@@ -20,6 +20,6 @@ setup(
     keywords = "Simulator mainframe compiler",
     url = "http://code.google.com/p/mainframe-env-simulator/",
     packages=find_packages(),
-    scripts = ['zcc'],
+    scripts = ['zcc', 'zrun'],
     long_description=read('README'),
 )

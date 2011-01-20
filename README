@@ -24,5 +24,6 @@ sudo ./setup.py install
 
 USAGE
 -------------------------
-zcc [-o OUTPUT_FILE] [SOURCE_FILE]
+Use 'zcc' to compile / assemble the source code.
+Use 'zrun' to run the compiled / assembled program.
 
