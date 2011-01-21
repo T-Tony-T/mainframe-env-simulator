@@ -18,8 +18,15 @@ All rights reserved.
 
 INSTALLATION
 -------------------------
-./setup.py build
-sudo ./setup.py install
+Under Linux:
+$ python setup.py build
+$ sudo python setup.py install --record install.record.txt
+("install.record.txt" is used for uninstall)
+
+Under Windows:
+> python setup.py bdist_wininst
+> dist/mainframe-env-simulator-*.exe
+("install.record.txt" is used for both install and uninstall)
 
 
 USAGE
@@ -27,3 +34,11 @@ USAGE
 Use 'zcc' to compile / assemble the source code.
 Use 'zrun' to run the compiled / assembled program.
 
+
+UNINSTALLATION
+-------------------------
+Under Linux:
+$ cat install.record.txt | sudo xargs rm -rf
+
+Under Windows:
+> dist/mainframe-env-simulator-*.exe

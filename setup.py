@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import os
 from setuptools import setup, find_packages
 
@@ -20,6 +18,11 @@ setup(
     keywords = "Simulator mainframe compiler",
     url = "http://code.google.com/p/mainframe-env-simulator/",
     packages=find_packages(),
-    scripts = ['zcc', 'zrun'],
+    entry_points = {
+        'console_scripts': [
+            'zcc = zPE.scripts.zcc:main',
+            'zrun = zPE.scripts.zrun:main',
+        ],
+    },
     long_description=read('README'),
 )
