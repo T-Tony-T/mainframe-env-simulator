@@ -20,8 +20,7 @@ setup(
     packages=find_packages(),
     entry_points = {
         'console_scripts': [
-            'zcc = zPE.scripts.zcc:main',
-            'zrun = zPE.scripts.zrun:main',
+            'zsub = zPE.scripts.zsub:main',
         ],
     },
     long_description=read('README'),

@@ -1,8 +1,8 @@
-from zPE import lang
+import zPE
+from zPE import pgm
 from zPE import core
 
-import sys
-import os
+import os, sys
 from optparse import OptionParser
 
 
@@ -11,19 +11,27 @@ if __name__ == '__main__':
 
 
 def main():
+    if os.path.isfile(zPE.CONFIG_FILE):
+        zPE.Read_Config()
+    else:
+        zPE.Touch_Config()
+
     parser = prepare_option(OptionParser())
     (options, args) = parser.parse_args()
 
     if options.list:
-        core.list_lang()
+        zPE.LIST_LANG()
         return 0
 
-    if options.lang in core.LANG_SUPPORTED:
-        eval(core.LANG_SUPPORTED[options.lang])(args)
-    else:
-        print sys.argv[0] + ': ' + options.lang + ': Language not supported.'
-        print 'For more information, see \'' + sys.argv[0] + ' -l\' for help.'
-        return 1
+    core.jcl.parse(args[0])
+#    if options.lang in zPE.LANG_SUPPORTED:
+#        eval(zPE.LANG_SUPPORTED[options.lang])(args)
+#    else:
+#        print sys.argv[0] + ': ' + options.lang + ': Language not supported.'
+#        print 'For more information, see \'' + sys.argv[0] + ' -l\' for help.'
+#        return 1
+
+    core.jcl.write_out()
 
 
 def prepare_option(parser):
@@ -32,12 +40,8 @@ def prepare_option(parser):
     parser.add_option("-l", "--list", action="store_true", dest="list",
                       default=False,
                       help="list all supported languages")
-    parser.add_option("-L", "--lang", dest="lang",
-                      default='assist',
-                      help="language of the source file", metavar="LANGUAGE")
-
     return parser
 
 
 def slv_assist(src):
-    print 'process assist'
+    pass

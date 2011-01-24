@@ -31,8 +31,8 @@ Under Windows:
 
 USAGE
 -------------------------
-Use 'zcc' to compile / assemble the source code.
-Use 'zrun' to run the compiled / assembled program.
+Use 'zsub' to submit an JCL job. The job output will be generated
+at the same folder of the submitted jobs.
 
 
 UNINSTALLATION
