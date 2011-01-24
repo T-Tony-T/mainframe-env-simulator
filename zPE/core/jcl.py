@@ -128,8 +128,6 @@ def parse(src):
             line = nextline
             nextline = ''
 
-    print zPE.JCL['step'][-1].__dict__
-
     # save MSGLG
     sp = zPE.SPOOL['JESMSGLG'][0]
     ctrl = '1'                  # control character for output

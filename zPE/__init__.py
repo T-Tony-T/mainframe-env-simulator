@@ -115,14 +115,14 @@ class Step:                     # for JCL['step']
         self.dd.append(dd)
         
 
-# Language Supported
-LANG_SUPPORTED = {              # all supported languages and their bindings
-    'assist' : 'slv_assist',
+# Program Supported
+PGM_SUPPORTED = {         # all supported programs and their bindings
+    'ASSIST' : 'zPE.pgm.ASSIST.main',
     }
 
-def LIST_LANG():                # list all supported languages out
-    print 'All programming languages that are currently supported:'
-    print '  ASSIST     -- Assembler language using ASSIST'
+def LIST_PGM():                # list all supported languages out
+    print 'All programs (PGM) that are currently supported:'
+    print '  ASSIST     -- Assembler using ASSIST'
     print
 
 

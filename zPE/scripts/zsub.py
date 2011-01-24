@@ -24,12 +24,14 @@ def main():
         return 0
 
     core.jcl.parse(args[0])
-#    if options.lang in zPE.LANG_SUPPORTED:
-#        eval(zPE.LANG_SUPPORTED[options.lang])(args)
-#    else:
-#        print sys.argv[0] + ': ' + options.lang + ': Language not supported.'
-#        print 'For more information, see \'' + sys.argv[0] + ' -l\' for help.'
-#        return 1
+    for step in zPE.JCL['step']:
+        if step.pgm in zPE.PGM_SUPPORTED:
+            eval(zPE.PGM_SUPPORTED[step.pgm])(args)
+        else:
+            print sys.argv[0] + ': ' + step.pgm + ': Program not supported.'
+            print ('For more information, see \'' + sys.argv[0] +
+                   ' -l\' for help.')
+            return 1
 
     core.jcl.write_out()
 
@@ -39,9 +41,5 @@ def prepare_option(parser):
 
     parser.add_option("-l", "--list", action="store_true", dest="list",
                       default=False,
-                      help="list all supported languages")
+                      help="list all supported programs (PGM)")
     return parser
-
-
-def slv_assist(src):
-    pass
