@@ -26,6 +26,12 @@ def ck_label(lable):
 
 ### Program Definition
 
+# Identifier
+SYSTEM = {
+    'SYS'      : 'Z S U B',
+    'JES'      : 'J E S 2',
+    }
+
 # Configurable Definition
 DEFAULT = {
     'ADDR_MODE' : 31,           # hardware addressing mode: 31 bit
@@ -296,12 +302,16 @@ def flush(sp):
 # Program Supported
 PGM_SUPPORTED = {         # all supported programs and their bindings
     'ASSIST'  : 'zPE.pgm.ASSIST.init',
+
     'IEFBR14' : 'pass',
     }
 
 def LIST_PGM():                # list all supported languages out
     print 'All programs (PGM) that are currently supported:'
     print '  ASSIST     -- Assembler using ASSIST'
+    print
+    print 'Utilities:'
+    print '  IEFBR14    -- System utility that DO NOTHING'
     print
 
 

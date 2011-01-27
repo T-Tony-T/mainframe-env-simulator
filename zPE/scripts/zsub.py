@@ -14,12 +14,12 @@ def main():
     parser = prepare_option(OptionParser())
     (options, args) = parser.parse_args()
 
-    if len(args) == 0:
-        parser.print_help()
+    if options.list:
+        zPE.LIST_PGM()
         return 0
 
-    if options.list:
-        zPE.LIST_LANG()
+    if len(args) == 0:
+        parser.print_help()
         return 0
 
     submit(args[0])

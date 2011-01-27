@@ -139,13 +139,15 @@ def parse(job):
     # save MSGLG
     sp = zPE.core.SPOOL.retrive('JESMSGLG')
     ctrl = '1'                  # in skip list
-    sp.append(ctrl, '                    J E S 2  J O B  L O G  --  S Y S T E M  S Y S 1  --  N O D E  Z O S K C T R\n')
+    sp.append(ctrl, '                    {0}'.format(zPE.SYSTEM['JES']),
+              '  J O B  L O G  --  S Y S T E M  {0}'.format(zPE.SYSTEM['SYS']),
+              '  --  N O D E  Z O S K C T R\n')
     ctrl = '0'
     sp.append(ctrl, '\n')
     ctrl = ' '
     sp.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
-              '{0:<16}'.format(strftime(" ---- %A,")),
-              strftime(" %d %b %Y ----"), '\n')
+              '{0:<16}'.format(strftime(" ---- %A,").upper()),
+              strftime(" %d %b %Y ----").upper(), '\n')
     sp.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
               '  IRR010I  USERID {0:<8}'.format(zPE.JCL['owner']),
               ' IS ASSIGNED TO THIS JOB.\n')
