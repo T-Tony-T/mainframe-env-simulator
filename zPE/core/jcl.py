@@ -1,4 +1,4 @@
-# this is not the complete module for JCL
+# this is not the complete module for "Job Control Language"
 # this is currently only working for simple assist
 
 import zPE
@@ -7,11 +7,11 @@ import os, sys
 import re
 from time import localtime, mktime, strftime, strptime
 
-def parse(src):
+
+def parse(job):
     invalid_lable = []          # record all invalid lables
 
-    fp = open(src, 'r')
-    sp = zPE.SPOOL['JESJCL'][0]
+    fp = open(job, 'r')         # this is not under the control of SMS
 
     # initial read
     line = fp.readline()
@@ -33,14 +33,13 @@ def parse(src):
     zPE.JCL['jobname'] = field[0][2:]
     zPE.JCL['owner'] = zPE.JCL['jobname'][:7]
     zPE.JCL['job'] = 'JOB' + str(zPE.Config['job_id'])
-    for k,v in zPE.SPOOL.items(): # add in path to pre-defined spool
-        v[2] = [ zPE.Config['spool_path'],
-                 zPE.JCL['jobname'] + '.' + zPE.JCL['job']
-                 ] + v[2]
 
-    # ctrl for 1st line will be added in finish_job()
-    sp.append('{0:>9}'.format(1) + ' {0:<72}'.format(line[:-1]) +
-              zPE.JCL['job'] + '\n')
+    zPE.Config['spool_path'] = zPE.JCL['jobname'] + '.' + zPE.JCL['job']
+
+    sp = zPE.core.SPOOL.retrive('JESJCL')
+
+    # ctrl for 1st line will be modified in finish_job()
+    sp.append('c', '{0:>9} {1:<72}'.format(1, line[:-1]), zPE.JCL['job'], '\n')
     ctrl = ' '                  # control character for output
 
     zPE.JCL['jobstart'] = localtime()
@@ -63,7 +62,7 @@ def parse(src):
 
         # check comment
         if line[:3] == '//*':
-            sp.append(ctrl + '{0:>9}'.format('') + ' ' + line)
+            sp.append(ctrl, '{0:>9} {1}'.format('', line))
             continue
 
         field = re.split('\s', line)
@@ -101,159 +100,219 @@ def parse(src):
                                             proc = proc,
                                             parm = parm))
         # parse DD card
-        # currently supported parameter: dsn, disp(simplified), sysout, */data
+        # currently supported parameter: dsn, disp, sysout, */data
         elif field[1] == 'DD':
             sysout = ''
             dsn = []
-            disp = 'NEW'
+            disp = ''
             if field[2] == '*' or field[2] == 'DATA':
                 nextline = __READ_UNTIL(fp, field[0][2:], [], '/*')
             elif field[2][:9] == 'DATA,DLM=\'':
                 nextline = __READ_UNTIL(fp, field[0][2:], [], field[2][9:11])
             elif field[2][:7] == 'SYSOUT=':
                 sysout = field[2][7:]
-            elif field[2][:4] == 'DSN=':
-                tmp = re.split(',', field[2], 1)
-                dsn = zPE.conv_path(tmp[0][4:])
-                if len(tmp) == 2:
-                    for part in re.split(',', tmp[1]):
-                        if part[:5] == 'DISP=':
-                            disp = part[5:]
             else:
-                sys.stderr.write('Error: ' + re.split(',', field[2], 1)[0] +
-                                 ': Parameter not supported.\n')
-                sys.exit(44)
+                for part in re.split(',', field[2]):
+                    if part[:4] == 'DSN=':
+                        dsn = zPE.conv_path(part[4:])
+                    elif part[:5] == 'DISP=':
+                        disp = part[5:]
+                    else:
+                        sys.stderr.write('Error: ' + part +
+                                         ': Parameter not supported.\n')
+                        sys.exit(44)
+                if disp == '':
+                    sys.stderr.write('Error: ' + field[0][2:] +
+                                     ': Need DISP=[disp].\n')
+                    sys.exit(44)
 
-            zPE.JCL['step'][-1].append_dd(
+            zPE.JCL['step'][-1].dd.append(
                 field[0][2:], {
                     'SYSOUT' : sysout,
                     'DSN' : dsn,
                     'DISP' : disp,
                     })
 
-        sp.append(ctrl + '{0:>9}'.format(zPE.JCL['card_cnt']) + ' ' + line)
+        sp.append(ctrl, '{0:>9} {1}'.format(zPE.JCL['card_cnt'], line))
     # end of the main read loop
 
     # save MSGLG
-    sp = zPE.SPOOL['JESMSGLG'][0]
+    sp = zPE.core.SPOOL.retrive('JESMSGLG')
     ctrl = '1'                  # in skip list
-    sp.append(ctrl + '                    J E S 2  J O B  L O G  --  S Y S T E M  S Y S 1  --  N O D E  Z O S K C T R\n')
+    sp.append(ctrl, '                    J E S 2  J O B  L O G  --  S Y S T E M  S Y S 1  --  N O D E  Z O S K C T R\n')
     ctrl = '0'
-    sp.append(ctrl + '\n')
+    sp.append(ctrl, '\n')
     ctrl = ' '
-    sp.append(ctrl + strftime("%H.%M.%S ") + zPE.JCL['job'] +
-              '{0:<16}'.format(strftime(" ---- %A,")) +
-              strftime(" %d %b %Y ----") + '\n')
-    sp.append(ctrl + strftime("%H.%M.%S ") + zPE.JCL['job'] +
-              '  IRR010I  USERID {0:<8}'.format(zPE.JCL['owner']) +
+    sp.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+              '{0:<16}'.format(strftime(" ---- %A,")),
+              strftime(" %d %b %Y ----"), '\n')
+    sp.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+              '  IRR010I  USERID {0:<8}'.format(zPE.JCL['owner']),
               ' IS ASSIGNED TO THIS JOB.\n')
 
     if len(invalid_lable) != 0:
-        sp = zPE.SPOOL['JESYSMSG'][0]
-        # ctrl for 1st line will be added in finish_job()
-        sp.append(' STMT NO. MESSAGE\n')
+        sp = zPE.core.SPOOL.retrive('JESYSMSG')
+        # ctrl for 1st line will be modified in finish_job()
+        sp.append('c', ' STMT NO. MESSAGE\n')
         ctrl = ' '
         for indx in invalid_lable:
-            sp.append(ctrl + '{0:>9} IEFC662I INVALID LABEL\n'.format(indx))
-        sp.append(ctrl + '\n')
+            sp.append(ctrl, '{0:>9} IEFC662I INVALID LABEL\n'.format(indx))
+        sp.append(ctrl, '\n')
 
         return 'label'
 
     return 'ok'
 
 
-def init_step(step):
-    sp0 = zPE.SPOOL['JESMSGLG'][0] # spool No. 0
-    sp2 = zPE.SPOOL['JESYSMSG'][0] # spool No. 2
+def init_job():
+    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
 
-    # ctrl for 1st line will be added in finish_job()
-    sp2.append('\n')
+    # ctrl for 1st line will be modified in finish_job()
+    sp3.append('c', '\n')
     ctrl = ' '
 
-    step.start = (
-        ctrl + 'IEF373I STEP/{0:<8}/START '.format(step.name) +
-        strftime("%Y%m%d.%H%M") + '\n'
-        )
-
     conf = zPE.load_ICH70001I()
-    line = 'ICH70001I {0:<8} LAST ACCESS AT {1}\n'.format(zPE.JCL['owner'], conf['atime'])
-    sp2.append(ctrl + line)
-    sp0.append(ctrl + strftime("%H.%M.%S ") + zPE.JCL['job'] + '  ' + line)
+    line = 'ICH70001I {0:<8} LAST ACCESS AT {1}\n'.format(zPE.JCL['owner'],
+                                                          conf['atime'])
+    sp1.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'], '  ', line)
+    sp3.append(ctrl, line)
     conf['atime'] = strftime("%H:%M:%S ON %A, %B %d, %Y").upper()
     zPE.dump_ICH70001I(conf)
-    
-    #dummy()
 
-    sp2.append(ctrl + 'IEF236I ALLOC. FOR {0:<8} {1}\n'.format(
+    sp1.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+              '  $HASP373 {0:<8}'.format(zPE.JCL['jobname']),
+              ' STARTED - INIT 1    - CLASS A - SYS SYS1\n')
+    sp1.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+              '  IEF403I {0:<8}'.format(zPE.JCL['jobname']),
+              ' - STARTED - TIME=', strftime("%H.%M.%S"), '\n')
+    sp1.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+              '  -                                              --TIMINGS (MINS.)--            -----PAGING COUNTS----\n')
+    sp1.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+              '  -STEPNAME PROCSTEP    RC   EXCP   CONN    TCB    SRB  CLOCK   SERV  WORKLOAD  PAGE  SWAP   VIO SWAPS\n')
+
+
+def init_step(step):
+    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+
+    step.start = localtime()
+    ctrl = ' '
+
+    sp3.append(ctrl, 'IEF236I ALLOC. FOR {0:<8} {1}\n'.format(
             zPE.JCL['jobname'], step.name))
-    if 'STEPLIB' in step.dd:
-        if not zPE.is_dir(step.dd['STEPLIB'][1]['DSN']):
-            del sp2[-1]
-            sp2.append(ctrl + 'IEF212I KC03GC4A ' + step.name +
-                       ' STEPLIB - DATA SET NOT FOUND\n')
-            sp2.append(ctrl + 'IEF272I KC03GC4A ' + step.name +
-                       ' - STEP WAS NOT EXECUTED.\n')
+    if 'STEPLIB' in step.dd.dict():
+        if not zPE.is_dir(step.dd['STEPLIB']['DSN']):
+            # STEPLIB cannot be instream, thus DSN= should always exist
+            sp3.rmline(-1)
+            sp3.append(ctrl, 'IEF212I {0:<8} '.format(zPE.JCL['jobname']),
+                       step.name, ' STEPLIB - DATA SET NOT FOUND\n')
+            sp3.append(ctrl, 'IEF272I {0:<8} '.format(zPE.JCL['jobname']),
+                       step.name, ' - STEP WAS NOT EXECUTED.\n')
+            step.dd['STEPLIB']['STAT'] = zPE.DD_STATUS['abnormal']
             return 'steplib'
-        sp2.append(ctrl + 'IGD103I SMS ALLOCATED TO DDNAME STEPLIB\n')
+        sp3.append(ctrl, 'IGD103I {0}'.format(zPE.JES['file']),
+                   ' ALLOCATED TO DDNAME STEPLIB\n')
+        step.dd['STEPLIB']['STAT'] = zPE.DD_STATUS['normal']
 
-    #dummy()
+    for ddname in step.dd.list():
+        if step.dd[ddname]['STAT'] != zPE.DD_STATUS['init']:
+            continue            # skip the allocated ones
+
+        # check for the f_type
+        if ddname in zPE.core.SPOOL.list():
+            # read in but not allocate, must be instream
+            step.dd[ddname]['STAT'] = zPE.DD_STATUS['normal']
+        else:
+            if step.dd[ddname]['SYSOUT'] != '':
+                # outstream
+                mode = 'o'
+                f_type = 'outstream'
+                path = [ '{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname) ]
+            else:
+                if step.dd[ddname]['DSN'] != '':
+                    # file
+                    f_type = 'file'
+                    path = [ '{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname) ]
+                else:
+                    # tmp
+                    f_type = 'tmp'
+                    path = [ '{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname) ]
+                mode = step.dd.mode(ddname)
+            zPE.core.SPOOL.new(ddname, mode, f_type, path)
+
+        sp3.append(ctrl, 'IEF237I {0}'.format(zPE.JES[f_type]),
+                   ' ALLOCATED TO {0}\n'.format(ddname))
 
     return 'ok'
 
 
 def dummy():
-    sp.append(ctrl + '23.04.09 JOB05799  $HASP373 KC03GC4A STARTED - INIT 1    - CLASS A - SYS SYS1\n')
-    sp.append(ctrl + '23.04.09 JOB05799  IEF403I KC03GC4A - STARTED - TIME=23.04.09\n')
-    sp.append(ctrl + '23.04.09 JOB05799  -                                              --TIMINGS (MINS.)--            -----PAGING COUNTS----\n')
-    sp.append(ctrl + '23.04.09 JOB05799  -STEPNAME PROCSTEP    RC   EXCP   CONN    TCB    SRB  CLOCK   SERV  WORKLOAD  PAGE  SWAP   VIO SWAPS\n')
-    sp.append(ctrl + '23.04.09 JOB05799  -STEP1             FLUSH      0      0    .00    .00     .0      0  BATCH        0     0     0     0\n')
-    sp.append(ctrl + '23.04.09 JOB05799  IEF453I KC03GC4A - JOB FAILED - JCL ERROR - TIME=23.04.09\n')
-    sp.append(ctrl + '23.04.09 JOB05799  -KC03GC4A ENDED.  NAME-CHI ZHANG            TOTAL TCB CPU TIME=    .00 TOTAL ELAPSED TIME=    .0\n')
-    sp.append(ctrl + '23.04.09 JOB05799  $HASP395 KC03GC4A ENDED\n')
+    sp1.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+              '  IEF453I {0:<8}'.format(zPE.JCL['jobname']),
+              ' - JOB FAILED - JCL ERROR - TIME=23.04.09\n')
+    sp1.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+              '  -{0:<8}'.format(zPE.JCL['jobname']),
+              ' ENDED.  NAME-CHI ZHANG            TOTAL TCB CPU TIME=    .00 TOTAL ELAPSED TIME=    .0\n')
+    sp1.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+              '  $HASP395 {0:<8}'.format(zPE.JCL['jobname']),
+              ' ENDED\n')
 
 
-    sp2.append(ctrl + 'IEF237I JES2 ALLOCATED TO SYSPRINT\n')
-    sp2.append(ctrl + 'IEF237I JES2 ALLOCATED TO SYSIN\n')
-    sp2.append(ctrl + 'IEF142I KC03GC4A STEP1 - STEP WAS EXECUTED - COND CODE 0000\n')
-    sp2.append(ctrl + 'IGD104I KC02293.ASSIST.LOADLIB                       RETAINED,  DDNAME=STEPLIB\n')
-    sp2.append(ctrl + 'IEF285I   KC03GC4.KC03GC4A.JOB09061.D0000102.?         SYSOUT\n')
-    sp2.append(ctrl + 'IEF285I   KC03GC4.KC03GC4A.JOB09061.D0000101.?         SYSIN\n')
+    sp3.append(ctrl, 'IEF142I {0:<8}'.format(zPE.JCL['jobname']),
+              ' STEP1 - STEP WAS EXECUTED - COND CODE 0000\n')
+    sp3.append(ctrl, 'IGD104I KC02293.ASSIST.LOADLIB                       RETAINED,  DDNAME=STEPLIB\n')
+    sp3.append(ctrl, 'IEF285I   KC03GC4.KC03GC4A.JOB09061.D0000102.?         SYSOUT\n')
+    sp3.append(ctrl, 'IEF285I   KC03GC4.KC03GC4A.JOB09061.D0000101.?         SYSIN\n')
 
 
 def finish_step(step):
-    sp = zPE.SPOOL['JESYSMSG'][0]
-    sp.append(step.start)
-    sp.append(' ' + 'IEF373I STEP/{0:<8}/STOP  '.format(step.name) +
-              strftime("%Y%m%d.%H%M") + ' CPU    0MIN 00.00SEC SRB    0MIN' +
-              ' 00.00SEC VIRT   584K SYS   260K EXT       0K SYS   11352K\n')
+    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+    ctrl = ' '
+
+    sp1.append(ctrl, strftime("%H.%M.%S "), zPE.JCL['job'],
+               '  -{0:<8} {1:<8} '.format(step.name, step.procname),
+               '{0:>5} {1:>6} {2:>6} '.format(step.rc, 0, 0), # mark
+               '{0:>6} {1:>6} '.format('.00', '.00'),         # mark
+               '{0:>6} {1:>6} '.format('.0', 0),              # mark
+               ' {0:<8} '.format('BATCH'),                    # mark
+               '{0:>5} {1:>5} '.format(0, 0),                 # mark
+               '{0:>5} {1:>5}\n'.format(0, 0))                # mark
+
+    sp3.append(' ', 'IEF373I STEP/{0:<8}/START '.format(step.name),
+               strftime("%Y%m%d.%H%M", step.start), '\n')
+    sp3.append(' ', 'IEF373I STEP/{0:<8}/STOP  '.format(step.name),
+               strftime("%Y%m%d.%H%M"), ' CPU    0MIN 00.00SEC SRB    0MIN',
+               ' 00.00SEC VIRT   584K SYS   260K EXT       0K SYS   11352K\n')
 
 
 def finish_job(msg):
     zPE.JCL['jobend'] = localtime()
 
-    sp = zPE.SPOOL['JESYSMSG'][0]
-    sp.append(' ' + 'IEF375I  JOB/{0:<8}/START '.format(zPE.JCL['jobname']) +
-              strftime("%Y%m%d.%H%M", zPE.JCL['jobstart']) + '\n')
-    sp.append(' ' + 'IEF376I  JOB/{0:<8}/STOP  '.format(zPE.JCL['jobname']) +
-              strftime("%Y%m%d.%H%M", zPE.JCL['jobend']) + ' CPU    0MIN'
+    sp = zPE.core.SPOOL.retrive('JESYSMSG')
+    sp.append(' ', 'IEF375I  JOB/{0:<8}/START '.format(zPE.JCL['jobname']),
+              strftime("%Y%m%d.%H%M", zPE.JCL['jobstart']), '\n')
+    sp.append(' ', 'IEF376I  JOB/{0:<8}/STOP  '.format(zPE.JCL['jobname']),
+              strftime("%Y%m%d.%H%M", zPE.JCL['jobend']), ' CPU    0MIN'
               ' 00.00SEC SRB    0MIN 00.00SEC\n')
 
-    for fn in zPE.SPOOL.keys():
-        sp = zPE.SPOOL[fn][0]
-        if zPE.SPOOL[fn][1] in ['i', 't']:
-            continue            # input / tmp spool
-        if len(sp) == 0:
+    for key in zPE.core.SPOOL.list():
+        sp = zPE.core.SPOOL.retrive(key)
+        if sp.mode  == 'i':
+            continue            # input spool
+        if sp.empty():
             continue            # empty spool
-        if fn in ['JESMSGLG']:
+        if key in ['JESMSGLG']:
             continue            # in skip list
 
         if msg == 'ok':
-            sp[0] = '1' + sp[0]
+            sp[0,0] = '1'
         else:
-            if fn == 'JESYSMSG':
-                del sp[0]
+            if key == 'JESYSMSG':
+                sp.rmline(0)
             else:
-                sp[0] = ' ' + sp[0]
+                sp[0,0] = ' '
 
     __JES2_STAT(msg)
     __WRITE_OUT()
@@ -273,40 +332,40 @@ def __JES2_STAT(msg):
         ctrl = '-'
     # ^^^ JCL executed ^^^
 
-    sp = zPE.SPOOL['JESMSGLG'][0]
-    sp.append('0' + '------ JES2 JOB STATISTICS ------\n')
+    sp = zPE.core.SPOOL.retrive('JESMSGLG')
+    sp.append('0', '------ JES2 JOB STATISTICS ------\n')
     if msg not in ['label']:    # if JCL executed
-        sp.append(ctrl + '{0:>13}'.format(strftime(" %d %b %Y")) +
+        sp.append(ctrl, '{0:>13}'.format(strftime(" %d %b %Y")),
                   ' JOB EXECUTION DATE\n')
 
-    sp.append(ctrl + '{0:>13}'.format(zPE.JCL['read_cnt']) + ' CARDS READ\n')
+    sp.append(ctrl, '{0:>13}'.format(zPE.JCL['read_cnt']), ' CARDS READ\n')
 
     cnt = 0
-    for k,v in zPE.SPOOL.items():
-        if v[1] == 'o':
-            cnt += len(v[0])
+    for k,v in zPE.core.SPOOL.dict():
+        if v.mode == 'o':
+            cnt += len(v.spool)
     cnt += 4                    # 4 more lines include this line
-    sp.append(ctrl + '{0:>13}'.format(cnt) + ' SYSOUT PRINT RECORDS\n')
+    sp.append(ctrl, '{0:>13}'.format(cnt), ' SYSOUT PRINT RECORDS\n')
 
     cnt = 0                     # "punch" is currently not supported
-    sp.append(ctrl + '{0:>13}'.format(cnt) + ' SYSOUT PUNCH RECORDS\n')
+    sp.append(ctrl, '{0:>13}'.format(cnt), ' SYSOUT PUNCH RECORDS\n')
 
     cnt = 0
-    for k,v in zPE.SPOOL.items():
-        if v[1] == 'o':
-            for line in v[0]:
+    for k,v in zPE.core.SPOOL.dict():
+        if v.mode == 'o':
+            for line in v.spool:
                 cnt = cnt + len(line)
     cnt = (cnt + 72) / 1024 + 1 # 72 more characters include this line
-    sp.append(ctrl + '{0:>13}'.format(cnt) + ' SYSOUT SPOOL KBYTES\n')
+    sp.append(ctrl, '{0:>13}'.format(cnt), ' SYSOUT SPOOL KBYTES\n')
 
     diff = mktime(zPE.JCL['jobend']) - mktime(zPE.JCL['jobstart'])
     h_mm = '{0}.{1:0>2}'.format(str(int(diff / 3600)), str(int(diff / 60)))
-    sp.append(ctrl + '{0:>13}'.format(h_mm) + ' MINUTES EXECUTION TIME\n')
+    sp.append(ctrl, '{0:>13}'.format(h_mm), ' MINUTES EXECUTION TIME\n')
 
 def __READ_UNTIL(fp, fn, dsn, dlm):
     # prepare spool
-    zPE.new_spool(fn, 'i', dsn)
-    sp = zPE.SPOOL[fn][0]
+    zPE.core.SPOOL.new(fn, 'i', 'instream', dsn)
+    sp = zPE.core.SPOOL.retrive(fn)
 
     # read until encountering dlm
     while True:
@@ -314,7 +373,7 @@ def __READ_UNTIL(fp, fn, dsn, dlm):
 
         # check end of stream
         if line == dlm:
-            return ''
+            return ''           # the return value of readline() on EOF
 
         # check in-stream data
         if len(dsn) == 0:
@@ -325,16 +384,12 @@ def __READ_UNTIL(fp, fn, dsn, dlm):
         sp.append(line)
 
 def __WRITE_OUT():
-    for fn in zPE.SPOOL.keys():
-        sp = zPE.SPOOL[fn][0]
-        if zPE.SPOOL[fn][1] in ['i', 't']:
-            continue            # input / tmp spool
-        if len(sp) == 0:
+    for fn in zPE.core.SPOOL.list():
+        sp = zPE.core.SPOOL.retrive(fn)
+        if sp.mode == 'i':
+            continue            # input spool
+        if sp.empty():
             continue            # empty spool
 
-        path = os.path.join(* zPE.SPOOL[fn][2])
-        zPE.create_dir(os.path.dirname(path))
-        fp = open(path, 'w')
-        for line in sp:
-            fp.write(line)
+        zPE.flush(sp)
 

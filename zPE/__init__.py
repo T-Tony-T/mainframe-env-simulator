@@ -1,3 +1,9 @@
+# this is the System Level Definition
+# any Subsystem will not effect the behaviour of functions in this file
+
+# modules that will be auto imported
+import core, pgm
+
 import os, sys, pickle
 import re
 
@@ -27,7 +33,7 @@ DEFAULT = {
     'MEMORY_SZ' : '1024K',      # memory size: 1024 KB
     'MEM_MAX'   : 1048576,      # 1024K = 1024 * 1024 = 1048576
 
-    'SPOOL_PATH' : '',          # SPOOL positon: current directory
+    'SPOOL_DIR' : '',           # SPOOL positon: current directory
 
     'ICH70001I' : {             # config list for ICH70001I
         'atime' : '00:00:00 ON THURSDAY, JANUARY 18, 2011',
@@ -43,7 +49,8 @@ Config = {
     'memory_sz' : DEFAULT['MEMORY_SZ'],
                 # in future, this may be controled by "// EXEC PGM=*,REGION="
     'mem_max'   : DEFAULT['MEM_MAX'],
-    'spool_path': DEFAULT['SPOOL_PATH'],
+    'spool_dir' : DEFAULT['SPOOL_DIR'],
+    'spool_path': None,         # will be set after JOB card is read
     }
 
 CONFIG_PATH = {
@@ -100,26 +107,167 @@ def read_rc():
                 sys.stderr.write('Warning: ' + v[:-1] +
                                  ': Invalid memory size.\n')
 
-        elif k == 'spool_path':
+        elif k == 'spool_dir':
             if os.path.isdir(v[:-1]):
-                Config['spool_path'] = v[:-1]
+                Config['spool_dir'] = v[:-1]
             else:
                 sys.stderr.write('Warning: ' + v[:-1] +
-                                 ': Invalid SPOOL path.\n')
+                                 ': Invalid SPOOL dir path.\n')
 
     Config['addr_max'] = 2 ** Config['addr_mode']
     __TOUCH_RC()
 
 
-# File Definition
+# JCL Definition
+JCL = {
+    # fetched when parsing JCL
+    'owner'     : None,         # 'owner_id'
+    'jobname'   : None,         # 'job_name'
+    'job'       : None,         # 'JOB*****'
+    'jobstart'  : None,         # time object
+    'jobend'    : None,         # time object
+    'step'      : [],           # each item is of type "Step"
+    'read_cnt'  : 0,            # lines read in
+    'card_cnt'  : 0,            # cards read in
+    }
+
+DD_STATUS = { 'init' : 0, 'normal' : 1, 'abnormal' : 2 }
+DISP_STATUS = {                 # status : action_normal
+    'NEW' : 'DELETE',
+    'OLD' : 'KEEP',
+    'SHR' : 'KEEP',
+    'MOD' : 'KEEP',
+    }
+DISP_ACTION = [ 'KEEP', 'DELETE', 'PASS', 'CATLG', 'UNCATLG' ]
+DD_MODE = {
+    'NEW' : 'o',
+    'OLD' : 'o',
+    'SHR' : 'i',
+    'MOD' : '+',
+    }
+class Step(object):             # for JCL['step'][*]
+    def __init__(self, name, pgm = '', proc = '', parm = ''):
+        # begining of inner class definition
+        class DDlist(object):   # inner class for JCL['step'][*].dd
+            def __init__(self):
+                self.__items = {}
+                self.__indxs = []
+
+            def append(self, ddname, ddcard):
+                if not isinstance(ddname, str):
+                    sys.stderr.write('Error: ' + ddname +
+                                     ': Invalid DD name.\n')
+                    sys.exit(44)
+                if ddname in self.__items:
+                    sys.stderr.write('Error: ' + ddname +
+                                     ': Duplicated DD names.\n')
+                    sys.exit(44)
+                for k,v in ddcard.items():
+                    if k not in ['SYSOUT', 'DSN', 'DISP']:
+                        sys.stderr.write('Error: ' + k + '=' + v +
+                                         ': Un-recognized option\n')
+                        sys.exit(44)
+                # parse DISP if presented
+                if ddcard['DISP'] != '':
+                    if ddcard['DISP'][0] == '(':
+                        disp = re.split(',', ddcard['DISP'][1:-1])
+                    else:
+                        disp = [ddcard['DISP']]
+                    if disp[0] not in DISP_STATUS:  # check status
+                        sys.stderr.write('Error: ' + disp[0] +
+                                         ': Invalid DISP status.\n')
+                        sys.exit(41)
+                    if len(disp) == 1:              # check normal
+                        disp.append(DISP_STATUS[disp[0]])
+                    if disp[1] not in DISP_ACTION:
+                        sys.stderr.write('Error: ' + disp[1] +
+                                         ': Invalid DISP action.\n')
+                        sys.exit(41)
+                    if len(disp) == 2:              # check abnormal
+                        disp.append(disp[1])
+                    if disp[2] not in DISP_ACTION:
+                        sys.stderr.write('Error: ' + disp[2] +
+                                         ': Invalid DISP action.\n')
+                        sys.exit(41)
+                    ddcard['DISP'] = disp
+                # add STAT
+                ddcard['STAT'] = DD_STATUS['init']
+                self.__items[ddname] = ddcard
+                self.__indxs.append(ddname)
+
+            def remove(self, key):
+                if isinstance(key, str):
+                    del self.__items[key]
+                    self.__indxs.remove(key)
+                elif isinstance(key, int):
+                    del self.__items[self.__indxs.pop(key)]
+                else:
+                    sys.stderr.write('Error: ' + key +
+                                     ': Invalid key/index.\n')
+                    sys.exit(44)
+
+            def dict(self):
+                return self.__items
+
+            def list(self):
+                return self.__indxs
+
+            def key(self, indx):
+                return self.__indxs[indx]
+
+            def mode(self, key):
+                return DD_MODE[self.__items[key]['DISP'][0]]
+
+            def __len__(self):
+                return len(self.__indxs)
+
+            def __getitem__(self, key):
+                if isinstance(key, str):
+                    return self.__items[key]
+                elif isinstance(key, int):
+                    return self.__items[self.__indxs[key]]
+                else:
+                    sys.stderr.write('Error: ' + key +
+                                     ': Invalid key/index.\n')
+                    sys.exit(44)
+
+            def __setitem__(self, key, val):
+                if isinstance(key, str):
+                    if key not in self.__items:
+                        sys.stderr.write('Error: ' + key +
+                                         ': DD name not found.\n')
+                        sys.exit(44)
+                    self.__items[key] = val
+                elif isinstance(key, int):
+                    self.__items[self.__indxs[key]] = val
+                else:
+                    sys.stderr.write('Error: ' + key +
+                                     ': Invalid key.\n')
+                    sys.exit(44)
+        # end of inner class definition
+
+        self.name = name        # 'step_name'
+        self.pgm = pgm          # PGM='pgm_name'
+        self.proc = proc        # [PROG=]'prog_name'
+        self.procname = ''      # not applied now
+        self.parm = parm        # PARM=(parm_list)
+        self.start = None       # time object
+        self.rc = None          # return code
+        self.dd = DDlist()
+# end of Step Definition
+
+
+# JES Definition
+JES = {                         # JES storage management map
+    'instream'  : 'JES2',       # '// DD *|DATA'
+    'outstream' : 'JES2',       # '// DD SYSOUT='
+    'file'      : 'SMS',        # '// DD DSN='
+    'tmp'       : 'SMS',        # '// DD other'
+    }
+
+# converts "ABCD.EFG" to ["ABCD", "EFG"]
 def conv_path(fn):
     return re.split('\.', fn)
-
-def create_dir(path):
-    if os.path.isdir(path):
-        return None
-    else:
-        os.makedirs(path)
 
 def is_file(dsn):
     return os.path.isfile(os.path.join(* dsn))
@@ -127,47 +275,27 @@ def is_file(dsn):
 def is_dir(dsn):
     return os.path.isdir(os.path.join(* dsn))
 
-def open_file(dsn, mode):
-    return open(os.path.join(* dsn), mode)
+# open the target file in regardless of the existance
+def open_file(dsn, mode, f_type):
+    return eval('core.' + JES[f_type] + '.open_file')(dsn, mode)
+
+# flush the indicated SPOOL to the indicated File
+def flush(sp):
+    if sp.mode == 'i':
+        return -1
+
+    fp = open_file(sp.fn_list, 'w', sp.f_type)
+    cnt = 0
+    for line in sp.spool:
+        fp.write(line)
+        cnt += 1
+    return cnt
 
 
-# JCL Definition
-JCL = {
-    # fetched when parsing JCL
-    'owner'     : '*OWNER',
-    'jobname'   : '*JOBNAME',
-    'job'       : 'JOB*****',
-    'jobstart'  : 'start time:',
-    'jobend'    : 'end time:',
-    'step'      : [],           # each item is of type "Step"
-    'read_cnt'  : 0,
-    'card_cnt'  : 0,
-    }
-
-class Step:                     # for JCL['step']
-    def __init__(self, name, pgm = '', proc = '', parm = ''):
-        self.name = name
-        self.pgm = pgm
-        self.proc = proc
-        self.parm = parm
-        self.start = 'start time:'
-        self.dd = {}
-
-    def append_dd(self, ddname, dd):
-        if ddname in self.dd:
-            sys.stderr.write('Error: ' + ddname + ': Duplicated DD names.\n')
-            sys.exit(44)
-        for k,v in dd.items():
-            if k not in ['SYSOUT', 'DSN', 'DISP']:
-                sys.stderr.write('Error: ' + k + '=' + v +
-                                 ': Un-recognized key\n')
-                sys.exit(44)
-        self.dd[ddname] = [len(self.dd), dd]
-        
 
 # Program Supported
 PGM_SUPPORTED = {         # all supported programs and their bindings
-    'ASSIST'  : 'zPE.pgm.ASSIST.main',
+    'ASSIST'  : 'zPE.pgm.ASSIST.init',
     'IEFBR14' : 'pass',
     }
 
@@ -175,43 +303,6 @@ def LIST_PGM():                # list all supported languages out
     print 'All programs (PGM) that are currently supported:'
     print '  ASSIST     -- Assembler using ASSIST'
     print
-
-
-# SPOOL Definition
-SPOOL = {                       # defaultly opened spools; path will be modified
-    'JESMSGLG' : [[], 'o', ['01_JESMSGLG']],
-    'JESJCL'   : [[], 'o', ['02_JESJCL']],
-    'JESYSMSG' : [[], 'o', ['03_JESYSMSG']],
-    }
-
-def new_spool(key, mode, path = []):
-    # check uniqueness
-    if key in SPOOL:
-        sys.stderr.write('Error: ' + key + ': SPOOL name conflicts.\n')
-        sys.exit(-1)
-
-    # check mode
-    if mode not in ['i', 'o', 't']:
-        sys.stderr.write('Error: ' + mode + ': Invalid SPOOL mode.\n')
-        sys.exit(-1)
-
-    # check path auto-generation
-    if len(path) == 0:
-        while True:
-            conflict = False
-            path = [ Config['spool_path'],
-                     JCL['jobname'] + '.' + JCL['job'],
-                     'D{0:0>7}'.format(Config['tmp_id']) ]
-            Config['tmp_id'] += 1
-            # check for file conflict
-            for k,v in SPOOL.items():
-                if v[2] == path:
-                    conflict = True
-                    break
-            if not conflict:
-                break
-
-    SPOOL[key] = [[], mode, path]
 
 
 ### Supporting Function
@@ -232,7 +323,7 @@ def __TOUCH_RC():
     fp.write('job_id = ' + str(Config['job_id']) + '\n')
     fp.write('addr_mode = ' + str(Config['addr_mode']) + '\n')
     fp.write('memory_sz = ' + Config['memory_sz'] + '\n')
-    if Config['spool_path'] != '':
-        fp.write('spool_path = ' + Config['spool_path'] + '\n')
+    if Config['spool_dir'] != '':
+        fp.write('spool_dir = ' + Config['spool_dir'] + '\n')
     fp.close()
 

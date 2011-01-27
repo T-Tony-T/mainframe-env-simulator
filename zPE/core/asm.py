@@ -15,4 +15,5 @@ op_code = {
 
 def run(step):
     print ('exec ' + step.pgm + ' in ' +
-           os.path.join(* step.dd['STEPLIB'][1]['DSN']) + ' . . .')
+           os.path.join(* step.dd['STEPLIB']['DSN']) + ' . . .')
+    return 0

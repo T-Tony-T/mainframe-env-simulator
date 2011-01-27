@@ -1,6 +1,4 @@
 import zPE
-from zPE import pgm
-from zPE import core
 
 import os, sys
 from optparse import OptionParser
@@ -24,23 +22,32 @@ def main():
         zPE.LIST_LANG()
         return 0
 
-    rv = core.jcl.parse(args[0])
+    submit(args[0])
+
+
+def submit(job):
+    rv = zPE.core.jcl.parse(job)
     if rv == 'ok':
+        zPE.core.jcl.init_job()
         for step in zPE.JCL['step']:
             if step.pgm in zPE.PGM_SUPPORTED:
                 rv = zPE.core.jcl.init_step(step)
                 if rv == 'ok':
-                    eval(zPE.PGM_SUPPORTED[step.pgm])(args)
+                    step.rc = eval(zPE.PGM_SUPPORTED[step.pgm])(step)
+                else:
+                    step.rc = 'FLUSH'
                 zPE.core.jcl.finish_step(step)
             else:               # not in system path, search in STEPLIB
                 found_module = False
                 if 'STEPLIB' in step.dd:
                     rv = zPE.core.jcl.init_step(step)
                     if rv == 'ok':
-                        zPE.core.asm.run(step)
+                        step.rc = zPE.core.asm.run(step)
+                    else:
+                        step.rc = 'FLUSH'
                     zPE.core.jcl.finish_step(step)
 
-    core.jcl.finish_job(rv)
+    zPE.core.jcl.finish_job(rv)
 
 
 def prepare_option(parser):
