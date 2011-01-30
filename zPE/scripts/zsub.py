@@ -34,6 +34,8 @@ def submit(job):
                 rv = zPE.core.jcl.init_step(step)
                 if rv == 'ok':
                     step.rc = eval(zPE.PGM_SUPPORTED[step.pgm])(step)
+                    if step.rc != 0:
+                        rv = 'steprun'
                 else:
                     step.rc = 'FLUSH'
                 zPE.core.jcl.finish_step(step)
@@ -43,6 +45,8 @@ def submit(job):
                     rv = zPE.core.jcl.init_step(step)
                     if rv == 'ok':
                         step.rc = zPE.core.asm.run(step)
+                        if step.rc != 0:
+                            rv = 'steprun'
                     else:
                         step.rc = 'FLUSH'
                     zPE.core.jcl.finish_step(step)

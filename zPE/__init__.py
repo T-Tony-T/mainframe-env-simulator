@@ -12,7 +12,6 @@ import re
 JOB_ID_MIN = 10000              # the smallest job ID
 JOB_ID_MAX = 65535              # the largest job ID
 TMP_FILE_ID = 101               # the smallest tmp file identifier
-GPR_NUM = 16                    # number of general purpose registers
 
 def ck_label(lable):
     if len(lable) == 0:
@@ -23,16 +22,30 @@ def ck_label(lable):
         return False            # illegal character
     return True
 
+## General Purpose Register
+GPR_NUM = 16                    # number of general purpose registers
+
+
+## Program Status Word
+PSW = {
+    'ILC'       : 0,            # instruction length code
+    'CC'        : 0,            # condition code
+    }
+
 
 ### Program Definition
 
-# Identifier
+## Identifier
 SYSTEM = {
-    'SYS'      : 'Z S U B',
-    'JES'      : 'J E S 2',
+    'SYS'       : 'ZSUB',
+    'SYST'      : 'Z S U B',
+    'JES'       : 'JES2',
+    'JEST'      : 'J E S 2',
+    'NODE'      : 'ZPE@NIU',
+    'NODET'     : 'Z P E @ N I U',
     }
 
-# Configurable Definition
+## Configurable Definition
 DEFAULT = {
     'ADDR_MODE' : 31,           # hardware addressing mode: 31 bit
 
@@ -124,12 +137,16 @@ def read_rc():
     __TOUCH_RC()
 
 
-# JCL Definition
+## JCL Definition
 JCL = {
     # fetched when parsing JCL
-    'owner'     : None,         # 'owner_id'
     'jobname'   : None,         # 'job_name'
-    'job'       : None,         # 'JOB*****'
+    'owner'     : None,         # the first 7 chars of jobname
+    'class'     : None,         # the last char of jobname
+    'accinfo'   : None,         # the accounting information
+    'pgmer'     : None,         # the name of the programmer
+    'jobid'     : None,         # 'JOB*****'
+    'jobstat'   : None,         # the status of the job
     'jobstart'  : None,         # time object
     'jobend'    : None,         # time object
     'step'      : [],           # each item is of type "Step"
@@ -144,13 +161,20 @@ DISP_STATUS = {                 # status : action_normal
     'SHR' : 'KEEP',
     'MOD' : 'KEEP',
     }
-DISP_ACTION = [ 'KEEP', 'DELETE', 'PASS', 'CATLG', 'UNCATLG' ]
-DD_MODE = {
+DISP_ACTION = {                 # action : display
+    'KEEP'      : 'RETAINED',
+    'DELETE'    : 'DELETED',
+    'PASS'      : 'PASSED',
+    'CATLG'     : 'CATLGED',
+    'UNCATLG'   : 'UNCATLGED',
+    }
+DD_MODE = {                     # DD mode : SPOOL mode
     'NEW' : 'o',
     'OLD' : 'o',
     'SHR' : 'i',
     'MOD' : '+',
     }
+
 class Step(object):             # for JCL['step'][*]
     def __init__(self, name, pgm = '', proc = '', parm = ''):
         # begining of inner class definition
@@ -173,7 +197,7 @@ class Step(object):             # for JCL['step'][*]
                         sys.stderr.write('Error: ' + k + '=' + v +
                                          ': Un-recognized option\n')
                         sys.exit(44)
-                # parse DISP if presented
+                # parse DISP
                 if ddcard['DISP'] != '':
                     if ddcard['DISP'][0] == '(':
                         disp = re.split(',', ddcard['DISP'][1:-1])
@@ -196,6 +220,8 @@ class Step(object):             # for JCL['step'][*]
                                          ': Invalid DISP action.\n')
                         sys.exit(41)
                     ddcard['DISP'] = disp
+                else:
+                    ddcard['DISP'] = ['','','']
                 # add STAT
                 ddcard['STAT'] = DD_STATUS['init']
                 self.__items[ddname] = ddcard
@@ -223,6 +249,12 @@ class Step(object):             # for JCL['step'][*]
 
             def mode(self, key):
                 return DD_MODE[self.__items[key]['DISP'][0]]
+
+            def get_act(self, key, rc = 0):
+                if rc == 0:
+                    return self.__items[key]['DISP'][1]
+                else:
+                    return self.__items[key]['DISP'][2]
 
             def __len__(self):
                 return len(self.__indxs)
@@ -263,7 +295,7 @@ class Step(object):             # for JCL['step'][*]
 # end of Step Definition
 
 
-# JES Definition
+## JES Definition
 JES = {                         # JES storage management map
     'instream'  : 'JES2',       # '// DD *|DATA'
     'outstream' : 'JES2',       # '// DD SYSOUT='
@@ -274,6 +306,9 @@ JES = {                         # JES storage management map
 # converts "ABCD.EFG" to ["ABCD", "EFG"]
 def conv_path(fn):
     return re.split('\.', fn)
+
+def conv_back(fn_list):
+    return '.'.join(fn_list)
 
 def is_file(dsn):
     return os.path.isfile(os.path.join(* dsn))
@@ -290,7 +325,7 @@ def flush(sp):
     if sp.mode == 'i':
         return -1
 
-    fp = open_file(sp.fn_list, 'w', sp.f_type)
+    fp = open_file(sp.label, 'w', sp.f_type)
     cnt = 0
     for line in sp.spool:
         fp.write(line)
@@ -298,12 +333,11 @@ def flush(sp):
     return cnt
 
 
-
-# Program Supported
+## Program Supported
 PGM_SUPPORTED = {         # all supported programs and their bindings
-    'ASSIST'  : 'zPE.pgm.ASSIST.init',
+    'ASSIST'    : 'zPE.pgm.ASSIST.init',
 
-    'IEFBR14' : 'pass',
+    'IEFBR14'   : 'zPE.pgm.IEFBR14.init',
     }
 
 def LIST_PGM():                # list all supported languages out

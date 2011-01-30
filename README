@@ -16,6 +16,21 @@ Copyright (c) 2011, Northern Illinois University
 All rights reserved.
 
 
+PRE-INSTALL
+-------------------------
+Make sure you have python 2.x (not python 3) and setuptools
+installed correctly.
+
+You can find the python 2 here:
+http://python.org/download/
+
+And you can find the setuptools here:
+http://pypi.python.org/pypi/setuptools
+
+Under Windows, please make sure the Environment Variable "HOME"
+and "Path" are set correctly.
+
+
 INSTALLATION
 -------------------------
 Under Linux:
