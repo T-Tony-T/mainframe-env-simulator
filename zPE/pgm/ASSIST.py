@@ -13,12 +13,41 @@ FILE = [
 def init(step):
     # check for file requirement
     if __MISSED_FILE(step, 0) != 0:
-        return 16
+        return zPE.RC['SEVERE']
+
+    spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
+    spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
+
+    pln_cnt = 0                 # printed line counter of the current page
+    page_cnt = 1                # page counter
+    ctrl = '1'
+
+    spo.append(ctrl, '*** ASSIST 4.0/A2-05/15/82  470/V7A/0:OS/VS2  INS=SDFP7/X=BGHO, CHECK/TRC/=1180, OPTS=CDKMPR FROM PENN ST*NIU COMPSCI*LT\n')
+    pln_cnt += 1
+    ctrl = '0'
+
+    spo.append(ctrl, '\n')
+    pln_cnt += 1
+
+    spo.append(ctrl, '{0:>111}PAGE {1:>4}\n'.format(' ', page_cnt))
+    spo.append(ctrl, '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
+    pln_cnt += 2
+
+    # main read loop
+    for line in spi:
+        if pln_cnt >= zPE.DEFAULT['LN_P_PAGE']:
+            page_cnt += 1
+            spo.append('1', '{0:>111}PAGE {1:>4}\n'.format(' ', page_cnt))
+            spo.append(ctrl, '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
+            pln_cnt = 2
 
 
 
 
-    return 0
+    # end of main read loop
+
+
+    return zPE.RC['NORMAL']
 
 
 ### Supporting Functions

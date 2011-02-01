@@ -27,9 +27,13 @@ def main():
 
 def submit(job):
     rv = zPE.core.jcl.parse(job)
+    flush_all = False
     if rv == 'ok':
         zPE.core.jcl.init_job()
         for step in zPE.JCL['step']:
+            if flush_all:
+                continue        # flush all the rest step
+
             if step.pgm in zPE.PGM_SUPPORTED:
                 rv = zPE.core.jcl.init_step(step)
                 if rv == 'ok':
@@ -38,9 +42,9 @@ def submit(job):
                         rv = 'steprun'
                 else:
                     step.rc = 'FLUSH'
+                    flush_all = True
                 zPE.core.jcl.finish_step(step)
             else:               # not in system path, search in STEPLIB
-                found_module = False
                 if 'STEPLIB' in step.dd:
                     rv = zPE.core.jcl.init_step(step)
                     if rv == 'ok':
@@ -49,8 +53,15 @@ def submit(job):
                             rv = 'steprun'
                     else:
                         step.rc = 'FLUSH'
+                        flush_all = True
                     zPE.core.jcl.finish_step(step)
-
+                else:           # not found at all
+                    sys.stderr.write('Error: ' + step.pgm +
+                                     ': Program not supported.\n')
+                    sys.stderr.write('For more information, see \'' +
+                                     sys.argv[0] + ' -l\' for help.\n')
+                    sys.exit(-1)
+        # end of all steps
     zPE.core.jcl.finish_job(rv)
 
 

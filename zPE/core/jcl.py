@@ -33,10 +33,11 @@ def parse(job):
 
     field = re.split('\s', line, 2)
 
-    # parse JOB card
+    # check lable
     if not zPE.ck_label(field[0][2:]):
         invalid_lable.append(zPE.JCL['read_cnt'])
 
+    # parse JOB card
     if field[1] != 'JOB':
         sys.stderr.write('Error: No JOB card found.\n')
         sys.exit(1)
@@ -109,11 +110,14 @@ def parse(job):
             zPE.JCL['read_cnt'] -= 1 # "//" does not count
             break
 
-        # parse EXEC card
-        # currently supported parameter: parm
+        # check lable
         if not zPE.ck_label(field[0][2:]):
             invalid_lable.append(zPE.JCL['read_cnt'])
 
+        # parse EXEC card
+        # currently supported parameter: parm
+        # currently assumed parameter: cond=(0,NE)
+        # see also: __COND_FAIL(step)
         if field[1] == 'EXEC':
             tmp = re.split(',', field[2], 1)
             pgm = ''
@@ -169,6 +173,9 @@ def parse(job):
                     'DSN' : dsn,
                     'DISP' : disp,
                     })
+        else:                   # continuation
+            sys.stderr.write('Error: Continuation not supported.\n')
+            sys.exit(33)
 
         sp2.append(ctrl, '{0:>9} {1}'.format(zPE.JCL['card_cnt'], line))
     # end of the main read loop
@@ -231,6 +238,13 @@ def init_step(step):
     step.start = localtime()
     ctrl = ' '
 
+    # check condition
+    if __COND_FAIL(step):
+        sp3.append(ctrl, 'IEF202I {0:<8} '.format(zPE.JCL['jobname']),
+                   step.name, ' - STEP WAS NOT RUN BECAUSE OF CONDITION CODES\n'
+                   )
+        return 'cond'
+
     sp3.append(ctrl, 'IEF236I ALLOC. FOR {0:<8} {1}\n'.format(
             zPE.JCL['jobname'], step.name))
     alloc = False               # whether allocated any file
@@ -260,12 +274,12 @@ def init_step(step):
             pass          # read in but not allocate, must be instream
         else:
             path = []
-            label = []
+            zPEfn = []
             if step.dd[ddname]['SYSOUT'] != '':
                 # outstream
                 mode = 'o'
                 f_type = 'outstream'
-                label = ['{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)]
+                zPEfn = ['{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)]
             else:
                 if step.dd[ddname]['DSN'] != '':
                     # file
@@ -274,9 +288,9 @@ def init_step(step):
                 else:
                     # tmp
                     f_type = 'tmp'
-                    label = ['{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)]
+                    zPEfn = ['{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)]
                 mode = step.dd.mode(ddname)
-            zPE.core.SPOOL.new(ddname, mode, f_type, path, label)
+            zPE.core.SPOOL.new(ddname, mode, f_type, path, zPEfn)
 
         sp3.append(ctrl, 'IEF237I {0}'.format(zPE.JES[f_type]),
                    ' ALLOCATED TO {0}\n'.format(ddname))
@@ -316,12 +330,15 @@ def finish_step(step):
                        '{0:<10} DDNAME=STEPLIB\n'.format(action + ','))
 
         for ddname in step.dd.list():
-            if ddname in zPE.core.SPOOL.DEFAULT:
-                continue            # skip default spools
-            if ddname == 'STEPLIB':
-                continue            # already processed
+            if ddname in zPE.core.SPOOL.DEFAULT:        # skip default spools
+                continue
+            if ddname == 'STEPLIB':                     # already processed
+                continue
             if step.dd[ddname]['STAT'] != zPE.DD_STATUS['normal']:
-                continue            # do something if needed
+                sys.error.write('Warning: ' + ddname + ': File status is not' +
+                                'normal. (' + step.dd[ddname]['STAT'] + ')\n' +
+                                '        Ignored.\n')
+                continue
 
             path = zPE.core.SPOOL.path_of(ddname)
             action = zPE.core.SPOOL.MODE[zPE.core.SPOOL.mode_of(ddname)]
@@ -332,14 +349,17 @@ def finish_step(step):
                        ' {0}\n'.format(action))
 
             f_type = zPE.core.SPOOL.type_of(ddname)
-            if f_type == 'outstream':
-                pass                # ignore outstream
-            elif f_type == 'instream':
-                zPE.core.SPOOL.remove(ddname) # remove instream
-            elif f_type == 'tmp' and step.dd.nmend(ddname) != 'PASS':
-                zPE.core.SPOOL.remove(ddname) # remove non-passed tmp
-            else:                   # must be file
+            if f_type == 'outstream':                   # write outstream
+                __WRITE_OUT([ddname])
+            elif f_type == 'instream':                  # remove instream
                 pass
+            elif f_type == 'tmp':                       # remove tmp
+                pass
+            else:                                       # sync file if needed
+                if step.dd.nmend(ddname) in [ 'KEEP', 'PASS', 'CATLG' ]:
+                    __WRITE_OUT([ddname])
+
+            zPE.core.SPOOL.remove(ddname) # remove SPOOLs of the step
 
     sp3.append(' ', 'IEF373I STEP/{0:<8}/START '.format(step.name),
                strftime('%Y%j.%H%M\n', step.start))
@@ -384,10 +404,8 @@ def finish_job(msg):
     else:
         ctrl_new = ' '
 
-    for key in zPE.core.SPOOL.list():
+    for key in zPE.core.SPOOL.DEFAULT:
         sp = zPE.core.SPOOL.retrive(key)
-        if sp.mode  == 'i':
-            continue            # input spool
         if sp.empty():
             continue            # empty spool
         if key in ['JESMSGLG']:
@@ -399,22 +417,26 @@ def finish_job(msg):
             sp.rmline(0)
 
     __JES2_STAT(msg)
-    __WRITE_OUT()
+    __WRITE_OUT(zPE.core.SPOOL.DEFAULT)
 
 
 ### Supporting functions
 
+def __COND_FAIL(step):
+    # assume cond=(0,NE), modify if desired
+    for indx in range(zPE.JCL['step'].index(step)):
+        if zPE.JCL['step'][indx].rc != 0:
+            return True
+    return False
+
+
 def __JES2_STAT(msg):
     # vvv JCL not executed vvv
-    if msg == 'label':
+    if msg in [ 'label' ]:
         ctrl = '0'
-    elif msg == 'steplib':
-        ctrl = '-'
     # ^^^ JCL not executed ^^^
     # vvv JCL executed vvv
-    elif msg == 'steprun':
-        ctrl = '-'
-    elif msg == 'ok':
+    elif msg in [ 'steplib', 'steprun', 'cond', 'ok' ]:
         ctrl = '-'
     # ^^^ JCL executed ^^^
 
@@ -468,8 +490,8 @@ def __READ_UNTIL(fp, fn, dsn, dlm):
 
         sp.append(line)
 
-def __WRITE_OUT():
-    for fn in zPE.core.SPOOL.list():
+def __WRITE_OUT(dd_list):
+    for fn in dd_list:
         sp = zPE.core.SPOOL.retrive(fn)
         if sp.mode == 'i':
             continue            # input spool

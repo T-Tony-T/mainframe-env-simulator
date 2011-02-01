@@ -15,12 +15,12 @@ MODE = {                        # SPOOL mode : display
     }
 
 class Spool(object):
-    def __init__(self, spool, mode, f_type, fn_list, label):
+    def __init__(self, spool, mode, f_type, fn_list, zPEfn):
         self.spool = spool      # [ line_1, line_2, ... ]
         self.mode = mode        # one of the MODE keys
         self.f_type = f_type    # one of the zPE.JES keys
         self.fn_list = fn_list  # [ dir_1, dir_2, ... , file ]
-        self.label = label      # the file name on PC
+        self.zPEfn = zPEfn      # the file name in zPE, same format as above
 
 
     # the following methods are for Spool.spool
@@ -38,23 +38,28 @@ class Spool(object):
         return str('mode : ' + self.mode +
                    ', type : ' + self.f_type +
                    ', fn : ' + str(self.fn_list) +
-                   ', lbl : ' + str(self.label))
+                   ', lbl : ' + str(self.zPEfn))
 
-    def __getitem__(self, (ln, indx)):
-        return self.spool[ln][indx]
+    def __getitem__(self, key):
+        if isinstance(key, int):        # key = ln
+            return self.spool[key]
+        else:                           # key = (ln, indx/slice)
+            return self.spool[key[0]][key[1]]
 
-    def __setitem__(self, (ln, indx), val):
-        if isinstance(indx, int):
-            in_s = indx
-            in_e = indx + 1
-        else:                   # must be slice
-            (in_s, in_e, step) = indx.indices(len(self.spool[ln]))
-
-        self.spool[ln] = '{0}{1}{2}'.format(
-            self.spool[ln][:in_s],
-            val,
-            self.spool[ln][in_e:]
-            )
+    def __setitem__(self, key, val):
+        if isinstance(key, int):        # key = ln
+            self.spool[key] = val
+        else:
+            if isinstance(key[1], int): # key = (ln, indx)
+                in_s = key[1]
+                in_e = key[1] + 1
+            else:                       # key = (ln, slice)
+                (in_s, in_e, step) = key[1].indices(len(self.spool[key[0]]))
+            self.spool[key[0]] = '{0}{1}{2}'.format(
+                self.spool[key[0]][:in_s],
+                val,
+                self.spool[key[0]][in_e:]
+                )
 # end of Spool Definition
 
 # SPOOL pool
@@ -79,9 +84,13 @@ def dict():
 def list():
     return SPOOL.keys()
 
-def new(key, mode, f_type, path = [], label = []):
+def new(key, mode, f_type, path = [], zPEfn = []):
     # check uniqueness
     if key in SPOOL:
+        if ( (f_type == 'file') and (mode in ['i', '+']) and
+             (path == path_of[key]) and (zPEfn == zPEfn_of(key))
+             ):
+            return SPOOL[key]   # passed from previous step
         sys.stderr.write('Error: ' + key + ': SPOOL name conflicts.\n')
         sys.exit(-1)
 
@@ -111,11 +120,11 @@ def new(key, mode, f_type, path = [], label = []):
             if not conflict:
                 break
 
-    # check label binding
-    if len(label) == 0:
-        label = path
+    # check zPEfn binding
+    if len(zPEfn) == 0:
+        zPEfn = path
 
-    SPOOL[key] = Spool([], mode, f_type, path, label)
+    SPOOL[key] = Spool([], mode, f_type, path, zPEfn)
     return SPOOL[key]
 
 def remove(key):
@@ -146,8 +155,8 @@ def path_of(key):
     else:
         return None
 
-def label_of(key):
+def zPEfn_of(key):
     if key in SPOOL:
-        return SPOOL[key].label
+        return SPOOL[key].zPEfn
     else:
         return None

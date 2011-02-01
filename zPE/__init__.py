@@ -27,10 +27,118 @@ GPR_NUM = 16                    # number of general purpose registers
 
 
 ## Program Status Word
-PSW = {
-    'ILC'       : 0,            # instruction length code
-    'CC'        : 0,            # condition code
+class ProgramStatusWord(object):
+    def __init__(self, C = 0):
+        if C == 1:              # EC mode
+            self.__full_init(0, 1, 0, None,
+                             0, 0, C, 0, 1, 1,
+                             1, None, None,
+                             0, 0, 0)
+        else:                   # BC mode
+            self.__full_init(None, None, None, 0,
+                             0, 0, C, 0, 1, 1,
+                             None, 0, 0,
+                             0, 0, 0)
+
+
+    def __full_init(self, R, T, I, Channel_masks,
+                    E, PSW_key, C, M, W, P,
+                    S, Interruption_code, ILC,
+                    CC, Program_mask, Instruction_address
+                    ):
+        # EC only:
+        self.R = R              # (R) Program event recording mask
+        self.T = T              # (T = 1) DAT mode
+        self.I = I              # (I) Input/output mask
+        # BC only:
+        self.Channel_masks = Channel_masks
+                                # 64: Channel 0 mask
+                                # 32: Channel 1 mask
+                                # 16: Channel 2 mask
+                                #  8: Channel 3 mask
+                                #  4: Channel 4 mask
+                                #  2: Channel 5 mask
+                                #  1: Mask for channel 6 and up
+
+        # EC + BC:
+        self.E = E              # (E) External mask
+        self.PSW_key = PSW_key
+        self.C = C              # (C = 0) Control mode:
+                                #      0 -> Basic Control mode
+                                #      1 -> Extended Control mode
+        self.M = M              # (M) Machine check mask
+        self.W = W              # (W = 1) Wait state
+        self.P = P              # (P = 1) Problem state
+
+        # EC only:
+        self.S = S              # (S = 1) Secondary space mode
+        # BC only:
+        self.Interruption_code = Interruption_code
+        self.ILC = ILC          # (ILC) Instruction length code
+
+        # EC + BC:
+        self.CC = CC            # (CC) Condition code
+        self.Program_mask = Program_mask
+                                #  8: Fixed point overflow mask
+                                #  4: Decimal overflow mask
+                                #  2: Exponent underflow mask
+                                #  1: Significance mask
+        self.Instruction_address = Instruction_address
+    # end of __full_init()
+
+    def dump_bin(self):
+        if self.C == 1:         # EC mode
+            return (
+                # 1st word
+                '0{0}000{1}{2}{3}'.format(self.R, self.T, self.I, self.E) + #  8
+                '{0:0>4}'.format(bin(self.PSW_key)[2:]) +                   # 12
+                '{0}{1}{2}{3}'.format(self.C, self.M, self.W, self.P) +     # 16
+                '{0}0{1:0>2}'.format(self.S, bin(self.CC)[2:]) +            # 20
+                '{0:0>4}'.format(bin(self.Program_mask)[2:]) +              # 24
+                '00000000',                                                 # 32
+                # 2nd word
+                '00000000' +                                                #  8
+                '{0:0>24}'.format(bin(self.Instruction_address)[2:])        # 32
+                )
+        else:                   # BC mode
+            return (
+                # 1st word
+                '{0:0>7}{1}'.format(bin(self.Channel_masks)[2:], self.E) +  #  8
+                '{0:0>4}'.format(bin(self.PSW_key)[2:]) +                   # 12
+                '{0}{1}{2}{3}'.format(self.C, self.M, self.W, self.P) +     # 16
+                '{0:0>16}'.format(bin(self.Interruption_code)[2:]),         # 32
+                # 2nd word
+                '{0:0>2}'.format(bin(self.ILC)[2:]) +                       #  2
+                '{0:0>2}'.format(bin(self.CC)[2:]) +                        #  4
+                '{0:0>4}'.format(bin(self.Program_mask)[2:]) +              #  8
+                '{0:0>24}'.format(bin(self.Instruction_address)[2:])        # 32
+                )
+
+    def dump_hex(self):
+        (w1, w2) = self.dump_bin()
+        return (
+            '{0:0>8}'.format(hex(int(w1, 2))[2:].upper()),
+            '{0:0>8}'.format(hex(int(w2, 2))[2:].upper())
+            )
+
+    def __str__(self):
+        (w1, w2) = self.dump_hex()
+        return '{0} {1}'.format(w1, w2)
+
+
+# end of PSW class definition
+
+
+## Return Code
+RC = {
+    'NORMAL'    : 0,
+    'WARNING'   : 4,
+    'ERROR'     : 8,
+    'SERIOUS'   : 12,
+    'SEVERE'    : 16,
     }
+
+
 
 
 ### Program Definition
@@ -51,6 +159,8 @@ DEFAULT = {
 
     'MEMORY_SZ' : '1024K',      # memory size: 1024 KB
     'MEM_MAX'   : 1048576,      # 1024K = 1024 * 1024 = 1048576
+
+    'LN_P_PAGE' : 60,           # line per page for output
 
     'SPOOL_DIR' : '',           # SPOOL positon: current directory
 
@@ -180,8 +290,8 @@ class Step(object):             # for JCL['step'][*]
         # begining of inner class definition
         class DDlist(object):   # inner class for JCL['step'][*].dd
             def __init__(self):
-                self.__items = {}
-                self.__indxs = []
+                self.__items = {} # { ddname : { 'DSN' : '*', 'DISP' = [,,] } }
+                self.__indxs = [] # [ ddname ]
 
             def append(self, ddname, ddcard):
                 if not isinstance(ddname, str):
@@ -243,6 +353,9 @@ class Step(object):             # for JCL['step'][*]
 
             def list(self):
                 return self.__indxs
+
+            def index(self, key):
+                return self.__indxs.index(key)
 
             def key(self, indx):
                 return self.__indxs[indx]
@@ -325,7 +438,7 @@ def flush(sp):
     if sp.mode == 'i':
         return -1
 
-    fp = open_file(sp.label, 'w', sp.f_type)
+    fp = open_file(sp.zPEfn, 'w', sp.f_type)
     cnt = 0
     for line in sp.spool:
         fp.write(line)
