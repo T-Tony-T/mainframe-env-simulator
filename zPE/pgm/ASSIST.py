@@ -1,6 +1,7 @@
 import zPE
 
 import os, sys
+import re
 from time import localtime, mktime, strftime, strptime
 
 
@@ -17,12 +18,31 @@ def init(step):
 
 
 
-    parse(None)                 # cStringIO
+    rc = pass_1(None)           # cStringIO
+    return pass_2(rc, None)     # cStringIO
+
+
+def pass_1(memory):
+    spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
+
+    # main read loop
+    for line in spi:
+        if line[0] != '*':      # not comment
+            field = re.split('\s', line[:-1], 3)
+
+            # check lable
+            bad_lbl = zPE.bad_label(field[0])
+            if bad_lbl:
+                pass            # err msg
+            elif bad_lbl != None: # label exists
+                pass            # add to table
+
+    # end of main read loop
 
     return zPE.RC['NORMAL']
 
 
-def parse(memory):
+def pass_2(rc, memory):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
 
@@ -63,6 +83,8 @@ def parse(memory):
 
 
     # end of main read loop
+
+    return zPE.RC['NORMAL']
 
 
 

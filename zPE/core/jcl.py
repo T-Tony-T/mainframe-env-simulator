@@ -34,7 +34,7 @@ def parse(job):
     field = re.split('\s', line, 2)
 
     # check lable
-    if not zPE.ck_label(field[0][2:]):
+    if zPE.bad_label(field[0][2:]):
         invalid_lable.append(zPE.JCL['read_cnt'])
 
     # parse JOB card
@@ -111,7 +111,7 @@ def parse(job):
             break
 
         # check lable
-        if not zPE.ck_label(field[0][2:]):
+        if zPE.bad_label(field[0][2:]):
             invalid_lable.append(zPE.JCL['read_cnt'])
 
         # parse EXEC card
@@ -479,7 +479,7 @@ def __READ_UNTIL(fp, fn, dsn, dlm):
         line = fp.readline()
 
         # check end of stream
-        if line == dlm:
+        if line[:2] == dlm:
             return ''           # the return value of readline() on EOF
 
         # check in-stream data

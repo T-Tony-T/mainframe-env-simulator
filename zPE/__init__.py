@@ -13,14 +13,14 @@ JOB_ID_MIN = 10000              # the smallest job ID
 JOB_ID_MAX = 65535              # the largest job ID
 TMP_FILE_ID = 101               # the smallest tmp file identifier
 
-def ck_label(lable):
-    if len(lable) == 0:
-        return True             # no lable
-    if len(lable) > 8:
-        return False            # label too long
-    if re.match('[A-Z@#$][A-Z@#$0-9]+', lable).group(0) != lable:
-        return False            # illegal character
-    return True
+def bad_label(label):
+    if len(label) == 0:
+        return None             # no lable
+    if len(label) > 8:
+        return True             # label too long
+    if re.match('[A-Z@#$][A-Z@#$0-9]+', label).group(0) != label:
+        return True             # illegal character
+    return False
 
 ## Return Code
 RC = {
