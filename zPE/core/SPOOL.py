@@ -14,6 +14,7 @@ MODE = {                        # SPOOL mode : display
     '+' : 'KEPT',
     }
 
+## Simultaneous Peripheral Operations On-line
 class Spool(object):
     def __init__(self, spool, mode, f_type, fn_list, zPEfn):
         self.spool = spool      # [ line_1, line_2, ... ]
@@ -62,7 +63,8 @@ class Spool(object):
                 )
 # end of Spool Definition
 
-# SPOOL pool
+
+## SPOOL Pool
 DEFAULT = [ 'JESMSGLG', 'JESJCL', 'JESYSMSG' ]
 
 SPOOL = {
@@ -72,6 +74,7 @@ SPOOL = {
     }
 
 
+## Interface Functions
 def empty():
     return (len(SPOOL) == 0)
 
