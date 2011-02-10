@@ -78,7 +78,7 @@ def parse(job):
         for part in re.split(',', args[2]):
             if part[:7] == 'REGION=':
                 try:
-                    zPE.JCL['region'] = zPE.parse_region(part[7:])
+                    zPE.JCL['region'] = zPE.core.mem.parse_region(part[7:])
                 except SyntaxError:
                     sys.stderr.write('Error: ' + part +
                                      ': Invalid region size.\n')
@@ -163,7 +163,7 @@ def parse(job):
                         parm = part[5:]
                     elif part[:7] == 'REGION=':
                         try:
-                            region = zPE.parse_region(part[7:])
+                            region = zPE.core.mem.parse_region(part[7:])
                         except SyntaxError:
                             sys.stderr.write('Error: ' + part +
                                              ': Invalid region size.\n')
