@@ -16,7 +16,7 @@ def init(step):
     if __MISSED_FILE(step, 0) != 0:
         return zPE.RC['SEVERE']
 
-
+    print step.region
 
     rc = pass_1(None)           # cStringIO
     return pass_2(rc, None)     # cStringIO

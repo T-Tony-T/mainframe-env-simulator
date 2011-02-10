@@ -50,7 +50,6 @@ DEFAULT = {
     'ADDR_MODE' : 31,           # hardware addressing mode: 31 bit
 
     'MEMORY_SZ' : '1024K',      # memory size: 1024 KB
-    'MEM_MAX'   : 1048576,      # 1024K = 1024 * 1024 = 1048576
 
     'LN_P_PAGE' : 60,           # line per page for output
 
@@ -65,18 +64,21 @@ DEFAULT = {
 Config = {
     'job_id'    : JOB_ID_MIN,
     'tmp_id'    : TMP_FILE_ID,  # next available tmp file identifier
+
     'addr_mode' : DEFAULT['ADDR_MODE'],
     'addr_max'  : 0,            # calculate on loading
+
     'memory_sz' : DEFAULT['MEMORY_SZ'],
-                # in future, this may be controled by "// EXEC PGM=*,REGION="
-    'mem_max'   : DEFAULT['MEM_MAX'],
+                                # can be altered by "// JOB ,*,REGION=*"
+                                # can be overridden by "// EXEC *,REGION=*"
+
     'spool_dir' : DEFAULT['SPOOL_DIR'],
     'spool_path': None,         # will be set after JOB card is read
     }
 
 CONFIG_PATH = {
     'dir'       : os.path.join(os.environ['HOME'], '.zPE'),
-    'rc'        : os.path.join(os.environ['HOME'], '.zPE', 'zPE.conf'),
+    'rc'        : os.path.join(os.environ['HOME'], '.zPE', 'config'),
     'data'      : os.path.join(os.environ['HOME'], '.zPE', 'data'),
     'ICH70001I' : os.path.join(os.environ['HOME'], '.zPE', 'data', 'ICH70001I'),
     }
@@ -95,45 +97,52 @@ def read_rc():
 
     for line in open(CONFIG_PATH['rc'], 'r'):
         (k, v) = re.split('[ \t]*=[ \t]*', line, maxsplit=1)
+        ok = False
 
         if k == 'job_id':
             try:
                 Config[k] = int(v) + 1
-                if Config[k] < JOB_ID_MIN or Config[k] > JOB_ID_MAX:
-                    Config[k] = JOB_ID_MIN
+                if JOB_ID_MIN < Config[k] and Config[k] < JOB_ID_MAX:
+                    ok = True
             except ValueError:
-                Config[k] = JOB_ID_MIN
-                sys.stderr.write('Warning: ' + v[:-1] +
-                                 ': Invalid job ID.\n')
+                pass
 
+            if not ok:
+                Config[k] = JOB_ID_MIN
+                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
+                                 ': Invalid job ID.\n')
         elif k == 'addr_mode':
             try:
                 Config[k] = int(v)
-                if Config[k] not in [16, 31, 64]:
-                    Config[k] = ADDR_MODE
+                if Config[k] in [16, 31, 64]:
+                    ok = True
             except ValueError:
-                Config[k] = ADDR_MODE
-                sys.stderr.write('Warning: ' + v[:-1] +
+                pass
+
+            if not ok:
+                Config[k] = DEFAULT['ADDR_MODE']
+                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
                                  ': Invalid address mode.\n')
-
         elif k == 'memory_sz':
-            v = re.split('(\d+)', v)
-            if len(v) == 2:
-                Config[k] = int(v[1])
-                Config['mem_max'] = Config['memory_sz']
-            elif (len(v) == 3) and ('K' in re.split('\s', v[2].upper())):
-                Config[k] = v[1] + 'K'
-                Config['mem_max'] = int(v[1]) * 1024
-            else:
-                sys.stderr.write('Warning: ' + v[:-1] +
-                                 ': Invalid memory size.\n')
+            try:
+                Config[k] = parse_region(v)
+                ok = True
+            except SyntaxError:
+                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
+                                 ': Invalid region size.\n')
+            except ValueError:
+                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
+                                 ': Region must be divisible by 4K.\n')
 
+            if not ok:
+                Config[k] = DEFAULT['MEMORY_SZ']
         elif k == 'spool_dir':
             if os.path.isdir(v[:-1]):
                 Config['spool_dir'] = v[:-1]
             else:
                 sys.stderr.write('Warning: ' + v[:-1] +
                                  ': Invalid SPOOL dir path.\n')
+                Config[k] = DEFAULT['SPOOL_DIR']
 
     Config['addr_max'] = 2 ** Config['addr_mode']
     __TOUCH_RC()
@@ -147,6 +156,7 @@ JCL = {
     'class'     : None,         # the last char of jobname
     'accinfo'   : None,         # the accounting information
     'pgmer'     : None,         # the name of the programmer
+    'regoin'    : None,         # the regoin of the entire job
     'jobid'     : None,         # 'JOB*****'
     'jobstat'   : None,         # the status of the job
     'jobstart'  : None,         # time object
@@ -178,7 +188,10 @@ DD_MODE = {                     # DD mode : SPOOL mode
     }
 
 class Step(object):             # for JCL['step'][*]
-    def __init__(self, name, pgm = '', proc = '', parm = ''):
+    def __init__(self, name, pgm, proc,
+                 region = Config['memory_sz'],
+                 parm = ''
+                 ):
         # begining of inner class definition
         class DDlist(object):   # inner class for JCL['step'][*].dd
             def __init__(self):
@@ -293,11 +306,35 @@ class Step(object):             # for JCL['step'][*]
         self.pgm = pgm          # PGM='pgm_name'
         self.proc = proc        # [PROG=]'prog_name'
         self.procname = ''      # not applied now
-        self.parm = parm        # PARM=(parm_list)
+        self.region = region    # REGION=
+        self.parm = parm        # PARM='parm_list'
         self.start = None       # time object
         self.rc = None          # return code
         self.dd = DDlist()
 # end of Step Definition
+
+## Region Parser
+def parse_region(region):
+    return __PARSE_REGION(region)[1]
+
+def max_sz_of(region):
+    return __PARSE_REGION(region)[0]
+
+def __PARSE_REGION(region):
+    region = re.split('(\d+)', region)
+    if len(region) == 2:
+        region = int(region[1])
+    elif (len(region) == 3) and ('K' in re.split('\s', region[2].upper())):
+        region = int(region[1]) * 1024
+    elif (len(region) == 3) and ('M' in re.split('\s', region[2].upper())):
+        region = int(region[1]) * 1024 * 1024
+    else:
+        raise SyntaxError
+
+    if region % 4096 != 0:
+        raise ValueError
+
+    return (region, '{0}K'.format(region / 1024))
 
 
 ## JES Definition
