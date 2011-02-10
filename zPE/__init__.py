@@ -125,7 +125,7 @@ def read_rc():
                                  ': Invalid address mode.\n')
         elif k == 'memory_sz':
             try:
-                Config[k] = parse_region(v)
+                Config[k] = core.mem.parse_region(v)
                 ok = True
             except SyntaxError:
                 sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
@@ -306,35 +306,12 @@ class Step(object):             # for JCL['step'][*]
         self.pgm = pgm          # PGM='pgm_name'
         self.proc = proc        # [PROG=]'prog_name'
         self.procname = ''      # not applied now
-        self.region = region    # REGION=
+        self.region = region    # REGION=xxxx[K|M]
         self.parm = parm        # PARM='parm_list'
         self.start = None       # time object
         self.rc = None          # return code
         self.dd = DDlist()
 # end of Step Definition
-
-## Region Parser
-def parse_region(region):
-    return __PARSE_REGION(region)[1]
-
-def max_sz_of(region):
-    return __PARSE_REGION(region)[0]
-
-def __PARSE_REGION(region):
-    region = re.split('(\d+)', region)
-    if len(region) == 2:
-        region = int(region[1])
-    elif (len(region) == 3) and ('K' in re.split('\s', region[2].upper())):
-        region = int(region[1]) * 1024
-    elif (len(region) == 3) and ('M' in re.split('\s', region[2].upper())):
-        region = int(region[1]) * 1024 * 1024
-    else:
-        raise SyntaxError
-
-    if region % 4096 != 0:
-        raise ValueError
-
-    return (region, '{0}K'.format(region / 1024))
 
 
 ## JES Definition
