@@ -5,7 +5,8 @@ import zPE
 
 import os, sys
 import re
-from ctypes import *            # for Union
+from ctypes import *            # for Union and C-Style array
+
 
 ## General Purpose Register
 class GPR(Union):
@@ -16,15 +17,15 @@ class GPR(Union):
 
     def __getitem__(self, key):
         if key == 0:
-            return self.long
+            return self.long    # 0 to get the entire register
         else:
-            return self.bytes[4 - key]
+            return self.bytes[(4-key)%4] # reverse the byte order
 
     def __setitem__(self, key, val):
         if key == 0:
             self.long = val
         else:
-            self.bytes[4 - key] = val
+            self.bytes[(4-key)%4] = val
 
     def positive(self):
         # 0x80000000 will mask off all but the sign bit
