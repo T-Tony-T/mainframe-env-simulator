@@ -184,11 +184,11 @@ class Page(Structure):
 
 
 ## Virtual Memory
-# MemoryError:   addressability error
+# MemoryError:   addressing exception
 class Memory(object):
     def __init__(self, pos, sz):
         if pos < 0 or pos + sz >= zPE.Config['addr_max']:
-            raise MemoryError   # addressability error
+            raise MemoryError   # addressing exception
         self.pos = pos
         self.memory = ( Page * (sz % 4096 + 1) )()
 
@@ -212,9 +212,9 @@ def __PARSE_REGION(region):
     region = re.split('(\d+)', region)
     if len(region) == 2:
         region = int(region[1])
-    elif (len(region) == 3) and ('K' in re.split('\s', region[2].upper())):
+    elif (len(region) == 3) and ('K' in re.split('\s+', region[2].upper())):
         region = int(region[1]) * 1024
-    elif (len(region) == 3) and ('M' in re.split('\s', region[2].upper())):
+    elif (len(region) == 3) and ('M' in re.split('\s+', region[2].upper())):
         region = int(region[1]) * 1024 * 1024
     else:
         raise SyntaxError

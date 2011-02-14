@@ -16,12 +16,16 @@ MODE = {                        # SPOOL mode : display
 
 ## Simultaneous Peripheral Operations On-line
 class Spool(object):
-    def __init__(self, spool, mode, f_type, fn_list, zPEfn):
+    def __init__(self, spool, mode, f_type, virtual_path, real_path):
         self.spool = spool      # [ line_1, line_2, ... ]
         self.mode = mode        # one of the MODE keys
         self.f_type = f_type    # one of the zPE.JES keys
-        self.fn_list = fn_list  # [ dir_1, dir_2, ... , file ]
-        self.zPEfn = zPEfn      # the file name in zPE, same format as above
+        self.virtual_path = virtual_path
+                                # path recognized within zPE;
+                                # [ dir_1, dir_2, ... , file ]
+        self.real_path = real_path
+                                # path in the actual file system;
+                                # same format as above
 
 
     # the following methods are for Spool.spool
@@ -38,8 +42,11 @@ class Spool(object):
     def __str__(self):
         return str('mode : ' + self.mode +
                    ', type : ' + self.f_type +
-                   ', fn : ' + str(self.fn_list) +
-                   ', lbl : ' + str(self.zPEfn))
+                   ', v_fn : ' + str(self.virtual_path) +
+                   ', r_fn : ' + str(self.real_path))
+
+    def __len__(self):
+        return len(self.spool)
 
     def __getitem__(self, key):
         if isinstance(key, int):        # key = ln
@@ -87,11 +94,11 @@ def dict():
 def list():
     return SPOOL.keys()
 
-def new(key, mode, f_type, path = [], zPEfn = []):
+def new(key, mode, f_type, path = [], real_path = []):
     # check uniqueness
     if key in SPOOL:
         if ( (f_type == 'file') and (mode in ['i', '+']) and
-             (path == path_of[key]) and (zPEfn == zPEfn_of(key))
+             (path == path_of[key]) and (real_path == real_path_of(key))
              ):
             return SPOOL[key]   # passed from previous step
         sys.stderr.write('Error: ' + key + ': SPOOL name conflicts.\n')
@@ -117,22 +124,26 @@ def new(key, mode, f_type, path = [], zPEfn = []):
             zPE.Config['tmp_id'] += 1
             # check for file conflict
             for k,v in dict():
-                if v.fn_list == path:
+                if v.virtual_path == path:
                     conflict = True
                     break
             if not conflict:
                 break
 
-    # check zPEfn binding
-    if len(zPEfn) == 0:
-        zPEfn = path
+    # check real_path binding
+    if len(real_path) == 0:
+        real_path = path
 
-    SPOOL[key] = Spool([], mode, f_type, path, zPEfn)
+    SPOOL[key] = Spool([], mode, f_type, path, real_path)
     return SPOOL[key]
 
 def remove(key):
     if key in SPOOL:
         del SPOOL[key]
+
+def replace(key, spool):
+    SPOOL[key] = spool
+    return SPOOL[key]
 
 def retrive(key):
     if key in SPOOL:
@@ -154,12 +165,12 @@ def type_of(key):
 
 def path_of(key):
     if key in SPOOL:
-        return SPOOL[key].fn_list
+        return SPOOL[key].virtual_path
     else:
         return None
 
-def zPEfn_of(key):
+def real_path_of(key):
     if key in SPOOL:
-        return SPOOL[key].zPEfn
+        return SPOOL[key].real_path
     else:
         return None

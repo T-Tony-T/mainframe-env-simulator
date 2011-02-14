@@ -1,3 +1,30 @@
+################################################################
+# Program Name:
+#     ASSIST
+#
+# Purpose:
+#     assemble, link-edit, and execute the assembler source code
+#     with additional features supported (pretty output,
+#     pseudo-instructions, etc.)
+#
+# Parameter:
+#     MACRO     not implemented yet
+#
+# Input:
+#     STEPLIB   required by the ASSIST on Mainframe;
+#               an empty folder will work here
+#     SYSIN     source code to be assembled, link-edited, and executed
+#
+# Output:
+#     SYSPRINT  source listing and diagnostic message
+#
+# Return Code:
+#     
+# Return Value:
+#     none
+################################################################
+
+
 import zPE
 
 import os, sys
@@ -10,40 +37,78 @@ FILE = [
     ('SYSPRINT', 'AM001 ASSIST COULD NOT OPEN PRINTER FT06F001:ABORT'),
     ]
 
-
 def init(step):
     # check for file requirement
     if __MISSED_FILE(step, 0) != 0:
         return zPE.RC['SEVERE']
 
-    print step.region
+    __LOAD_PSEUDO()             # load in all the pseudo instructions
 
-    rc = pass_1(None)           # cStringIO
-    return pass_2(rc, None)     # cStringIO
+    # invoke parser from ASMA90 to assemble the source code
+    objmod = zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '')
+    sketch = zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '')
 
+    rc1 = zPE.pgm.ASMA90.pass_1()
+    if rc1 < zPE.RC['ERROR']:
+        rc2 = zPE.pgm.ASMA90.pass_2()
+    else:
+        rc2 = rc1
 
-def pass_1(memory):
-    spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
+    __PARSE_OUT()
 
-    # main read loop
-    for line in spi:
-        if line[0] != '*':      # not comment
-            field = re.split('\s', line[:-1], 3)
+    zPE.core.SPOOL.remove('SYSLIN')
+    zPE.core.SPOOL.remove('SYSUT1')
 
-            # check lable
-            bad_lbl = zPE.bad_label(field[0])
-            if bad_lbl:
-                pass            # err msg
-            elif bad_lbl != None: # label exists
-                pass            # add to table
+    max_rc = max(rc1, rc2)
+    if max_rc > zPE.RC['WARNING']:
+        return max_rc
 
-    # end of main read loop
+    # invoke HEWLDRGO to link-edit and execute the object module
+    zPE.core.SPOOL.replace('SYSLIN', objmod)
+
+    spo = zPE.core.SPOOL.new('SYSLOUT', 'o', 'outstream', '', '')
+
+    rc = zPE.pgm.HEWLDRGO.init(step)
+
+    zPE.core.SPOOL.remove('SYSLIN')
+    zPE.core.SPOOL.remove('SYSLOUT')
 
     return zPE.RC['NORMAL']
 
 
-def pass_2(rc, memory):
+
+### Supporting Functions
+def __LOAD_PSEUDO():
+    pass
+
+def __MISSED_FILE(step, i):
+    if i >= len(FILE):
+        return 0                # termination condition
+
+    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+    ctrl = ' '
+
+    if FILE[i][0] not in zPE.core.SPOOL.list():
+        sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
+                   '  IEC130I {0:<8}'.format(FILE[i][0]), 
+                   ' DD STATEMENT MISSING\n')
+        sp3.append(ctrl, 'IEC130I {0:<8}'.format(FILE[i][0]),
+                   ' DD STATEMENT MISSING\n')
+
+    cnt = __MISSED_FILE(step, i+1)
+
+    if FILE[i][0] not in zPE.core.SPOOL.list():
+        sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
+                   '  +{0}\n'.format(FILE[i][1]))
+        sp3.append(ctrl, '{0}\n'.format(FILE[i][1]))
+        cnt += 1
+
+    return cnt
+
+def __PARSE_OUT():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
+    spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
 
     pln_cnt = 0                 # printed line counter of the current page
@@ -80,36 +145,12 @@ def pass_2(rc, memory):
             spo.append(ctrl, '{0:0>6} {1:<26} '.format('0', ' '),
                        '{0:>5} {1}'.format(cnt, line))
 
+    print '\nExternal Symbol Dictionary:'
+    for k,v in sorted(zPE.pgm.ASMA90.ESD.iteritems(),
+                      key=lambda (k,v): (v,k)):
+        print '{0:<8} => {1}'.format(k, v.__dict__)
 
-
-    # end of main read loop
-
-    return zPE.RC['NORMAL']
-
-
-
-### Supporting Functions
-def __MISSED_FILE(step, i):
-    if i >= len(FILE):
-        return 0                # termination condition
-
-    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
-    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
-    ctrl = ' '
-
-    if FILE[i][0] not in step.dd.dict():
-        sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
-                   '  IEC130I {0:<8}'.format(FILE[i][0]), 
-                   ' DD STATEMENT MISSING\n')
-        sp3.append(ctrl, 'IEC130I {0:<8}'.format(FILE[i][0]),
-                   ' DD STATEMENT MISSING\n')
-
-    cnt = __MISSED_FILE(step, i+1)
-
-    if FILE[i][0] not in step.dd.dict():
-        sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
-                   '  +{0}\n'.format(FILE[i][1]))
-        sp3.append(ctrl, '{0}\n'.format(FILE[i][1]))
-        cnt += 1
-
-    return cnt
+    print '\nSymbol Cross Reference Table:'
+    mydict = zPE.pgm.ASMA90.SYMBOL
+    for key in sorted(mydict.iterkeys()):
+        print '{0:<8} => {1}'.format(key, mydict[key].__dict__)

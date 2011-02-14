@@ -36,7 +36,7 @@ def parse(job):
     # //label    JOB     <args>
     # //         EXEC    <args>
     # //maxlabel DD      <args>
-    field = re.split('\s', line, 2)
+    field = re.split('\s+', line, 2)
 
     # check lable
     if zPE.bad_label(field[0][2:]):
@@ -129,7 +129,7 @@ def parse(job):
             sp2.append(ctrl, '{0:>9} {1}'.format('', line))
             continue
 
-        field = re.split('\s', line)
+        field = re.split('\s+', line)
 
         # check end of JCL
         if field[1] == '':
@@ -316,24 +316,30 @@ def init_step(step):
         if ddname in zPE.core.SPOOL.list():
             pass          # read in but not allocate, must be instream
         else:
-            path = []
-            zPEfn = []
+            v_path = []         # virtual path
+            r_path = []         # real path
             if step.dd[ddname]['SYSOUT'] != '':
                 # outstream
                 mode = 'o'
                 f_type = 'outstream'
-                zPEfn = ['{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)]
+                r_path = [
+                    '{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)
+                    ]
             else:
                 if step.dd[ddname]['DSN'] != '':
                     # file
                     f_type = 'file'
-                    path = ['{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)]
+                    v_path = [
+                        '{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)
+                        ]
                 else:
                     # tmp
                     f_type = 'tmp'
-                    zPEfn = ['{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)]
+                    r_path = [
+                        '{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)
+                        ]
                 mode = step.dd.mode(ddname)
-            zPE.core.SPOOL.new(ddname, mode, f_type, path, zPEfn)
+            zPE.core.SPOOL.new(ddname, mode, f_type, v_path, r_path)
 
         sp3.append(ctrl, 'IEF237I {0}'.format(zPE.JES[f_type]),
                    ' ALLOCATED TO {0}\n'.format(ddname))

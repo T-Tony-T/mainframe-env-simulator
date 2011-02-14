@@ -27,6 +27,9 @@ class GPR(Union):
         else:
             self.bytes[(4-key)%4] = val
 
+    def __str__(self):
+        return '{0:0>8}'.format(hex(self.long)[2:-1])
+
     def positive(self):
         # 0x80000000 will mask off all but the sign bit
         if self.long & int('80000000', 16) == 0:

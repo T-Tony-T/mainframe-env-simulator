@@ -17,10 +17,13 @@ def bad_label(label):
     if len(label) == 0:
         return None             # no lable
     if len(label) > 8:
-        return True             # label too long
-    if re.match('[A-Z@#$][A-Z@#$0-9]+', label).group(0) != label:
-        return True             # illegal character
-    return False
+        return 9                # label too long
+    if not re.match('[A-Z@#$]', label[0]):
+        return 1                # first character not legal
+    for indx in range(1, len(label)):
+        if not re.match('[A-Z@#$0-9]', label[indx]):
+            return indx         # (indx+1)th character not legal
+    return 0                    # all good
 
 ## Return Code
 RC = {
@@ -344,7 +347,7 @@ def flush(sp):
     if sp.mode == 'i':
         return -1
 
-    fp = open_file(sp.zPEfn, 'w', sp.f_type)
+    fp = open_file(sp.real_path, 'w', sp.f_type)
     cnt = 0
     for line in sp.spool:
         fp.write(line)
@@ -354,14 +357,19 @@ def flush(sp):
 
 ## Program Supported
 PGM_SUPPORTED = {         # all supported programs and their bindings
+    'ASMA90'    : 'zPE.pgm.ASMA90.init',
     'ASSIST'    : 'zPE.pgm.ASSIST.init',
+    'HEWLDRGO'  : 'zPE.pgm.HEWLDRGO.init',
+    'LOADER'    : 'zPE.pgm.HEWLDRGO.init', # alias to HEWLDRGO
 
     'IEFBR14'   : 'zPE.pgm.IEFBR14.init',
     }
 
 def LIST_PGM():                # list all supported languages out
     print 'All programs (PGM) that are currently supported:'
+    print '  ASMA90     -- High-Level Assembler'
     print '  ASSIST     -- Assembler using ASSIST'
+    print '  HEWLDRGO   -- Loader'
     print
     print 'Utilities:'
     print '  IEFBR14    -- System utility that DO NOTHING'
