@@ -101,7 +101,6 @@ def pass_1():
     for line in spi:
         cnt += 1                # start at line No. 1
         if line[0] == '*':      # is comment
-            spt.append('*\n')
             continue
 
         field = re.split('\s+', line[:-1], 3)
@@ -127,7 +126,7 @@ def pass_1():
                     'J', ' ', ' ',
                     cnt, []
                     )
-            spt.append('{0:<8} CSECT\n'.format(field[0]))
+            spt.append('{0:0>5}{1:<8} CSECT\n'.format(cnt, field[0]))
 
         # parse USING
         elif field[1] == 'USING':
@@ -145,7 +144,7 @@ def pass_1():
                     SYMBOL[args[0]].references.append(
                         '{0:>4}{1}'.format(cnt, 'U')
                         )
-            spt.append('{0:<8} USING {1}\n'.format(' ', field[2]))
+            spt.append('{0:0>5}{1:<8} USING {2}\n'.format(cnt ,' ', field[2]))
 
         # parse END
         elif field[1] == 'END':
@@ -160,7 +159,7 @@ def pass_1():
                     SYMBOL[args[0]].references.append(
                         '{0:>4}{1}'.format(cnt, ' ')
                         )
-            spt.append('{0:<8} END   {1}\n'.format(' ', field[2]))
+            spt.append('{0:0>5}{1:<8} END   {2}\n'.format(cnt, ' ', field[2]))
             break               # end of program
 
         # parse op-code
@@ -238,8 +237,8 @@ def pass_1():
             # update address
             for code in op_code:
                 addr += len(code)
-            spt.append('{0:<8} {1:<5} {2}\n'.format(
-                    field[0], field[1], arg_list[:-1]
+            spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
+                    cnt, field[0], field[1], arg_list[:-1]
                     ))
 
         # parse DC/DS
@@ -290,17 +289,35 @@ def pass_1():
                     st_info[2], st_info[2], ' ',
                     cnt, []
                     )
-            spt.append('{0:<8} {1:<5} {2}\n'.format(
-                    field[0], field[1], field[2]
+            spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
+                    cnt, field[0], field[1], field[2]
                     ))
 
         # not recognized op-code
         else:
-            spt.append(line)
+            spt.append('{0:0>5}{1}'.format(cnt, line))
             pass        # err msg
     # end of main read loop
 
-    return zPE.RC['NORMAL']
+    # check cross references table integrality
+    invalid_symbol = 0
+    for k,v in SYMBOL.items():
+        if v.defn == None:
+            invalid_symbol += 1
+            pass                # symbol not defined
+        if len(v.references) == 0:
+            pass                # symbol not referenced
+
+############ test only
+    for line in spt.spool:
+        print line[:-1]
+############ test only
+
+    if invalid_symbol:
+        return zPE.RC['ERROR']
+    else:
+        return zPE.RC['NORMAL']
+# end of pass 1
 
 
 def pass_2():

@@ -99,7 +99,6 @@ op_code = {
 ### Valid Constant Type
 
 ## constant type
-
 # byte-based types
 class C_(object):
     def __init__(self, ch_str, length = 0):
@@ -131,6 +130,8 @@ class C_(object):
             ch_str += chr(val).decode('EBCDIC-CP-US')
         return ch_str
 
+# Exception:
+#   ValueError:  if the string contains invalid hex digit
 class X_(object):
     def __init__(self, hex_str, length = 0):
         self.set(hex_str, length)
@@ -141,7 +142,7 @@ class X_(object):
     def get(self):
         return self.tr(self.__vals)
     def value(self):
-        return None             # should not be evaluated
+        return int(self.get(), 16)
     def set(self, hex_str, length = 0):
         hex_len = len(hex_str)
         # align to byte
@@ -167,6 +168,8 @@ class X_(object):
             hex_str += '{0:0>2}'.format(hex(val)[2:].upper())
         return hex_str
 
+# Exception:
+#   ValueError:  if the string contains anything other than '0' and '1'
 class B_(object):
     def __init__(self, bin_str, length = 0):
         self.set(bin_str, length)
@@ -206,7 +209,8 @@ class B_(object):
 # Exception:
 #   SyntaxError: if sign is not invalid
 #   TypeError:   if the value is not packed
-#   ValueError:  if the range exceeds the length
+#   ValueError:  if the range exceeds the length;
+#                if the string contains invalid digit (except pack())
 class P_(object):
     def __init__(self, ch_str, length = 0):
         self.set(ch_str, length)
@@ -217,31 +221,32 @@ class P_(object):
     def get(self, sign = '-'):
         return self.tr(self.__vals, sign)
     def value(self):
-        return None             # should not be evaluated
+        ch_str = self.tr(self.__vals, '+')
+        return int(ch_str[-1] + ch_str[:-1])
     def set(self, ch_str, length = 0):
-        ch_len = len(ch_str)
-        if not length:
-            length = ch_len
-        else:
-            length += length - 1
-        if length < ch_len:
-            raise ValueError
-        # align to odd-bytes
-        length += (length - 1) % 2
-        ch_str = '{0:0>{1}}'.format(ch_str, length)
-        self.__vals = []        # initialize to empty list
-        for indx in range(0, length - 1, 2):
-            hex_1 = '{0:0>2}'.format(hex(
-                    ord(ch_str[indx + 0].encode('EBCDIC-CP-US'))
-                    )[2:].upper())
-            hex_2 = '{0:0>2}'.format(hex(
-                    ord(ch_str[indx + 1].encode('EBCDIC-CP-US'))
-                    )[2:].upper())
-            self.__vals.append(int(hex_1[1] + hex_2[1], 16))
-        hex_val = '{0:0>2}'.format(hex(
-                ord(ch_str[-1].encode('EBCDIC-CP-US'))
-                )[2:].upper())
-        self.__vals.append(int(hex_val[1] + hex_val[0], 16))
+        # check sign
+        sign_digit = 'C'        # assume positive
+        if ch_str[0] == '-':
+            ch_str = ch_str[1:]
+            sign_digit = 'D'    # change to negative
+        elif ch_str[0] == '+':
+            ch_str = ch_str[1:]
+        int(ch_str)             # check format
+        if length and length * 2 - 1 < len(ch_str):
+            raise ValueError    # check length
+        self.fill__(X_(ch_str + sign_digit).dump())
+    def pack(self, ch_str, length = 0):
+        if length and length * 2 - 1 < len(ch_str):
+            raise ValueError    # check length
+        hex_str = ''
+        for ch in ch_str:
+            hex_str += hex(
+                ord(ch.encode('EBCDIC-CP-US'))
+                )[-1].upper()   # for each char, get the low digit
+        hex_str += '{0:0>2}'.format(
+            hex(ord(ch_str[-1].encode('EBCDIC-CP-US')))[2:]
+            )[0].upper()        # for the last char, add the high digit
+        self.fill__(X_(hex_str).dump())
     def dump(self):
         return self.__vals
     def fill__(self, vals):     # no error checking
@@ -259,10 +264,16 @@ class P_(object):
         if hex_val[1] in 'FACE':
             if sign == '+':
                 ch_str += '+'
+            elif sign == '-':
+                ch_str += ' '
+            elif sign in [ 'DB', 'CR' ]:
+                ch_str += '  '
+            else:
+                raise SyntaxError
         elif hex_val[1] in 'BD':
-            if sign == '+':
+            if sign in [ '+', '-' ]:
                 ch_str += '-'
-            elif sign in [ '-', 'DB', 'CR' ]:
+            elif sign in [ 'DB', 'CR' ]:
                 ch_str += sign
             else:
                 raise SyntaxError
@@ -274,6 +285,7 @@ class P_(object):
 # Exception:
 #   SyntaxError: if sign is not invalid
 #   TypeError:   if the value is not zoned
+#   ValueError:  if the string contains invalid digit
 class Z_(object):
     def __init__(self, ch_str, length = 0):
         self.set(ch_str, length)
@@ -284,8 +296,18 @@ class Z_(object):
     def get(self, sign = '-'):
         return self.tr(self.__vals, sign)
     def value(self):
-        return None             # should not be evaluated
+        ch_str = self.tr(self.__vals, '+')
+        return int(ch_str[-1] + ch_str[:-1])
     def set(self, ch_str, length = 0):
+        # check sign
+        sign_digit = 'C'        # assume positive
+        if ch_str[0] == '-':
+            ch_str = ch_str[1:]
+            sign_digit = 'D'    # change to negative
+        elif ch_str[0] == '+':
+            ch_str = ch_str[1:]
+        int(ch_str)             # check format
+        # check length
         ch_len = len(ch_str)
         if not length:
             length = ch_len
@@ -295,6 +317,8 @@ class Z_(object):
             self.__vals[length - indx - 1] = ord(
                 ch_str[ch_len - indx - 1].encode('EBCDIC-CP-US')
                 )
+        # set sign for the last digit
+        self.__vals[-1] = int(sign_digit + hex(self.__vals[-1])[-1], 16)
     def dump(self):
         return self.__vals
     def fill__(self, vals):     # no error checking
@@ -310,10 +334,16 @@ class Z_(object):
         if hex_val[0] in 'FACE':
             if sign == '+':
                 ch_str += '+'
+            elif sign == '-':
+                ch_str += ' '
+            elif sign in [ 'DB', 'CR' ]:
+                ch_str += '  '
+            else:
+                raise SyntaxError
         elif hex_val[0] in 'BD':
-            if sign == '+':
+            if sign in [ '+', '-' ]:
                 ch_str += '-'
-            elif sign in [ '-', 'DB', 'CR' ]:
+            elif sign in [ 'DB', 'CR' ]:
                 ch_str += sign
             else:
                 raise SyntaxError
@@ -335,7 +365,7 @@ class F_(object):
         return 4                # must be 4
 
     def get(self):
-        return self.tr(self.__val)
+        return self.tr(self.dump())
     def value(self):
         return self.__val
     def set(self, int_str, length = 0):
@@ -344,13 +374,36 @@ class F_(object):
         int_val = int(int_str, 10)
         if int_val < int('-80000000', 16) or int_val > int('7FFFFFFF', 16):
             raise ValueError
+        self.__val = int_val
     def dump(self):
-        return self.__val
-    def fill__(self, val):      # no error checking
-        self.__vals = val
+        if self.__val >= 0:
+            hex_str = '{0:0>8}'.format(hex(self.__val)[2:])
+        else:
+            hex_str = '{0:0>8}'.format(hex(
+                    int('100000000', 16) + self.__val # 2's complement
+                    )[2:])
+        return (
+            int(hex_str[0:2], 16),
+            int(hex_str[2:4], 16),
+            int(hex_str[4:6], 16),
+            int(hex_str[6:8], 16),
+            )
+    def fill__(self, vals):      # no error checking
+        self.__val = int(self.tr(vals))
     @staticmethod
-    def tr(val):
-        return '{0}'.format(val)
+    def tr(vals):
+        int_val = vals[0]
+        for indx in range(1, len(vals)):
+            int_val *= 256
+            int_val += vals[indx]
+        int_val %= int('FFFFFFFF', 16)
+        if int_val > int('7FFFFFFF', 16):
+            int_str = '-{0}'.format(
+                int('100000000', 16) - int_val # 2's complement
+                )
+        else:
+            int_str = str(int_val)
+        return int_str
 
 # Exception:
 #   ValueError: if length (required or actual) greater than 2
@@ -362,7 +415,7 @@ class H_(object):
         return 2                # must be 2
 
     def get(self):
-        return self.tr(self.__val)
+        return self.tr(self.dump())
     def value(self):
         return self.__val
     def set(self, int_str, length = 0):
@@ -373,12 +426,32 @@ class H_(object):
             raise ValueError
         self.__val = int_val
     def dump(self):
-        return self.__val
-    def fill__(self, val):      # no error checking
-        self.__vals = val
+        if self.__val >= 0:
+            hex_str = '{0:0>4}'.format(hex(self.__val)[2:])
+        else:
+            hex_str = '{0:0>4}'.format(hex(
+                    int('10000', 16) + self.__val # 2's complement
+                    )[2:])
+        return (
+            int(hex_str[0:2], 16),
+            int(hex_str[2:4], 16),
+            )
+    def fill__(self, vals):      # no error checking
+        self.__val = int(self.tr(vals))
     @staticmethod
-    def tr(val):
-        return '{0}'.format(val)
+    def tr(vals):
+        int_val = vals[0]
+        for indx in range(1, len(vals)):
+            int_val *= 256
+            int_val += vals[indx]
+        int_val %= int('FFFF', 16)
+        if int_val > int('7FFF', 16):
+            int_str = '-{0}'.format(
+                int('10000', 16) - int_val # 2's complement
+                )
+        else:
+            int_str = str(int_val)
+        return int_str
 
 # Exception:
 #   ValueError: if length (required or actual) greater than 4
@@ -390,7 +463,7 @@ class A_(object):
         return 4                # must be 4
 
     def get(self):
-        return self.tr(self.__val)
+        return self.tr(self.dump())
     def value(self):
         return self.__val
     def set(self, int_str, length = 0):
@@ -401,12 +474,24 @@ class A_(object):
             raise ValueError
         self.__val = int_val
     def dump(self):
-        return self.__val
-    def fill__(self, val):      # no error checking
-        self.__vals = val
+        hex_str = '{0:0>8}'.format(hex(self.__val)[2:])
+        return (
+            int(hex_str[0:2], 16),
+            int(hex_str[2:4], 16),
+            int(hex_str[4:6], 16),
+            int(hex_str[6:8], 16),
+            )
+    def fill__(self, vals):      # no error checking
+        self.__val = int(self.tr(vals)[2:], 16)
     @staticmethod
-    def tr(val):
-        return '0x{0:0>8}'.format(hex(val)[2:-1].upper())
+    def tr(vals):
+        int_val = vals[0]
+        for indx in range(1, len(vals)):
+            int_val *= 256
+            int_val += vals[indx]
+        return '0x{0:0>8}'.format(
+            hex(int_val % int('FFFFFFFF', 16))[2:-1].upper()
+            )
 
 
 ## simple type
