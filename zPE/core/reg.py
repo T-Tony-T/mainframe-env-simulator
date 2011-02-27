@@ -42,6 +42,8 @@ class GPR(Union):
 
 ## Program Status Word
 PSW_MODE = { 'EC' : 1, 'BC' : 0 }
+# EC: Extended Control Mode, 31-bit addressing
+# BC: Basic Control Mode, 24-bit addressing
 
 class PSW(object):
     def __init__(self, C = 0):

@@ -17,7 +17,7 @@ class R(object):
             self.set(val)
 
     def __len__(self):
-        return 1
+        return 1                # number of half-bytes / hex-digits
 
     def get(self):
         return self.__val
@@ -495,6 +495,13 @@ class A_(object):
 
 
 ## simple type
+BOUNDARY = [
+    [ 'C', 'X', 'B', 'P', 'Z', ], # no boundary
+    [ 'H', ],                     # half-word boundary
+    [ 'F', 'A', 'V', ],           # full-word boundary
+    [  ],                         # double-word boundary
+    ]
+
 const_s = {
     'C' : C_('0'),
     'X' : X_('0'),
@@ -513,6 +520,12 @@ const_a = {
 
 
 ### Interface Functions
+
+def align_at(st_ch):
+    for indx in range(len(BOUNDARY)):
+        if st_ch in BOUNDARY[indx]:
+            return 2 ** indx
+    return 0
 
 # rv: ( 'op_code', fmt_tp_1, ... )
 def get_op(instruction):
@@ -600,7 +613,11 @@ def parse_st(st_arg):
     # parse length
     if match == 0:              # no '?L' found
         if L[2] == '':
-            st_len = len_st(st_ch)
+            if st_val != None:
+                tmp = eval('{0}_(\'{1}\')'.format(st_ch, st_val))
+                st_len = len(tmp)
+            else:
+                st_len = len_st(st_ch)
         else:
             raise SyntaxError
     elif match == 1:            # one '?L' found

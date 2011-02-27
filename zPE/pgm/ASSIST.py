@@ -153,4 +153,10 @@ def __PARSE_OUT():
     print '\nSymbol Cross Reference Table:'
     mydict = zPE.pgm.ASMA90.SYMBOL
     for key in sorted(mydict.iterkeys()):
-        print '{0:<8} => {1}'.format(key, mydict[key].__dict__)
+        if mydict[key].value == None:
+            addr = -1
+        else:
+            addr = mydict[key].value
+        print '{0:<8} (0x{1:0>6}) => {2}'.format(
+            key, hex(addr)[2:], mydict[key].__dict__
+            )

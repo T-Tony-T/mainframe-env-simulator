@@ -33,7 +33,10 @@ class Spool(object):
         return (len(self.spool) == 0)
 
     def append(self, *phrase):
-        self.spool.append(''.join(phrase))
+        self.insert(len(self.spool), *phrase)
+
+    def insert(self, indx, *phrase):
+        self.spool.insert(indx, ''.join(phrase))
 
     def rmline(self, indx):
         if indx < len(self.spool):

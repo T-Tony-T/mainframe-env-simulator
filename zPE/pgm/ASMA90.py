@@ -98,6 +98,7 @@ def pass_1():
     cnt = 0                     # line number
     addr = 0                    # address
     scope_id = 0
+    const_pool = None           # memory heap for constant allocation
     for line in spi:
         cnt += 1                # start at line No. 1
         if line[0] == '*':      # is comment
@@ -148,102 +149,85 @@ def pass_1():
 
         # parse END
         elif field[1] == 'END':
-            if len(field[0]) != 0:
-                pass            # err msg
-            if len(field) < 3:
-                pass            # err msg
-            else:
-                if ESD[field[2]] != 1:
-                    pass        # err msg
+            if const_pool:      # check left-over constants
+                cnt_tmp = cnt - 1
+                for lbl in SYMBOL:
+                    if lbl[0] == '=' and SYMBOL[lbl].defn == None:
+                        spi.insert(cnt_tmp, '{0:<14} {1}\n'.format(' ', lbl))
+                        cnt_tmp += 1
+                const_pool = None   # close the current pool
+                # the following is to "move back" the iterator
+                # need to be removed after END
+                spi.insert(0, '')
+                cnt -= 1
+            else:               # no left-over constant, end the program
+                if len(field[0]) != 0:
+                    pass            # err msg
+                if len(field) < 3:
+                    pass            # err msg
                 else:
-                    SYMBOL[args[0]].references.append(
-                        '{0:>4}{1}'.format(cnt, ' ')
-                        )
-            spt.append('{0:0>5}{1:<8} END   {2}\n'.format(cnt, ' ', field[2]))
-            break               # end of program
-
-        # parse op-code
-        elif zPE.core.asm.valid_op(field[1]):
-            op_code = zPE.core.asm.get_op(field[1])
-            args = __PARSE_ARGS(field[2])
-            # check reference
-            arg_list = ''
-            for lbl in args:
-                if re.match('[A-Z@#$][A-Z@#$0-9]', lbl[:2]):
-                    # is a label
-                    bad_lbl = zPE.bad_label(lbl)
-                    if bad_lbl:
+                    if ESD[field[2]] != 1:
                         pass        # err msg
-                    elif lbl in SYMBOL:
-                        # check scope
-                        symbol = SYMBOL[lbl]
-                        if symbol.id == scope_id:
-                            symbol.references.append(
-                                '{0:>4}{1}'.format(
-                                    cnt, zPE.core.asm.type_op(op_code[0])
-                                    )
-                                )
-                        else:
-                            pass        # duplicated symbol
                     else:
-                        SYMBOL[lbl] = Symbol(
-                            None, None, scope_id,
-                            None, None, None,
-                            None, [
-                                '{0:>4}{1}'.format(
-                                    cnt, zPE.core.asm.type_op(op_code[0])
-                                    ),
-                                ]
+                        SYMBOL[args[0]].references.append(
+                            '{0:>4}{1}'.format(cnt, ' ')
                             )
-                    arg_list += lbl + ','
-                elif lbl[0] == '=':
-                    # constant
-                    arg_list += lbl + ','
-                    pass        # mark for allocation
-                elif zPE.core.asm.valid_st(lbl):
-                    # check for constant
-                    try:
-                        st_info = zPE.core.asm.parse_st(lbl)
-                        arg_list += '{0},'.format(
-                            zPE.core.asm.value_st(st_info)
-                            )
-                    except:
-                        arg_list += lbl + ','
-                else:
-                    arg_list += lbl + ','
-            # check lable
-            bad_lbl = zPE.bad_label(field[0])
-            if bad_lbl == None:
-                pass        # no label detected
-            elif bad_lbl:
-                pass        # err msg
-            elif field[0] in SYMBOL:
-                symbol = SYMBOL[field[0]]
-                if symbol.value == None and symbol.id == scope_id:
-                    symbol.length = zPE.core.asm.len_op(op_code[0])
-                    symbol.value = addr
-                    symbol.r_type = 'I'
-                    symbol.asm = ' '
-                    symbol.program = ' '
-                    symbol.defn = cnt
-                else:
-                    pass        # duplicated symbol
-            else:
-                SYMBOL[field[0]] = Symbol(
-                    zPE.core.asm.len_op(op_code[0]), addr, scope_id,
-                    'I', ' ', ' ',
-                    cnt, []
-                    )
-            # update address
-            for code in op_code:
-                addr += len(code)
-            spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
-                    cnt, field[0], field[1], arg_list[:-1]
-                    ))
 
-        # parse DC/DS
-        elif field[1] in ['DC', 'DS']:
-            st_info = zPE.core.asm.parse_st(field[2])
+                spt.append('{0:0>5}{1:<8} END   {2}\n'.format(
+                        cnt, ' ', field[2])
+                           )
+                if spi[0] == '':
+                    spi.rmline(0)
+                break           # end of program
+
+        # parse LTORG
+        elif field[1] == 'LTORG':
+            curr_pool = [
+                [],     # pool for constant with double-word alignment
+                [],     # pool for constant with full-word alignment
+                [],     # pool for constant with half-word alignment
+                [],     # pool for constant with byte alignment
+                ]
+            for lbl in SYMBOL:
+                if lbl[0] == '=' and SYMBOL[lbl].defn == None:
+                    # current pool
+                    alignment = zPE.core.asm.align_at(lbl[1])
+                    for i in range(0,3):
+                        if alignment == 2 ** i:
+                            curr_pool[3 - i].append(lbl)
+                            break
+
+            cnt_tmp = cnt
+            for pool in curr_pool:
+                for lbl in pool:
+                    spi.insert(cnt_tmp, '{0:<15}{1}\n'.format(' ', lbl))
+                    cnt_tmp += 1
+
+            const_pool = None   # close the current pool
+            spt.append('{0:0>5}{1:<8} LTORG\n'.format(cnt, ' '))
+
+        # parse DC/DS/=constant
+        elif field[1] in ['DC', 'DS'] or field[1][0] == '=':
+            try:
+                if field[1][0] == '=':
+                    st_info = zPE.core.asm.parse_st(field[1][1:])
+                else:
+                    st_info = zPE.core.asm.parse_st(field[2])
+            except:
+                continue        # err msg
+
+            # check =constant
+            if field[1][0] == '=':
+                if field[1] in SYMBOL:
+                    symbol = SYMBOL[field[1]]
+                    if symbol.defn == None and symbol.id == scope_id:
+                        symbol.length = st_info[3]
+                        symbol.value = addr
+                        symbol.r_type = st_info[2]
+                        symbol.defn = cnt
+                    else:
+                        pass    # err msg
+
             if st_info[0] == 'a' and st_info[4] != None:
                 # check references
                 for lbl in st_info[4]:
@@ -274,7 +258,7 @@ def pass_1():
                 pass        # err msg
             elif field[0] in SYMBOL:
                 symbol = SYMBOL[field[0]]
-                if symbol.value == None and symbol.id == scope_id:
+                if symbol.defn == None and symbol.id == scope_id:
                     symbol.length = st_info[3]
                     symbol.value = addr
                     symbol.r_type = st_info[2]
@@ -289,8 +273,127 @@ def pass_1():
                     st_info[2], st_info[2], ' ',
                     cnt, []
                     )
+
+            # update address
+            # align boundary
+            alignment = zPE.core.asm.align_at(st_info[2])
+            addr = (addr + alignment - 1) / alignment * alignment
+            # allocate space
+            addr += st_info[1] * st_info[3]
+
+            if field[1][0] == '=':
+                spt.append('{0:0>5}{1}'.format(cnt, line))
+            else:
+                spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
+                        cnt, field[0], field[1], field[2]
+                        ))
+
+        # parse op-code
+        elif zPE.core.asm.valid_op(field[1]):
+            op_code = zPE.core.asm.get_op(field[1])
+            args = __PARSE_ARGS(field[2])
+            # check reference
+            arg_list = ''
+            for lbl in args:
+                if lbl[0] == '=':
+                    # parse constant
+                    if not const_pool:
+                        # allocate new pool
+                        const_pool = scope_id
+
+                    if scope_id != const_pool:  # invalid pool
+
+                        pass    # err msg
+                    else:                       # valid pool
+                        if lbl in SYMBOL:
+                            SYMBOL[lbl].references.append(
+                                '{0:>4}{1}'.format(cnt, ' ')
+                                )
+                        elif zPE.core.asm.valid_st(lbl[1:]):
+                            SYMBOL[lbl] = Symbol(
+                                None, None, const_pool,
+                                lbl[1], ' ', ' ',
+                                None, [
+                                    '{0:>4}{1}'.format(cnt, ' '),
+                                    ]
+                                )
+                        else:
+                            pass # err msg
+                    arg_list += lbl + ','
+                elif zPE.core.asm.valid_st(lbl):
+                    # parse in-line constant
+                    try:
+                        st_info = zPE.core.asm.parse_st(lbl)
+                        arg_list += '{0},'.format(
+                            zPE.core.asm.value_st(st_info)
+                            )
+                    except:
+                        arg_list += lbl + ','
+                elif re.match('[A-Z@#$][A-Z@#$0-9]', lbl[:2]):
+                    # parse label
+                    bad_lbl = zPE.bad_label(lbl)
+                    if bad_lbl:
+                        pass        # err msg
+                    elif lbl in SYMBOL:
+                        # check scope
+                        symbol = SYMBOL[lbl]
+                        if symbol.id == scope_id:
+                            symbol.references.append(
+                                '{0:>4}{1}'.format(
+                                    cnt, zPE.core.asm.type_op(op_code[0])
+                                    )
+                                )
+                        else:
+                            pass        # duplicated symbol
+                    else:
+                        SYMBOL[lbl] = Symbol(
+                            None, None, scope_id,
+                            None, None, None,
+                            None, [
+                                '{0:>4}{1}'.format(
+                                    cnt, zPE.core.asm.type_op(op_code[0])
+                                    ),
+                                ]
+                            )
+                    arg_list += lbl + ','
+                else:
+                    arg_list += lbl + ','
+            # check lable
+            bad_lbl = zPE.bad_label(field[0])
+            if bad_lbl == None:
+                pass        # no label detected
+            elif bad_lbl:
+                pass        # err msg
+            elif field[0] in SYMBOL:
+                symbol = SYMBOL[field[0]]
+                if symbol.defn == None and symbol.id == scope_id:
+                    symbol.length = zPE.core.asm.len_op(op_code[0])
+                    symbol.value = addr
+                    symbol.r_type = 'I'
+                    symbol.asm = ' '
+                    symbol.program = ' '
+                    symbol.defn = cnt
+                else:
+                    pass        # duplicated symbol
+            else:
+                SYMBOL[field[0]] = Symbol(
+                    zPE.core.asm.len_op(op_code[0]), addr, scope_id,
+                    'I', ' ', ' ',
+                    cnt, []
+                    )
+
+            # update address
+            length = 0
+            for code in op_code:
+                length += len(code)
+            if length % 2 != 0:
+                sys.stderr.write('Error: {0}'.format(length / 2) +
+                                 '.5: Invalid OP code length\n')
+                sys.exit(5)
+            addr += length / 2
+
             spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
-                    cnt, field[0], field[1], field[2]
+                    cnt, field[0], field[1], arg_list[:-1]
                     ))
 
         # not recognized op-code
@@ -363,8 +466,8 @@ def pass_2():
                     arg = args[i] # parsing needed
                     op_code[i+1].set(arg)
 
-        # parse DC/DS
-        elif field[1] in ['DC', 'DS']:
+        # parse DC/DS/=constant
+        elif field[1] in ['DC', 'DS'] or field[1][0] == '=':
             pass
 
 
