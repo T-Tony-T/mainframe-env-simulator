@@ -128,6 +128,7 @@ def __PARSE_OUT():
 
     # main read loop
     cnt = 0                     # line number
+    indx_t = 0                  # index for spt
     for line in spi:
         cnt += 1                # start at line No. 1
         if pln_cnt >= zPE.DEFAULT['LN_P_PAGE']:
@@ -142,8 +143,14 @@ def __PARSE_OUT():
             spo.append(ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
                        '{0:>5} {1}'.format(cnt, line))
         else:
-            spo.append(ctrl, '{0:0>6} {1:<26} '.format('0', ' '),
+            if cnt != int(spt[indx_t][6:11]):
+                sys.stderr.write('Error: {0},{1}: '.format(
+                        cnt, int(spt[indx_t][6:11])
+                        ) + 'Inconsistent line number in parsing report.\n')
+                sys.exit(11)
+            spo.append(ctrl, '{0:0>6} {1:<26} '.format(spt[indx_t][0:6], ' '),
                        '{0:>5} {1}'.format(cnt, line))
+            indx_t += 1         # move to next line
 
     print '\nExternal Symbol Dictionary:'
     for k,v in sorted(zPE.pgm.ASMA90.ESD.iteritems(),

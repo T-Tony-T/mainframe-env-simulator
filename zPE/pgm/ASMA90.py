@@ -127,7 +127,9 @@ def pass_1():
                     'J', ' ', ' ',
                     cnt, []
                     )
-            spt.append('{0:0>5}{1:<8} CSECT\n'.format(cnt, field[0]))
+            spt.append('{0:0>6}{1:0>5}{2:<8} CSECT\n'.format(
+                    hex(addr)[2:].upper(), cnt, field[0]
+                    ))
 
         # parse USING
         elif field[1] == 'USING':
@@ -145,7 +147,9 @@ def pass_1():
                     SYMBOL[args[0]].references.append(
                         '{0:>4}{1}'.format(cnt, 'U')
                         )
-            spt.append('{0:0>5}{1:<8} USING {2}\n'.format(cnt ,' ', field[2]))
+            spt.append('{0:0>6}{1:0>5}{2:<8} USING {3}\n'.format(
+                    hex(addr)[2:].upper(), cnt ,' ', field[2]
+                    ))
 
         # parse END
         elif field[1] == 'END':
@@ -173,9 +177,9 @@ def pass_1():
                             '{0:>4}{1}'.format(cnt, ' ')
                             )
 
-                spt.append('{0:0>5}{1:<8} END   {2}\n'.format(
-                        cnt, ' ', field[2])
-                           )
+                spt.append('{0:0>6}{1:0>5}{2:<8} END   {3}\n'.format(
+                        hex(addr)[2:].upper(), cnt, ' ', field[2]
+                        ))
                 if spi[0] == '':
                     spi.rmline(0)
                 break           # end of program
@@ -204,7 +208,9 @@ def pass_1():
                     cnt_tmp += 1
 
             const_pool = None   # close the current pool
-            spt.append('{0:0>5}{1:<8} LTORG\n'.format(cnt, ' '))
+            spt.append('{0:0>6}{1:0>5}{2:<8} LTORG\n'.format(
+                    hex(addr)[2:].upper(), cnt, ' '
+                    ))
 
         # parse DC/DS/=constant
         elif field[1] in ['DC', 'DS'] or field[1][0] == '=':
@@ -274,19 +280,21 @@ def pass_1():
                     cnt, []
                     )
 
-            # update address
             # align boundary
             alignment = zPE.core.asm.align_at(st_info[2])
             addr = (addr + alignment - 1) / alignment * alignment
-            # allocate space
-            addr += st_info[1] * st_info[3]
 
             if field[1][0] == '=':
-                spt.append('{0:0>5}{1}'.format(cnt, line))
-            else:
-                spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
-                        cnt, field[0], field[1], field[2]
+                spt.append('{0:0>6}{1:0>5}{2}'.format(
+                        hex(addr)[2:].upper(), cnt, line
                         ))
+            else:
+                spt.append('{0:0>6}{1:0>5}{2:<8} {3:<5} {4}\n'.format(
+                        hex(addr)[2:].upper(), cnt, field[0], field[1], field[2]
+                        ))
+
+            # update address
+            addr += st_info[1] * st_info[3]
 
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
@@ -382,6 +390,11 @@ def pass_1():
                     cnt, []
                     )
 
+            spt.append('{0:0>6}{1:0>5}{2:<8} {3:<5} {4}\n'.format(
+                    hex(addr)[2:].upper(), cnt,
+                    field[0], field[1], arg_list[:-1]
+                    ))
+
             # update address
             length = 0
             for code in op_code:
@@ -392,13 +405,11 @@ def pass_1():
                 sys.exit(5)
             addr += length / 2
 
-            spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
-                    cnt, field[0], field[1], arg_list[:-1]
-                    ))
-
         # not recognized op-code
         else:
-            spt.append('{0:0>5}{1}'.format(cnt, line))
+            spt.append('{0:0>6}{1:0>5}{2}'.format(
+                    hex(addr)[2:].upper(), cnt, line
+                    ))
             pass        # err msg
     # end of main read loop
 
