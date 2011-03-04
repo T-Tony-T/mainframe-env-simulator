@@ -36,9 +36,8 @@ from time import localtime, mktime, strftime, strptime
 FILE = [ 'SYSIN', 'SYSLIB', 'SYSPRINT', 'SYSLIN', 'SYSUT1' ]
 
 INFO = {                # { Line_No : 'message' }
-    'TRAN'    : {},             # the machine code translation ahead of src
-    'WARNING' : {},             # warning message below where it occurs
-    'ERROR'   : {},             # error message below where it occurs
+    'WARNING'  : {},            # warning message below where it occurs
+    'ERROR'    : {},            # error message below where it occurs
     }
 
 class ExternalSymbol(object):
@@ -95,12 +94,12 @@ def pass_1():
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
 
     # main read loop
-    cnt = 0                     # line number
-    addr = 0                    # address
+    addr = 0                    # program counter
+    line_num = 0
     scope_id = 0
     const_pool = None           # memory heap for constant allocation
     for line in spi:
-        cnt += 1                # start at line No. 1
+        line_num += 1           # start at line No. 1
         if line[0] == '*':      # is comment
             continue
 
@@ -108,29 +107,48 @@ def pass_1():
 
         # parse CSECT
         if field[1] == 'CSECT':
-            scope_id += 1
-            # check lable
+            # update the CSECT info
+            if scope_id:        # if not first CSECT
+                ESD[csect_lbl].length = addr
+
             bad_lbl = zPE.bad_label(field[0])
             if bad_lbl == None:
-                pass            # err msg
+                csect_lbl = ''
             elif bad_lbl:
-                pass            # err msg
-            elif field[0] in SYMBOL:
-                pass            # duplicated label
+                INFO['ERROR'][line_num] = 'INVALID SYMBOL'
+                csect_lbl = ''
             else:
-                ESD[field[0]] = ExternalSymbol(
+                csect_lbl = field[0]
+
+            # parse the new CSECT 
+            scope_id += 1
+            addr = 0
+            if csect_lbl in SYMBOL:
+                # continued CSECT
+                scope_id = SYMBOL[csect_lbl].id
+                addr = SYMBOL[csect_lbl].length
+            elif csect_lbl:
+                # labelled symbol
+                ESD[csect_lbl] = ExternalSymbol(
                     'SD', scope_id, addr, 0,
                     ' ', '00', ' '
                     )
-                SYMBOL[field[0]] = Symbol(
+                SYMBOL[csect_lbl] = Symbol(
                     1, addr, scope_id,
                     'J', ' ', ' ',
-                    cnt, []
+                    line_num, []
                     )
-            spt.append('{0:0>6}{1:0>5}{2:<8} CSECT\n'.format(
-                    hex(addr)[2:].upper(), cnt, field[0]
-                    ))
+            else:
+                # unlabelled symbol
+                ESD[csect_lbl] = ExternalSymbol(
+                    'PC', scope_id, addr, 0,
+                    ' ', '00', ' '
+                    )
 
+            spt.append('{0:0>6}{1:0>5}{2:<8} CSECT\n'.format(
+                    hex(addr)[2:].upper(), line_num, field[0]
+                    ))
+                
         # parse USING
         elif field[1] == 'USING':
             if len(field[0]) != 0:
@@ -145,25 +163,25 @@ def pass_1():
                     pass        # err msg
                 else:
                     SYMBOL[args[0]].references.append(
-                        '{0:>4}{1}'.format(cnt, 'U')
+                        '{0:>4}{1}'.format(line_num, 'U')
                         )
             spt.append('{0:0>6}{1:0>5}{2:<8} USING {3}\n'.format(
-                    hex(addr)[2:].upper(), cnt ,' ', field[2]
+                    hex(addr)[2:].upper(), line_num ,' ', field[2]
                     ))
 
         # parse END
         elif field[1] == 'END':
             if const_pool:      # check left-over constants
-                cnt_tmp = cnt - 1
+                line_num_tmp = line_num - 1
                 for lbl in SYMBOL:
                     if lbl[0] == '=' and SYMBOL[lbl].defn == None:
-                        spi.insert(cnt_tmp, '{0:<14} {1}\n'.format(' ', lbl))
-                        cnt_tmp += 1
+                        spi.insert(line_num_tmp, '{0:<14} {1}\n'.format(' ', lbl))
+                        line_num_tmp += 1
                 const_pool = None   # close the current pool
                 # the following is to "move back" the iterator
                 # need to be removed after END
                 spi.insert(0, '')
-                cnt -= 1
+                line_num -= 1
             else:               # no left-over constant, end the program
                 if len(field[0]) != 0:
                     pass            # err msg
@@ -174,11 +192,11 @@ def pass_1():
                         pass        # err msg
                     else:
                         SYMBOL[args[0]].references.append(
-                            '{0:>4}{1}'.format(cnt, ' ')
+                            '{0:>4}{1}'.format(line_num, ' ')
                             )
 
                 spt.append('{0:0>6}{1:0>5}{2:<8} END   {3}\n'.format(
-                        hex(addr)[2:].upper(), cnt, ' ', field[2]
+                        hex(addr)[2:].upper(), line_num, ' ', field[2]
                         ))
                 if spi[0] == '':
                     spi.rmline(0)
@@ -201,15 +219,15 @@ def pass_1():
                             curr_pool[3 - i].append(lbl)
                             break
 
-            cnt_tmp = cnt
+            line_num_tmp = line_num
             for pool in curr_pool:
                 for lbl in pool:
-                    spi.insert(cnt_tmp, '{0:<15}{1}\n'.format(' ', lbl))
-                    cnt_tmp += 1
+                    spi.insert(line_num_tmp, '{0:<15}{1}\n'.format(' ', lbl))
+                    line_num_tmp += 1
 
             const_pool = None   # close the current pool
             spt.append('{0:0>6}{1:0>5}{2:<8} LTORG\n'.format(
-                    hex(addr)[2:].upper(), cnt, ' '
+                    hex(addr)[2:].upper(), line_num, ' '
                     ))
 
         # parse DC/DS/=constant
@@ -230,7 +248,7 @@ def pass_1():
                         symbol.length = st_info[3]
                         symbol.value = addr
                         symbol.r_type = st_info[2]
-                        symbol.defn = cnt
+                        symbol.defn = line_num
                     else:
                         pass    # err msg
 
@@ -246,7 +264,7 @@ def pass_1():
                             symbol = SYMBOL[lbl]
                             if symbol.id == scope_id:
                                 symbol.references.append(
-                                    '{0:>4}{1}'.format(cnt, ' ')
+                                    '{0:>4}{1}'.format(line_num, ' ')
                                     )
                             else:
                                 pass # duplicated symbol
@@ -254,7 +272,7 @@ def pass_1():
                             SYMBOL[lbl] = Symbol(
                                 None, None, scope_id,
                                 None, None, None,
-                                None, [ '{0:>4}{1}'.format(cnt, ' '), ]
+                                None, [ '{0:>4}{1}'.format(line_num, ' '), ]
                                 )
             # check lable
             bad_lbl = zPE.bad_label(field[0])
@@ -270,14 +288,14 @@ def pass_1():
                     symbol.r_type = st_info[2]
                     symbol.asm = st_info[2]
                     symbol.program = ' '
-                    symbol.defn = cnt
+                    symbol.defn = line_num
                 else:
                     pass        # duplicated symbol
             else:
                 SYMBOL[field[0]] = Symbol(
                     st_info[3], addr, scope_id,
                     st_info[2], st_info[2], ' ',
-                    cnt, []
+                    line_num, []
                     )
 
             # align boundary
@@ -286,11 +304,11 @@ def pass_1():
 
             if field[1][0] == '=':
                 spt.append('{0:0>6}{1:0>5}{2}'.format(
-                        hex(addr)[2:].upper(), cnt, line
+                        hex(addr)[2:].upper(), line_num, line
                         ))
             else:
                 spt.append('{0:0>6}{1:0>5}{2:<8} {3:<5} {4}\n'.format(
-                        hex(addr)[2:].upper(), cnt, field[0], field[1], field[2]
+                        hex(addr)[2:].upper(), line_num, field[0], field[1], field[2]
                         ))
 
             # update address
@@ -315,14 +333,14 @@ def pass_1():
                     else:                       # valid pool
                         if lbl in SYMBOL:
                             SYMBOL[lbl].references.append(
-                                '{0:>4}{1}'.format(cnt, ' ')
+                                '{0:>4}{1}'.format(line_num, ' ')
                                 )
                         elif zPE.core.asm.valid_st(lbl[1:]):
                             SYMBOL[lbl] = Symbol(
                                 None, None, const_pool,
                                 lbl[1], ' ', ' ',
                                 None, [
-                                    '{0:>4}{1}'.format(cnt, ' '),
+                                    '{0:>4}{1}'.format(line_num, ' '),
                                     ]
                                 )
                         else:
@@ -348,7 +366,7 @@ def pass_1():
                         if symbol.id == scope_id:
                             symbol.references.append(
                                 '{0:>4}{1}'.format(
-                                    cnt, zPE.core.asm.type_op(op_code[0])
+                                    line_num, zPE.core.asm.type_op(op_code[0])
                                     )
                                 )
                         else:
@@ -359,7 +377,7 @@ def pass_1():
                             None, None, None,
                             None, [
                                 '{0:>4}{1}'.format(
-                                    cnt, zPE.core.asm.type_op(op_code[0])
+                                    line_num, zPE.core.asm.type_op(op_code[0])
                                     ),
                                 ]
                             )
@@ -380,18 +398,18 @@ def pass_1():
                     symbol.r_type = 'I'
                     symbol.asm = ' '
                     symbol.program = ' '
-                    symbol.defn = cnt
+                    symbol.defn = line_num
                 else:
                     pass        # duplicated symbol
             else:
                 SYMBOL[field[0]] = Symbol(
                     zPE.core.asm.len_op(op_code[0]), addr, scope_id,
                     'I', ' ', ' ',
-                    cnt, []
+                    line_num, []
                     )
 
             spt.append('{0:0>6}{1:0>5}{2:<8} {3:<5} {4}\n'.format(
-                    hex(addr)[2:].upper(), cnt,
+                    hex(addr)[2:].upper(), line_num,
                     field[0], field[1], arg_list[:-1]
                     ))
 
@@ -408,7 +426,7 @@ def pass_1():
         # not recognized op-code
         else:
             spt.append('{0:0>6}{1:0>5}{2}'.format(
-                    hex(addr)[2:].upper(), cnt, line
+                    hex(addr)[2:].upper(), line_num, line
                     ))
             pass        # err msg
     # end of main read loop
@@ -443,9 +461,9 @@ def pass_2():
 ############ test only
 
     # main read loop
-    cnt = 0                     # line number
+    line_num = 0                     # line number
     for line in spt:
-        cnt += 1                # start at line No. 1
+        line_num += 1                # start at line No. 1
 
         if line[0] == '*':      # is comment
             continue
