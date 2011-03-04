@@ -64,16 +64,16 @@ class X(object):
         self.__dsplc = dsplc
 
 
-## pseudo-instruction
+## Pseudo-Instruction
 pseudo = { }    # need to be filled by other modules (e.g. ASSIST)
 
-## extended mnemonic
+## Extended Mnemonic
 ext_mnem = {
-    'B'    : ('47F', X()),
-    'BR'   : ('07F', R()),
+    'B'    : lambda: ('47F', X()),
+    'BR'   : lambda: ('07F', R()),
     }
 
-## op-code look-up table
+## Op-Code Look-Up Table
 TYPE_OP = {     # M=modified, B=branch, U=USING, D=DROP, N=index
     #       AP    DP    ED    EDMK  MP    PACK  SP    SRP   UNPK  ZAP
     'M' : ( 'FA', 'FD', 'DE', 'DF', 'FC', 'F2', 'FB', 'F0', 'F3', 'F8',
@@ -86,14 +86,62 @@ TYPE_OP = {     # M=modified, B=branch, U=USING, D=DROP, N=index
     'B' : ( '45', '05', '4D', '0D', '47', '07', '46', '06', '86', '87' ),
     }
 op_code = {
-    'BC'   : ('47', R(), X()),
-    'BCR'  : ('07', R(), R()),
-    'L'    : ('58', R(), X()),
-    'LA'   : ('41', R(), X()),
-    'LR'   : ('18', R(), R()),
-    'SR'   : ('1B', R(), R()),
-    'ST'   : ('50', R(), X()),
+    'BC'   : lambda: ('47', R(), X()),
+    'BCR'  : lambda: ('07', R(), R()),
+    'L'    : lambda: ('58', R(), X()),
+    'LA'   : lambda: ('41', R(), X()),
+    'LR'   : lambda: ('18', R(), R()),
+    'SR'   : lambda: ('1B', R(), R()),
+    'ST'   : lambda: ('50', R(), X()),
     }
+
+
+## Interface Functions
+
+# rv: ( 'op_code', fmt_tp_1, ... )
+def get_op(instruction):
+    if instruction in pseudo:
+        return pseudo[instruction]()
+    elif instruction in ext_mnem:
+        return ext_mnem[instruction]()
+    elif instruction in op_code:
+        return op_code[instruction]()
+    else:
+        return None
+
+
+def len_op(op):
+    code = int(op[:2], 16)
+    if ( code <= int('98', 16) or
+         ( code >= int('AC', 16) and code <= int('B1', 16) ) or
+         ( code >= int('B6', 16) and code <= int('DF', 16) ) or
+         code >= int('E8', 16)
+         ):
+        return 2
+    else:
+        return 4
+
+
+def type_op(op_code):
+    if op_code[:2] in TYPE_OP['B']:
+        return 'B'
+    elif op_code[:2] in TYPE_OP['M']:
+        return 'M'
+    else:
+        return ' '
+
+
+def valid_op(instruction):
+    if instruction in pseudo:
+        return True
+    elif instruction in ext_mnem:
+        return True
+    elif instruction in op_code:
+        return True
+    else:
+        return False
+
+### end of Operation Code Definition
 
 
 ### Valid Constant Type
@@ -503,59 +551,36 @@ BOUNDARY = [
     ]
 
 const_s = {
-    'C' : C_('0'),
-    'X' : X_('0'),
-    'B' : B_('0'),
-    'F' : F_('0'),
-    'H' : H_('0'),
-    'P' : P_('0'),
-    'Z' : Z_('0'),
+    'C' : lambda val = '0', sz = 0: C_(val, sz),
+    'X' : lambda val = '0', sz = 0: X_(val, sz),
+    'B' : lambda val = '0', sz = 0: B_(val, sz),
+    'F' : lambda val = '0', sz = 0: F_(val, sz),
+    'H' : lambda val = '0', sz = 0: H_(val, sz),
+    'P' : lambda val = '0', sz = 0: P_(val, sz),
+    'Z' : lambda val = '0', sz = 0: Z_(val, sz),
     }
 
 ## address type
 const_a = {
-    'A' : A_('0'),
-    'V' : A_('0'),
+    'A' : lambda val = '0', sz = 0: A_(val, sz),
+    'V' : lambda val = '0', sz = 0: A_(val, sz),
     }
 
 
-### Interface Functions
+## Interface Functions
 
-def align_at(st_ch):
+def align_at(sd_ch):
     for indx in range(len(BOUNDARY)):
-        if st_ch in BOUNDARY[indx]:
+        if sd_ch in BOUNDARY[indx]:
             return 2 ** indx
     return 0
 
-# rv: ( 'op_code', fmt_tp_1, ... )
-def get_op(instruction):
-    if instruction in pseudo:
-        return pseudo[instruction]
-    elif instruction in ext_mnem:
-        return ext_mnem[instruction]
-    elif instruction in op_code:
-        return op_code[instruction]
-    else:
-        return None
 
-
-def len_op(op):
-    code = int(op[:2], 16)
-    if ( code <= int('98', 16) or
-         ( code >= int('AC', 16) and code <= int('B1', 16) ) or
-         ( code >= int('B6', 16) and code <= int('DF', 16) ) or
-         code >= int('E8', 16)
-         ):
-        return 2
-    else:
-        return 4
-
-
-def len_st(st_ch):
-    if st_ch in const_s:
-        return len(const_s[st_ch])
-    elif st_ch in const_a:
-        return len(const_a[st_ch])
+def get_sd(sd_info):
+    if sd_info[2] in const_s:
+        return const_s[sd_info[2]](sd_info[4], sd_info[3])
+    elif sd_info[2] in const_a:
+        return const_a[sd_info[2]](sd_info[4], sd_info[3])
     else:
         return None
 
@@ -563,112 +588,92 @@ def len_st(st_ch):
 # rv: ( const_type, multiplier, ch, length, init_val )
 # exception:
 #   SyntaxError: any syntax error in parsing the arguments
-def parse_st(st_arg):
+def parse_sd(sd_arg):
     # split into ( [mul]ch[Llen], val )
-    L = re.split('\(', st_arg)  # split according to '\('
+    L = re.split('\(', sd_arg)  # split according to '\('
     sz = len(L)
     if sz == 2 and L[1][-1] == ')':
         # A(label) ==> [ 'A', 'label)' ]
-        st_ch = L[0]
-        st_val = re.split(',', L[1][:-1])
+        sd_ch = L[0]
+        sd_val = re.split(',', L[1][:-1])
         val_tp = 'a'            # address type constant
     elif sz == 1:
         # AL3 ==> [ 'AL3' ]  or  8F'1' ==> [ "8F'1'" ]
-        L = re.split("'", st_arg) # re-split according to '\''
+        L = re.split("'", sd_arg) # re-split according to '\''
         sz = len(L)
         if sz == 3 and L[2] == '':
             # 8F'1' ==> [ '8F', '1', '' ]
-            st_ch = L[0]
-            st_val = L[1]
+            sd_ch = L[0]
+            sd_val = L[1]
             val_tp = 's'        # simple constant
         elif sz == 1:           # DS
             # 8F ==> [ '8F' ]
-            st_ch = L[0]
-            st_val = None
+            sd_ch = L[0]
+            sd_val = None
         else:
             raise SyntaxError
     else:
         raise SyntaxError
 
     # split l[0] into [ multiplier, type, length ]
-    L = re.split('([A-Z])L?', st_ch) # split according to '?L'
-    match = len(re.findall('([A-Z])L', st_ch)) # match the postfix 'L'
+    L = re.split('([A-Z])L?', sd_ch) # split according to '?L'
+    match = len(re.findall('([A-Z])L', sd_ch)) # match the postfix 'L'
 
     # parse multiplier
     if len(L) != 3:
         raise SyntaxError
     if L[0] == '':
-        st_mul = 1
+        sd_mul = 1
     else:
-        st_mul = int(L[0])
+        sd_mul = int(L[0])
 
     # check type
-    const_tp = valid_st(L[1])
+    const_tp = valid_sd(L[1])
     if not const_tp:
         raise SyntaxError
-    st_ch = L[1]
-    if st_val != None and const_tp != val_tp:
+    sd_ch = L[1]
+    if sd_val != None and const_tp != val_tp:
         raise SyntaxError
 
     # parse length
     if match == 0:              # no '?L' found
         if L[2] == '':
-            if st_val != None:
-                tmp = eval('{0}_(\'{1}\')'.format(st_ch, st_val))
-                st_len = len(tmp)
+            if sd_val != None:
+                sd_len = len(eval('{0}_(\'{1}\')'.format(sd_ch, sd_val)))
             else:
-                st_len = len_st(st_ch)
+                sd_len = len(eval('{0}_(\'0\')'.format(sd_ch)))
         else:
             raise SyntaxError
     elif match == 1:            # one '?L' found
         if L[2] == '':
             raise SyntaxError
         else:
-            st_len = int(L[2])
+            sd_len = int(L[2])
     else:                       # more than one '?L' found
         raise SyntaxError
 
-    return (const_tp, st_mul, st_ch, st_len, st_val)
+    return (const_tp, sd_mul, sd_ch, sd_len, sd_val)
 
 
-def type_op(op_code):
-    if op_code[:2] in TYPE_OP['B']:
-        return 'B'
-    elif op_code[:2] in TYPE_OP['M']:
-        return 'M'
-    else:
-        return ' '
-
-
-def valid_op(instruction):
-    if instruction in pseudo:
-        return True
-    elif instruction in ext_mnem:
-        return True
-    elif instruction in op_code:
-        return True
-    else:
-        return False
-
-
-def valid_st(st_arg_line):
-    if st_arg_line[0] in const_a:
+# it takes a string like F'12' or A(CARD)
+def valid_sd(sd_arg_line):
+    if sd_arg_line[0] in const_a:
         return 'a'
-    elif st_arg_line[0] in const_s:
+    elif sd_arg_line[0] in const_s:
         return 's'
     else:
         return None
 
 
-# st_info: ( 's', 1, ch, length, init_val )
-#   see parse_st(st_arg) for more details
+# sd_info: ( 's', 1, ch, length, init_val )
+#   see parse_sd(sd_arg) for more details
 # exception:
 #   ValueError: if the storage type cannot be evaluated
 #   others:     along the way of parsing storage
-def value_st(st_info):
-    st = eval('{0}_( \'{1}\', {2} )'.format(
-            st_info[2], st_info[4], st_info[3]
-            ))
-    if st.value() == None:
+def value_sd(sd_info):
+    sd = get_sd(sd_info)
+    if sd.value() == None:
         raise ValueError
-    return st.value()
+    return sd.value()
+
+### end of Constant Type Definition

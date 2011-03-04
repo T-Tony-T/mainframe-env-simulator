@@ -35,9 +35,15 @@ from time import localtime, mktime, strftime, strptime
 
 FILE = [ 'SYSIN', 'SYSLIB', 'SYSPRINT', 'SYSLIN', 'SYSUT1' ]
 
-INFO = {                # { Line_No : 'message' }
+INFO = {                # { Line_Num : 'message' }
     'WARNING'  : {},            # warning message below where it occurs
     'ERROR'    : {},            # error message below where it occurs
+    }
+
+MNEMONIC = {
+    # Line_Num : [ LOC ]                                // type (len) 1
+    # Line_Num : [ LOC, CONST_VALUE ]                   // type (len) 2
+    # Line_Num : [ LOC, (OBJECT_CODE), ADDR1, ADDR2 ]   // type (len) 4
     }
 
 class ExternalSymbol(object):
@@ -175,7 +181,9 @@ def pass_1():
                 line_num_tmp = line_num - 1
                 for lbl in SYMBOL:
                     if lbl[0] == '=' and SYMBOL[lbl].defn == None:
-                        spi.insert(line_num_tmp, '{0:<14} {1}\n'.format(' ', lbl))
+                        spi.insert(line_num_tmp,
+                                   '{0:<14} {1}\n'.format(' ', lbl)
+                                   )
                         line_num_tmp += 1
                 const_pool = None   # close the current pool
                 # the following is to "move back" the iterator
@@ -234,9 +242,9 @@ def pass_1():
         elif field[1] in ['DC', 'DS'] or field[1][0] == '=':
             try:
                 if field[1][0] == '=':
-                    st_info = zPE.core.asm.parse_st(field[1][1:])
+                    sd_info = zPE.core.asm.parse_sd(field[1][1:])
                 else:
-                    st_info = zPE.core.asm.parse_st(field[2])
+                    sd_info = zPE.core.asm.parse_sd(field[2])
             except:
                 continue        # err msg
 
@@ -245,16 +253,16 @@ def pass_1():
                 if field[1] in SYMBOL:
                     symbol = SYMBOL[field[1]]
                     if symbol.defn == None and symbol.id == scope_id:
-                        symbol.length = st_info[3]
+                        symbol.length = sd_info[3]
                         symbol.value = addr
-                        symbol.r_type = st_info[2]
+                        symbol.r_type = sd_info[2]
                         symbol.defn = line_num
                     else:
                         pass    # err msg
 
-            if st_info[0] == 'a' and st_info[4] != None:
+            if sd_info[0] == 'a' and sd_info[4] != None:
                 # check references
-                for lbl in st_info[4]:
+                for lbl in sd_info[4]:
                     if re.match('[A-Z@#$]', lbl[0]): # is a symbol
                         bad_lbl = zPE.bad_label(lbl)
                         if bad_lbl:
@@ -283,23 +291,23 @@ def pass_1():
             elif field[0] in SYMBOL:
                 symbol = SYMBOL[field[0]]
                 if symbol.defn == None and symbol.id == scope_id:
-                    symbol.length = st_info[3]
+                    symbol.length = sd_info[3]
                     symbol.value = addr
-                    symbol.r_type = st_info[2]
-                    symbol.asm = st_info[2]
+                    symbol.r_type = sd_info[2]
+                    symbol.asm = sd_info[2]
                     symbol.program = ' '
                     symbol.defn = line_num
                 else:
                     pass        # duplicated symbol
             else:
                 SYMBOL[field[0]] = Symbol(
-                    st_info[3], addr, scope_id,
-                    st_info[2], st_info[2], ' ',
+                    sd_info[3], addr, scope_id,
+                    sd_info[2], sd_info[2], ' ',
                     line_num, []
                     )
 
             # align boundary
-            alignment = zPE.core.asm.align_at(st_info[2])
+            alignment = zPE.core.asm.align_at(sd_info[2])
             addr = (addr + alignment - 1) / alignment * alignment
 
             if field[1][0] == '=':
@@ -312,7 +320,7 @@ def pass_1():
                         ))
 
             # update address
-            addr += st_info[1] * st_info[3]
+            addr += sd_info[1] * sd_info[3]
 
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
@@ -335,7 +343,7 @@ def pass_1():
                             SYMBOL[lbl].references.append(
                                 '{0:>4}{1}'.format(line_num, ' ')
                                 )
-                        elif zPE.core.asm.valid_st(lbl[1:]):
+                        elif zPE.core.asm.valid_sd(lbl[1:]):
                             SYMBOL[lbl] = Symbol(
                                 None, None, const_pool,
                                 lbl[1], ' ', ' ',
@@ -346,12 +354,12 @@ def pass_1():
                         else:
                             pass # err msg
                     arg_list += lbl + ','
-                elif zPE.core.asm.valid_st(lbl):
+                elif zPE.core.asm.valid_sd(lbl):
                     # parse in-line constant
                     try:
-                        st_info = zPE.core.asm.parse_st(lbl)
+                        sd_info = zPE.core.asm.parse_sd(lbl)
                         arg_list += '{0},'.format(
-                            zPE.core.asm.value_st(st_info)
+                            zPE.core.asm.value_sd(sd_info)
                             )
                     except:
                         arg_list += lbl + ','
