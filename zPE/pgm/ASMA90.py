@@ -41,9 +41,9 @@ INFO = {                # { Line_Num : 'message' }
     }
 
 MNEMONIC = {
-    # Line_Num : [ LOC ]                                // type (len) 1
-    # Line_Num : [ LOC, CONST_VALUE ]                   // type (len) 2
-    # Line_Num : [ LOC, (OBJECT_CODE), ADDR1, ADDR2 ]   // type (len) 4
+    # Line_Num : [ LOC, ]                               // type (len) 1
+    # Line_Num : [ LOC, [CONST_OBJECTs], ]              // type (len) 2
+    # Line_Num : [ LOC, (OBJECT_CODE), ADDR1, ADDR2, ]  // type (len) 4
     }
 
 class ExternalSymbol(object):
@@ -151,8 +151,9 @@ def pass_1():
                     ' ', '00', ' '
                     )
 
-            spt.append('{0:0>6}{1:0>5}{2:<8} CSECT\n'.format(
-                    hex(addr)[2:].upper(), line_num, field[0]
+            MNEMONIC[line_num] = [ addr, ]
+            spt.append('{0:0>5}{1:<8} CSECT\n'.format(
+                    line_num, field[0]
                     ))
                 
         # parse USING
@@ -171,8 +172,10 @@ def pass_1():
                     SYMBOL[args[0]].references.append(
                         '{0:>4}{1}'.format(line_num, 'U')
                         )
-            spt.append('{0:0>6}{1:0>5}{2:<8} USING {3}\n'.format(
-                    hex(addr)[2:].upper(), line_num ,' ', field[2]
+
+            MNEMONIC[line_num] = [ addr, ]
+            spt.append('{0:0>5}{1:<8} USING {2}\n'.format(
+                    line_num , ' ', field[2]
                     ))
 
         # parse END
@@ -196,15 +199,19 @@ def pass_1():
                 if len(field) < 3:
                     pass            # err msg
                 else:
-                    if ESD[field[2]] != 1:
-                        pass        # err msg
-                    else:
-                        SYMBOL[args[0]].references.append(
+                    # update the CSECT info
+                    ESD[csect_lbl].length = addr
+                    if field[2] in ESD:
+                        ESD[field[2]].length = addr
+                    if field[2] in SYMBOL:
+                        SYMBOL[field[2]].references.append(
                             '{0:>4}{1}'.format(line_num, ' ')
                             )
+                    addr = 0    # reset program counter
 
-                spt.append('{0:0>6}{1:0>5}{2:<8} END   {3}\n'.format(
-                        hex(addr)[2:].upper(), line_num, ' ', field[2]
+                MNEMONIC[line_num] = [ addr, ]
+                spt.append('{0:0>5}{1:<8} END   {2}\n'.format(
+                        line_num, ' ', field[2]
                         ))
                 if spi[0] == '':
                     spi.rmline(0)
@@ -234,9 +241,8 @@ def pass_1():
                     line_num_tmp += 1
 
             const_pool = None   # close the current pool
-            spt.append('{0:0>6}{1:0>5}{2:<8} LTORG\n'.format(
-                    hex(addr)[2:].upper(), line_num, ' '
-                    ))
+            MNEMONIC[line_num] = [ addr, ]
+            spt.append('{0:0>5}{1:<8} LTORG\n'.format(line_num, ' '))
 
         # parse DC/DS/=constant
         elif field[1] in ['DC', 'DS'] or field[1][0] == '=':
@@ -310,13 +316,15 @@ def pass_1():
             alignment = zPE.core.asm.align_at(sd_info[2])
             addr = (addr + alignment - 1) / alignment * alignment
 
-            if field[1][0] == '=':
-                spt.append('{0:0>6}{1:0>5}{2}'.format(
-                        hex(addr)[2:].upper(), line_num, line
-                        ))
+            if field[1] == 'DS':
+                MNEMONIC[line_num] = [ addr, ]
             else:
-                spt.append('{0:0>6}{1:0>5}{2:<8} {3:<5} {4}\n'.format(
-                        hex(addr)[2:].upper(), line_num, field[0], field[1], field[2]
+                MNEMONIC[line_num] = [ addr, zPE.core.asm.get_sd(sd_info), ]
+            if field[1][0] == '=':
+                spt.append('{0:0>5}{1}'.format(line_num, line))
+            else:
+                spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
+                        line_num, field[0], field[1], field[2]
                         ))
 
             # update address
@@ -326,99 +334,121 @@ def pass_1():
         elif zPE.core.asm.valid_op(field[1]):
             op_code = zPE.core.asm.get_op(field[1])
             args = __PARSE_ARGS(field[2])
-            # check reference
-            arg_list = ''
-            for lbl in args:
-                if lbl[0] == '=':
-                    # parse constant
-                    if not const_pool:
-                        # allocate new pool
-                        const_pool = scope_id
 
-                    if scope_id != const_pool:  # invalid pool
+            if len(op_code) != len(args) + 1:
+                INFO['ERROR'][line_num] = 'UNMATCHED ARGUMENTS'
+                arg_list = field[2] + ','
+            else:
+                # check reference
+                arg_list = ''
+                arg_indx = 0    # index used for op_code
+                for lbl in args:
+                    arg_indx += 1 # start at 1, since op_code = ('xx', ...)
 
-                        pass    # err msg
-                    else:                       # valid pool
-                        if lbl in SYMBOL:
-                            SYMBOL[lbl].references.append(
-                                '{0:>4}{1}'.format(line_num, ' ')
-                                )
-                        elif zPE.core.asm.valid_sd(lbl[1:]):
+                    if lbl[0] == '=':
+                        # parse =constant, op_code not filled
+                        if not const_pool:
+                            # allocate new pool
+                            const_pool = scope_id
+
+                        if scope_id != const_pool:  # invalid pool
+
+                            pass    # err msg
+                        else:                       # valid pool
+                            if lbl in SYMBOL:
+                                SYMBOL[lbl].references.append(
+                                    '{0:>4}{1}'.format(line_num, ' ')
+                                    )
+                            elif zPE.core.asm.valid_sd(lbl[1:]):
+                                SYMBOL[lbl] = Symbol(
+                                    None, None, const_pool,
+                                    lbl[1], ' ', ' ',
+                                    None, [
+                                        '{0:>4}{1}'.format(line_num, ' '),
+                                        ]
+                                    )
+                            else:
+                                pass # err msg
+                        arg_list += lbl + ','
+                    elif re.match('[A-Z@#$]', lbl[0]):
+                        if zPE.core.asm.valid_sd(lbl):
+                            # try parse in-line constant,
+                            # op_code filled on success
+                            try:
+                                sd_info = zPE.core.asm.parse_sd(lbl)
+                                arg_val = zPE.core.asm.value_sd(sd_info)
+                                op_code[arg_indx].set(arg_val)
+
+                                arg_list += '{0},'.format(arg_val)
+                                continue # is in-line constant, skip label
+                            except:
+                                pass     # is not in-line constant, check label
+
+                        # parse label, op_code not filled
+                        bad_lbl = zPE.bad_label(lbl)
+                        if bad_lbl:
+                            pass        # err msg
+                        elif lbl in SYMBOL:
+                            # check scope
+                            symbol = SYMBOL[lbl]
+                            if symbol.id == scope_id:
+                                symbol.references.append(
+                                    '{0:>4}{1}'.format(
+                                        line_num, zPE.core.asm.type_op(op_code)
+                                        )
+                                    )
+                            else:
+                                pass        # duplicated symbol
+                        else:
                             SYMBOL[lbl] = Symbol(
-                                None, None, const_pool,
-                                lbl[1], ' ', ' ',
+                                None, None, scope_id,
+                                None, None, None,
                                 None, [
-                                    '{0:>4}{1}'.format(line_num, ' '),
+                                    '{0:>4}{1}'.format(
+                                        line_num, zPE.core.asm.type_op(op_code)
+                                        ),
                                     ]
                                 )
-                        else:
-                            pass # err msg
-                    arg_list += lbl + ','
-                elif zPE.core.asm.valid_sd(lbl):
-                    # parse in-line constant
-                    try:
-                        sd_info = zPE.core.asm.parse_sd(lbl)
-                        arg_list += '{0},'.format(
-                            zPE.core.asm.value_sd(sd_info)
-                            )
-                    except:
                         arg_list += lbl + ','
-                elif re.match('[A-Z@#$][A-Z@#$0-9]', lbl[:2]):
-                    # parse label
-                    bad_lbl = zPE.bad_label(lbl)
-                    if bad_lbl:
-                        pass        # err msg
-                    elif lbl in SYMBOL:
-                        # check scope
-                        symbol = SYMBOL[lbl]
-                        if symbol.id == scope_id:
-                            symbol.references.append(
-                                '{0:>4}{1}'.format(
-                                    line_num, zPE.core.asm.type_op(op_code[0])
-                                    )
-                                )
-                        else:
-                            pass        # duplicated symbol
                     else:
-                        SYMBOL[lbl] = Symbol(
-                            None, None, scope_id,
-                            None, None, None,
-                            None, [
-                                '{0:>4}{1}'.format(
-                                    line_num, zPE.core.asm.type_op(op_code[0])
-                                    ),
-                                ]
-                            )
-                    arg_list += lbl + ','
-                else:
-                    arg_list += lbl + ','
-            # check lable
-            bad_lbl = zPE.bad_label(field[0])
-            if bad_lbl == None:
-                pass        # no label detected
-            elif bad_lbl:
-                pass        # err msg
-            elif field[0] in SYMBOL:
-                symbol = SYMBOL[field[0]]
-                if symbol.defn == None and symbol.id == scope_id:
-                    symbol.length = zPE.core.asm.len_op(op_code[0])
-                    symbol.value = addr
-                    symbol.r_type = 'I'
-                    symbol.asm = ' '
-                    symbol.program = ' '
-                    symbol.defn = line_num
-                else:
-                    pass        # duplicated symbol
-            else:
-                SYMBOL[field[0]] = Symbol(
-                    zPE.core.asm.len_op(op_code[0]), addr, scope_id,
-                    'I', ' ', ' ',
-                    line_num, []
-                    )
+                        # try parse integer string,
+                        # op_code filled on success
+                        try:
+                            int_val = int(lbl)
+                            op_code[arg_indx].set(int_val)
+                        except:
+                            pass
+                        arg_list += lbl + ','
+                ## end of checking references
 
-            spt.append('{0:0>6}{1:0>5}{2:<8} {3:<5} {4}\n'.format(
-                    hex(addr)[2:].upper(), line_num,
-                    field[0], field[1], arg_list[:-1]
+                # check lable
+                bad_lbl = zPE.bad_label(field[0])
+                if bad_lbl == None:
+                    pass        # no label detected
+                elif bad_lbl:
+                    pass        # err msg
+                elif field[0] in SYMBOL:
+                    symbol = SYMBOL[field[0]]
+                    if symbol.defn == None and symbol.id == scope_id:
+                        symbol.length = zPE.core.asm.len_op(op_code)
+                        symbol.value = addr
+                        symbol.r_type = 'I'
+                        symbol.asm = ' '
+                        symbol.program = ' '
+                        symbol.defn = line_num
+                    else:
+                        pass        # duplicated symbol
+                else:
+                    SYMBOL[field[0]] = Symbol(
+                        zPE.core.asm.len_op(op_code), addr, scope_id,
+                        'I', ' ', ' ',
+                        line_num, []
+                        )
+            # fi
+
+            MNEMONIC[line_num] = [ addr, op_code, '', '', ]
+            spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
+                    line_num, field[0], field[1], arg_list[:-1]
                     ))
 
             # update address
@@ -431,12 +461,10 @@ def pass_1():
                 sys.exit(5)
             addr += length / 2
 
-        # not recognized op-code
+        # unrecognized op-code
         else:
-            spt.append('{0:0>6}{1:0>5}{2}'.format(
-                    hex(addr)[2:].upper(), line_num, line
-                    ))
-            pass        # err msg
+            INFO['ERROR'][line_num] = 'INVALID OP CODE'
+            spt.append('{0:0>5}{1}'.format(line_num, line))
     # end of main read loop
 
     # check cross references table integrality

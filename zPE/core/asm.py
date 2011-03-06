@@ -12,6 +12,7 @@ import re
 class R(object):
     def __init__(self, val = None):
         if val == None:
+            self.valid = False
             self.__val = None
         else:
             self.set(val)
@@ -20,17 +21,25 @@ class R(object):
         return 1                # number of half-bytes / hex-digits
 
     def get(self):
-        return self.__val
+        if self.valid:
+            return self.__val
+        else:
+            raise ValueError
     def prnt(self):
-        return hex(self.__val)[-1].upper()
+        if self.valid:
+            return hex(self.__val)[-1].upper()
+        else:
+            raise ValueError
     def set(self, val):
         if val < 0 or val > 15:
             raise ValueError
         self.__val = val
+        self.valid = True
 
 class X(object):
-    def __init__(self, dsplc = None, indx = None, base = None):
+    def __init__(self, dsplc = None, indx = 0, base = 0):
         if dsplc == None:
+            self.valid = False
             self.__dsplc = None
             self.__indx = None
             self.__base = None
@@ -41,18 +50,24 @@ class X(object):
         return 5
 
     def get(self):
-        return (
-            self.__indx,
-            self.__base,
-            self.__dsplc
-            )
+        if self.valid:
+            return (
+                self.__indx,
+                self.__base,
+                self.__dsplc
+                )
+        else:
+            raise ValueError
     def prnt(self):
-        return '{0}{1}{2:0>3}'.format(
-            hex(self.__indx)[-1].upper(),
-            hex(self.__base)[-1].upper(),
-            hex(self.__dsplc)[2:].upper()
-            )
-    def set(self, dsplc, indx, base):
+        if self.valid:
+            return '{0}{1}{2:0>3}'.format(
+                hex(self.__indx)[-1].upper(),
+                hex(self.__base)[-1].upper(),
+                hex(self.__dsplc)[2:].upper()
+                )
+        else:
+            raise ValueError
+    def set(self, dsplc, indx = 0, base = 0):
         if dsplc < 0 or dsplc > 4095:
             raise ValueError
         if indx < 0 or indx > 15:
@@ -62,6 +77,7 @@ class X(object):
         self.__indx = indx
         self.__base = base
         self.__dsplc = dsplc
+        self.valid = True
 
 
 ## Pseudo-Instruction
@@ -98,7 +114,7 @@ op_code = {
 
 ## Interface Functions
 
-# rv: ( 'op_code', fmt_tp_1, ... )
+# rv: ( 'op_mnem', fmt_tp_1, ... )
 def get_op(instruction):
     if instruction in pseudo:
         return pseudo[instruction]()
@@ -110,8 +126,8 @@ def get_op(instruction):
         return None
 
 
-def len_op(op):
-    code = int(op[:2], 16)
+def len_op(op_code):
+    code = int(op_code[0][:2], 16)
     if ( code <= int('98', 16) or
          ( code >= int('AC', 16) and code <= int('B1', 16) ) or
          ( code >= int('B6', 16) and code <= int('DF', 16) ) or
@@ -122,10 +138,20 @@ def len_op(op):
         return 4
 
 
+def prnt_op(op_code):
+    code = op_code[0]
+    for indx in range(1, len(op_code)):
+        if op_code[indx].valid:
+            code += op_code[indx].prnt()
+        else:
+            code += '-' * len(op_code[indx])
+    return code
+
+
 def type_op(op_code):
-    if op_code[:2] in TYPE_OP['B']:
+    if op_code[0][:2] in TYPE_OP['B']:
         return 'B'
-    elif op_code[:2] in TYPE_OP['M']:
+    elif op_code[0][:2] in TYPE_OP['M']:
         return 'M'
     else:
         return ' '
@@ -577,15 +603,23 @@ def align_at(sd_ch):
 
 
 def get_sd(sd_info):
-    if sd_info[2] in const_s:
-        return const_s[sd_info[2]](sd_info[4], sd_info[3])
-    elif sd_info[2] in const_a:
-        return const_a[sd_info[2]](sd_info[4], sd_info[3])
+    if sd_info[0] == 's':
+        rv = [None] * sd_info[1]
+        for indx in range(sd_info[1]):
+            rv[indx] = const_s[sd_info[2]](sd_info[4], sd_info[3])
+        return rv
+    elif sd_info[0] == 'a':
+        rv = []
+        for val in sd_info[4]:
+            rv.append( const_a[sd_info[2]](val, sd_info[3]) )
+        return rv
     else:
         return None
 
 
 # rv: ( const_type, multiplier, ch, length, init_val )
+#   const_type: 'a' | 's'
+#   init_val:   str(num) | [ symbol ]
 # exception:
 #   SyntaxError: any syntax error in parsing the arguments
 def parse_sd(sd_arg):
@@ -671,7 +705,7 @@ def valid_sd(sd_arg_line):
 #   ValueError: if the storage type cannot be evaluated
 #   others:     along the way of parsing storage
 def value_sd(sd_info):
-    sd = get_sd(sd_info)
+    sd = get_sd(sd_info)[0]
     if sd.value() == None:
         raise ValueError
     return sd.value()

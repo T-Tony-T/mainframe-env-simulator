@@ -111,6 +111,12 @@ def __PARSE_OUT():
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
 
+    asm_warn = zPE.pgm.ASMA90.INFO['WARNING']
+    asm_err  = zPE.pgm.ASMA90.INFO['ERROR']
+    asm_mnem = zPE.pgm.ASMA90.MNEMONIC
+    asm_esd  = zPE.pgm.ASMA90.ESD
+    asm_symb = zPE.pgm.ASMA90.SYMBOL
+
     pln_cnt = 0                 # printed line counter of the current page
     page_cnt = 1                # page counter
     ctrl = '1'
@@ -128,7 +134,6 @@ def __PARSE_OUT():
 
     # main read loop
     cnt = 0                     # line number
-    indx_t = 0                  # index for spt
     for line in spi:
         cnt += 1                # start at line No. 1
         if pln_cnt >= zPE.DEFAULT['LN_P_PAGE']:
@@ -143,27 +148,56 @@ def __PARSE_OUT():
             spo.append(ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
                        '{0:>5} {1}'.format(cnt, line))
         else:
-            if cnt != int(spt[indx_t][6:11]):
-                sys.stderr.write('Error: {0},{1}: '.format(
-                        cnt, int(spt[indx_t][6:11])
-                        ) + 'Inconsistent line number in parsing report.\n')
-                sys.exit(11)
-            spo.append(ctrl, '{0:0>6} {1:<26} '.format(spt[indx_t][0:6], ' '),
+            loc = hex(asm_mnem[cnt][0])[2:].upper()
+            spo.append(ctrl, '{0:0>6} {1:<26} '.format(loc, ' '),
                        '{0:>5} {1}'.format(cnt, line))
-            indx_t += 1         # move to next line
 
     print '\nExternal Symbol Dictionary:'
-    for k,v in sorted(zPE.pgm.ASMA90.ESD.iteritems(),
-                      key=lambda (k,v): (v,k)):
+    for k,v in sorted(asm_esd.iteritems(), key=lambda (k,v): (v,k)):
         print '{0:<8} => {1}'.format(k, v.__dict__)
 
     print '\nSymbol Cross Reference Table:'
-    mydict = zPE.pgm.ASMA90.SYMBOL
-    for key in sorted(mydict.iterkeys()):
-        if mydict[key].value == None:
+    for key in sorted(asm_symb.iterkeys()):
+        if asm_symb[key].value == None:
             addr = -1
         else:
-            addr = mydict[key].value
+            addr = asm_symb[key].value
         print '{0:<8} (0x{1:0>6}) => {2}'.format(
-            key, hex(addr)[2:], mydict[key].__dict__
+            key, hex(addr)[2:], asm_symb[key].__dict__
             )
+
+    print '\nMnemonic:'
+    for key in sorted(asm_mnem.iterkeys()):
+        tmp_str = ''
+        if len(asm_mnem[key]) == 2:
+            for val in asm_mnem[key][1]:
+                tmp_str += zPE.core.asm.X_.tr(val.dump())
+        elif len(asm_mnem[key]) == 4:
+            code = zPE.core.asm.prnt_op(asm_mnem[key][1])
+            if len(code) == 12:
+                field_3 = code[8:12]
+            else:
+                field_3 = '    '
+            if len(code) >= 8:
+                field_2 = code[4:8]
+            else:
+                field_2 = '    '
+            field_1 = code[0:4]
+            tmp_str = '{0} {1} {2} '.format(
+                field_1, field_2, field_3
+                )
+            if asm_mnem[key][2]:
+                addr_1 = asm_mnem[key][2]
+            else:
+                addr_1 = '     '
+            if asm_mnem[key][3]:
+                addr_2 = asm_mnem[key][3]
+            else:
+                addr_2 = '     '
+            tmp_str += '{0:0>5} {1:0>5}'.format(
+                addr_1, addr_2
+                )
+        print '{0:>5}: {1:0>6} {2}'.format(key,
+                                           hex(asm_mnem[key][0])[2:],
+                                           tmp_str
+                                           )
