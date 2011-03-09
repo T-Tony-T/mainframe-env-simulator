@@ -38,16 +38,15 @@ $ python setup.py build
 $ sudo python setup.py install --record install.record.txt
 ("install.record.txt" is used for uninstall)
 
-Under Windows:
+Under Windows: (cmd)
 > python setup.py bdist_wininst
 > dist/mainframe-env-simulator-*.exe
-("install.record.txt" is used for both install and uninstall)
 
 
 USAGE
 -------------------------
 Use 'zsub' to submit an JCL job. The job output will be generated
-at the same folder of the submitted jobs.
+at the same folder of the submitted job.
 
 
 UNINSTALLATION
@@ -56,4 +55,4 @@ Under Linux:
 $ cat install.record.txt | sudo xargs rm -rf
 
 Under Windows:
-> dist/mainframe-env-simulator-*.exe
+Control Panel -> Uninstall a Program

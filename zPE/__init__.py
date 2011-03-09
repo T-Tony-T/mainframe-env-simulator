@@ -368,11 +368,11 @@ PGM_SUPPORTED = {         # all supported programs and their bindings
 def LIST_PGM():                # list all supported languages out
     print 'All programs (PGM) that are currently supported:'
     print '  ASMA90     -- High-Level Assembler'
-    print '  ASSIST     -- Assembler using ASSIST'
+    print '  ASSIST     -- ASSIST Assembler'
     print '  HEWLDRGO   -- Loader'
     print
     print 'Utilities:'
-    print '  IEFBR14    -- System utility that DO NOTHING'
+    print '  IEFBR14    -- System utility that DOES NOTHING'
     print
 
 
