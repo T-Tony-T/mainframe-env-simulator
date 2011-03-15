@@ -651,7 +651,6 @@ def get_sd(sd_info):
 # exception:
 #   SyntaxError: any syntax error in parsing the arguments
 def parse_sd(sd_arg):
-    print sd_arg
     # split into ( [mul]ch[Llen], val )
     L = re.split('\(', sd_arg)  # split according to '\('
     sz = len(L)

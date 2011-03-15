@@ -121,7 +121,6 @@ def pass_1():
             continue
 
         field = zPE.resplit('\s+', line[:-1], 3)
-        print field
 
         # parse CSECT
         if field[1] == 'CSECT':
