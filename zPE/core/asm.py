@@ -9,6 +9,9 @@ import re
 ### Valid Operation Code
 
 ## basic instruction format type
+# self.prnt() should return ( first_str, second_str ) where either can be ''
+
+# int_4 => ( 'r', '' )
 class R(object):
     def __init__(self, val = None):
         if val == None:
@@ -25,17 +28,21 @@ class R(object):
             return self.__val
         else:
             raise ValueError
+
     def prnt(self):
         if self.valid:
-            return hex(self.__val)[-1].upper()
+            rv = hex(self.__val)[-1].upper()
         else:
-            raise ValueError
+            rv = '-'
+        return ( rv, '', )
+
     def set(self, val):
         if val < 0 or val > 15:
             raise ValueError
         self.__val = val
         self.valid = True
 
+# int_12(int_4, int_4) => ( 'xbddd', '' )
 class X(object):
     def __init__(self, dsplc = None, indx = 0, base = 0):
         if dsplc == None:
@@ -58,15 +65,18 @@ class X(object):
                 )
         else:
             raise ValueError
+
     def prnt(self):
         if self.valid:
-            return '{0}{1}{2:0>3}'.format(
+            rv = '{0}{1}{2:0>3}'.format(
                 hex(self.__indx)[-1].upper(),
                 hex(self.__base)[-1].upper(),
                 hex(self.__dsplc)[2:].upper()
                 )
         else:
-            raise ValueError
+            rv = '-----'
+        return ( rv, '', )
+
     def set(self, dsplc, indx = 0, base = 0):
         if dsplc < 0 or dsplc > 4095:
             raise ValueError
@@ -80,16 +90,7 @@ class X(object):
         self.valid = True
 
 
-## Pseudo-Instruction
-pseudo = { }    # need to be filled by other modules (e.g. ASSIST)
-
-## Extended Mnemonic
-ext_mnem = {
-    'B'    : lambda: ('47F', X()),
-    'BR'   : lambda: ('07F', R()),
-    }
-
-## Op-Code Look-Up Table
+## Op-Code Type Map
 TYPE_OP = {     # M=modified, B=branch, U=USING, D=DROP, N=index
     #       AP    DP    ED    EDMK  MP    PACK  SP    SRP   UNPK  ZAP
     'M' : ( 'FA', 'FD', 'DE', 'DF', 'FC', 'F2', 'FB', 'F0', 'F3', 'F8',
@@ -101,6 +102,17 @@ TYPE_OP = {     # M=modified, B=branch, U=USING, D=DROP, N=index
     #       BAL   BALR  BAS   BASR  BC    BCR   BCT   BCTR  BXH   BXLE
     'B' : ( '45', '05', '4D', '0D', '47', '07', '46', '06', '86', '87' ),
     }
+
+## Op-Code Look-Up Table
+# Pseudo-Instruction
+pseudo = { }        # should only be filled by other modules (e.g. ASSIST)
+
+# Extended Mnemonic
+ext_mnem = {
+    'B'    : lambda: ('47F', X()),
+    'BR'   : lambda: ('07F', R()),
+    }
+# Basic Instruction
 op_code = {
     'BC'   : lambda: ('47', R(), X()),
     'BCR'  : lambda: ('07', R(), R()),
@@ -140,11 +152,12 @@ def len_op(op_code):
 
 def prnt_op(op_code):
     code = op_code[0]
+    # first pass
     for indx in range(1, len(op_code)):
-        if op_code[indx].valid:
-            code += op_code[indx].prnt()
-        else:
-            code += '-' * len(op_code[indx])
+        code += op_code[indx].prnt()[0]
+    # second pass
+    for indx in range(1, len(op_code)):
+        code += op_code[indx].prnt()[1]
     return code
 
 
@@ -445,7 +458,12 @@ class F_(object):
     def set(self, int_str, length = 0):
         if length > 4:
             raise ValueError
-        int_val = int(int_str, 10)
+        if isinstance(int_str, int):
+            int_val = int_str
+        elif isinstance(int_str, str):
+            int_val = int(int_str, 10)
+        else:
+            raise ValueError
         if int_val < int('-80000000', 16) or int_val > int('7FFFFFFF', 16):
             raise ValueError
         self.__val = int_val
@@ -495,7 +513,12 @@ class H_(object):
     def set(self, int_str, length = 0):
         if length > 2:
             raise ValueError
-        int_val = int(int_str, 10)
+        if isinstance(int_str, int):
+            int_val = int_str
+        elif isinstance(int_str, str):
+            int_val = int(int_str, 10)
+        else:
+            raise ValueError
         if int_val < int('-8000', 16) or int_val > int('7FFF', 16):
             raise ValueError
         self.__val = int_val
@@ -543,7 +566,12 @@ class A_(object):
     def set(self, int_str, length = 0):
         if length > 4:
             raise ValueError
-        int_val = int(int_str, 10)
+        if isinstance(int_str, int):
+            int_val = int_str
+        elif isinstance(int_str, str):
+            int_val = int(int_str, 10)
+        else:
+            raise ValueError
         if int_val < 0 or int_val > int('FFFFFFFF', 16):
             raise ValueError
         self.__val = int_val
@@ -589,7 +617,7 @@ const_s = {
 ## address type
 const_a = {
     'A' : lambda val = '0', sz = 0: A_(val, sz),
-    'V' : lambda val = '0', sz = 0: A_(val, sz),
+    'V' : lambda val = '0', sz = 0: A_('0', sz),
     }
 
 
@@ -623,6 +651,7 @@ def get_sd(sd_info):
 # exception:
 #   SyntaxError: any syntax error in parsing the arguments
 def parse_sd(sd_arg):
+    print sd_arg
     # split into ( [mul]ch[Llen], val )
     L = re.split('\(', sd_arg)  # split according to '\('
     sz = len(L)
@@ -672,10 +701,13 @@ def parse_sd(sd_arg):
     # parse length
     if match == 0:              # no '?L' found
         if L[2] == '':
-            if sd_val != None:
-                sd_len = len(eval('{0}_(\'{1}\')'.format(sd_ch, sd_val)))
+            if const_tp == 's' and sd_val != None:
+                sd_len = len(const_s[sd_ch](sd_val))
             else:
-                sd_len = len(eval('{0}_(\'0\')'.format(sd_ch)))
+                if const_tp == 's':
+                    sd_len = len(const_s[sd_ch]())
+                else:
+                    sd_len = len(const_a[sd_ch]())
         else:
             raise SyntaxError
     elif match == 1:            # one '?L' found

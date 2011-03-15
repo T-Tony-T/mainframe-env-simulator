@@ -54,7 +54,7 @@ def parse(job):
 
     # args_0,args_1,args_2
     # AccInfo,'pgmer'[,parameters]
-    args = re.split(',', field[2], 2)
+    args = zPE.resplit(',', field[2], 2)
     if len(args) < 2:
         sys.stderr.write('Error: Invalid JOB card.\n')
         sys.exit(1)

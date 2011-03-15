@@ -25,6 +25,46 @@ def bad_label(label):
             return indx         # (indx+1)th character not legal
     return 0                    # all good
 
+def resplit(pattern, string, maxsplit = 0):
+    if "'" in pattern:
+        rv = re.split(pattern, string, maxsplit)
+    elif not len(string):
+        rv = [ '', ]
+    else:
+        rv = []
+        reminder = string
+
+        # parse first group
+        if re.match(pattern, string[0]):
+            rv.append('')
+        new_pattern = "(?:[^{0}']*'[^']*')+[^{0}']*|[^{0}']+".format(pattern)
+
+        # parse middle group
+        while True:
+            res = re.search(new_pattern, reminder)
+
+            if maxsplit and maxsplit <= len(rv):
+                if res != None:
+                    rv.append(reminder[res.start():])
+                else:
+                    rv.append(reminder)
+                break           # reach length limit
+
+            if res != None:
+                rv.append(reminder[res.start():res.end()])
+                reminder = reminder[res.end():]
+            else:
+                break           # search fails
+
+        # parse last group
+        if ( re.match(pattern, string[-1]) and
+             (not maxsplit) or (maxsplit > len(rv))
+             ):
+            rv.append('')
+
+    return rv
+
+
 ## Return Code
 RC = {
     'NORMAL'    : 0,

@@ -41,9 +41,10 @@ INFO = {                # { Line_Num : 'message' }
     }
 
 MNEMONIC = {
-    # Line_Num : [ LOC, ]                               // type (len) 1
-    # Line_Num : [ LOC, [CONST_OBJECTs], ]              // type (len) 2
-    # Line_Num : [ LOC, (OBJECT_CODE), ADDR1, ADDR2, ]  // type (len) 4
+    # Line_Num : [ scope, ]                                     // type (len) 1
+    # Line_Num : [ scope, LOC, ]                                // type (len) 2
+    # Line_Num : [ scope, LOC, [CONST_OBJECTs], ]               // type (len) 3
+    # Line_Num : [ scope, LOC, (OBJECT_CODE), ADDR1, ADDR2, ]   // type (len) 5
     }
 
 class ExternalSymbol(object):
@@ -73,10 +74,16 @@ class Symbol(object):
         self.references = references
 
 ESD = {                 # External Symbol Dictionary; build during pass 1
-    # 'Symbol' : ExternalSymbol()
+    # 'Symbol  ' : ( ExternalSymbol(SD/PC), ExternalSymbol(ER), )
     }
-SYMBOL = {              # Cross Reference table; build during pass 1
-    # 'Symbol' : Symbol()
+ESD_ID = {              # External Symbol Dictionary ID Table
+    # scope_id : 'Symbol  '
+    }
+SYMBOL = {              # Cross Reference Table; build during pass 1
+    # 'Symbol  ' : Symbol()
+    }
+SYMBOL_V = {            # Cross Reference Sub-Table
+    # 'Symbol  ' : Symbol()
     }
 
 def init(step):
@@ -99,59 +106,81 @@ def pass_1():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
 
-    # main read loop
     addr = 0                    # program counter
     line_num = 0
+
     scope_id = 0
+    scope_new = scope_id + 1
+
     const_pool = None           # memory heap for constant allocation
+
+    # main read loop
     for line in spi:
         line_num += 1           # start at line No. 1
         if line[0] == '*':      # is comment
             continue
 
-        field = re.split('\s+', line[:-1], 3)
+        field = zPE.resplit('\s+', line[:-1], 3)
+        print field
 
         # parse CSECT
         if field[1] == 'CSECT':
             # update the CSECT info
             if scope_id:        # if not first CSECT
-                ESD[csect_lbl].length = addr
+                ESD[csect_lbl][0].length = addr
 
             bad_lbl = zPE.bad_label(field[0])
             if bad_lbl == None:
-                csect_lbl = ''
+                csect_lbl = '{0:<8}'.format(' ')
             elif bad_lbl:
                 INFO['ERROR'][line_num] = 'INVALID SYMBOL'
-                csect_lbl = ''
+                csect_lbl = '{0:<8}'.format(' ')
             else:
-                csect_lbl = field[0]
+                csect_lbl = '{0:<8}'.format(field[0])
 
             # parse the new CSECT 
-            scope_id += 1
-            addr = 0
-            if csect_lbl in SYMBOL:
-                # continued CSECT
-                scope_id = SYMBOL[csect_lbl].id
-                addr = SYMBOL[csect_lbl].length
-            elif csect_lbl:
-                # labelled symbol
-                ESD[csect_lbl] = ExternalSymbol(
-                    'SD', scope_id, addr, 0,
-                    ' ', '00', ' '
-                    )
-                SYMBOL[csect_lbl] = Symbol(
-                    1, addr, scope_id,
-                    'J', ' ', ' ',
-                    line_num, []
-                    )
-            else:
-                # unlabelled symbol
-                ESD[csect_lbl] = ExternalSymbol(
-                    'PC', scope_id, addr, 0,
-                    ' ', '00', ' '
+            scope_id = scope_new
+            scope_new += 1      # update the next scope_id ptr
+            addr = 0    # reset program counter
+
+            if csect_lbl not in ESD:
+                ESD[csect_lbl] = (
+                    ExternalSymbol(
+                        None, None, None, None,
+                        None, None, None,
+                        ),
+                    ExternalSymbol(
+                        None, None, None, None,
+                        None, None, None,
+                        ),
                     )
 
-            MNEMONIC[line_num] = [ addr, ]
+            if ESD[csect_lbl][0].id != None:
+                # continued CSECT
+                scope_id = ESD[csect_lbl][0].id
+                scope_new -= 1  # roll back the next scope id
+                addr = ESD[csect_lbl][0].length
+            else:
+                ESD[csect_lbl][0].id = scope_id
+                ESD[csect_lbl][0].addr = addr
+                ESD[csect_lbl][0].flags = '00'
+
+                ESD_ID[scope_id] = csect_lbl
+
+                if csect_lbl == '{0:<8}'.format(' '):
+                    # unlabelled symbol
+                    ESD[csect_lbl][0].type = 'PC'
+                else:
+                    # labelled symbol
+                    ESD[csect_lbl][0].type = 'SD'
+
+                    SYMBOL[csect_lbl] = Symbol(
+                        1, addr, scope_id,
+                        'J', ' ', ' ',
+                        line_num, []
+                        )
+
+            MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
             spt.append('{0:0>5}{1:<8} CSECT\n'.format(
                     line_num, field[0]
                     ))
@@ -164,16 +193,17 @@ def pass_1():
                 pass            # err msg
             else:
                 args = re.split(',', field[2])
+                lbl_8 = '{0:<8}'.format(args[0])
                 if len(args) != 2:
                     pass        # err msg
-                elif SYMBOL[args[0]].id not in [int('FFFFFFFF', 16), scope_id]:
+                elif SYMBOL[lbl_8].id > 0 and SYMBOL[lbl_8].id != scope_id:
                     pass        # err msg
                 else:
-                    SYMBOL[args[0]].references.append(
+                    SYMBOL[lbl_8].references.append(
                         '{0:>4}{1}'.format(line_num, 'U')
                         )
 
-            MNEMONIC[line_num] = [ addr, ]
+            MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
             spt.append('{0:0>5}{1:<8} USING {2}\n'.format(
                     line_num , ' ', field[2]
                     ))
@@ -200,16 +230,17 @@ def pass_1():
                     pass            # err msg
                 else:
                     # update the CSECT info
-                    ESD[csect_lbl].length = addr
-                    if field[2] in ESD:
-                        ESD[field[2]].length = addr
-                    if field[2] in SYMBOL:
-                        SYMBOL[field[2]].references.append(
+                    ESD[csect_lbl][0].length = addr
+
+                    lbl_8 = '{0:<8}'.format(field[2])
+                    if lbl_8 in SYMBOL:
+                        SYMBOL[lbl_8].references.append(
                             '{0:>4}{1}'.format(line_num, ' ')
                             )
                     addr = 0    # reset program counter
 
-                MNEMONIC[line_num] = [ addr, ]
+                MNEMONIC[line_num] = [ 0, addr, ]               # type 2
+                                # the scope ID of END is always set to 0
                 spt.append('{0:0>5}{1:<8} END   {2}\n'.format(
                         line_num, ' ', field[2]
                         ))
@@ -241,7 +272,7 @@ def pass_1():
                     line_num_tmp += 1
 
             const_pool = None   # close the current pool
-            MNEMONIC[line_num] = [ addr, ]
+            MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
             spt.append('{0:0>5}{1:<8} LTORG\n'.format(line_num, ' '))
 
         # parse DC/DS/=constant
@@ -252,6 +283,7 @@ def pass_1():
                 else:
                     sd_info = zPE.core.asm.parse_sd(field[2])
             except:
+                print '-----------------'
                 continue        # err msg
 
             # check =constant
@@ -271,31 +303,70 @@ def pass_1():
                 for lbl in sd_info[4]:
                     if re.match('[A-Z@#$]', lbl[0]): # is a symbol
                         bad_lbl = zPE.bad_label(lbl)
+                        lbl_8 = '{0:<8}'.format(lbl)
+
                         if bad_lbl:
                             pass # err msg
-                        elif lbl in SYMBOL:
-                            # check scope
-                            symbol = SYMBOL[lbl]
-                            if symbol.id == scope_id:
-                                symbol.references.append(
-                                    '{0:>4}{1}'.format(line_num, ' ')
-                                    )
+                        elif sd_info[2] == 'A':
+                            if lbl_8 in SYMBOL:
+                                # check scope
+                                symbol = SYMBOL[lbl_8]
+                                if symbol.id == scope_id:
+                                    symbol.references.append(
+                                        '{0:>4}{1}'.format(line_num, ' ')
+                                        )
+                                else:
+                                    pass # duplicated symbol
                             else:
-                                pass # duplicated symbol
-                        else:
-                            SYMBOL[lbl] = Symbol(
-                                None, None, scope_id,
-                                None, None, None,
-                                None, [ '{0:>4}{1}'.format(line_num, ' '), ]
+                                SYMBOL[lbl_8] = Symbol(
+                                    None, None, scope_id,
+                                    None, None, None,
+                                    None, [ '{0:>4}{1}'.format(line_num, ' '), ]
+                                    )
+                        elif sd_info[2] == 'V':
+                            # update the Cross-References Sub-Table
+                            if lbl_8 not in SYMBOL_V:
+                                SYMBOL_V[lbl_8] = Symbol(
+                                    1, 0, scope_id,
+                                    'T', ' ', ' ',
+                                    line_num, [ ]
+                                    )
+                            SYMBOL_V[lbl_8].references.append(
+                                '{0:>4}{1}'.format(line_num, ' ')
                                 )
+
+                            # update the External Symbol Dictionary
+                            if lbl_8 not in ESD:
+                                ESD[lbl_8] = (
+                                    ExternalSymbol(
+                                        None, None, None, None,
+                                        None, None, None,
+                                        ),
+                                    ExternalSymbol(
+                                        None, None, None, None,
+                                        None, None, None,
+                                        ),
+                                    )
+
+                            if ESD[lbl_8][1].id == None:
+                                ESD[lbl_8][1].type = 'ER'
+                                ESD[lbl_8][1].id = scope_new
+
+                                ESD_ID[scope_new] = lbl_8
+                                scope_new += 1 # update the next scope_id ptr
+                        else:
+                            sys.stderr.write('Error: {0}'.format(sd_info[2]) +
+                                             ': Invalid address type.\n')
+                            sys.exit(10)
             # check lable
             bad_lbl = zPE.bad_label(field[0])
+            lbl_8 = '{0:<8}'.format(field[0])
             if bad_lbl == None:
                 pass        # no label detected
             elif bad_lbl:
                 pass        # err msg
-            elif field[0] in SYMBOL:
-                symbol = SYMBOL[field[0]]
+            elif lbl_8 in SYMBOL:
+                symbol = SYMBOL[lbl_8]
                 if symbol.defn == None and symbol.id == scope_id:
                     symbol.length = sd_info[3]
                     symbol.value = addr
@@ -306,7 +377,7 @@ def pass_1():
                 else:
                     pass        # duplicated symbol
             else:
-                SYMBOL[field[0]] = Symbol(
+                SYMBOL[lbl_8] = Symbol(
                     sd_info[3], addr, scope_id,
                     sd_info[2], sd_info[2], ' ',
                     line_num, []
@@ -317,9 +388,11 @@ def pass_1():
             addr = (addr + alignment - 1) / alignment * alignment
 
             if field[1] == 'DS':
-                MNEMONIC[line_num] = [ addr, ]
+                MNEMONIC[line_num] = [ scope_id, addr, ]        # type 2
             else:
-                MNEMONIC[line_num] = [ addr, zPE.core.asm.get_sd(sd_info), ]
+                MNEMONIC[line_num] = [ scope_id, addr,          # type 3
+                                       zPE.core.asm.get_sd(sd_info),
+                                       ]
             if field[1][0] == '=':
                 spt.append('{0:0>5}{1}'.format(line_num, line))
             else:
@@ -386,11 +459,12 @@ def pass_1():
 
                         # parse label, op_code not filled
                         bad_lbl = zPE.bad_label(lbl)
+                        lbl_8 = '{0:<8}'.format(lbl)
                         if bad_lbl:
                             pass        # err msg
-                        elif lbl in SYMBOL:
+                        elif lbl_8 in SYMBOL:
                             # check scope
-                            symbol = SYMBOL[lbl]
+                            symbol = SYMBOL[lbl_8]
                             if symbol.id == scope_id:
                                 symbol.references.append(
                                     '{0:>4}{1}'.format(
@@ -400,7 +474,7 @@ def pass_1():
                             else:
                                 pass        # duplicated symbol
                         else:
-                            SYMBOL[lbl] = Symbol(
+                            SYMBOL[lbl_8] = Symbol(
                                 None, None, scope_id,
                                 None, None, None,
                                 None, [
@@ -423,12 +497,13 @@ def pass_1():
 
                 # check lable
                 bad_lbl = zPE.bad_label(field[0])
+                lbl_8 = '{0:<8}'.format(field[0])
                 if bad_lbl == None:
                     pass        # no label detected
                 elif bad_lbl:
                     pass        # err msg
-                elif field[0] in SYMBOL:
-                    symbol = SYMBOL[field[0]]
+                elif lbl_8 in SYMBOL:
+                    symbol = SYMBOL[lbl_8]
                     if symbol.defn == None and symbol.id == scope_id:
                         symbol.length = zPE.core.asm.len_op(op_code)
                         symbol.value = addr
@@ -439,14 +514,16 @@ def pass_1():
                     else:
                         pass        # duplicated symbol
                 else:
-                    SYMBOL[field[0]] = Symbol(
+                    SYMBOL[lbl_8] = Symbol(
                         zPE.core.asm.len_op(op_code), addr, scope_id,
                         'I', ' ', ' ',
                         line_num, []
                         )
             # fi
 
-            MNEMONIC[line_num] = [ addr, op_code, '', '', ]
+            MNEMONIC[line_num] = [ scope_id, addr,              # type 5
+                                   op_code, '', '',
+                                   ]
             spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
                     line_num, field[0], field[1], arg_list[:-1]
                     ))
@@ -464,6 +541,7 @@ def pass_1():
         # unrecognized op-code
         else:
             INFO['ERROR'][line_num] = 'INVALID OP CODE'
+            MNEMONIC[line_num] = [ scope_id, ]                  # type 1
             spt.append('{0:0>5}{1}'.format(line_num, line))
     # end of main read loop
 
@@ -508,7 +586,7 @@ def pass_2():
 
         # parse CSECT
         if field[1] == 'CSECT':
-            scope_id = ESD(field[0]).id
+            scope_id = ESD[field[0]][0].id
 
         # parse USING
         elif field[1] == 'USING':
