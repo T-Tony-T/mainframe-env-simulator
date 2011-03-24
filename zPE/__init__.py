@@ -13,6 +13,9 @@ JOB_ID_MIN = 10000              # the smallest job ID
 JOB_ID_MAX = 65535              # the largest job ID
 TMP_FILE_ID = 101               # the smallest tmp file identifier
 
+# Return the position (start at 1) of the first invalid char;
+# Return 0 if all good;
+# Return None if no label
 def bad_label(label):
     if len(label) == 0:
         return None             # no lable
@@ -25,42 +28,34 @@ def bad_label(label):
             return indx         # (indx+1)th character not legal
     return 0                    # all good
 
-def resplit(pattern, string, maxsplit = 0):
+# Behave similarly as re.split(), except that the split won't happen
+# inside single quote
+# 
+# Note: if the pattern contains single quote, then the function
+# behaves exactly the same as re.split()
+def resplit_sq(pattern, string, maxsplit = 0):
     if "'" in pattern:
         rv = re.split(pattern, string, maxsplit)
-    elif not len(string):
-        rv = [ '', ]
     else:
         rv = []
         reminder = string
+        true_pattern = "^[^']*?(?:'[^']*'[^']*?)*({0})".format(pattern)
+        # start at begin; search for pairs of sq; search for pattern (catch it)
 
-        # parse first group
-        if re.match(pattern, string[0]):
-            rv.append('')
-        new_pattern = "(?:[^{0}']*'[^']*')+[^{0}']*|[^{0}']+".format(pattern)
-
-        # parse middle group
         while True:
-            res = re.search(new_pattern, reminder)
-
-            if maxsplit and maxsplit <= len(rv):
-                if res != None:
-                    rv.append(reminder[res.start():])
-                else:
+            if (not maxsplit) or len(rv) < maxsplit:
+                # more to go
+                res = re.search(true_pattern, reminder)
+                if res != None: # search succeed
+                    rv.append(reminder[:res.start(1)])
+                    reminder = reminder[res.end(1):]
+                else:           # search failed
                     rv.append(reminder)
-                break           # reach length limit
-
-            if res != None:
-                rv.append(reminder[res.start():res.end()])
-                reminder = reminder[res.end():]
+                    break
             else:
-                break           # search fails
-
-        # parse last group
-        if ( re.match(pattern, string[-1]) and
-             (not maxsplit) or (maxsplit > len(rv))
-             ):
-            rv.append('')
+                # reach length limit
+                rv.append(reminder)
+                break
 
     return rv
 

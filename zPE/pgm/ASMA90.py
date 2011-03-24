@@ -120,7 +120,7 @@ def pass_1():
         if line[0] == '*':      # is comment
             continue
 
-        field = zPE.resplit('\s+', line[:-1], 3)
+        field = zPE.resplit_sq('\s+', line[:-1], 3)
 
         # parse CSECT
         if field[1] == 'CSECT':
