@@ -109,15 +109,28 @@ def pass_1():
     addr = 0                    # program counter
     line_num = 0
 
-    scope_id = 0
-    scope_new = scope_id + 1
+    scope_id = 0                # current scope ID; init to None (0)
+    scope_new = scope_id + 1    # next available scope ID; starting at 1
+    csect_lbl = None            # current csect label
 
     const_pool = None           # memory heap for constant allocation
+
+    spi.terminate()             # manually append an EOF at the end, which
+                                # will be removed before leave 1st pass
 
     # main read loop
     for line in spi:
         line_num += 1           # start at line No. 1
-        if line[0] == '*':      # is comment
+
+        # check EOF
+        if spi.atEOF(line):
+            # replace EOF with an END instruction
+            spi.unterminate()
+            line = '{0:<8} END\n'.format(' ')
+            spi.append(line)
+
+        # check comment
+        if line[0] == '*':
             continue
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
@@ -130,17 +143,17 @@ def pass_1():
 
             bad_lbl = zPE.bad_label(field[0])
             if bad_lbl == None:
-                csect_lbl = '{0:<8}'.format(' ')
+                csect_lbl = '{0:<8}'.format(' ') # PC symbol
             elif bad_lbl:
                 INFO['ERROR'][line_num] = 'INVALID SYMBOL'
-                csect_lbl = '{0:<8}'.format(' ')
+                csect_lbl = '{0:<8}'.format(' ') # treat as PC symbol
             else:
                 csect_lbl = '{0:<8}'.format(field[0])
 
-            # parse the new CSECT 
+            # parse the new CSECT
             scope_id = scope_new
             scope_new += 1      # update the next scope_id ptr
-            addr = 0    # reset program counter
+            addr = 0            # reset program counter; not fixed yet
 
             if csect_lbl not in ESD:
                 ESD[csect_lbl] = (
@@ -155,11 +168,12 @@ def pass_1():
                     )
 
             if ESD[csect_lbl][0].id != None:
-                # continued CSECT
+                # continued CSECT, switch to it
                 scope_id = ESD[csect_lbl][0].id
                 scope_new -= 1  # roll back the next scope id
                 addr = ESD[csect_lbl][0].length
             else:
+                # new CSECT, update info
                 ESD[csect_lbl][0].id = scope_id
                 ESD[csect_lbl][0].addr = addr
                 ESD[csect_lbl][0].flags = '00'
@@ -225,23 +239,24 @@ def pass_1():
             else:               # no left-over constant, end the program
                 if len(field[0]) != 0:
                     pass            # err msg
-                if len(field) < 3:
-                    pass            # err msg
-                else:
-                    # update the CSECT info
-                    ESD[csect_lbl][0].length = addr
 
+                # update the CSECT info
+                ESD[csect_lbl][0].length = addr
+
+                if len(field) == 3: # has label
                     lbl_8 = '{0:<8}'.format(field[2])
-                    if lbl_8 in SYMBOL:
-                        SYMBOL[lbl_8].references.append(
-                            '{0:>4}{1}'.format(line_num, ' ')
-                            )
-                    addr = 0    # reset program counter
+                else:               # has no label; default to 1st CSECT
+                    lbl_8 = ESD_ID[1]
+                if lbl_8 in SYMBOL:
+                    SYMBOL[lbl_8].references.append(
+                        '{0:>4}{1}'.format(line_num, ' ')
+                        )
+                addr = 0    # reset program counter
 
                 MNEMONIC[line_num] = [ 0, addr, ]               # type 2
                                 # the scope ID of END is always set to 0
                 spt.append('{0:0>5}{1:<8} END   {2}\n'.format(
-                        line_num, ' ', field[2]
+                        line_num, ' ', lbl_8
                         ))
                 if spi[0] == '':
                     spi.rmline(0)
@@ -543,6 +558,10 @@ def pass_1():
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
             spt.append('{0:0>5}{1}'.format(line_num, line))
     # end of main read loop
+
+    # check EOF again
+    if spi.atEOF():
+        spi.unterminate()
 
     # check cross references table integrality
     invalid_symbol = 0
