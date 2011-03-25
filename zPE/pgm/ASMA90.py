@@ -124,6 +124,7 @@ def pass_1():
 
         # check EOF
         if spi.atEOF(line):
+            #### warning
             # replace EOF with an END instruction
             spi.unterminate()
             line = '{0:<8} END\n'.format(' ')

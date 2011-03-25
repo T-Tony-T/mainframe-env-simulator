@@ -17,7 +17,6 @@ MODE = {                        # SPOOL mode : display
 ## Simultaneous Peripheral Operations On-line
 class Spool(object):
     def __init__(self, spool, mode, f_type, virtual_path, real_path):
-        self.eof = False
         self.spool = spool      # [ line_1, line_2, ... ]
         self.mode = mode        # one of the MODE keys
         self.f_type = f_type    # one of the zPE.JES keys
@@ -39,7 +38,7 @@ class Spool(object):
             found = True
         except:
             found = False
-        return ( self.eof  and  found  and  (line == self.spool[-1]) )
+        return (found  and  (line == self.spool[-1]))
 
     def append(self, *phrase):
         self.insert(len(self.spool), *phrase)
@@ -52,10 +51,8 @@ class Spool(object):
             del self.spool[indx]
 
     def terminate(self):
-        self.eof = True
         self.spool.append(-1)
     def unterminate(self):
-        self.eof = False
         self.spool.remove(-1)
 
     def __str__(self):
