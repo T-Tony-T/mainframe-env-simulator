@@ -113,28 +113,14 @@ def __PARSE_OUT():
 
     asm_warn    = zPE.pgm.ASMA90.INFO['WARNING']
     asm_err     = zPE.pgm.ASMA90.INFO['ERROR']
+
     asm_mnem    = zPE.pgm.ASMA90.MNEMONIC
+    offset      = zPE.pgm.ASMA90.RELOCATE_OFFSET
+
     asm_esd     = zPE.pgm.ASMA90.ESD
     asm_esd_id  = zPE.pgm.ASMA90.ESD_ID
     asm_symb    = zPE.pgm.ASMA90.SYMBOL
     asm_symb_v  = zPE.pgm.ASMA90.SYMBOL_V
-
-    # prepare the offset look-up table of the addresses
-    offset = { 1 : 0, }         # { scope_id : offset }
-    for key in sorted(asm_esd_id.iterkeys()):
-        symbol = asm_esd[asm_esd_id[key]][0]
-        if symbol != None:
-            if symbol.id == 1:  # 1st CSECT
-                prev_sym = symbol
-            else:               # 2nd or later CSECT
-                # calculate the actual offset
-                # align to double-word boundary
-                offset[symbol.id] = (
-                    (offset[prev_sym.id] + prev_sym.length + 7) / 8 * 8
-                    )
-
-                # update the pointer
-                prev_sym = symbol
 
     # aliases used to convert signed integer to unsigned hex string
     TP_F = zPE.core.asm.F_

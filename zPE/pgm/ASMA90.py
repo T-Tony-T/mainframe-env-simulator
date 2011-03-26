@@ -47,6 +47,10 @@ MNEMONIC = {
     # Line_Num : [ scope, LOC, (OBJECT_CODE), ADDR1, ADDR2, ]   // type (len) 5
     }
 
+RELOCATE_OFFSET = {
+    1 : 0,                      # { scope_id : offset }
+    }
+
 class ExternalSymbol(object):
     def __init__(self, tp, scope_id, addr, length,
                  owner, flags, alias
@@ -580,6 +584,23 @@ def pass_1():
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
             spt.append('{0:0>5}{1}'.format(line_num, line))
     # end of main read loop
+
+    # prepare the offset look-up table of the addresses
+    offset = RELOCATE_OFFSET
+    for key in sorted(ESD_ID.iterkeys()):
+        symbol = ESD[ESD_ID[key]][0]
+        if symbol != None and symbol.id == key:
+            if symbol.id == 1:  # 1st CSECT
+                prev_sym = symbol
+            else:               # 2nd or later CSECT
+                # calculate the actual offset
+                # align to double-word boundary
+                offset[symbol.id] = (
+                    (offset[prev_sym.id] + prev_sym.length + 7) / 8 * 8
+                    )
+
+                # update the pointer
+                prev_sym = symbol
 
     # check cross references table integrality
     invalid_symbol = 0
