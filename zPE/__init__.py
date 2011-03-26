@@ -39,25 +39,19 @@ def resplit_sq(pattern, string, maxsplit = 0):
     if "'" in pattern:
         return re.split(pattern, string, maxsplit)
     else:
-        true_pattern = "^[^']*?(?:'[^']*'[^']*?)*({0})".format(pattern)
-        # start at begin; search for pairs of sq; search for pattern (catch it)
-        return __SKIP_SPLIT(true_pattern, string, maxsplit)
+        return __SKIP_SPLIT(pattern, string, "'", "'", maxsplit)
 
 def resplit_dq(pattern, string, maxsplit = 0):
     if '"' in pattern:
         return re.split(pattern, string, maxsplit)
     else:
-        true_pattern = '^[^"]*?(?:"[^"]*"[^"]*?)*({0})'.format(pattern)
-        # start at begin; search for pairs of sq; search for pattern (catch it)
-        return __SKIP_SPLIT(true_pattern, string, maxsplit)
+        return __SKIP_SPLIT(pattern, string, '"', '"', maxsplit)
 
 def resplit_sp(pattern, string, maxsplit = 0):
     if '(' in pattern or ')' in pattern:
         return re.split(pattern, string, maxsplit)
     else:
-        true_pattern = '^[^()]*?(?:\([^()]*\)[^()]*?)*({0})'.format(pattern)
-        # start at begin; search for pairs of (); search for pattern (catch it)
-        return __SKIP_SPLIT(true_pattern, string, maxsplit)
+        return __SKIP_SPLIT(pattern, string, '\(', '\)', maxsplit)
 
 
 ## Return Code
@@ -434,12 +428,16 @@ def __TOUCH_RC():
     fp.close()
 
 
-def __SKIP_SPLIT(true_pattern, string, maxsplit):
+def __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit):
+    true_pattern = '^[^{1}{2}]*?(?:{1}[^{1}{2}]*{2}[^{1}{2}]*?)*({0})'.format(
+        pattern, skip_l, skip_r)
+    # start at begin; search for skip_l/r; search for pattern (catch it)
+
     rv = []
     reminder = string
 
     while True:
-        if (not maxsplit) or len(rv) < maxsplit:
+        if (maxsplit == 0) or len(rv) < maxsplit:
             # more to go
             res = re.search(true_pattern, reminder)
             if res != None:     # search succeed
