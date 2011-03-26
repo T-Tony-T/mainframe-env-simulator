@@ -28,36 +28,36 @@ def bad_label(label):
             return indx         # (indx+1)th character not legal
     return 0                    # all good
 
-# Behave similarly as re.split(), except that the split won't happen
-# inside single quote
+# Behave similarly as re.split(), except that the splits won't happen inside:
+#   sq ==> single quotes
+#   dq ==> double quotes
+#   sp ==> single pair of parentheses
 # 
-# Note: if the pattern contains single quote, then the function
+# Note: if the pattern contains the "skip pattern", then the functions
 # behaves exactly the same as re.split()
 def resplit_sq(pattern, string, maxsplit = 0):
     if "'" in pattern:
-        rv = re.split(pattern, string, maxsplit)
+        return re.split(pattern, string, maxsplit)
     else:
-        rv = []
-        reminder = string
         true_pattern = "^[^']*?(?:'[^']*'[^']*?)*({0})".format(pattern)
         # start at begin; search for pairs of sq; search for pattern (catch it)
+        return __SKIP_SPLIT(true_pattern, string, maxsplit)
 
-        while True:
-            if (not maxsplit) or len(rv) < maxsplit:
-                # more to go
-                res = re.search(true_pattern, reminder)
-                if res != None: # search succeed
-                    rv.append(reminder[:res.start(1)])
-                    reminder = reminder[res.end(1):]
-                else:           # search failed
-                    rv.append(reminder)
-                    break
-            else:
-                # reach length limit
-                rv.append(reminder)
-                break
+def resplit_dq(pattern, string, maxsplit = 0):
+    if '"' in pattern:
+        return re.split(pattern, string, maxsplit)
+    else:
+        true_pattern = '^[^"]*?(?:"[^"]*"[^"]*?)*({0})'.format(pattern)
+        # start at begin; search for pairs of sq; search for pattern (catch it)
+        return __SKIP_SPLIT(true_pattern, string, maxsplit)
 
-    return rv
+def resplit_sp(pattern, string, maxsplit = 0):
+    if '(' in pattern or ')' in pattern:
+        return re.split(pattern, string, maxsplit)
+    else:
+        true_pattern = '^[^()]*?(?:\([^()]*\)[^()]*?)*({0})'.format(pattern)
+        # start at begin; search for pairs of (); search for pattern (catch it)
+        return __SKIP_SPLIT(true_pattern, string, maxsplit)
 
 
 ## Return Code
@@ -433,3 +433,23 @@ def __TOUCH_RC():
         fp.write('spool_dir = ' + Config['spool_dir'] + '\n')
     fp.close()
 
+
+def __SKIP_SPLIT(true_pattern, string, maxsplit):
+    rv = []
+    reminder = string
+
+    while True:
+        if (not maxsplit) or len(rv) < maxsplit:
+            # more to go
+            res = re.search(true_pattern, reminder)
+            if res != None:     # search succeed
+                rv.append(reminder[:res.start(1)])
+                reminder = reminder[res.end(1):]
+            else:               # search failed
+                rv.append(reminder)
+                break
+        else:
+            # reach length limit
+            rv.append(reminder)
+            break
+    return rv

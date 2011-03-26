@@ -219,9 +219,10 @@ def pass_1():
             if len(field) < 3:
                 INFO['ERROR'][line_num] = 'MISSING OPERAND'
             else:
-                args = re.split(',', field[2])
+                args = zPE.resplit_sp(',', field[2])
 
-                
+
+                # mark
                 lbl_8 = '{0:<8}'.format(args[0])
                 if len(args) < 2:
                     INFO['ERROR'][line_num] = 'INVALID DELIMITER'
@@ -446,7 +447,7 @@ def pass_1():
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
             op_code = zPE.core.asm.get_op(field[1])
-            args = __PARSE_ARGS(field[2])
+            args = zPE.resplit_sp(',', field[2])
 
             if len(op_code) != len(args) + 1:
                 INFO['ERROR'][line_num] = 'UNMATCHED ARGUMENTS'
@@ -658,7 +659,7 @@ def pass_2():
         elif zPE.core.asm.valid_op(field[1]):
             op_code = zPE.core.asm.get_op(field[1])
             num = len(op_code) - 1      # number of arguments to be parsed
-            args = __PARSE_ARGS(field[2])
+            args = zPE.resplit_sp(',', field[2])
             if len(args) != num:
                 pass            # err msg
             else:
@@ -695,27 +696,6 @@ def __MISSED_FILE(step):
 
     return cnt
 
-def __PARSE_ARGS(arg_line):
-    l = re.split(',', arg_line) # gross argument list
-    L = []                      # net argument list
-    tmp = ''                    # incomplete argument
-    for item in l:
-        if len(tmp) > 0:
-            # incomplete argument exist
-            if re.match('[^)]*\)', item):
-                # last piece
-                L.append(tmp + item)
-                tmp = ''
-            else:
-                # not last piece
-                tmp += item + ','
-        elif re.match('[^(]*\([^)]*$', item):
-            # incomplete argument
-            tmp += item + ','
-        else:
-            # complete argument
-            L.append(item)
-    return L
 
 def __PARSE_OUT():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
