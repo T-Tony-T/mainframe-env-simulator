@@ -124,11 +124,11 @@ def pass_1():
 
         # check EOF
         if spi.atEOF(line):
-            #### warning
+            INFO['WARNING'][line_num] = 'W-END MISSING'
             # replace EOF with an END instruction
-            spi.unterminate()
+            spi.unterminate()   # this indicates the generation of the END
             line = '{0:<8} END\n'.format(' ')
-            spi.append(line)
+            spi.append(line)    # will be removed when encountered
 
         # check comment
         if line[0] == '*':
@@ -136,8 +136,17 @@ def pass_1():
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
 
+        # check for OP code
+        if len(field) < 2:
+            INFO['ERROR'][line_num] = 'OP-CODE MISSING'
+
+            MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
+            spt.append('{0:0>5}{1:<8}\n'.format(
+                    line_num, field[0]
+                    ))                
+
         # parse CSECT
-        if field[1] == 'CSECT':
+        elif field[1] == 'CSECT':
             # update the CSECT info
             if scope_id:        # if not first CSECT
                 ESD[csect_lbl][0].length = addr
@@ -202,14 +211,16 @@ def pass_1():
         # parse USING
         elif field[1] == 'USING':
             if len(field[0]) != 0:
-                pass            # err msg
+                INFO['ERROR'][line_num] = 'LABEL NOT ALLOWED'
             if len(field) < 3:
-                pass            # err msg
+                INFO['ERROR'][line_num] = 'MISSING OPERAND'
             else:
                 args = re.split(',', field[2])
+
+                
                 lbl_8 = '{0:<8}'.format(args[0])
-                if len(args) != 2:
-                    pass        # err msg
+                if len(args) < 2:
+                    INFO['ERROR'][line_num] = 'INVALID DELIMITER'
                 elif SYMBOL[lbl_8].id > 0 and SYMBOL[lbl_8].id != scope_id:
                     pass        # err msg
                 else:
@@ -254,11 +265,21 @@ def pass_1():
                         )
                 addr = 0    # reset program counter
 
-                MNEMONIC[line_num] = [ 0, addr, ]               # type 2
+                # check EOF again
+                if spi.atEOF():
+                    # no auto-generation of END
+                    spi.unterminate()
+
+                    MNEMONIC[line_num] = [ 0, addr, ]           # type 2
                                 # the scope ID of END is always set to 0
-                spt.append('{0:0>5}{1:<8} END   {2}\n'.format(
-                        line_num, ' ', lbl_8
-                        ))
+                    spt.append('{0:0>5}{1:<8} END   {2}\n'.format(
+                            line_num, ' ', lbl_8
+                            ))
+                else:
+                    # END auto-generated, remove it
+                    spi.rmline(-1)
+
+                # remove the dummy line added in the previous branch
                 if spi[0] == '':
                     spi.rmline(0)
                 break           # end of program
@@ -559,10 +580,6 @@ def pass_1():
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
             spt.append('{0:0>5}{1}'.format(line_num, line))
     # end of main read loop
-
-    # check EOF again
-    if spi.atEOF():
-        spi.unterminate()
 
     # check cross references table integrality
     invalid_symbol = 0

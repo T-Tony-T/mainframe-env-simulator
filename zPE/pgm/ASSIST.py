@@ -285,3 +285,8 @@ def __PARSE_OUT():
             hex(asm_mnem[key][1])[2:],
             tmp_str
             )
+
+    print '\nWarning:'
+    print asm_warn
+    print '\nError:'
+    print asm_err
