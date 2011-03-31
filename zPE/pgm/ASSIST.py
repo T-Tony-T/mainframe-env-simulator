@@ -111,8 +111,10 @@ def __PARSE_OUT():
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
 
-    asm_warn    = zPE.pgm.ASMA90.INFO['WARNING']
-    asm_err     = zPE.pgm.ASMA90.INFO['ERROR']
+    asm_info    = zPE.pgm.ASMA90.INFO['I']
+    asm_warn    = zPE.pgm.ASMA90.INFO['W']
+    asm_err     = zPE.pgm.ASMA90.INFO['E']
+    asm_ser     = zPE.pgm.ASMA90.INFO['S']
 
     asm_mnem    = zPE.pgm.ASMA90.MNEMONIC
     offset      = zPE.pgm.ASMA90.RELOCATE_OFFSET
@@ -121,6 +123,8 @@ def __PARSE_OUT():
     asm_esd_id  = zPE.pgm.ASMA90.ESD_ID
     asm_symb    = zPE.pgm.ASMA90.SYMBOL
     asm_symb_v  = zPE.pgm.ASMA90.SYMBOL_V
+
+    asm_using   = zPE.pgm.ASMA90.USING_MAP
 
     # aliases used to convert signed integer to unsigned hex string
     TP_F = zPE.core.asm.F_
@@ -162,7 +166,9 @@ def __PARSE_OUT():
                        '{0:>5} {1}'.format(cnt, line))
 
         else:                   # instructions
-            if asm_mnem[cnt][0] > 0:    # CSECT
+            if len(asm_mnem[cnt]) == 1: # type 1
+                loc = ''
+            elif asm_mnem[cnt][0] > 0:    # CSECT
                 loc = hex(
                     offset[ asm_mnem[cnt][0] ] + asm_mnem[cnt][1]
                     )[2:].upper()
@@ -172,6 +178,7 @@ def __PARSE_OUT():
                     eojob = True
 
             tmp_str = ''
+                
             if len(asm_mnem[cnt]) == 3: # type 3
                 for val in asm_mnem[cnt][2]:
                     tmp_str += zPE.core.asm.X_.tr(val.dump())
@@ -205,6 +212,9 @@ def __PARSE_OUT():
 
             spo.append(ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
                        '{0:>5} {1}'.format(cnt, line))
+    # end of main read loop
+
+    
 
     print '\nExternal Symbol Dictionary:'
     for key in sorted(asm_esd_id.iterkeys()):
@@ -236,6 +246,10 @@ def __PARSE_OUT():
 
     print '\nMnemonic:'
     for key in sorted(asm_mnem.iterkeys()):
+        if len(asm_mnem[key]) == 1: # type 1
+            loc = ''
+        else:
+            loc = hex(asm_mnem[key][1])[2:]
         tmp_str = ''
         if len(asm_mnem[key]) == 3: # type 3
             for val in asm_mnem[key][2]:
@@ -268,11 +282,19 @@ def __PARSE_OUT():
         print '{0:>5}: {1} {2:0>6} {3}'.format(
             key,
             TP_X.tr(TP_F(asm_mnem[key][0]).dump()),
-            hex(asm_mnem[key][1])[2:],
+            loc,
             tmp_str
             )
 
+    print '\nInfo:'
+    print asm_info
     print '\nWarning:'
     print asm_warn
     print '\nError:'
     print asm_err
+    print '\nSerious:'
+    print asm_ser
+
+    print '\nUsing Map:'
+    for k,v in asm_using.items():
+        print k, v.__dict__
