@@ -295,10 +295,9 @@ def pass_1():
                 # check following arguments
                 tmp = []
                 for indx in range(1, len(args)):
-                    if not args[indx].isdigit():
-                        INFO['E'][line_num] = ( 0, 0, 0, )
-                        break
-                    if int(args[indx]) >= zPE.core.reg.GPR_NUM:
+                    if ( (not args[indx].isdigit())  or
+                         (int(args[indx]) >= zPE.core.reg.GPR_NUM)
+                         ):
                         INFO['E'][line_num] = (
                             29,
                             line.index(args[indx]),
@@ -375,7 +374,7 @@ def pass_1():
                 line_num -= 1
             else:               # no left-over constant, end the program
                 if len(field[0]) != 0:
-                    INFO['E'][line_num] = 'LABEL NOT ALLOWED'
+                    INFO['W'][line_num] = ( 165, None, None, )
 
                 # update the CSECT info
                 ESD[csect_lbl][0].length = addr
@@ -473,7 +472,11 @@ def pass_1():
                         lbl_8 = '{0:<8}'.format(lbl)
 
                         if bad_lbl:
-                            INFO['E'][line_num] = 'INVALID SYMBOL {0}'.format(bad_lbl)
+                            INFO['E'][line_num] = (
+                                74,
+                                line.index(lbl),
+                                line.index(lbl) + len(lbl),
+                                )
                         elif sd_info[2] == 'A':
                             if lbl_8 in SYMBOL:
                                 # check scope
@@ -531,7 +534,11 @@ def pass_1():
             if bad_lbl == None:
                 pass        # no label detected
             elif bad_lbl:
-                INFO['E'][line_num] = 'INVALID SYMBOL {0}'.format(bad_lbl)
+                INFO['E'][line_num] = (
+                    143,
+                    bad_lbl, # field[0] start at line begin, no offset
+                    len(field[0]),
+                    )
             elif lbl_8 in SYMBOL:
                 symbol = SYMBOL[lbl_8]
                 if symbol.defn == None and symbol.id == scope_id:
@@ -579,8 +586,19 @@ def pass_1():
             op_code = zPE.core.asm.get_op(field[1])
             args = zPE.resplit_sp(',', field[2])
 
-            if len(op_code) != len(args) + 1:
-                INFO['E'][line_num] = 'UNMATCHED ARGUMENTS'
+            if len(op_code) > len(args) + 1:
+                INFO['S'][line_num] = (
+                    175,
+                    line.index(args[-1]),
+                    line.index(args[-1]),
+                    )
+                arg_list = field[2] + ','
+            elif len(op_code) < len(args) + 1:
+                INFO['S'][line_num] = (
+                    173,
+                    line.index(args[len(op_code)-1]),
+                    line.index(field[2]) + len(field[2]),
+                    )
                 arg_list = field[2] + ','
             else:
                 # check reference
@@ -608,7 +626,11 @@ def pass_1():
                                     ]
                                 )
                         else:
-                            INFO['E'][line_num] = 'UNKOWN TYPE'
+                            INFO['E'][line_num] = (
+                                65,
+                                line.index(lbl) + 1, # +1 to skip '='
+                                line.index(lbl) + len(lbl),
+                                )
                         arg_list += lbl + ','
                     elif re.match('[A-Z@#$]', lbl[0]):
                         if zPE.core.asm.valid_sd(lbl):
@@ -628,7 +650,11 @@ def pass_1():
                         bad_lbl = zPE.bad_label(lbl)
                         lbl_8 = '{0:<8}'.format(lbl)
                         if bad_lbl:
-                            INFO['E'][line_num] = 'INVALID SYMBOL {0}'.format(bad_lbl)
+                            INFO['E'][line_num] = (
+                                74,
+                                line.index(lbl),
+                                line.index(lbl) + len(lbl),
+                                )
                         elif lbl_8 in SYMBOL:
                             # check scope
                             symbol = SYMBOL[lbl_8]
@@ -668,7 +694,11 @@ def pass_1():
                 if bad_lbl == None:
                     pass        # no label detected
                 elif bad_lbl:
-                    INFO['E'][line_num] = 'INVALID SYMBOL {0}'.format(bad_lbl)
+                    INFO['E'][line_num] = (
+                        143,
+                        bad_lbl, # field[0] start at line begin, no offset
+                        len(field[0]),
+                        )
                 elif lbl_8 in SYMBOL:
                     symbol = SYMBOL[lbl_8]
                     if symbol.defn == None and symbol.id == scope_id:

@@ -14,15 +14,18 @@ ASMA303W: Multiple address resolutions may result from this USING and the USING 
 ASMA029E: Incorrect register specification - {str}
 ASMA044E: Undefined symbol - {str}
 ASMA057E: Undefined operation code - {str}
+ASMA065E: Unknown type - {str}
 ASMA074E: Illegal syntax in expansion - {str}
 ASMA141E: Bad character in operation code - {str}
 ASMA142E: Operation code not complete on first record
 ASMA143E: Bad character in name field - {str}
+ASMA145E: Operator, right parenthesis, or end-of-expression expected - {str}
 ASMA305E: Operand 1 does not refer to location within reference control section
 ASMA307E: No active USING for operand {str}
 ASMA308E: Repeated register {str}
 
 
 ASMA040S: Missing operand
+ASMA173S: Delimiter error, expected blank - {str}
 ASMA174S: Delimiter error, expected blank or comma - {str}
 ASMA175S: Delimiter error, expected comma - {str}
