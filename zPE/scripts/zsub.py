@@ -56,11 +56,10 @@ def submit(job):
                         flush_all = True
                     zPE.core.jcl.finish_step(step)
                 else:           # not found at all
-                    sys.stderr.write('Error: ' + step.pgm +
-                                     ': Program not supported.\n')
-                    sys.stderr.write('For more information, see \'' +
-                                     sys.argv[0] + ' -l\' for help.\n')
-                    sys.exit(-1)
+                    zPE.abort(-1, 'Error: ' + step.pgm +
+                               ': Program not supported.\n' +
+                               'For more information, see \'' +
+                               sys.argv[0] + ' -l\' for help.\n')
         # end of all steps
     zPE.core.jcl.finish_job(rv)
 

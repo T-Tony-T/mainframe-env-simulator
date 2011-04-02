@@ -27,9 +27,8 @@ def parse(job):
     zPE.JCL['read_cnt'] += 1
     zPE.JCL['card_cnt'] += 1
     if len(line) > 72:
-        sys.stderr.write('Error: line ' + str(zPE.JCL['read_cnt']) +
-                         'Statement cannot exceed colomn 72.\n')
-        sys.exit(72)
+        zPE.abort(72, 'Error: line ' + str(zPE.JCL['read_cnt']) +
+                  'Statement cannot exceed colomn 72.\n')
 
     # field_0    field_1 field_2
     # ---------- ------- ------------------------------------
@@ -45,8 +44,7 @@ def parse(job):
     # parse JOB card
     # currently supported parameter: region
     if field[1] != 'JOB':
-        sys.stderr.write('Error: No JOB card found.\n')
-        sys.exit(1)
+        zPE.abort(1, 'Error: No JOB card found.\n')
     zPE.JCL['jobname'] = field[0][2:]
     zPE.JCL['owner'] = zPE.JCL['jobname'][:7]
     zPE.JCL['class'] = zPE.JCL['jobname'][-1]
@@ -56,22 +54,19 @@ def parse(job):
     # AccInfo,'pgmer'[,parameters]
     args = zPE.resplit_sq(',', field[2], 2)
     if len(args) < 2:
-        sys.stderr.write('Error: Invalid JOB card.\n')
-        sys.exit(1)
+        zPE.abort(1, 'Error: Invalid JOB card.\n')
     # parse AccInfo
     zPE.JCL['accinfo'] = args[0]
     if args[1][0] != '\'' or args[1][-1] != '\'':
-        sys.stderr.write('Error: ' + args[1] +
-                         ':\n       The programmer\'s name need to be ' +
-                         'surrounded by single quotes.\n')
-        sys.exit(1)
+        zPE.abort(1, 'Error: ' + args[1] +
+                  ':\n       The programmer\'s name need to be ' +
+                  'surrounded by single quotes.\n')
     # parse pgmer
     zPE.JCL['pgmer'] = args[1][1:-1]
     if len(zPE.JCL['pgmer']) > 20:
-        sys.stderr.write('Error: ' + args[1] +
-                         ':\n       The programmer\'s name cannot be exceed ' +
-                         '20 characters.\n')
-        sys.exit(1)
+        zPE.abort(1, 'Error: ' + args[1] +
+                  ':\n       The programmer\'s name cannot be exceed ' +
+                  '20 characters.\n')
     # parse parameters
     zPE.JCL['region'] = zPE.Config['memory_sz']
     if len(args) == 3:
@@ -80,13 +75,11 @@ def parse(job):
                 try:
                     zPE.JCL['region'] = zPE.core.mem.parse_region(part[7:])
                 except SyntaxError:
-                    sys.stderr.write('Error: ' + part +
-                                     ': Invalid region size.\n')
-                    sys.exit(52)
+                    zPE.abort(52, 'Error: ' + part +
+                              ': Invalid region size.\n')
                 except ValueError:
-                    sys.stderr.write('Error: ' + part +
-                                     ': Region must be divisible by 4K.\n')
-                    sys.exit(4)
+                    zPE.abort(4, 'Error: ' + part +
+                              ': Region must be divisible by 4K.\n')
         #   elif part[:9] == 'MSGCLASS=':
 
 
@@ -120,9 +113,8 @@ def parse(job):
         zPE.JCL['card_cnt'] += 1
 
         if len(line) > 72:
-            sys.stderr.write('Error: line ' + str(zPE.JCL['read_cnt']) +
-                             'Statement cannot exceed colomn 72.\n')
-            sys.exit(72)
+            zPE.abort(72, 'Error: line ' + str(zPE.JCL['read_cnt']) +
+                      'Statement cannot exceed colomn 72.\n')
 
         # check comment
         if line[:3] == '//*':
@@ -165,14 +157,12 @@ def parse(job):
                         try:
                             region = zPE.core.mem.parse_region(part[7:])
                         except SyntaxError:
-                            sys.stderr.write('Error: ' + part +
-                                             ': Invalid region size.\n')
-                            sys.exit(52)
+                            zPE.abort(52, 'Error: ' + part +
+                                      ': Invalid region size.\n')
                         except ValueError:
-                            sys.stderr.write('Error: ' + part +
-                                             ': Region must be divisible ' +
-                                             'by 4K.\n')
-                            sys.exit(4)
+                            zPE.abort(4, 'Error: ' + part +
+                                      ': Region must be divisible ' +
+                                      'by 4K.\n')
                 #   elif part[:5] == 'COND=':
 
             zPE.JCL['step'].append(
@@ -202,13 +192,11 @@ def parse(job):
                     elif part[:5] == 'DISP=':
                         disp = part[5:]
                     else:
-                        sys.stderr.write('Error: ' + part +
-                                         ': Parameter not supported.\n')
-                        sys.exit(44)
+                        zPE.abort(44, 'Error: ' + part +
+                                  ': Parameter not supported.\n')
                 if disp == '':
-                    sys.stderr.write('Error: ' + field[0][2:] +
-                                     ': Need DISP=[disp].\n')
-                    sys.exit(44)
+                    zPE.abort(44, 'Error: ' + field[0][2:] +
+                              ': Need DISP=[disp].\n')
 
             zPE.JCL['step'][-1].dd.append(
                 field[0][2:], {
@@ -217,8 +205,7 @@ def parse(job):
                     'DISP' : disp,
                     })
         else:                   # continuation
-            sys.stderr.write('Error: Continuation not supported.\n')
-            sys.exit(33)
+            zPE.abort(33, 'Error: Continuation not supported.\n')
 
         sp2.append(ctrl, '{0:>9} {1}'.format(zPE.JCL['card_cnt'], line))
     # end of the main read loop

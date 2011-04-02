@@ -29,3 +29,4 @@ ASMA040S: Missing operand
 ASMA173S: Delimiter error, expected blank - {str}
 ASMA174S: Delimiter error, expected blank or comma - {str}
 ASMA175S: Delimiter error, expected comma - {str}
+ASMA178S: Delimiter error, expected comma or right parenthesis - {str}

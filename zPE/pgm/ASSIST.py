@@ -49,10 +49,7 @@ def init(step):
     sketch = zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '')
 
     rc1 = zPE.pgm.ASMA90.pass_1()
-    if rc1 < zPE.RC['ERROR']:
-        rc2 = zPE.pgm.ASMA90.pass_2()
-    else:
-        rc2 = rc1
+    rc2 = zPE.pgm.ASMA90.pass_2(rc1)
 
     __PARSE_OUT()
 
