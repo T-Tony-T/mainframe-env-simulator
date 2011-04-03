@@ -248,7 +248,7 @@ def pass_1():
         # parse USING
         elif field[1] == 'USING':
             if len(field[0]) != 0:
-                zPE.mark4future() # mark, add support later
+                zPE.mark4future('Labeled USING')
             if len(field) < 3:
                 INFO['S'][line_num] = ( 40, None, None, )
             else:
@@ -282,7 +282,7 @@ def pass_1():
                             line.index(args[0]) + len(args[0]) - 1,
                             )
                     # range-limit using
-                    zPE.mark4future() # mark, add support later
+                    zPE.mark4future('Range-Limited USING')
 
                 # check existance of 2nd argument
                 if len(args) < 2:
@@ -453,7 +453,7 @@ def pass_1():
             try:
                 sd_info = zPE.core.asm.parse_sd(tmp)
             except:
-                zPE.abort(123, 'Error: {0}: Invalid constant.\n'.format(tmp))
+                zPE.abort(90, 'Error: {0}: Invalid constant.\n'.format(tmp))
 
             # check =constant
             if field[1][0] == '=':
@@ -528,7 +528,7 @@ def pass_1():
                                 ESD_ID[scope_new] = lbl_8
                                 scope_new += 1 # update the next scope_id ptr
                         else:
-                            zPE.abort(10, 'Error: {0}'.format(sd_info[2]) +
+                            zPE.abort(90, 'Error: {0}'.format(sd_info[2]) +
                                       ': Invalid address type.\n')
             # check lable
             bad_lbl = zPE.bad_label(field[0])
@@ -730,7 +730,7 @@ def pass_1():
             for code in op_code:
                 length += len(code)
             if length % 2 != 0:
-                zPE.abort(5, 'Error: {0}'.format(length / 2) +
+                zPE.abort(90, 'Error: {0}'.format(length / 2) +
                           '.5: Invalid OP code length\n')
             addr += length / 2
 
@@ -803,18 +803,25 @@ def pass_2(rc):
         line = line[5:]                         # retrive line
         scope_id = MNEMONIC[line_num][0]        # retrive scope ID
         csect_lbl = ESD_ID[scope_id]            # retrive CSECT label
+        if len(MNEMONIC[line_num]) > 1:         # update & retrive address
+            MNEMONIC[line_num][1] += RELOCATE_OFFSET[scope_id]
+            addr = MNEMONIC[line_num][1]
+        else:
+            addr = None
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
 
         if rc and not len(field[1]):
             if INFO['E'][line_num] != ( 142, None, None, ):
-                zPE.abort(101, 'Error: OP-Code detection error in pass 1.\n')
+                zPE.abort(92, 'Error: OP-Code detection error in pass 1.\n')
             continue            # no op code; detected in the first pass
 
         # parse CSECT
         if field[1] == 'CSECT':
             if csect_lbl != '{0:<8}'.format(field[0]):
-                zPE.abort(181, 'Error: Fail to retrive CSECT label.\n')
+                zPE.abort(92, 'Error: Fail to retrive CSECT label.\n')
+            if scope_id != ESD[csect_lbl][0].id:
+                zPE.abort(92, 'Error: Fail to retrive scope ID.\n')
 
 
         # parse USING

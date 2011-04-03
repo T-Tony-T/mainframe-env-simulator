@@ -114,7 +114,6 @@ def __PARSE_OUT():
     asm_ser     = zPE.pgm.ASMA90.INFO['S']
 
     asm_mnem    = zPE.pgm.ASMA90.MNEMONIC
-    offset      = zPE.pgm.ASMA90.RELOCATE_OFFSET
 
     asm_esd     = zPE.pgm.ASMA90.ESD
     asm_esd_id  = zPE.pgm.ASMA90.ESD_ID
@@ -164,15 +163,12 @@ def __PARSE_OUT():
 
         else:                   # instructions
             if len(asm_mnem[cnt]) == 1: # type 1
-                loc = ''
-            elif asm_mnem[cnt][0] > 0:    # CSECT
-                loc = hex(
-                    offset[ asm_mnem[cnt][0] ] + asm_mnem[cnt][1]
-                    )[2:].upper()
-            else:                       # DSECT or END
+                loc = '      '
+            elif asm_mnem[cnt][0] != 0: # CSECT or DSECT
                 loc = hex(asm_mnem[cnt][1])[2:].upper()
-                if asm_mnem[cnt][0] == 0:
-                    eojob = True
+            else:                       # END
+                loc = hex(asm_mnem[cnt][1])[2:].upper()
+                eojob = True
 
             tmp_str = ''
                 
@@ -244,7 +240,7 @@ def __PARSE_OUT():
     print '\nMnemonic:'
     for key in sorted(asm_mnem.iterkeys()):
         if len(asm_mnem[key]) == 1: # type 1
-            loc = ''
+            loc = '      '
         else:
             loc = hex(asm_mnem[key][1])[2:]
         tmp_str = ''

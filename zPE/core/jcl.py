@@ -27,7 +27,7 @@ def parse(job):
     zPE.JCL['read_cnt'] += 1
     zPE.JCL['card_cnt'] += 1
     if len(line) > 72:
-        zPE.abort(72, 'Error: line ' + str(zPE.JCL['read_cnt']) +
+        zPE.abort(9, 'Error: line ' + str(zPE.JCL['read_cnt']) +
                   'Statement cannot exceed colomn 72.\n')
 
     # field_0    field_1 field_2
@@ -44,7 +44,7 @@ def parse(job):
     # parse JOB card
     # currently supported parameter: region
     if field[1] != 'JOB':
-        zPE.abort(1, 'Error: No JOB card found.\n')
+        zPE.abort(9, 'Error: No JOB card found.\n')
     zPE.JCL['jobname'] = field[0][2:]
     zPE.JCL['owner'] = zPE.JCL['jobname'][:7]
     zPE.JCL['class'] = zPE.JCL['jobname'][-1]
@@ -54,17 +54,17 @@ def parse(job):
     # AccInfo,'pgmer'[,parameters]
     args = zPE.resplit_sq(',', field[2], 2)
     if len(args) < 2:
-        zPE.abort(1, 'Error: Invalid JOB card.\n')
+        zPE.abort(9, 'Error: Invalid JOB card.\n')
     # parse AccInfo
     zPE.JCL['accinfo'] = args[0]
     if args[1][0] != '\'' or args[1][-1] != '\'':
-        zPE.abort(1, 'Error: ' + args[1] +
+        zPE.abort(9, 'Error: ' + args[1] +
                   ':\n       The programmer\'s name need to be ' +
                   'surrounded by single quotes.\n')
     # parse pgmer
     zPE.JCL['pgmer'] = args[1][1:-1]
     if len(zPE.JCL['pgmer']) > 20:
-        zPE.abort(1, 'Error: ' + args[1] +
+        zPE.abort(9, 'Error: ' + args[1] +
                   ':\n       The programmer\'s name cannot be exceed ' +
                   '20 characters.\n')
     # parse parameters
@@ -75,10 +75,10 @@ def parse(job):
                 try:
                     zPE.JCL['region'] = zPE.core.mem.parse_region(part[7:])
                 except SyntaxError:
-                    zPE.abort(52, 'Error: ' + part +
+                    zPE.abort(9, 'Error: ' + part +
                               ': Invalid region size.\n')
                 except ValueError:
-                    zPE.abort(4, 'Error: ' + part +
+                    zPE.abort(9, 'Error: ' + part +
                               ': Region must be divisible by 4K.\n')
         #   elif part[:9] == 'MSGCLASS=':
 
@@ -113,7 +113,7 @@ def parse(job):
         zPE.JCL['card_cnt'] += 1
 
         if len(line) > 72:
-            zPE.abort(72, 'Error: line ' + str(zPE.JCL['read_cnt']) +
+            zPE.abort(9, 'Error: line ' + str(zPE.JCL['read_cnt']) +
                       'Statement cannot exceed colomn 72.\n')
 
         # check comment
@@ -157,10 +157,10 @@ def parse(job):
                         try:
                             region = zPE.core.mem.parse_region(part[7:])
                         except SyntaxError:
-                            zPE.abort(52, 'Error: ' + part +
+                            zPE.abort(9, 'Error: ' + part +
                                       ': Invalid region size.\n')
                         except ValueError:
-                            zPE.abort(4, 'Error: ' + part +
+                            zPE.abort(9, 'Error: ' + part +
                                       ': Region must be divisible ' +
                                       'by 4K.\n')
                 #   elif part[:5] == 'COND=':
@@ -192,10 +192,10 @@ def parse(job):
                     elif part[:5] == 'DISP=':
                         disp = part[5:]
                     else:
-                        zPE.abort(44, 'Error: ' + part +
+                        zPE.abort(9, 'Error: ' + part +
                                   ': Parameter not supported.\n')
                 if disp == '':
-                    zPE.abort(44, 'Error: ' + field[0][2:] +
+                    zPE.abort(9, 'Error: ' + field[0][2:] +
                               ': Need DISP=[disp].\n')
 
             zPE.JCL['step'][-1].dd.append(
@@ -205,7 +205,7 @@ def parse(job):
                     'DISP' : disp,
                     })
         else:                   # continuation
-            zPE.abort(33, 'Error: Continuation not supported.\n')
+            zPE.mark4future('JCL Continuation')
 
         sp2.append(ctrl, '{0:>9} {1}'.format(zPE.JCL['card_cnt'], line))
     # end of the main read loop

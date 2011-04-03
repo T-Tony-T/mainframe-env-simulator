@@ -117,15 +117,15 @@ def new(key, mode, f_type, path = [], real_path = []):
              (path == path_of[key]) and (real_path == real_path_of(key))
              ):
             return SPOOL[key]   # passed from previous step
-        zPE.abort(-1, 'Error: ' + key + ': SPOOL name conflicts.\n')
+        zPE.abort(5, 'Error: ' + key + ': SPOOL name conflicts.\n')
 
     # check SPOOL mode
     if mode not in ['i', 'o', '+']:
-        zPE.abort(-1, 'Error: ' + mode + ': Invalid SPOOL mode.\n')
+        zPE.abort(5, 'Error: ' + mode + ': Invalid SPOOL mode.\n')
 
     # check SPOOL type
     if f_type not in zPE.JES:
-        zPE.abort(-1, 'Error: ' + f_type + ': invalid SPOOL types.\n')
+        zPE.abort(5, 'Error: ' + f_type + ': invalid SPOOL types.\n')
 
     # check path auto-generation
     if len(path) == 0:
