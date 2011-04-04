@@ -31,6 +31,8 @@ import os, sys
 import re
 from time import localtime, mktime, strftime, strptime
 
+from assist_err_code_rc import * # read recourse file for err msg
+
 
 FILE = [
     ('SYSIN', 'AM002 ASSIST COULD NOT OPEN READER SYSIN:ABORT'),
@@ -154,57 +156,74 @@ def __PARSE_OUT():
         ctrl = ' '
 
 
-        if eojob:               # inline inputs
-            pass # ignored
+        if eojob:
+            # inline inputs
+            continue # ignored
 
-        elif line[0] == '*':    # comments
+        elif line[0] == '*':
+            # comments
             spo.append(ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
                        '{0:>5} {1}'.format(cnt, line))
+            continue
 
-        else:                   # instructions
-            if len(asm_mnem[cnt]) == 1: # type 1
-                loc = '      '
-            elif asm_mnem[cnt][0] != 0: # CSECT or DSECT
-                loc = hex(asm_mnem[cnt][1])[2:].upper()
-            else:                       # END
-                loc = hex(asm_mnem[cnt][1])[2:].upper()
-                eojob = True
+        # instructions
+        if len(asm_mnem[cnt]) == 1: # type 1
+            loc = '      '
+        elif asm_mnem[cnt][0] != 0: # CSECT or DSECT
+            loc = hex(asm_mnem[cnt][1])[2:].upper()
+        else:                       # END
+            loc = hex(asm_mnem[cnt][1])[2:].upper()
+            eojob = True
 
-            tmp_str = ''
+        tmp_str = ''
                 
-            if len(asm_mnem[cnt]) == 3: # type 3
-                for val in asm_mnem[cnt][2]:
-                    tmp_str += zPE.core.asm.X_.tr(val.dump())
-                if len(tmp_str) > 16:
-                    tmp_str = tmp_str[:16]
-            elif len(asm_mnem[cnt]) == 5: # type 5
-                code = zPE.core.asm.prnt_op(asm_mnem[cnt][2])
-                if len(code) == 12:
-                    field_3 = code[8:12]
-                else:
-                    field_3 = '    '
-                if len(code) >= 8:
-                    field_2 = code[4:8]
-                else:
-                    field_2 = '    '
-                field_1 = code[0:4]
-                tmp_str = '{0} {1} {2} '.format(
-                    field_1, field_2, field_3
-                    )
-                if asm_mnem[cnt][3]:
-                    addr_1 = asm_mnem[cnt][3]
-                else:
-                    addr_1 = '     '
-                if asm_mnem[cnt][4]:
-                    addr_2 = asm_mnem[cnt][4]
-                else:
-                    addr_2 = '     '
-                tmp_str += '{0:0>5} {1:0>5}'.format(
-                    addr_1, addr_2
-                    )
+        if len(asm_mnem[cnt]) == 3: # type 3
+            for val in asm_mnem[cnt][2]:
+                tmp_str += zPE.core.asm.X_.tr(val.dump())
+            if len(tmp_str) > 16:
+                tmp_str = tmp_str[:16]
+        elif len(asm_mnem[cnt]) == 5: # type 5
+            code = zPE.core.asm.prnt_op(asm_mnem[cnt][2])
+            if len(code) == 12:
+                field_3 = code[8:12]
+            else:
+                field_3 = '    '
+            if len(code) >= 8:
+                field_2 = code[4:8]
+            else:
+                field_2 = '    '
+            field_1 = code[0:4]
+            tmp_str = '{0} {1} {2} '.format(
+                field_1, field_2, field_3
+                )
+            if asm_mnem[cnt][3]:
+                addr_1 = asm_mnem[cnt][3]
+            else:
+                addr_1 = '     '
+            if asm_mnem[cnt][4]:
+                addr_2 = asm_mnem[cnt][4]
+            else:
+                addr_2 = '     '
+            tmp_str += '{0:0>5} {1:0>5}'.format(
+                addr_1, addr_2
+                )
 
-            spo.append(ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
-                       '{0:>5} {1}'.format(cnt, line))
+        spo.append(ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
+                   '{0:>5} {1}'.format(cnt, line))
+
+        # process error msg, if any
+        if cnt in asm_ser:
+            for tmp in asm_ser[cnt]:
+                spo.append(ctrl, gen_msg('S', tmp, line))
+        if cnt in asm_err:
+            for tmp in asm_err[cnt]:
+                spo.append(ctrl, gen_msg('E', tmp, line))
+        if cnt in asm_warn:
+            for tmp in asm_warn[cnt]:
+                spo.append(ctrl, gen_msg('W', tmp, line))
+        if cnt in asm_info:
+            for tmp in asm_info[cnt]:
+                spo.append(ctrl, gen_msg('I', tmp, line))
     # end of main read loop
 
     
