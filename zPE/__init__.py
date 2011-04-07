@@ -60,12 +60,17 @@ def resplit_dq(pattern, string, maxsplit = 0):
 def resplit_sp(pattern, string, maxsplit = 0):
     return resplit(pattern, string, '(', ')', maxsplit)
 
-# Note: only include one char for skip_l/r
+# Note: only include the char(s) in skip_l/r, do not escape
+#       (no '\' unless that is what need to be excluded)
 def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
-    if len(skip_l) != 1 or len(skip_r) != 1:
+    if len(skip_l) != len(skip_r):
         raise ValueError
-    if skip_l in pattern or skip_r in pattern:
-        return re.split(pattern, string, maxsplit)
+    for ch in skip_l:
+        if ch in pattern:
+            return re.split(pattern, string, maxsplit)
+    for ch in skip_r:
+        if ch in pattern:
+            return re.split(pattern, string, maxsplit)
     return __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit)
 
 
@@ -428,9 +433,17 @@ def __TOUCH_RC():
 
 
 def __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit):
-    true_pttn = '^[^{1}{2}]*?(?:[{1}][^{1}{2}]*[{2}][^{1}{2}]*?)*({0})'.format(
-        pattern, skip_l, skip_r)
-    # start at begin; search for skip_l/r; search for pattern (catch it)
+    true_pttn = '^[^{0}{1}]*?(?:(?:'.format(
+        ''.join(skip_l), ''.join(skip_r)
+        )
+    for indx in range(len(skip_l)):
+        true_pttn += '(?:[{0}][^{0}{1}]*[{1}])|'.format(
+            skip_l[indx], skip_r[indx]
+            )
+    true_pttn = true_pttn[:-1]  # remove the last '|'
+    true_pttn += ')[^{0}{1}]*?)*({2})'.format(
+        ''.join(skip_l), ''.join(skip_r), pattern
+        )
 
     rv = []
     reminder = string

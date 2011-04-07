@@ -246,7 +246,7 @@ def pass_1():
                 indx_s = line.index(field[1]) + len(field[1]) + 1 # +1 for ' '
                 __INFO('S', line_num, ( 40, indx_s, None, ))
             else:
-                args = zPE.resplit_sp(',', field[2])
+                args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
 
                 # check 1st argument
                 sub_args = re.split(',', args[0])
@@ -507,7 +507,7 @@ def pass_1():
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
             op_code = zPE.core.asm.get_op(field[1])
-            args = zPE.resplit_sp(',', field[2])
+            args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
 
             if len(op_code) > len(args) + 1:
                 indx_s = line.index(args[-1])
@@ -750,7 +750,7 @@ def pass_2(rc):
         # parse USING
         elif field[1] == 'USING':
             if len(field) >= 3:
-                args = zPE.resplit_sp(',', field[2])
+                args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
 
                 # check 1st argument
                 sub_args = re.split(',', args[0])
@@ -806,7 +806,7 @@ def pass_2(rc):
         # parse DROP
         elif field[1] == 'DROP':
             # update using map
-            args = zPE.resplit_sp(',', field[2])
+            args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
             for arg in args:
                 if ( (not arg.isdigit())  or
                      (int(arg) >= zPE.core.reg.GPR_NUM)
