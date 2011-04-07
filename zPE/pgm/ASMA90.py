@@ -289,40 +289,7 @@ def pass_1():
                 if len(args) < 2:
                     indx_s = line.index(field[2]) + len(field[2])
                     __INFO('S', line_num, ( 174, indx_s, indx_s, ))
-
-                # check following arguments
-                tmp = []
-                for indx in range(1, len(args)):
-                    if ( (not args[indx].isdigit())  or
-                         (int(args[indx]) >= zPE.core.reg.GPR_NUM)
-                         ):
-                        indx_s = line.index(args[indx])
-                        __INFO('E', line_num,
-                               ( 29, indx_s, indx_s + len(args[indx]), )
-                               )
-                        break
-                    if args[indx] in tmp:
-                        indx_s = line.index(args[indx-1])+len(args[indx-1])+1
-                        __INFO('E', line_num,
-                               ( 308, indx_s, indx_s + len(args[indx]), )
-                               )
-                        break
-                    tmp.append(args[indx])
-
-            # update using map
-            USING_MAP[line_num, args[1]] = Using(
-                addr, scope_id,
-                'USING',
-                'ORDINARY', 0, range_limit, None,
-                None, None, field[2]
-                )
-            for indx in range(2, len(args)):
-                USING_MAP[line_num, args[indx]] = Using(
-                    addr, scope_id,
-                    'USING',
-                    'ORDINARY', 4096 * (indx - 1), range_limit, None,
-                    None, None, ''
-                )
+                # following arguments will be checked in pass 2
 
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
             spt.append('{0:0>5}{1:<8} USING {2}\n'.format(
@@ -805,7 +772,58 @@ def pass_2(rc):
 
         # parse USING
         elif field[1] == 'USING':
-            pass # mark
+            if len(field) >= 3:
+                args = zPE.resplit_sp(',', field[2])
+
+                # check 1st argument
+                sub_args = re.split(',', args[0])
+                if len(sub_args) == 1:
+                    # regular using
+                    range_limit = 4096      # have to be 4096
+
+                    bad_lbl = zPE.bad_label(args[0])
+                    if bad_lbl:         # not a valid label
+                        if not __IS_REL_ADDR(args[0]):
+                            # not a relocatable address
+                            indx_s = line.index(field[2])
+                            __INFO('E', line_num, ( 305, indx_s, None, ))
+                else:           # must be 2
+                    # range-limit using
+                    zPE.abort(-1, '******  This should NEVER be seen!!  ******')
+
+                # check following arguments
+                tmp = []
+                for indx in range(1, len(args)):
+                    if ( (not args[indx].isdigit())  or # mark
+                         (int(args[indx]) >= zPE.core.reg.GPR_NUM)
+                         ):
+                        indx_s = line.index(args[indx])
+                        __INFO('E', line_num,
+                               ( 29, indx_s, indx_s + len(args[indx]), )
+                               )
+                        break
+                    if args[indx] in tmp:
+                        indx_s = line.index(args[indx-1])+len(args[indx-1])+1
+                        __INFO('E', line_num,
+                               ( 308, indx_s, indx_s + len(args[indx]), )
+                               )
+                        break
+                    tmp.append(args[indx])
+
+            # update using map
+            USING_MAP[line_num, args[1]] = Using(
+                addr, scope_id,
+                'USING',
+                'ORDINARY', 0, range_limit, None,
+                None, None, field[2]
+                )
+            for indx in range(2, len(args)):
+                USING_MAP[line_num, args[indx]] = Using(
+                    addr, scope_id,
+                    'USING',
+                    'ORDINARY', 4096 * (indx - 1), range_limit, None,
+                    None, None, ''
+                )
 
 
         # parse DROP
@@ -844,6 +862,9 @@ def pass_2(rc):
 def __IS_ABS_ADDR(addr_arg):
     return re.match('\d+(?:\(\d{0,2}(?:,\d{0,2})\))?', addr_arg)
 
+def __IS_REL_ADDR(addr_arg):
+    return True                 # mark
+
 def __INFO(err_tp, line, item):
     if line not in INFO[err_tp]:
         INFO[err_tp][line] = []
@@ -866,6 +887,11 @@ def __MISSED_FILE(step):
 
     return cnt
 
+
+# rv: ( [ symbol_1, ... ], f(), )
+# where f([ symbol_1, ... ]) 
+def __PARSE_ARG(arg_line):
+    pass                        # mark
 
 def __PARSE_OUT():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL

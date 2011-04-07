@@ -12,11 +12,14 @@ __W_MSG = {                     # ASMAxxxW
     }
 
 __E_MSG = {                     # ASMAxxxE
+    28  : lambda info, line: 'Invalid displacement',
     29  : lambda info, line: 'Incorrect register specification - {0}'.format(line[info[1]:info[2]]),
+    32  : lambda info, line: 'Relocatable value or unresolved symbol found when absolute value required - {0}'.format(line[info[1]:info[2]]),
     44  : lambda info, line: 'Undefined symbol - {0}'.format(line[info[1]:info[2]]),
     57  : lambda info, line: 'Undefined operation code - {0}'.format(line[info[1]:info[2]]),
     65  : lambda info, line: 'Unknown type - {0}'.format(line[info[1]:info[2]]),
     74  : lambda info, line: 'Illegal syntax in expansion - {0}'.format(line[info[1]:info[2]]),
+    78  : lambda info, line: 'Operand 2 expansion complexly relocatable - {0}'.format(line[info[1]:info[2]]),
     141 : lambda info, line: 'Bad character in operation code - {0}'.format(line[info[1]:info[2]]),
     142 : lambda info, line: 'Operation code not complete on first record',
     143 : lambda info, line: 'Bad character in name field - {0}'.format(line[info[1]:info[2]]),

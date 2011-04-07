@@ -45,29 +45,28 @@ def bad_label(label):
     return 0                    # all good
 
 # Behave similarly as re.split(), except that the splits won't happen inside:
-#   sq ==> single quotes
-#   dq ==> double quotes
-#   sp ==> single pair of parentheses
+#   _sq ==> single quotes
+#   _dq ==> double quotes
+#   _sp ==> single pair of parentheses
 # 
 # Note: if the pattern contains the "skip pattern", then the functions
 # behaves exactly the same as re.split()
 def resplit_sq(pattern, string, maxsplit = 0):
-    if "'" in pattern:
-        return re.split(pattern, string, maxsplit)
-    else:
-        return __SKIP_SPLIT(pattern, string, "'", "'", maxsplit)
+    return resplit(pattern, string, "'", "'", maxsplit)
 
 def resplit_dq(pattern, string, maxsplit = 0):
-    if '"' in pattern:
-        return re.split(pattern, string, maxsplit)
-    else:
-        return __SKIP_SPLIT(pattern, string, '"', '"', maxsplit)
+    return resplit(pattern, string, '"', '"', maxsplit)
 
 def resplit_sp(pattern, string, maxsplit = 0):
-    if '(' in pattern or ')' in pattern:
+    return resplit(pattern, string, '(', ')', maxsplit)
+
+# Note: only include one char for skip_l/r
+def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
+    if len(skip_l) != 1 or len(skip_r) != 1:
+        raise ValueError
+    if skip_l in pattern or skip_r in pattern:
         return re.split(pattern, string, maxsplit)
-    else:
-        return __SKIP_SPLIT(pattern, string, '\(', '\)', maxsplit)
+    return __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit)
 
 
 ## Return Code
@@ -429,7 +428,7 @@ def __TOUCH_RC():
 
 
 def __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit):
-    true_pattern = '^[^{1}{2}]*?(?:{1}[^{1}{2}]*{2}[^{1}{2}]*?)*({0})'.format(
+    true_pttn = '^[^{1}{2}]*?(?:[{1}][^{1}{2}]*[{2}][^{1}{2}]*?)*({0})'.format(
         pattern, skip_l, skip_r)
     # start at begin; search for skip_l/r; search for pattern (catch it)
 
@@ -439,7 +438,7 @@ def __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit):
     while True:
         if (maxsplit == 0) or len(rv) < maxsplit:
             # more to go
-            res = re.search(true_pattern, reminder)
+            res = re.search(true_pttn, reminder)
             if res != None:     # search succeed
                 rv.append(reminder[:res.start(1)])
                 reminder = reminder[res.end(1):]
