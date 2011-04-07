@@ -140,9 +140,6 @@ def pass_1():
     scope_id = 0                # current scope ID; init to None (0)
     scope_new = scope_id + 1    # next available scope ID; starting at 1
     csect_lbl = None            # current csect label
-    active_using = {
-        # reg : line_num
-        }
 
     const_pool = None           # memory heap for constant allocation
 
@@ -241,9 +238,6 @@ def pass_1():
                     line_num, field[0]
                     ))
                 
-            # update using map
-            active_using = {}   # empty the active_using
-
         # parse USING
         elif field[1] == 'USING':
             if len(field[0]) != 0:
@@ -303,23 +297,6 @@ def pass_1():
                     line_num , '', field[2]
                     ))
 
-            # update using map
-            args = zPE.resplit_sp(',', field[2])
-            for arg in args:
-                if ( (not arg.isdigit())  or
-                     (int(arg) >= zPE.core.reg.GPR_NUM)
-                     ):
-                    indx_s = line.index(args[indx])
-                    __INFO('E', line_num,
-                           ( 29, indx_s, indx_s + len(args[indx]), )
-                           )
-                    continue
-                if arg in active_using:
-                    del active_using[arg]
-                else:
-                    indx_s = line.index(arg)
-                    __INFO('W', line_num, ( 45, indx_s, indx_s + len(arg), ))
-
         # parse END
         elif field[1] == 'END':
             if const_pool:      # check left-over constants
@@ -352,9 +329,6 @@ def pass_1():
                         )
                 addr = 0    # reset program counter
                 prev_addr = None
-
-                # update using map
-                active_using = {}   # empty the active_using
 
                 # check EOF again
                 if spi.atEOF():
@@ -769,6 +743,9 @@ def pass_2(rc):
             if scope_id != ESD[csect_lbl][0].id:
                 zPE.abort(92, 'Error: Fail to retrive scope ID.\n')
 
+            # update using map
+            active_using = {}   # empty the active_using
+
 
         # parse USING
         elif field[1] == 'USING':
@@ -828,12 +805,28 @@ def pass_2(rc):
 
         # parse DROP
         elif field[1] == 'DROP':
-            pass # mark
+            # update using map
+            args = zPE.resplit_sp(',', field[2])
+            for arg in args:
+                if ( (not arg.isdigit())  or
+                     (int(arg) >= zPE.core.reg.GPR_NUM)
+                     ):
+                    indx_s = line.index(args[indx])
+                    __INFO('E', line_num,
+                           ( 29, indx_s, indx_s + len(args[indx]), )
+                           )
+                    continue
+                if arg in active_using:
+                    del active_using[arg]
+                else:
+                    indx_s = line.index(arg)
+                    __INFO('W', line_num, ( 45, indx_s, indx_s + len(arg), ))
 
 
         # parse END
         elif field[1] == 'END':
-            pass # mark
+            # update using map
+            active_using = {}   # empty the active_using
 
 
         # parse LTORG
