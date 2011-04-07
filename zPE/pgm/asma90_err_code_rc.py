@@ -23,12 +23,15 @@ __E_MSG = {                     # ASMAxxxE
     141 : lambda info, line: 'Bad character in operation code - {0}'.format(line[info[1]:info[2]]),
     142 : lambda info, line: 'Operation code not complete on first record',
     143 : lambda info, line: 'Bad character in name field - {0}'.format(line[info[1]:info[2]]),
+    145 : lambda info, line: 'Operator, right parenthesis, or end-of-expression expected - {0}'.format(line[info[1]:info[2]]),
+    150 : lambda info, line: 'Symbol has non-alphanumeric character or invalid delimiter - {0}'.format(line[info[1]:info[2]]),
     305 : lambda info, line: 'Operand 1 does not refer to location within reference control section',
     307 : lambda info, line: 'No active USING for operand {0}'.format(line[info[1]:info[2]]),
     308 : lambda info, line: 'Repeated register {0}'.format(line[info[1]:info[2]]),
     }
 
 __S_MSG = {                     # ASMAxxxS
+    35  : lambda info, line: 'Invalid delimiter - {0}'.format(line[info[1]:info[2]]),
     40  : lambda info, line: 'Missing operand',
     173 : lambda info, line: 'Delimiter error, expected blank - {0}'.format(line[info[1]:info[2]]),
     174 : lambda info, line: 'Delimiter error, expected blank or comma - {0}'.format(line[info[1]:info[2]]),

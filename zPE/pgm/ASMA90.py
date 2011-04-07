@@ -395,69 +395,116 @@ def pass_1():
                         symbol.defn = line_num
                     else:
                         __INFO('E', line_num, 'DUPLICATED SYMBOL') # mark
+            else: # not =constant
+                # prepared for spt; may be changed by exp-eval
+                t_field = field[2]
 
             if sd_info[0] == 'a' and sd_info[4] != None:
                 # check references
-                for lbl in sd_info[4]:
-                    if re.match('[A-Z@#$]', lbl[0]): # is a symbol
-                        bad_lbl = zPE.bad_label(lbl)
-                        lbl_8 = '{0:<8}'.format(lbl)
+                if sd_info[2] == 'V':
+                    bad_lbl = zPE.bad_label(lbl)
+                    lbl_8 = '{0:<8}'.format(lbl)
 
-                        if bad_lbl:
+                    # update the Cross-References Sub-Table
+                    if lbl_8 not in SYMBOL_V:
+                        SYMBOL_V[lbl_8] = Symbol(
+                            1, 0, scope_id,
+                            'T', '', '',
+                            line_num, [ ]
+                            )
+                    SYMBOL_V[lbl_8].references.append(
+                        '{0:>4}{1}'.format(line_num, '')
+                        )
+
+                    # update the External Symbol Dictionary
+                    if lbl_8 not in ESD:
+                        ESD[lbl_8] = (
+                            ExternalSymbol(
+                                None, None, None, None,
+                                None, None, None,
+                                ),
+                            ExternalSymbol(
+                                None, None, None, None,
+                                None, None, None,
+                                ),
+                            )
+
+                    if ESD[lbl_8][1].id == None:
+                        ESD[lbl_8][1].type = 'ER'
+                        ESD[lbl_8][1].id = scope_new
+
+                        ESD_ID[scope_new] = lbl_8
+                        scope_new += 1 # update the next scope_id ptr
+
+                elif sd_info[2] == 'A':
+                    for lbl_i in range(len(sd_info[4])):
+                        lbl = sd_info[4][lbl_i]
+                        sd_info[4][lbl_i] = '0'
+
+                        res = __PARSE_ARG(lbl)
+
+                        if len(res) == 1:
                             indx_s = line.index(lbl)
-                            __INFO('E', line_num,
-                                   ( 74, indx_s, indx_s + len(lbl), )
+                            __INFO('S', line_num,
+                                   ( 35, indx_s, indx_s + res, )
                                    )
-                        elif sd_info[2] == 'A':
-                            if lbl_8 in SYMBOL:
-                                # check scope
-                                symbol = SYMBOL[lbl_8]
-                                if symbol.id == scope_id:
-                                    symbol.references.append(
-                                        '{0:>4}{1}'.format(line_num, '')
-                                        )
-                                else:
-                                    __INFO('E', line_num, 'DUPLICATED SYMBOL') # mark
-                            else:
-                                SYMBOL[lbl_8] = Symbol(
-                                    None, None, scope_id,
-                                    None, None, None,
-                                    None, [ '{0:>4}{1}'.format(line_num, ''), ]
-                                    )
-                        elif sd_info[2] == 'V':
-                            # update the Cross-References Sub-Table
-                            if lbl_8 not in SYMBOL_V:
-                                SYMBOL_V[lbl_8] = Symbol(
-                                    1, 0, scope_id,
-                                    'T', '', '',
-                                    line_num, [ ]
-                                    )
-                            SYMBOL_V[lbl_8].references.append(
-                                '{0:>4}{1}'.format(line_num, '')
-                                )
-
-                            # update the External Symbol Dictionary
-                            if lbl_8 not in ESD:
-                                ESD[lbl_8] = (
-                                    ExternalSymbol(
-                                        None, None, None, None,
-                                        None, None, None,
-                                        ),
-                                    ExternalSymbol(
-                                        None, None, None, None,
-                                        None, None, None,
-                                        ),
-                                    )
-
-                            if ESD[lbl_8][1].id == None:
-                                ESD[lbl_8][1].type = 'ER'
-                                ESD[lbl_8][1].id = scope_new
-
-                                ESD_ID[scope_new] = lbl_8
-                                scope_new += 1 # update the next scope_id ptr
                         else:
-                            zPE.abort(90, 'Error: {0}'.format(sd_info[2]) +
-                                      ': Invalid address type.\n')
+                            for indx in range(len(res[0])):
+                                if res[1][indx] == 'valid_symbol':
+                                    bad_lbl = zPE.bad_label(res[0][indx])
+                                    lbl_8 = '{0:<8}'.format(res[0][indx])
+
+                                    if bad_lbl:
+                                        indx_s = line.index(res[0][indx])
+                                        __INFO('E', line_num,
+                                               ( 74, indx_s, indx_s + len(res[0][indx]), )
+                                               )
+                                    elif lbl_8 in SYMBOL:
+                                        # check scope
+                                        symbol = SYMBOL[lbl_8]
+                                        if symbol.id == scope_id:
+                                            symbol.references.append(
+                                                '{0:>4}{1}'.format(line_num, '')
+                                                )
+                                        else:
+                                            __INFO('E', line_num, 'DUPLICATED SYMBOL') # mark
+                                    else:
+                                        SYMBOL[lbl_8] = Symbol(
+                                            None, None, scope_id,
+                                            None, None, None,
+                                            None, [ '{0:>4}{1}'.format(line_num, ''), ]
+                                            )
+                                elif res[1][indx] == 'reloc_addr':
+                                    res[0][indx] == 'reloc_addr' # non-envaluable
+                                elif res[1][indx] == 'inline_const':
+                                    tmp = zPE.core.asm.parse_sd(res[0][indx])
+                                    if res[0][indx][0] != tmp[2]: # e.g. 2F'1'
+                                        indx_s = line.index(res[0][indx])
+                                        __INFO('E', line_num,
+                                               ( 145, indx_s, indx_s + len(res[0][indx]), )
+                                               )
+                                    elif res[0][indx][1] != "'": # e.g. BL2'1101'
+                                        indx_s = line.index(res[0][indx])
+                                        __INFO('E', line_num,
+                                               ( 150, indx_s, indx_s + len(res[0][indx]), )
+                                               )
+                                    else:
+                                        try:
+                                            sd = zPE.core.asm.get_sd(tmp)[0]
+                                            res[0][indx] = str(int(zPE.core.asm.X_.tr(sd.dump()), 16))
+                                        except:
+                                            zPE.abort(90, 'Error: {0}'.format(lbl) +
+                                                      ':Fail to envaluate const.\n')
+                            # exp-eval
+                            try:
+                                t_field = ''.join(res[0])
+                                sd_info[4][lbl_i] = str(eval(t_field))
+                            except:
+                                t_field = field[2]
+
+                else:
+                    zPE.abort(90, 'Error: {0}'.format(sd_info[2]) +
+                              ': Invalid address type.\n')
             # check lable
             bad_lbl = zPE.bad_label(field[0])
             lbl_8 = '{0:<8}'.format(field[0])
@@ -497,7 +544,7 @@ def pass_1():
                 spt.append('{0:0>5}{1}'.format(line_num, line))
             else:
                 spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
-                        line_num, field[0], field[1], field[2]
+                        line_num, field[0], field[1], t_field
                         ))
 
             # update address
@@ -716,6 +763,8 @@ def pass_2(rc):
 
     # main read loop
     for line in spt:
+        print line[:-1]         # mark
+
         line_num = int(line[:5])                # retrive line No.
         line = line[5:]                         # retrive line
         scope_id = MNEMONIC[line_num][0]        # retrive scope ID
@@ -881,10 +930,67 @@ def __MISSED_FILE(step):
     return cnt
 
 
-# rv: ( [ symbol_1, ... ], f(), )
-# where f([ symbol_1, ... ]) 
+# rv: ( [ symbol_1, ... ], [ desc_1, ... ], )
+# or  err_indx  if error occurs
 def __PARSE_ARG(arg_line):
-    pass                        # mark
+    parts = []                  # components of the expression
+    descs = []                  # descriptions of the components
+    reminder = arg_line
+
+    while True:
+        if reminder[0] == '(':  # start of a sub-expression
+            parts.append('(')
+            descs.append('parenthesis')
+            reminder = reminder[1:]
+
+        if reminder[0] == '*':  # current location ptr
+            parts.append('*')
+            descs.append('reloc_addr')
+            reminder = reminder[1:]
+        else:                   # number / symbol
+            res = zPE.resplit_sq('[*/+-]', reminder)[0]
+
+            bad_lbl = zPE.bad_label(res)
+            if bad_lbl:
+                try:
+                    sd_info = zPE.core.asm.parse_sd(res)
+                except:         # not a constant
+                    sd_info = None
+                if res.isdigit():
+                    parts.append(res)
+                    descs.append('regular_num')
+                elif sd_info:
+                    try:
+                        if sd_info[0] == 'a':
+                            raise TypeError
+                        zPE.core.asm.get_sd(sd_info)
+                        parts.append(res)
+                        descs.append('inline_const')
+                    except:     # invalid constant; return err pos
+                        return len(arg_line) - len(reminder)
+                else:           # invalid operand; return err pos
+                    return len(arg_line) - len(reminder)
+            else:
+                parts.append(res)
+                descs.append('valid_symbol')
+            reminder = reminder[len(res):]
+
+        if len(reminder) and reminder[0] == ')': # start of a sub-expression
+            parts.append(')')
+            descs.append('parenthesis')
+            reminder = reminder[1:]
+
+        if len(reminder):       # operator
+            if reminder[0] not in '*/+-': # invalid operator; return err pos
+                return len(arg_line) - len(reminder)
+            parts.append(reminder[0])
+            descs.append('operator')
+            reminder = reminder[1:]
+        else:                   # no more, stop
+            break
+
+    return ( parts, descs, )
+
 
 def __PARSE_OUT():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL

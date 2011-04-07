@@ -657,7 +657,7 @@ def parse_sd(sd_arg):
     if sz == 2 and L[1][-1] == ')':
         # A(label) ==> [ 'A', 'label)' ]
         sd_ch = L[0]
-        sd_val = re.split(',', L[1][:-1])
+        sd_val = zPE.resplit(',', L[1][:-1], ['(',"'"], [')',"'"])
         val_tp = 'a'            # address type constant
     elif sz == 1:
         # AL3 ==> [ 'AL3' ]  or  8F'1' ==> [ "8F'1'" ]

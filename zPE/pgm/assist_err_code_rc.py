@@ -27,12 +27,15 @@ __E_MSG = {                     # ASMAxxxE
     141 : lambda info, line: __format('INVALID OP-CODE', info[1]),
     142 : lambda info, line: __format('INVALID OP-CODE', info[1]),
     143 : lambda info, line: __format('INVALID SYMBOL', info[1]),
+    145 : lambda info, line: __format('INVALID DELIMITER', info[1]),
+    150 : lambda info, line: __format('INVALID DELIMITER', info[1]),
     305 : lambda info, line: __format('RELOCATABLE EXPRESSION REQUIRED', info[1]),
     307 : lambda info, line: __format('ADDRESSIBILITY ERROR', info[1]),
     308 : lambda info, line: __format('REPEATED REGISTER', info[1]),
     }
 
 __S_MSG = {                     # ASMAxxxS
+    35  : lambda info, line: __format('INVALID DELIMITER', info[1]),
     40  : lambda info, line: __format('MISSING OPERAND', info[1]),
     173 : lambda info, line: __format('INVALID DELIMITER', info[1]),
     174 : lambda info, line: __format('INVALID DELIMITER', info[1]),
