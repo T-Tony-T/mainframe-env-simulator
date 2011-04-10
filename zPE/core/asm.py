@@ -195,25 +195,29 @@ class C_(object):
         return len(self.__vals)
 
     def get(self):
-        return self.tr(self.__vals)
+        return self.tr(self.dump())
     def value(self):
         return None             # should not be evaluated
     def set(self, ch_str, length = 0):
         ch_len = len(ch_str)
         if not length:
             length = ch_len
+        # calculate natual length; in unit of hex_digit
+        self.natual_len = length * 2 # for char, natual length = 2 * len(str)
+        # convert encoding
         self.__vals = [ord(' '.encode('EBCDIC-CP-US'))] * length
                                 # initialize to all spaces
         for indx in range(0, min(ch_len, length), 1):
             self.__vals[indx] = ord(ch_str[indx].encode('EBCDIC-CP-US'))
     def dump(self):
-        return self.__vals
-    def fill__(self, vals):     # no error checking
-        self.__vals = vals
+        return (self.__vals, self.natual_len)
+    def fill__(self, dump):     # no error checking
+        self.__vals = dump[0]
+        self.natual_len = dump[1]
     @staticmethod
-    def tr(vals):
+    def tr(dump):
         ch_str = ''
-        for val in vals:
+        for val in dump[0]:
             ch_str += chr(val).decode('EBCDIC-CP-US')
         return ch_str
 
@@ -227,11 +231,15 @@ class X_(object):
         return len(self.__vals)
 
     def get(self):
-        return self.tr(self.__vals)
+        return self.tr(self.dump())
     def value(self):
         return int(self.get(), 16)
     def set(self, hex_str, length = 0):
         hex_len = len(hex_str)
+        # calculate natual length; in unit of hex_digit
+        self.natual_len = length * 2
+        if not self.natual_len: # for hex, natual length = len(str)
+            self.natual_len = hex_len
         # align to byte
         hex_len += hex_len % 2
         hex_str = '{0:0>{1}}'.format(hex_str, hex_len)
@@ -245,13 +253,14 @@ class X_(object):
             end = hex_len - indx
             self.__vals[- indx / 2 - 1] = int(hex_str[end - 2 : end], 16)
     def dump(self):
-        return self.__vals
-    def fill__(self, vals):     # no error checking
-        self.__vals = vals
+        return (self.__vals, self.natual_len)
+    def fill__(self, dump):     # no error checking
+        self.__vals = dump[0]
+        self.natual_len = dump[1]
     @staticmethod
-    def tr(vals):
+    def tr(dump):
         hex_str = ''
-        for val in vals:
+        for val in dump[0]:
             hex_str += '{0:0>2}'.format(hex(val)[2:].upper())
         return hex_str
 
@@ -265,11 +274,15 @@ class B_(object):
         return len(self.__vals)
 
     def get(self):
-        return self.tr(self.__vals)
+        return self.tr(self.dump())
     def value(self):
         return int(self.get(), 2)
     def set(self, bin_str, length = 0):
         bin_len = len(bin_str)
+        # calculate natual length; in unit of hex_digit
+        self.natual_len = length * 2
+        if not self.natual_len: # for bin, natual length = (len(str) + 3) / 4
+            self.natual_len = (bin_len + 3) / 4
         # align to byte
         bin_len += 8 - bin_len % 8
         bin_str = '{0:0>{1}}'.format(bin_str, bin_len)
@@ -283,13 +296,14 @@ class B_(object):
             end = bin_len - indx
             self.__vals[- indx / 8 - 1] = int(bin_str[end - 8 : end], 2)
     def dump(self):
-        return self.__vals
-    def fill__(self, vals):     # no error checking
-        self.__vals = vals
+        return (self.__vals, self.natual_len)
+    def fill__(self, dump):     # no error checking
+        self.__vals = dump[0]
+        self.natual_len = dump[1]
     @staticmethod
-    def tr(vals):
+    def tr(dump):
         bin_str = ''
-        for val in vals:
+        for val in dump[0]:
             bin_str += '{0:0>8}'.format(bin(val)[2:].upper())
         return bin_str
 
@@ -306,9 +320,9 @@ class P_(object):
         return len(self.__vals)
 
     def get(self, sign = '-'):
-        return self.tr(self.__vals, sign)
+        return self.tr(self.dump(), sign)
     def value(self):
-        ch_str = self.tr(self.__vals, '+')
+        ch_str = self.tr(self.dump(), '+')
         return int(ch_str[-1] + ch_str[:-1])
     def set(self, ch_str, length = 0):
         # check sign
@@ -335,11 +349,13 @@ class P_(object):
             )[0].upper()        # for the last char, add the high digit
         self.fill__(X_(hex_str).dump())
     def dump(self):
-        return self.__vals
-    def fill__(self, vals):     # no error checking
-        self.__vals = vals
+        return (self.__vals, self.natual_len)
+    def fill__(self, dump):     # no error checking
+        self.__vals = dump[0]
+        self.natual_len = dump[1]
     @staticmethod
-    def tr(vals, sign = '-'):
+    def tr(dump, sign = '-'):
+        vals = dump[0]
         ch_str = ''
         for val in vals[:-1]:
             hex_val = '{0:0>2}'.format(hex(val)[2:].upper())
@@ -381,9 +397,9 @@ class Z_(object):
         return len(self.__vals)
 
     def get(self, sign = '-'):
-        return self.tr(self.__vals, sign)
+        return self.tr(self.dump(), sign)
     def value(self):
-        ch_str = self.tr(self.__vals, '+')
+        ch_str = self.tr(self.dump(), '+')
         return int(ch_str[-1] + ch_str[:-1])
     def set(self, ch_str, length = 0):
         # check sign
@@ -398,6 +414,9 @@ class Z_(object):
         ch_len = len(ch_str)
         if not length:
             length = ch_len
+        # calculate natual length; in unit of hex_digit
+        self.natual_len = length # for zone, natual length = len(str)
+        # convert encoding
         self.__vals = [ord('0'.encode('EBCDIC-CP-US'))] * length
                                 # initialize to all zeros
         for indx in range(0, min(ch_len, length), 1):
@@ -407,11 +426,13 @@ class Z_(object):
         # set sign for the last digit
         self.__vals[-1] = int(sign_digit + hex(self.__vals[-1])[-1], 16)
     def dump(self):
-        return self.__vals
-    def fill__(self, vals):     # no error checking
-        self.__vals = vals
+        return (self.__vals, self.natual_len)
+    def fill__(self, dump):     # no error checking
+        self.__vals = dump[0]
+        self.natual_len = dump[1]
     @staticmethod
-    def tr(vals, sign = '-'):
+    def tr(dump, sign = '-'):
+        vals = dump[0]
         ch_str = ''
         for val in vals[:-1]:
             ch_str += chr(val).decode('EBCDIC-CP-US')
@@ -446,6 +467,7 @@ class Z_(object):
 #   ValueError: if length (required or actual) greater than 4
 class F_(object):
     def __init__(self, int_str, length = 0):
+        self.natual_len = 8     # must be 8
         self.set(int_str, length)
 
     def __len__(self):
@@ -475,15 +497,20 @@ class F_(object):
                     int('100000000', 16) + self.__val # 2's complement
                     )[2:])
         return (
-            int(hex_str[0:2], 16),
-            int(hex_str[2:4], 16),
-            int(hex_str[4:6], 16),
-            int(hex_str[6:8], 16),
+            (
+                int(hex_str[0:2], 16),
+                int(hex_str[2:4], 16),
+                int(hex_str[4:6], 16),
+                int(hex_str[6:8], 16),
+                ),
+            8
             )
-    def fill__(self, vals):      # no error checking
-        self.__val = int(self.tr(vals))
+    def fill__(self, dump):      # no error checking
+        self.__val = int(self.tr(dump))
+        self.natual_len = dump[1]
     @staticmethod
-    def tr(vals):
+    def tr(dump):
+        vals = dump[0]
         int_val = vals[0]
         for indx in range(1, len(vals)):
             int_val *= 256
@@ -501,6 +528,7 @@ class F_(object):
 #   ValueError: if length (required or actual) greater than 2
 class H_(object):
     def __init__(self, int_str, length = 0):
+        self.natual_len = 4     # must be 4
         self.set(int_str, length)
 
     def __len__(self):
@@ -530,13 +558,18 @@ class H_(object):
                     int('10000', 16) + self.__val # 2's complement
                     )[2:])
         return (
-            int(hex_str[0:2], 16),
-            int(hex_str[2:4], 16),
+            (
+                int(hex_str[0:2], 16),
+                int(hex_str[2:4], 16),
+                ),
+            4
             )
-    def fill__(self, vals):      # no error checking
-        self.__val = int(self.tr(vals))
+    def fill__(self, dump):      # no error checking
+        self.__val = int(self.tr(dump))
+        self.natual_len = dump[1]
     @staticmethod
-    def tr(vals):
+    def tr(dump):
+        vals = dump[0]
         int_val = vals[0]
         for indx in range(1, len(vals)):
             int_val *= 256
@@ -554,6 +587,7 @@ class H_(object):
 #   ValueError: if length (required or actual) greater than 4
 class A_(object):
     def __init__(self, int_str, length = 0):
+        self.natual_len = 8     # must be 8
         self.set(int_str, length)
 
     def __len__(self):
@@ -578,15 +612,20 @@ class A_(object):
     def dump(self):
         hex_str = '{0:0>8}'.format(hex(self.__val)[2:])
         return (
-            int(hex_str[0:2], 16),
-            int(hex_str[2:4], 16),
-            int(hex_str[4:6], 16),
-            int(hex_str[6:8], 16),
+            (
+                int(hex_str[0:2], 16),
+                int(hex_str[2:4], 16),
+                int(hex_str[4:6], 16),
+                int(hex_str[6:8], 16),
+                ),
+            8
             )
     def fill__(self, vals):      # no error checking
-        self.__val = int(self.tr(vals)[2:], 16)
+        self.__val = int(self.tr(dump)[2:], 16)
+        self.natual_len = dump[1]
     @staticmethod
-    def tr(vals):
+    def tr(dump):
+        vals = dump[0]
         int_val = vals[0]
         for indx in range(1, len(vals)):
             int_val *= 256

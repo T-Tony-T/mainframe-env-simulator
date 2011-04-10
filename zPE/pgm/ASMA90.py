@@ -395,9 +395,6 @@ def pass_1():
                         symbol.defn = line_num
                     else:
                         __INFO('E', line_num, 'DUPLICATED SYMBOL') # mark
-            else: # not =constant
-                # prepared for spt; may be changed by exp-eval
-                t_field = field[2]
 
             if sd_info[0] == 'a' and sd_info[4] != None:
                 # check references
@@ -497,10 +494,9 @@ def pass_1():
                                                       ':Fail to envaluate const.\n')
                             # exp-eval
                             try:
-                                t_field = ''.join(res[0])
-                                sd_info[4][lbl_i] = str(eval(t_field))
+                                sd_info[4][lbl_i] = str(eval(''.join(res[0])))
                             except:
-                                t_field = field[2]
+                                pass
 
                 else:
                     zPE.abort(90, 'Error: {0}'.format(sd_info[2]) +
@@ -544,7 +540,7 @@ def pass_1():
                 spt.append('{0:0>5}{1}'.format(line_num, line))
             else:
                 spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
-                        line_num, field[0], field[1], t_field
+                        line_num, field[0], field[1], field[2]
                         ))
 
             # update address
