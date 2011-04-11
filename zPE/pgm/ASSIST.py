@@ -121,6 +121,7 @@ def __PARSE_OUT():
     asm_esd_id  = zPE.pgm.ASMA90.ESD_ID
     asm_symb    = zPE.pgm.ASMA90.SYMBOL
     asm_symb_v  = zPE.pgm.ASMA90.SYMBOL_V
+    asm_symb_eq = zPE.pgm.ASMA90.SYMBOL_EQ
 
     asm_using   = zPE.pgm.ASMA90.USING_MAP
 
@@ -246,7 +247,7 @@ def __PARSE_OUT():
         print '{0} (0x{1:0>6}) => {2}'.format(
             key, hex(addr)[2:].upper(), asm_symb[key].__dict__
             )
-    print '\nSymbol Cross Reference Sub-Table:'
+    print '\nSymbol Cross Reference ER Sub-Table:'
     for key in sorted(asm_symb_v.iterkeys()):
         if asm_symb_v[key].value == None:
             addr = int('ffffff', 16)
@@ -255,6 +256,16 @@ def __PARSE_OUT():
         print '{0} (0x{1:0>6}) => {2}'.format(
             key, hex(addr)[2:].upper(), asm_symb_v[key].__dict__
             )
+    print '\nSymbol Cross Reference =Const Sub-Table:'
+    for key in sorted(asm_symb_eq.iterkeys()):
+        for indx in range(len(asm_symb_eq[key])):
+            if asm_symb_eq[key][indx].value == None:
+                addr = int('ffffff', 16)
+            else:
+                addr = asm_symb_eq[key][indx].value
+            print '{0} (0x{1:0>6}) => {2}'.format(
+                key, hex(addr)[2:].upper(), asm_symb_eq[key][indx].__dict__
+                )
 
     print '\nMnemonic:'
     for key in sorted(asm_mnem.iterkeys()):

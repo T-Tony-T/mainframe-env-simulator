@@ -3,7 +3,10 @@ def __format(msg, pos):
         offset = 0
     else:
         offset = len(msg) - 27
-    return '{0:<27}{1:->{2}}${1:->{3}} <-ERROR'.format(msg, '-', pos - offset, 71 - pos)
+    if pos - offset:            # at least 1 '-' before '$'
+        return '{0:<27}{1:->{2}}${1:->{3}} <-ERROR'.format(msg, '-', pos - offset, 71 - pos)
+    else:                       # start with '$'
+        return '{0:<27}${1:->71} <-ERROR'.format(msg, '-')
 
 __I_MSG = {                     # ASMAxxxI
     }
@@ -20,6 +23,7 @@ __W_MSG = {                     # ASMAxxxW
 
 __E_MSG = {                     # ASMAxxxE
     29  : lambda info, line: __format('INVALID REGISTER', info[1]),
+    43  : lambda info, line: __format('PREVIOUSLY DEFINED SYMBOL', info[1]),
     44  : lambda info, line: __format('UNDEFINED SYMBOL', info[1]),
     57  : lambda info, line: __format('INVALID OP-CODE', info[1]),
     65  : lambda info, line: __format('ILLEGAL CONSTANT TYPE', info[1]),

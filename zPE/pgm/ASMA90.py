@@ -90,8 +90,11 @@ class Symbol(object):
 SYMBOL = {              # Cross Reference Table; build during pass 1
     # 'Symbol  ' : Symbol()
     }
-SYMBOL_V = {            # Cross Reference Sub-Table
+SYMBOL_V = {            # Cross Reference ER Sub-Table
     # 'Symbol  ' : Symbol()
+    }
+SYMBOL_EQ = {           # Cross Reference =Const Sub-Table
+    # 'Symbol  ' : [ Symbol(), ... ]
     }
 INVALID_SYMBOL = []     # non-defined symbol
 NON_REF_SYMBOL = []     # non-referenced symbol
@@ -141,7 +144,9 @@ def pass_1():
     scope_new = scope_id + 1    # next available scope ID; starting at 1
     csect_lbl = None            # current csect label
 
-    const_pool = None           # memory heap for constant allocation
+    # memory heap for constant allocation
+    const_pool = {}             # same format as SYMBOL
+    const_plid = None
 
     spi.terminate()             # manually append an EOF at the end, which
                                 # will be removed before leave 1st pass
@@ -221,10 +226,10 @@ def pass_1():
                 ESD_ID[scope_id] = csect_lbl
 
                 if csect_lbl == '{0:<8}'.format(''):
-                    # unlabelled symbol
+                    # unlabelled CSECT
                     ESD[csect_lbl][0].type = 'PC'
                 else:
-                    # labelled symbol
+                    # labelled CSECT
                     ESD[csect_lbl][0].type = 'SD'
 
                     SYMBOL[csect_lbl] = Symbol(
@@ -240,51 +245,7 @@ def pass_1():
                 
         # parse USING
         elif field[1] == 'USING':
-            if len(field[0]) != 0:
-                zPE.mark4future('Labeled USING')
-            if len(field) < 3:
-                indx_s = line.index(field[1]) + len(field[1]) + 1 # +1 for ' '
-                __INFO('S', line_num, ( 40, indx_s, None, ))
-            else:
-                args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
-
-                # check 1st argument
-                sub_args = re.split(',', args[0])
-                if len(sub_args) == 1:
-                    # regular using
-                    range_limit = 4096      # have to be 4096
-
-                    bad_lbl = zPE.bad_label(args[0])
-                    if bad_lbl == None: # nothing before ','
-                        indx_s = line.index(field[2])
-                        __INFO('E', line_num,
-                               ( 74, indx_s, indx_s + 1 + len(args[1]), )
-                               )
-                    elif bad_lbl:       # not a valid label
-                        if __IS_ABS_ADDR(args[0]): # not a relocatable address
-                            indx_s = line.index(field[2])
-                            __INFO('E', line_num, ( 305, indx_s, None, ))
-                    else:               # a valid label
-                        lbl_8 = '{0:<8}'.format(args[0])
-                        SYMBOL[lbl_8].references.append(
-                            '{0:>4}{1}'.format(line_num, 'U')
-                            )
-                else:
-                    if len(sub_args) != 2:
-                        __INFO('S', line_num, (
-                                178,
-                                line.index(sub_args[2]),
-                                line.index(args[0]) + len(args[0]) - 1,
-                                ))
-                    # range-limit using
-                    zPE.mark4future('Range-Limited USING')
-
-                # check existance of 2nd argument
-                if len(args) < 2:
-                    indx_s = line.index(field[2]) + len(field[2])
-                    __INFO('S', line_num, ( 174, indx_s, indx_s, ))
-                # following arguments will be checked in pass 2
-
+            # actual parsing in pass 2
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
             spt.append('{0:0>5}{1:<8} USING {2}\n'.format(
                     line_num , '', field[2]
@@ -292,6 +253,7 @@ def pass_1():
 
         # parse DROP
         elif field[1] == 'DROP':
+            # actual parsing in pass 2
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
             spt.append('{0:0>5}{1:<8} DROP {2}\n'.format(
                     line_num , '', field[2]
@@ -299,15 +261,17 @@ def pass_1():
 
         # parse END
         elif field[1] == 'END':
-            if const_pool:      # check left-over constants
+            if const_plid:      # check left-over constants
                 line_num_tmp = line_num - 1
-                for lbl in SYMBOL:
-                    if lbl[0] == '=' and SYMBOL[lbl].defn == None:
-                        spi.insert(line_num_tmp,
-                                   '{0:<14} {1}\n'.format('', lbl)
-                                   )
-                        line_num_tmp += 1
-                const_pool = None   # close the current pool
+                for lbl in const_pool:
+                    spi.insert(line_num_tmp,
+                               '{0:<14} {1}\n'.format('', lbl)
+                               )
+                    __ALLOC_EQ(lbl, const_pool[lbl])
+                    line_num_tmp += 1
+                # close the current pool
+                const_pool = {}
+                const_plid = None
                 # the following is to "move back" the iterator
                 # need to be removed after END
                 spi.insert(0, '')
@@ -323,10 +287,7 @@ def pass_1():
                     lbl_8 = '{0:<8}'.format(field[2])
                 else:               # has no label; default to 1st CSECT
                     lbl_8 = ESD_ID[1]
-                if lbl_8 in SYMBOL:
-                    SYMBOL[lbl_8].references.append(
-                        '{0:>4}{1}'.format(line_num, '')
-                        )
+
                 addr = 0    # reset program counter
                 prev_addr = None
 
@@ -354,22 +315,24 @@ def pass_1():
                 [],     # pool for constant with half-word alignment
                 [],     # pool for constant with byte alignment
                 ]
-            for lbl in SYMBOL:
-                if lbl[0] == '=' and SYMBOL[lbl].defn == None:
-                    # current pool
-                    alignment = zPE.core.asm.align_at(lbl[1])
-                    for i in range(0,3):
-                        if alignment == 2 ** i:
-                            curr_pool[3 - i].append(lbl)
-                            break
+            for lbl in const_pool:
+                alignment = zPE.core.asm.align_at(lbl[1])
+                for i in range(0,3):
+                    if alignment == 2 ** i:
+                        curr_pool[3 - i].append(lbl)
+                        break
 
             line_num_tmp = line_num
             for pool in curr_pool:
                 for lbl in pool:
                     spi.insert(line_num_tmp, '{0:<15}{1}\n'.format('', lbl))
+                    __ALLOC_EQ(lbl, const_pool[lbl])
                     line_num_tmp += 1
 
-            const_pool = None   # close the current pool
+            # close the current pool
+            const_pool = {}
+            const_plid = None
+
             MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
             spt.append('{0:0>5}{1:<8} LTORG\n'.format(line_num, ''))
 
@@ -386,23 +349,27 @@ def pass_1():
 
             # check =constant
             if field[1][0] == '=':
-                if field[1] in SYMBOL:
-                    symbol = SYMBOL[field[1]]
-                    if symbol.defn == None and symbol.id == scope_id:
-                        symbol.length = sd_info[3]
-                        symbol.value = addr
-                        symbol.r_type = sd_info[2]
-                        symbol.defn = line_num
-                    else:
-                        __INFO('E', line_num, 'DUPLICATED SYMBOL') # mark
+                if field[1] in SYMBOL_EQ:
+                    found = False
+                    for symbol in SYMBOL_EQ[field[1]]:
+                        if symbol.defn == None and symbol.id == scope_id:
+                            found = True
+                            symbol.length = sd_info[3]
+                            symbol.value = addr
+                            symbol.r_type = sd_info[2]
+                            symbol.defn = line_num
+                    if not found:
+                        zPE.abort(90, 'Error: {0}'.format(field[1]) +
+                                  ': Invalid OP code.\n')
 
+            # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
-                # check references
                 if sd_info[2] == 'V':
+                    # check external reference
                     bad_lbl = zPE.bad_label(lbl)
                     lbl_8 = '{0:<8}'.format(lbl)
 
-                    # update the Cross-References Sub-Table
+                    # update the Cross-References ER Sub-Table
                     if lbl_8 not in SYMBOL_V:
                         SYMBOL_V[lbl_8] = Symbol(
                             1, 0, scope_id,
@@ -425,79 +392,16 @@ def pass_1():
                                 None, None, None,
                                 ),
                             )
-
                     if ESD[lbl_8][1].id == None:
                         ESD[lbl_8][1].type = 'ER'
                         ESD[lbl_8][1].id = scope_new
 
                         ESD_ID[scope_new] = lbl_8
                         scope_new += 1 # update the next scope_id ptr
-
                 elif sd_info[2] == 'A':
                     for lbl_i in range(len(sd_info[4])):
-                        lbl = sd_info[4][lbl_i]
-                        sd_info[4][lbl_i] = '0'
-
-                        res = __PARSE_ARG(lbl)
-
-                        if len(res) == 1:
-                            indx_s = line.index(lbl)
-                            __INFO('S', line_num,
-                                   ( 35, indx_s, indx_s + res, )
-                                   )
-                        else:
-                            for indx in range(len(res[0])):
-                                if res[1][indx] == 'valid_symbol':
-                                    bad_lbl = zPE.bad_label(res[0][indx])
-                                    lbl_8 = '{0:<8}'.format(res[0][indx])
-
-                                    if bad_lbl:
-                                        indx_s = line.index(res[0][indx])
-                                        __INFO('E', line_num,
-                                               ( 74, indx_s, indx_s + len(res[0][indx]), )
-                                               )
-                                    elif lbl_8 in SYMBOL:
-                                        # check scope
-                                        symbol = SYMBOL[lbl_8]
-                                        if symbol.id == scope_id:
-                                            symbol.references.append(
-                                                '{0:>4}{1}'.format(line_num, '')
-                                                )
-                                        else:
-                                            __INFO('E', line_num, 'DUPLICATED SYMBOL') # mark
-                                    else:
-                                        SYMBOL[lbl_8] = Symbol(
-                                            None, None, scope_id,
-                                            None, None, None,
-                                            None, [ '{0:>4}{1}'.format(line_num, ''), ]
-                                            )
-                                elif res[1][indx] == 'reloc_addr':
-                                    res[0][indx] == 'reloc_addr' # non-envaluable
-                                elif res[1][indx] == 'inline_const':
-                                    tmp = zPE.core.asm.parse_sd(res[0][indx])
-                                    if res[0][indx][0] != tmp[2]: # e.g. 2F'1'
-                                        indx_s = line.index(res[0][indx])
-                                        __INFO('E', line_num,
-                                               ( 145, indx_s, indx_s + len(res[0][indx]), )
-                                               )
-                                    elif res[0][indx][1] != "'": # e.g. BL2'1101'
-                                        indx_s = line.index(res[0][indx])
-                                        __INFO('E', line_num,
-                                               ( 150, indx_s, indx_s + len(res[0][indx]), )
-                                               )
-                                    else:
-                                        try:
-                                            sd = zPE.core.asm.get_sd(tmp)[0]
-                                            res[0][indx] = str(int(zPE.core.asm.X_.tr(sd.dump()), 16))
-                                        except:
-                                            zPE.abort(90, 'Error: {0}'.format(lbl) +
-                                                      ':Fail to envaluate const.\n')
-                            # exp-eval
-                            try:
-                                sd_info[4][lbl_i] = str(eval(''.join(res[0])))
-                            except:
-                                pass
-
+                        sd_info[4][lbl_i] = '0' # fool the paser
+                    pass        # check internal reference in pass 2
                 else:
                     zPE.abort(90, 'Error: {0}'.format(sd_info[2]) +
                               ': Invalid address type.\n')
@@ -509,16 +413,7 @@ def pass_1():
             elif bad_lbl:
                 __INFO('E', line_num, ( 143, bad_lbl, len(field[0]), ))
             elif lbl_8 in SYMBOL:
-                symbol = SYMBOL[lbl_8]
-                if symbol.defn == None and symbol.id == scope_id:
-                    symbol.length = sd_info[3]
-                    symbol.value = addr
-                    symbol.r_type = sd_info[2]
-                    symbol.asm = sd_info[2]
-                    symbol.program = ''
-                    symbol.defn = line_num
-                else:
-                    __INFO('E', line_num, 'DUPLICATED SYMBOL') # mark
+                __INFO('E', line_num, ( 43, 0, len(field[0]), ))
             else:
                 SYMBOL[lbl_8] = Symbol(
                     sd_info[3], addr, scope_id,
@@ -573,17 +468,17 @@ def pass_1():
 
                     if lbl[0] == '=':
                         # parse =constant, op_code not filled
-                        if not const_pool:
+                        if not const_plid:
                             # allocate new pool
-                            const_pool = scope_id
+                            const_plid = scope_id
 
-                        if lbl in SYMBOL:
-                            SYMBOL[lbl].references.append(
+                        if lbl in const_pool:
+                            const_pool[lbl].references.append(
                                 '{0:>4}{1}'.format(line_num, '')
                                 )
                         elif zPE.core.asm.valid_sd(lbl[1:]):
-                            SYMBOL[lbl] = Symbol(
-                                None, None, const_pool,
+                            const_pool[lbl] = Symbol(
+                                None, None, const_plid,
                                 lbl[1], '', '',
                                 None, [
                                     '{0:>4}{1}'.format(line_num, ''),
@@ -605,39 +500,10 @@ def pass_1():
                                 op_code[arg_indx].set(arg_val)
 
                                 arg_list += '{0},'.format(arg_val)
-                                continue # is in-line constant, skip label
+                                continue # is in-line constant, skip checking
                             except:
-                                pass     # is not in-line constant, check label
+                                pass     # not in-line constant, keep checking
 
-                        # parse label, op_code not filled
-                        bad_lbl = zPE.bad_label(lbl)
-                        lbl_8 = '{0:<8}'.format(lbl)
-                        if bad_lbl:
-                            indx_s = line.index(lbl)
-                            __INFO('E', line_num,
-                                   ( 74, indx_s, indx_s + len(lbl), )
-                                   )
-                        elif lbl_8 in SYMBOL:
-                            # check scope
-                            symbol = SYMBOL[lbl_8]
-                            if symbol.id == scope_id:
-                                symbol.references.append(
-                                    '{0:>4}{1}'.format(
-                                        line_num, zPE.core.asm.type_op(op_code)
-                                        )
-                                    )
-                            else:
-                                __INFO('E', line_num, 'DUPLICATED SYMBOL') # mark
-                        else:
-                            SYMBOL[lbl_8] = Symbol(
-                                None, None, scope_id,
-                                None, None, None,
-                                None, [
-                                    '{0:>4}{1}'.format(
-                                        line_num, zPE.core.asm.type_op(op_code)
-                                        ),
-                                    ]
-                                )
                         arg_list += lbl + ','
                     else:
                         # try parse integer string,
@@ -658,16 +524,7 @@ def pass_1():
                 elif bad_lbl:
                     __INFO('E', line_num, ( 143, bad_lbl, len(field[0]), ))
                 elif lbl_8 in SYMBOL:
-                    symbol = SYMBOL[lbl_8]
-                    if symbol.defn == None and symbol.id == scope_id:
-                        symbol.length = zPE.core.asm.len_op(op_code)
-                        symbol.value = addr
-                        symbol.r_type = 'I'
-                        symbol.asm = ''
-                        symbol.program = ''
-                        symbol.defn = line_num
-                    else:
-                        __INFO('E', line_num, 'DUPLICATED SYMBOL') # mark
+                    __INFO('E', line_num, ( 43, 0, len(field[0]), ))
                 else:
                     SYMBOL[lbl_8] = Symbol(
                         zPE.core.asm.len_op(op_code), addr, scope_id,
@@ -746,7 +603,8 @@ def pass_1():
 
 
 def pass_2(rc):
-    spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
+    spi = zPE.core.SPOOL.retrive('SYSIN')    # original input SPOOL
+    spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL (main input)
 
     addr = 0                    # program counter
     prev_addr = None            # previous program counter
@@ -755,7 +613,11 @@ def pass_2(rc):
         # reg : line_num
         }
 
-    const_pool = None           # memory heap for constant allocation
+    # memory heap for constant allocation
+    const_pool = {}             # same format as SYMBOL
+    const_plid = None
+
+    spi.insert(0, '')           # align the line index with line No.
 
     # main read loop
     for line in spt:
@@ -776,10 +638,14 @@ def pass_2(rc):
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
 
+        # (skip) OP code detection
         if rc and not len(field[1]):
             if ( 142, 9, None, ) not in INFO['E'][line_num]:
                 zPE.abort(92, 'Error: OP-Code detection error in pass 1.\n')
             continue            # no op code; detected in the first pass
+        # skip =constant
+        elif field[1][0] == '=':
+            continue
 
         # parse CSECT
         if field[1] == 'CSECT':
@@ -794,7 +660,13 @@ def pass_2(rc):
 
         # parse USING
         elif field[1] == 'USING':
-            if len(field) >= 3:
+            if len(field[0]) != 0:
+                zPE.mark4future('Labeled USING')
+            if len(field) < 3:
+                indx_s = spi[line_num].index(field[1]) + len(field[1]) + 1
+                                                                # +1 for ' '
+                __INFO('S', line_num, ( 40, indx_s, None, ))
+            else:
                 args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
 
                 # check 1st argument
@@ -804,14 +676,35 @@ def pass_2(rc):
                     range_limit = 4096      # have to be 4096
 
                     bad_lbl = zPE.bad_label(args[0])
-                    if bad_lbl:         # not a valid label
+                    if bad_lbl == None: # nothing before ','
+                        indx_s = spi[line_num].index(field[2])
+                        __INFO('E', line_num,
+                               ( 74, indx_s, indx_s + 1 + len(args[1]), )
+                               )
+                    elif bad_lbl:       # not a valid label
                         if not __IS_REL_ADDR(args[0]):
                             # not a relocatable address
-                            indx_s = line.index(field[2])
+                            indx_s = spi[line_num].index(field[2])
                             __INFO('E', line_num, ( 305, indx_s, None, ))
-                else:           # must be 2
+                    else:               # a valid label
+                        lbl_8 = '{0:<8}'.format(args[0])
+                        SYMBOL[lbl_8].references.append(
+                            '{0:>4}{1}'.format(line_num, 'U')
+                            )
+                else:
+                    if len(sub_args) != 2:
+                        __INFO('S', line_num, (
+                                178,
+                                spi[line_num].index(sub_args[2]),
+                                spi[line_num].index(args[0]) + len(args[0]) - 1,
+                                ))
                     # range-limit using
-                    zPE.abort(-1, '******  This should NEVER be seen!!  ******')
+                    zPE.mark4future('Range-Limited USING')
+
+                # check existance of 2nd argument
+                if len(args) < 2:
+                    indx_s = spi[line_num].index(field[2]) + len(field[2])
+                    __INFO('S', line_num, ( 174, indx_s, indx_s, ))
 
                 # check following arguments
                 tmp = []
@@ -819,13 +712,15 @@ def pass_2(rc):
                     if ( (not args[indx].isdigit())  or # mark
                          (int(args[indx]) >= zPE.core.reg.GPR_NUM)
                          ):
-                        indx_s = line.index(args[indx])
+                        indx_s = spi[line_num].index(args[indx])
                         __INFO('E', line_num,
                                ( 29, indx_s, indx_s + len(args[indx]), )
                                )
                         break
                     if args[indx] in tmp:
-                        indx_s = line.index(args[indx-1])+len(args[indx-1])+1
+                        indx_s = ( spi[line_num].index(args[indx-1]) +
+                                   len(args[indx-1]) + 1 # +1 for ','
+                                   )
                         __INFO('E', line_num,
                                ( 308, indx_s, indx_s + len(args[indx]), )
                                )
@@ -856,7 +751,7 @@ def pass_2(rc):
                 if ( (not arg.isdigit())  or
                      (int(arg) >= zPE.core.reg.GPR_NUM)
                      ):
-                    indx_s = line.index(args[indx])
+                    indx_s = spi[line_num].index(args[indx])
                     __INFO('E', line_num,
                            ( 29, indx_s, indx_s + len(args[indx]), )
                            )
@@ -864,12 +759,20 @@ def pass_2(rc):
                 if arg in active_using:
                     del active_using[arg]
                 else:
-                    indx_s = line.index(arg)
+                    indx_s = spi[line_num].index(arg)
                     __INFO('W', line_num, ( 45, indx_s, indx_s + len(arg), ))
 
 
         # parse END
         elif field[1] == 'END':
+            lbl_8 = '{0:<8}'.format(field[2])
+            if lbl_8 in SYMBOL:
+                SYMBOL[lbl_8].references.append(
+                    '{0:>4}{1}'.format(line_num, '')
+                    )
+            else:
+                indx_s = spi[line_num].index(field[2])
+                __INFO('E', line_num, ( 44, indx_s, indx_s + len(field[2]), ))
             # update using map
             active_using = {}   # empty the active_using
 
@@ -878,14 +781,147 @@ def pass_2(rc):
         elif field[1] == 'LTORG':
             pass                # all constants should be allocated by now
 
-        # parse DC/DS/=constant
-        elif field[1] in ['DC', 'DS'] or field[1][0] == '=':
-            pass # mark
+        # parse DC/DS
+        elif field[1] in ['DC', 'DS']:
+            try:
+                sd_info = zPE.core.asm.parse_sd(field[2])
+            except:
+                zPE.abort(90,'Error: {0}: Invalid constant.\n'.format(field[2]))
 
+            # check address const
+            if sd_info[0] == 'a' and sd_info[4] != None:
+                # check internal reference
+                if sd_info[2] == 'A':
+                    for lbl_i in range(len(sd_info[4])):
+                        lbl = sd_info[4][lbl_i]
+                        sd_info[4][lbl_i] = '0'
+
+                        res = __PARSE_ARG(lbl)
+
+                        if len(res) == 1:
+                            indx_s = spi[line_num].index(lbl)
+                            __INFO('S', line_num,
+                                   ( 35, indx_s, indx_s + res, )
+                                   )
+                        else:
+                            for indx in range(len(res[0])):
+                                if res[1][indx] == 'valid_symbol':
+                                    bad_lbl = zPE.bad_label(res[0][indx])
+                                    lbl_8 = '{0:<8}'.format(res[0][indx])
+
+                                    if bad_lbl:
+                                        indx_s = spi[line_num].index(
+                                            res[0][indx]
+                                            )
+                                        __INFO('E', line_num, (
+                                                74,
+                                                indx_s,
+                                                indx_s + len(res[0][indx]),
+                                                )
+                                               )
+                                    elif ( lbl_8 in SYMBOL  and
+                                           SYMBOL[lbl_8].id == scope_id
+                                           ):
+                                            SYMBOL[lbl_8].references.append(
+                                                '{0:>4}{1}'.format(line_num, '')
+                                                )
+                                        # mark
+                                    else:
+                                        indx_s = spi[line_num].index(
+                                            res[0][indx]
+                                            )
+                                        __INFO('E', line_num, (
+                                                44,
+                                                indx_s,
+                                                indx_s + len(res[0][indx]),
+                                                )
+                                               )
+                                elif res[1][indx] == 'reloc_addr':
+                                    res[0][indx] == 'reloc_addr'
+                                    # mark
+                                elif res[1][indx] == 'inline_const':
+                                    tmp = zPE.core.asm.parse_sd(res[0][indx])
+                                    if res[0][indx][0] != tmp[2]: # e.g. 2F'1'
+                                        indx_s = spi[line_num].index(
+                                            res[0][indx]
+                                            )
+                                        __INFO('E', line_num, (
+                                                145,
+                                                indx_s,
+                                                indx_s + len(res[0][indx]),
+                                                )
+                                               )
+                                    elif res[0][indx][1] != "'": # e.g. BL2'1'
+                                        indx_s = spi[line_num].index(
+                                            res[0][indx]
+                                            )
+                                        __INFO('E', line_num, (
+                                                150,
+                                                indx_s,
+                                                indx_s + len(res[0][indx]),
+                                                )
+                                               )
+                                    else: # mark for removal 
+                                        try:
+                                            sd = zPE.core.asm.get_sd(tmp)[0]
+                                            res[0][indx] = str(int(zPE.core.asm.X_.tr(sd.dump()), 16))
+                                        except:
+                                            zPE.abort(
+                                                90, 'Error: {0}'.format(lbl) +
+                                                ':Fail to envaluate const.\n')
+                            # exp-eval
+                            try:
+                                sd_info[4][lbl_i] = str(eval(''.join(res[0])))
+                            except:
+                                pass
+
+                    # replace the dummy const
+                    MNEMONIC[line_num][2] = zPE.core.asm.get_sd(sd_info)
 
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
-            pass # mark
+            op_code = zPE.core.asm.get_op(field[1])
+            args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
+
+            if len(op_code) != len(args) + 1:
+                continue        # should be processed in pass 1
+
+            # check reference
+            arg_indx = 0    # index used for op_code
+            for lbl in args:
+                arg_indx += 1 # start at 1, since op_code = ('xx', ...)
+
+                if lbl[0] == '=':
+                    pass        # mark
+                elif re.match('[A-Z@#$]', lbl[0]):
+                    # parse label
+                    bad_lbl = zPE.bad_label(lbl)
+                    lbl_8 = '{0:<8}'.format(lbl)
+                    if bad_lbl:
+                        indx_s = spi[line_num].index(lbl)
+                        __INFO('E', line_num,
+                               ( 74, indx_s, indx_s + len(lbl), )
+                               )
+                    elif lbl_8 in SYMBOL and SYMBOL[lbl_8].id == scope_id:
+                        SYMBOL[lbl_8].references.append(
+                            '{0:>4}{1}'.format(
+                                line_num, zPE.core.asm.type_op(op_code)
+                                )
+                            )
+                    else:
+                        indx_s = spi[line_num].index(lbl)
+                        __INFO('E', line_num,
+                               ( 44, indx_s, indx_s + len(lbl), )
+                               )
+                else:
+                    # try parse integer string,
+                    # op_code filled on success
+                    try:
+                        int_val = int(lbl)
+                        op_code[arg_indx].set(int_val)
+                    except:
+                        pass
+            ## end of checking references
 
 
         # unrecognized op-code
@@ -893,10 +929,17 @@ def pass_2(rc):
             pass # mark
     # end of main read loop
 
+    spi.rmline(0)               # undo the align of line No.
+
     return zPE.RC['NORMAL']
 
 
 ### Supporting Functions
+def __ALLOC_EQ(lbl, symbol):
+    if lbl not in SYMBOL_EQ:
+        SYMBOL_EQ[lbl] = []
+    SYMBOL_EQ[lbl].append(symbol) # mark =const as allocable
+
 def __IS_ABS_ADDR(addr_arg):
     return re.match('\d+(?:\(\d{0,2}(?:,\d{0,2})\))?', addr_arg)
 
