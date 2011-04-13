@@ -365,39 +365,40 @@ def pass_1():
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
                 if sd_info[2] == 'V':
-                    # check external reference
-                    bad_lbl = zPE.bad_label(lbl)
-                    lbl_8 = '{0:<8}'.format(lbl)
+                    for lbl in sd_info[4]:
+                        # check external reference
+                        bad_lbl = zPE.bad_label(lbl)
+                        lbl_8 = '{0:<8}'.format(lbl)
 
-                    # update the Cross-References ER Sub-Table
-                    if lbl_8 not in SYMBOL_V:
-                        SYMBOL_V[lbl_8] = Symbol(
-                            1, 0, scope_id,
-                            'T', '', '',
-                            line_num, [ ]
+                        # update the Cross-References ER Sub-Table
+                        if lbl_8 not in SYMBOL_V:
+                            SYMBOL_V[lbl_8] = Symbol(
+                                1, 0, scope_id,
+                                'T', '', '',
+                                line_num, [ ]
+                                )
+                        SYMBOL_V[lbl_8].references.append(
+                            '{0:>4}{1}'.format(line_num, '')
                             )
-                    SYMBOL_V[lbl_8].references.append(
-                        '{0:>4}{1}'.format(line_num, '')
-                        )
 
-                    # update the External Symbol Dictionary
-                    if lbl_8 not in ESD:
-                        ESD[lbl_8] = (
-                            ExternalSymbol(
-                                None, None, None, None,
-                                None, None, None,
-                                ),
-                            ExternalSymbol(
-                                None, None, None, None,
-                                None, None, None,
-                                ),
-                            )
-                    if ESD[lbl_8][1].id == None:
-                        ESD[lbl_8][1].type = 'ER'
-                        ESD[lbl_8][1].id = scope_new
+                        # update the External Symbol Dictionary
+                        if lbl_8 not in ESD:
+                            ESD[lbl_8] = (
+                                ExternalSymbol(
+                                    None, None, None, None,
+                                    None, None, None,
+                                    ),
+                                ExternalSymbol(
+                                    None, None, None, None,
+                                    None, None, None,
+                                    ),
+                                )
+                        if ESD[lbl_8][1].id == None:
+                            ESD[lbl_8][1].type = 'ER'
+                            ESD[lbl_8][1].id = scope_new
 
-                        ESD_ID[scope_new] = lbl_8
-                        scope_new += 1 # update the next scope_id ptr
+                            ESD_ID[scope_new] = lbl_8
+                            scope_new += 1 # update the next scope_id ptr
                 elif sd_info[2] == 'A':
                     for lbl_i in range(len(sd_info[4])):
                         sd_info[4][lbl_i] = '0' # fool the paser
@@ -405,6 +406,11 @@ def pass_1():
                 else:
                     zPE.abort(90, 'Error: {0}'.format(sd_info[2]) +
                               ': Invalid address type.\n')
+
+            # align boundary
+            alignment = zPE.core.asm.align_at(sd_info[2])
+            addr = (addr + alignment - 1) / alignment * alignment
+
             # check lable
             bad_lbl = zPE.bad_label(field[0])
             lbl_8 = '{0:<8}'.format(field[0])
@@ -420,10 +426,6 @@ def pass_1():
                     sd_info[2], sd_info[2], '',
                     line_num, []
                     )
-
-            # align boundary
-            alignment = zPE.core.asm.align_at(sd_info[2])
-            addr = (addr + alignment - 1) / alignment * alignment
 
             if field[1] == 'DS':
                 MNEMONIC[line_num] = [ scope_id, addr, ]        # type 2
@@ -598,6 +600,46 @@ def pass_1():
     else:
         rc_err = zPE.RC['NORMAL']
 
+###################
+    print '\nExternal Symbol Dictionary:'
+    for key in sorted(ESD_ID.iterkeys()):
+        k = ESD_ID[key]
+        if ESD[k][0] and ESD[k][0].id == key:
+            v = ESD[k][0]
+        else:
+            v = ESD[k][1]
+        print '{0} => {1}'.format(k, v.__dict__)
+
+    print '\nSymbol Cross Reference Table:'
+    for key in sorted(SYMBOL.iterkeys()):
+        if SYMBOL[key].value == None:
+            addr = int('ffffff', 16)
+        else:
+            addr = SYMBOL[key].value
+        print '{0} (0x{1:0>6}) => {2}'.format(
+            key, hex(addr)[2:].upper(), SYMBOL[key].__dict__
+            )
+    print '\nSymbol Cross Reference ER Sub-Table:'
+    for key in sorted(SYMBOL_V.iterkeys()):
+        if SYMBOL_V[key].value == None:
+            addr = int('ffffff', 16)
+        else:
+            addr = SYMBOL_V[key].value
+        print '{0} (0x{1:0>6}) => {2}'.format(
+            key, hex(addr)[2:].upper(), SYMBOL_V[key].__dict__
+            )
+    print '\nSymbol Cross Reference =Const Sub-Table:'
+    for key in sorted(SYMBOL_EQ.iterkeys()):
+        for indx in range(len(SYMBOL_EQ[key])):
+            if SYMBOL_EQ[key][indx].value == None:
+                addr = int('ffffff', 16)
+            else:
+                addr = SYMBOL_EQ[key][indx].value
+            print '{0} (0x{1:0>6}) => {2}'.format(
+                key, hex(addr)[2:].upper(), SYMBOL_EQ[key][indx].__dict__
+                )
+################
+
     return max(rc_symbol, rc_err)
 # end of pass 1
 
@@ -621,7 +663,7 @@ def pass_2(rc):
 
     # main read loop
     for line in spt:
-        print line[:-1]         # mark
+#        print line[:-1]         # mark
 
         line_num = int(line[:5])                # retrive line No.
         line = line[5:]                         # retrive line
@@ -647,12 +689,22 @@ def pass_2(rc):
         elif field[1][0] == '=':
             continue
 
+        # update symbol address
+        lbl_8 = '{0:<8}'.format(field[0])
+        if field[0] and lbl_8 in SYMBOL:
+            SYMBOL[lbl_8].value = addr
+
         # parse CSECT
         if field[1] == 'CSECT':
-            if csect_lbl != '{0:<8}'.format(field[0]):
+            if ( csect_lbl != '{0:<8}'.format(field[0]) and
+                 csect_lbl != '{0:<8}'.format('') # in case of PC
+                 ):
                 zPE.abort(92, 'Error: Fail to retrive CSECT label.\n')
             if scope_id != ESD[csect_lbl][0].id:
                 zPE.abort(92, 'Error: Fail to retrive scope ID.\n')
+
+            # update symbol address
+            ESD[csect_lbl][0].addr = addr
 
             # update using map
             active_using = {}   # empty the active_using
@@ -688,9 +740,15 @@ def pass_2(rc):
                             __INFO('E', line_num, ( 305, indx_s, None, ))
                     else:               # a valid label
                         lbl_8 = '{0:<8}'.format(args[0])
-                        SYMBOL[lbl_8].references.append(
-                            '{0:>4}{1}'.format(line_num, 'U')
-                            )
+                        if lbl_8 in ESD:
+                            SYMBOL[lbl_8].references.append(
+                                '{0:>4}{1}'.format(line_num, 'U')
+                                )
+                        else:
+                            indx_s = spi[line_num].index(field[2])
+                            __INFO('E', line_num,
+                                   ( 44, indx_s, indx_s + 1 + len(args[1]), )
+                                   )
                 else:
                     if len(sub_args) != 2:
                         __INFO('S', line_num, (
@@ -971,10 +1029,10 @@ def __MISSED_FILE(step):
 
 # rv: ( [ symbol_1, ... ], [ desc_1, ... ], )
 # or  err_indx  if error occurs
-def __PARSE_ARG(arg_line):
+def __PARSE_ARG(arg_str):
     parts = []                  # components of the expression
     descs = []                  # descriptions of the components
-    reminder = arg_line
+    reminder = arg_str
 
     while True:
         if reminder[0] == '(':  # start of a sub-expression
@@ -1006,9 +1064,9 @@ def __PARSE_ARG(arg_line):
                         parts.append(res)
                         descs.append('inline_const')
                     except:     # invalid constant; return err pos
-                        return len(arg_line) - len(reminder)
+                        return len(arg_str) - len(reminder)
                 else:           # invalid operand; return err pos
-                    return len(arg_line) - len(reminder)
+                    return len(arg_str) - len(reminder)
             else:
                 parts.append(res)
                 descs.append('valid_symbol')
@@ -1021,7 +1079,7 @@ def __PARSE_ARG(arg_line):
 
         if len(reminder):       # operator
             if reminder[0] not in '*/+-': # invalid operator; return err pos
-                return len(arg_line) - len(reminder)
+                return len(arg_str) - len(reminder)
             parts.append(reminder[0])
             descs.append('operator')
             reminder = reminder[1:]
