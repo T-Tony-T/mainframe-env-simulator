@@ -600,46 +600,6 @@ def pass_1():
     else:
         rc_err = zPE.RC['NORMAL']
 
-###################
-    print '\nExternal Symbol Dictionary:'
-    for key in sorted(ESD_ID.iterkeys()):
-        k = ESD_ID[key]
-        if ESD[k][0] and ESD[k][0].id == key:
-            v = ESD[k][0]
-        else:
-            v = ESD[k][1]
-        print '{0} => {1}'.format(k, v.__dict__)
-
-    print '\nSymbol Cross Reference Table:'
-    for key in sorted(SYMBOL.iterkeys()):
-        if SYMBOL[key].value == None:
-            addr = int('ffffff', 16)
-        else:
-            addr = SYMBOL[key].value
-        print '{0} (0x{1:0>6}) => {2}'.format(
-            key, hex(addr)[2:].upper(), SYMBOL[key].__dict__
-            )
-    print '\nSymbol Cross Reference ER Sub-Table:'
-    for key in sorted(SYMBOL_V.iterkeys()):
-        if SYMBOL_V[key].value == None:
-            addr = int('ffffff', 16)
-        else:
-            addr = SYMBOL_V[key].value
-        print '{0} (0x{1:0>6}) => {2}'.format(
-            key, hex(addr)[2:].upper(), SYMBOL_V[key].__dict__
-            )
-    print '\nSymbol Cross Reference =Const Sub-Table:'
-    for key in sorted(SYMBOL_EQ.iterkeys()):
-        for indx in range(len(SYMBOL_EQ[key])):
-            if SYMBOL_EQ[key][indx].value == None:
-                addr = int('ffffff', 16)
-            else:
-                addr = SYMBOL_EQ[key][indx].value
-            print '{0} (0x{1:0>6}) => {2}'.format(
-                key, hex(addr)[2:].upper(), SYMBOL_EQ[key][indx].__dict__
-                )
-################
-
     return max(rc_symbol, rc_err)
 # end of pass 1
 
@@ -663,8 +623,6 @@ def pass_2(rc):
 
     # main read loop
     for line in spt:
-#        print line[:-1]         # mark
-
         line_num = int(line[:5])                # retrive line No.
         line = line[5:]                         # retrive line
         scope_id = MNEMONIC[line_num][0]        # retrive scope ID

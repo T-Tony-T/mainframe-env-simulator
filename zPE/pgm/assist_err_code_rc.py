@@ -1,12 +1,12 @@
 def __format(msg, pos):
-    if len(msg) < 27:
+    if len(msg) < 28:
         offset = 0
     else:
-        offset = len(msg) - 27
+        offset = len(msg) - 28
     if pos - offset:            # at least 1 '-' before '$'
-        return '{0:<27}{1:->{2}}${1:->{3}} <-ERROR'.format(msg, '-', pos - offset, 71 - pos)
+        return '{0:<28}{1:->{2}}${1:->{3}} <-ERROR'.format(msg, '-', pos - offset, 71 - pos)
     else:                       # start with '$'
-        return '{0:<27}${1:->71} <-ERROR'.format(msg, '-')
+        return '{0:<28}${1:->71} <-ERROR'.format(msg, '-')
 
 __I_MSG = {                     # ASMAxxxI
     }
@@ -56,4 +56,4 @@ __MSG = {
     }
 
 def gen_msg(msg_type, info, line):
-    return '----->AS{0:0>3}{1} {2}\n'.format(info[0], msg_type, __MSG[msg_type][info[0]](info, line))
+    return '----->AS{0:0>3} {1}\n'.format(info[0], __MSG[msg_type][info[0]](info, line))
