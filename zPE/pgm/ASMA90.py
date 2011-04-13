@@ -109,7 +109,7 @@ class Using(object):
         self.loc_id = curr_id
         self.action = action
         self.u_type = using_type
-        self.u_value = lbl_addr # init to 0 to allow multiple-reg using
+        self.u_value = lbl_addr
         self.u_range = range_limit
         self.u_id = lbl_id
         self.max_disp = max_disp
@@ -118,6 +118,10 @@ class Using(object):
 USING_MAP = {           # Using Map
     # ( Stmt, reg, ) : Using()
     }
+ACTIVE_USING = {
+    # reg : Stmt
+    }
+
 
 def init(step):
     # check for file requirement
@@ -237,6 +241,9 @@ def pass_1():
                         'J', '', '',
                         line_num, []
                         )
+
+            # update using map
+            # mark
 
             MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
             spt.append('{0:0>5}{1:<8} CSECT\n'.format(
@@ -577,6 +584,14 @@ def pass_1():
                 # update the pointer
                 prev_sym = symbol
 
+    # update the address in MNEMONIC table
+    for line in spt:
+        line_num = int(line[:5])                # retrive line No.
+        scope_id = MNEMONIC[line_num][0]        # retrive scope ID
+        if scope_id:
+            if len(MNEMONIC[line_num]) > 1:     # update & retrive address
+                MNEMONIC[line_num][1] += RELOCATE_OFFSET[scope_id]
+
     # check cross references table integrality
     for k,v in SYMBOL.items():
         if v.defn == None:
@@ -611,10 +626,6 @@ def pass_2(rc):
     addr = 0                    # program counter
     prev_addr = None            # previous program counter
 
-    active_using = {
-        # reg : line_num
-        }
-
     # memory heap for constant allocation
     const_pool = {}             # same format as SYMBOL
     const_plid = None
@@ -628,11 +639,12 @@ def pass_2(rc):
         scope_id = MNEMONIC[line_num][0]        # retrive scope ID
         if scope_id:
             csect_lbl = ESD_ID[scope_id]        # retrive CSECT label
+            if addr != None:                    # if valid,
+                prev_addr = addr                #   record the previous address
             if len(MNEMONIC[line_num]) > 1:     # update & retrive address
-                MNEMONIC[line_num][1] += RELOCATE_OFFSET[scope_id]
                 addr = MNEMONIC[line_num][1]
             else:
-                addr = None
+                addr = None     # indicate failure in retriving address
         else:
             csect_lbl = None
 
@@ -663,9 +675,6 @@ def pass_2(rc):
 
             # update symbol address
             ESD[csect_lbl][0].addr = addr
-
-            # update using map
-            active_using = {}   # empty the active_using
 
 
         # parse USING
@@ -743,20 +752,25 @@ def pass_2(rc):
                         break
                     tmp.append(args[indx])
 
-            # update using map
-            USING_MAP[line_num, args[1]] = Using(
-                addr, scope_id,
-                'USING',
-                'ORDINARY', 0, range_limit, None,
-                None, None, field[2]
-                )
-            for indx in range(2, len(args)):
-                USING_MAP[line_num, args[indx]] = Using(
-                    addr, scope_id,
+            if line_num not in INFO['S'] and line_num not in INFO['E']:
+                # update using map
+                USING_MAP[line_num, args[1]] = Using(
+                    prev_addr, scope_id, # no addr retrived from USING
                     'USING',
-                    'ORDINARY', 4096 * (indx - 1), range_limit, None,
-                    None, None, ''
-                )
+                    'ORDINARY', SYMBOL[lbl_8].value,
+                    range_limit, SYMBOL[lbl_8].id,
+                    None, None, field[2]
+                    )
+                ACTIVE_USING[args[1]] = line_num # start the domain of the USING
+                for indx in range(2, len(args)):
+                    USING_MAP[line_num, args[indx]] = Using(
+                        prev_addr, scope_id,
+                        'USING',
+                        'ORDINARY', SYMBOL[lbl_8].value + 4096 * (indx - 1),
+                        range_limit, SYMBOL[lbl_8].id,
+                        None, None, ''
+                        )
+                    ACTIVE_USING[args[indx]] = line_num
 
 
         # parse DROP
@@ -772,8 +786,8 @@ def pass_2(rc):
                            ( 29, indx_s, indx_s + len(args[indx]), )
                            )
                     continue
-                if arg in active_using:
-                    del active_using[arg]
+                if arg in ACTIVE_USING:
+                    del ACTIVE_USING[arg] # end the domain of the USING
                 else:
                     indx_s = spi[line_num].index(arg)
                     __INFO('W', line_num, ( 45, indx_s, indx_s + len(arg), ))
@@ -790,7 +804,7 @@ def pass_2(rc):
                 indx_s = spi[line_num].index(field[2])
                 __INFO('E', line_num, ( 44, indx_s, indx_s + len(field[2]), ))
             # update using map
-            active_using = {}   # empty the active_using
+            ACTIVE_USING.clear() # end the domain of all USINGs
 
 
         # parse LTORG
@@ -918,12 +932,18 @@ def pass_2(rc):
                         __INFO('E', line_num,
                                ( 74, indx_s, indx_s + len(lbl), )
                                )
-                    elif lbl_8 in SYMBOL and SYMBOL[lbl_8].id == scope_id:
-                        SYMBOL[lbl_8].references.append(
-                            '{0:>4}{1}'.format(
-                                line_num, zPE.core.asm.type_op(op_code)
+                    elif lbl_8 in SYMBOL:
+                        if __IS_ADDRESSABLE(lbl_8, csect_lbl):
+                            SYMBOL[lbl_8].references.append(
+                                '{0:>4}{1}'.format(
+                                    line_num, zPE.core.asm.type_op(op_code)
+                                    )
                                 )
-                            )
+                        else:
+                            indx_s = spi[line_num].index(lbl)
+                            __INFO('E', line_num,
+                                   ( 307, indx_s, indx_s + len(lbl), )
+                                   )                            
                     else:
                         indx_s = spi[line_num].index(lbl)
                         __INFO('E', line_num,
@@ -955,6 +975,26 @@ def __ALLOC_EQ(lbl, symbol):
     if lbl not in SYMBOL_EQ:
         SYMBOL_EQ[lbl] = []
     SYMBOL_EQ[lbl].append(symbol) # mark =const as allocable
+
+def __IS_ADDRESSABLE(lbl, csect_lbl):
+    if lbl not in SYMBOL:
+        return False            # not a symbol at all
+    if len(ACTIVE_USING) == 0:
+        return False            # not in the domain of any USING
+    for k,v in ACTIVE_USING.items():
+        if __IS_IN_RANGE(lbl, USING_MAP[v,k], ESD[csect_lbl][0]):
+            return True
+    return False                # not in the range of any USING
+
+def __IS_IN_RANGE(lbl, using, csect):
+    u_range = min(
+        using.u_value + using.u_range, # ending addr of the USING
+        csect.addr + csect.length      # ending addr of the CSECT
+        )
+    if MNEMONIC[SYMBOL[lbl].defn][1] < u_range:
+        return True
+    else:
+        return False
 
 def __IS_ABS_ADDR(addr_arg):
     return re.match('\d+(?:\(\d{0,2}(?:,\d{0,2})\))?', addr_arg)
