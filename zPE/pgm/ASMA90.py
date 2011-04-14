@@ -707,7 +707,7 @@ def pass_2(rc):
                             __INFO('E', line_num, ( 305, indx_s, None, ))
                     else:               # a valid label
                         lbl_8 = '{0:<8}'.format(args[0])
-                        if lbl_8 in ESD:
+                        if lbl_8 in SYMBOL:
                             SYMBOL[lbl_8].references.append(
                                 '{0:>4}{1}'.format(line_num, 'U')
                                 )
