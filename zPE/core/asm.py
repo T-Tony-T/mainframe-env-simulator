@@ -683,6 +683,13 @@ def get_sd(sd_info):
     else:
         return None
 
+def update_sd(sd_list, sd_info):
+    for indx in range(len(sd_list)):
+        if sd_info[0] == 's':
+            sd_list[indx].set(sd_info[4], sd_info[3])
+        elif sd_info[0] == 'a':
+            sd_list[indx].set(sd_info[4][indx], sd_info[3])        
+
 
 # rv: ( const_type, multiplier, ch, length, init_val )
 #   const_type: 'a' | 's'

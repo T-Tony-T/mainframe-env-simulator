@@ -15,6 +15,7 @@ __E_MSG = {                     # ASMAxxxE
     28  : lambda info, line: 'Invalid displacement',
     29  : lambda info, line: 'Incorrect register specification - {0}'.format(line[info[1]:info[2]]),
     32  : lambda info, line: 'Relocatable value or unresolved symbol found when absolute value required - {0}'.format(line[info[1]:info[2]]),
+    34  : lambda info, line: 'Operand {0} beyond active USING range'.format(line[info[1]:info[2]]),
     43  : lambda info, line: 'Previously defined symbol - {0}'.format(line[info[1]:info[2]]),
     44  : lambda info, line: 'Undefined symbol - {0}'.format(line[info[1]:info[2]]),
     57  : lambda info, line: 'Undefined operation code - {0}'.format(line[info[1]:info[2]]),

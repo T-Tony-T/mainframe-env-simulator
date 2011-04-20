@@ -23,11 +23,14 @@ __W_MSG = {                     # ASMAxxxW
 
 __E_MSG = {                     # ASMAxxxE
     29  : lambda info, line: __format('INVALID REGISTER', info[1]),
+    32  : lambda info, line: __format('RELOCATABLE EXPRESSION REQUIRED', info[1]),
+    34  : lambda info, line: __format('ADDRESSIBILITY ERROR', info[1]),
     43  : lambda info, line: __format('PREVIOUSLY DEFINED SYMBOL', info[1]),
     44  : lambda info, line: __format('UNDEFINED SYMBOL', info[1]),
     57  : lambda info, line: __format('INVALID OP-CODE', info[1]),
     65  : lambda info, line: __format('ILLEGAL CONSTANT TYPE', info[1]),
     74  : lambda info, line: __format('UNEXPECTED END OF EXPRESSION', info[1]),
+    78  : lambda info, line: __format('COMPLEX RELOCATABILITY ILLEGAL', info[1]),
     141 : lambda info, line: __format('INVALID OP-CODE', info[1]),
     142 : lambda info, line: __format('INVALID OP-CODE', info[1]),
     143 : lambda info, line: __format('INVALID SYMBOL', info[1]),
