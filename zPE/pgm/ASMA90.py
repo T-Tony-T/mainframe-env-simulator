@@ -151,6 +151,7 @@ def pass_1():
     # memory heap for constant allocation
     const_pool = {}             # same format as SYMBOL
     const_plid = None
+    const_left = 0              # number of =constant LTORG/END allocated
 
     spi.terminate()             # manually append an EOF at the end, which
                                 # will be removed before leave 1st pass
@@ -275,6 +276,7 @@ def pass_1():
                                '{0:<14} {1}\n'.format('', lbl)
                                )
                     __ALLOC_EQ(lbl, const_pool[lbl])
+                    const_left += 1
                     line_num_tmp += 1
                 # close the current pool
                 const_pool = {}
@@ -334,6 +336,7 @@ def pass_1():
                 for lbl in pool:
                     spi.insert(line_num_tmp, '{0:<15}{1}\n'.format('', lbl))
                     __ALLOC_EQ(lbl, const_pool[lbl])
+                    const_left += 1
                     line_num_tmp += 1
 
             # close the current pool
@@ -356,18 +359,30 @@ def pass_1():
 
             # check =constant
             if field[1][0] == '=':
+                if not const_left:
+                    indx_s = line.index(field[1])
+                    __INFO('E', line_num,
+                           ( 141, indx_s, indx_s + len(field[1]), )
+                           )
+                    MNEMONIC[line_num] = [ scope_id, ]          # type 1
+                    continue
+
                 if field[1] in SYMBOL_EQ:
                     found = False
                     for symbol in SYMBOL_EQ[field[1]]:
                         if symbol.defn == None and symbol.id == scope_id:
                             found = True
+                            const_left -= 1
                             symbol.length = sd_info[3]
                             symbol.value = addr
                             symbol.r_type = sd_info[2]
                             symbol.defn = line_num
                     if not found:
                         zPE.abort(90, 'Error: {0}'.format(field[1]) +
-                                  ': Invalid OP code.\n')
+                                  ': Fail to find the allocation.\n')
+                else:
+                    zPE.abort(90, 'Error: {0}'.format(field[1]) +
+                                  ': Fail to allocate the constant.\n')
 
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
