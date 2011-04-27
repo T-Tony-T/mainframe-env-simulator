@@ -36,6 +36,13 @@ class R(object):
             rv = '-'
         return ( rv, '', )
 
+    def value(self):
+        if self.valid:
+            rv = int(self.prnt()[0], 16)
+        else:
+            rv = None
+        return rv
+
     def set(self, val):
         if val < 0 or val > 15:
             raise ValueError
@@ -76,6 +83,13 @@ class X(object):
         else:
             rv = '-----'
         return ( rv, '', )
+
+    def value(self):
+        if self.valid:
+            rv = int(self.prnt()[0], 16)
+        else:
+            rv = None
+        return rv
 
     def set(self, dsplc, indx = 0, base = 0):
         if dsplc < 0 or dsplc > 4095:

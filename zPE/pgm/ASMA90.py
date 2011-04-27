@@ -968,14 +968,11 @@ def pass_2(rc):
                                 SYMBOL[lbl_8].references.append(
                                     '{0:>4}{1}'.format(line_num, '')
                                     )
-                                sd_info[4][lbl_i] = str(int(
-                                        '{0}{1}{2:0>3}'.format(
-                                            '0',
-                                            hex(int(addr_res[2]))[-1],
-                                            hex(addr_res[0])[2:]
-                                            ),
-                                        16
-                                        ))
+                                sd_info[4][lbl_i] = str(
+                                    zPE.core.asm.X(
+                                        int(addr_res[0]), 0, int(addr_res[2])
+                                        ).value()
+                                    )
                             else:
                                 pass
                     # end of processing args
