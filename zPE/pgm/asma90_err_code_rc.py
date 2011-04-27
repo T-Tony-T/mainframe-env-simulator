@@ -14,8 +14,10 @@ __W_MSG = {                     # ASMAxxxW
 __E_MSG = {                     # ASMAxxxE
     28  : lambda info, line: 'Invalid displacement',
     29  : lambda info, line: 'Incorrect register specification - {0}'.format(line[info[1]:info[2]]),
+    30  : lambda info, line: 'Invalid literal usage - {0}'.format(line[info[1]:info[2]]),
     32  : lambda info, line: 'Relocatable value or unresolved symbol found when absolute value required - {0}'.format(line[info[1]:info[2]]),
     34  : lambda info, line: 'Operand {0} beyond active USING range'.format(line[info[1]:info[2]]),
+    41  : lambda info, line: 'Term expected; text is unclassifiable - {0}'.format(line[info[1]:info[2]]),
     43  : lambda info, line: 'Previously defined symbol - {0}'.format(line[info[1]:info[2]]),
     44  : lambda info, line: 'Undefined symbol - {0}'.format(line[info[1]:info[2]]),
     57  : lambda info, line: 'Undefined operation code - {0}'.format(line[info[1]:info[2]]),
@@ -26,6 +28,7 @@ __E_MSG = {                     # ASMAxxxE
     142 : lambda info, line: 'Operation code not complete on first record',
     143 : lambda info, line: 'Bad character in name field - {0}'.format(line[info[1]:info[2]]),
     145 : lambda info, line: 'Operator, right parenthesis, or end-of-expression expected - {0}'.format(line[info[1]:info[2]]),
+    146 : lambda info, line: 'Self-defining term too long or value too large - {0}'.format(line[info[1]:info[2]]),
     150 : lambda info, line: 'Symbol has non-alphanumeric character or invalid delimiter - {0}'.format(line[info[1]:info[2]]),
     305 : lambda info, line: 'Operand 1 does not refer to location within reference control section',
     307 : lambda info, line: 'No active USING for operand {0}'.format(line[info[1]:info[2]]),
@@ -39,6 +42,7 @@ __S_MSG = {                     # ASMAxxxS
     174 : lambda info, line: 'Delimiter error, expected blank or comma - {0}'.format(line[info[1]:info[2]]),
     175 : lambda info, line: 'Delimiter error, expected comma - {0}'.format(line[info[1]:info[2]]),
     178 : lambda info, line: 'Delimiter error, expected comma or right parenthesis - {0}'.format(line[info[1]:info[2]]),
+    179 : lambda info, line: 'Delimiter error, expected right parenthesis - {0}'.format(line[info[1]:info[2]]),
     }
 
 

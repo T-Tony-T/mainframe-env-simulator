@@ -23,9 +23,11 @@ __W_MSG = {                     # ASMAxxxW
 
 __E_MSG = {                     # ASMAxxxE
     29  : lambda info, line: __format('INVALID REGISTER', info[1]),
+    30  : lambda info, line: __format('INVALID DELIMITER', info[1]),
     32  : lambda info, line: __format('RELOCATABLE EXPRESSION REQUIRED', info[1]),
     34  : lambda info, line: __format('ADDRESSIBILITY ERROR', info[1]),
     43  : lambda info, line: __format('PREVIOUSLY DEFINED SYMBOL', info[1]),
+    41  : lambda info, line: __format('INVALID DELIMITER', info[1]),
     44  : lambda info, line: __format('UNDEFINED SYMBOL', info[1]),
     57  : lambda info, line: __format('INVALID OP-CODE', info[1]),
     65  : lambda info, line: __format('ILLEGAL CONSTANT TYPE', info[1]),
@@ -35,6 +37,7 @@ __E_MSG = {                     # ASMAxxxE
     142 : lambda info, line: __format('INVALID OP-CODE', info[1]),
     143 : lambda info, line: __format('INVALID SYMBOL', info[1]),
     145 : lambda info, line: __format('INVALID DELIMITER', info[1]),
+    146 : lambda info, line: __format('INVALID SELF-DEFINING TERM', info[1]),
     150 : lambda info, line: __format('INVALID DELIMITER', info[1]),
     305 : lambda info, line: __format('RELOCATABLE EXPRESSION REQUIRED', info[1]),
     307 : lambda info, line: __format('ADDRESSIBILITY ERROR', info[1]),
@@ -48,6 +51,7 @@ __S_MSG = {                     # ASMAxxxS
     174 : lambda info, line: __format('INVALID DELIMITER', info[1]),
     175 : lambda info, line: __format('INVALID DELIMITER', info[1]),
     178 : lambda info, line: __format('UNEXPECTED END OF EXPRESSION', info[1]),
+    179 : lambda info, line: __format('INVALID DELIMITER', info[1]),
     }
 
 

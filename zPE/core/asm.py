@@ -732,6 +732,7 @@ def parse_sd(sd_arg):
             # 8F ==> [ '8F' ]
             sd_ch = L[0]
             sd_val = None
+            val_tp = 's'
         else:
             raise SyntaxError
     else:
@@ -748,6 +749,8 @@ def parse_sd(sd_arg):
         sd_mul = 1
     else:
         sd_mul = int(L[0])
+    if val_tp == 'a' and sd_val and len(sd_val) > 0:
+        sd_mul = max(sd_mul, len(sd_val))
 
     # check type
     const_tp = valid_sd(L[1])

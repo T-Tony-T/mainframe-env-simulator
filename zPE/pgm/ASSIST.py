@@ -50,8 +50,8 @@ def init(step):
     objmod = zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '')
     sketch = zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '')
 
-    rc1 = zPE.pgm.ASMA90.pass_1()
-    rc2 = zPE.pgm.ASMA90.pass_2(rc1)
+    rc1 = zPE.pgm.ASMA90.pass_1(24, 24)
+    rc2 = zPE.pgm.ASMA90.pass_2(rc1, 24, 24)
 
     __PARSE_OUT()
 

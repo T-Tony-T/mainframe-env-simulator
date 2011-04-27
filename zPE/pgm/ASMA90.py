@@ -136,7 +136,7 @@ def init(step):
     return max(rc1, rc2)
 
 
-def pass_1():
+def pass_1(amode = 31, rmode = 31):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
 
@@ -355,7 +355,8 @@ def pass_1():
             try:
                 sd_info = zPE.core.asm.parse_sd(tmp)
             except:
-                zPE.abort(90, 'Error: {0}: Invalid constant.\n'.format(tmp))
+                zPE.abort(90, 'Error: {0}'.format(tmp) +
+                          ': Invalid constant at line {0}.\n'.format(line_num))
 
             # check =constant
             if field[1][0] == '=':
@@ -368,18 +369,16 @@ def pass_1():
                     continue
 
                 if field[1] in SYMBOL_EQ:
-                    found = False
-                    for symbol in SYMBOL_EQ[field[1]]:
-                        if symbol.defn == None and symbol.id == scope_id:
-                            found = True
-                            const_left -= 1
-                            symbol.length = sd_info[3]
-                            symbol.value = addr
-                            symbol.r_type = sd_info[2]
-                            symbol.defn = line_num
-                    if not found:
+                    symbol = __HAS_EQ(field[1], scope_id)
+                    if symbol == None or symbol.defn != None:
                         zPE.abort(90, 'Error: {0}'.format(field[1]) +
                                   ': Fail to find the allocation.\n')
+                    else:       # found successfully
+                        const_left -= 1
+                        symbol.length = sd_info[3]
+                        symbol.value = addr
+                        symbol.r_type = sd_info[2]
+                        symbol.defn = line_num
                 else:
                     zPE.abort(90, 'Error: {0}'.format(field[1]) +
                                   ': Fail to allocate the constant.\n')
@@ -514,21 +513,17 @@ def pass_1():
                                    ( 65, indx_s, indx_s - 1 + len(lbl), )
                                    )
                         arg_list += lbl + ','
-                    elif re.match('[A-Z@#$]', lbl[0]):
-                        if zPE.core.asm.valid_sd(lbl):
-                            # try parse in-line constant,
-                            # op_code filled on success
-                            try:
-                                sd_info = zPE.core.asm.parse_sd(lbl)
-                                arg_val = zPE.core.asm.value_sd(sd_info)
-                                op_code[arg_indx].set(arg_val)
+                    elif zPE.core.asm.valid_sd(lbl):
+                        # try parse in-line constant,
+                        # op_code filled on success
+                        try:
+                            sd_info = zPE.core.asm.parse_sd(lbl)
+                            arg_val = zPE.core.asm.value_sd(sd_info)
+                            op_code[arg_indx].set(arg_val)
 
-                                arg_list += '{0},'.format(arg_val)
-                                continue # is in-line constant, skip checking
-                            except:
-                                pass     # not in-line constant, keep checking
-
-                        arg_list += lbl + ','
+                            arg_list += '{0},'.format(arg_val)
+                        except:
+                            arg_list += lbl + ','
                     else:
                         # try parse integer string,
                         # op_code filled on success
@@ -634,7 +629,7 @@ def pass_1():
 # end of pass 1
 
 
-def pass_2(rc):
+def pass_2(rc, amode = 31, rmode = 31):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # original input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL (main input)
 
@@ -858,6 +853,14 @@ def pass_2(rc):
                                        ( 78, indx_s, indx_s + len(lbl), )
                                        )
                                 break
+                            if res[1][indx] == 'eq_constant':
+                                indx_s = spi[line_num].index(res[0][indx])
+                                __INFO('E', line_num, (
+                                        30,
+                                        indx_s,
+                                        indx_s + len(res[0][indx]),
+                                        ))
+                                break
 
                             if ( res[1][indx] == 'reloc_addr' or
                                  res[1][indx] == 'valid_symbol' 
@@ -906,7 +909,18 @@ def pass_2(rc):
                                     reloc_cnt += 1
                             elif res[1][indx] == 'inline_const':
                                 tmp = zPE.core.asm.parse_sd(res[0][indx])
-                                if res[0][indx][0] != tmp[2]: # e.g. 2F'1'
+                                if tmp[2] not in 'BCX':
+                                    indx_s = spi[line_num].index(
+                                        res[0][indx]
+                                        )
+                                    __INFO('E', line_num, (
+                                            41,
+                                            indx_s,
+                                            indx_s + len(res[0][indx]),
+                                            )
+                                           )
+                                    break
+                                elif res[0][indx][0] != tmp[2]: # e.g. 2B'10'
                                     indx_s = spi[line_num].index(
                                         res[0][indx]
                                         )
@@ -916,6 +930,7 @@ def pass_2(rc):
                                             indx_s + len(res[0][indx]),
                                             )
                                            )
+                                    break
                                 elif res[0][indx][1] != "'": # e.g. BL2'1'
                                     indx_s = spi[line_num].index(
                                         res[0][indx]
@@ -924,15 +939,29 @@ def pass_2(rc):
                                             150,
                                             indx_s,
                                             indx_s + len(res[0][indx]),
-                                            )
-                                           )
+                                            ))
+                                    break
                                 try:
                                     sd = zPE.core.asm.get_sd(tmp)[0]
-                                    res[0][indx] = str(int(
-                                            zPE.core.asm.X_.tr(sd.dump()), 16
-                                            ))
+                                    parsed_addr = zPE.core.asm.X_.tr(sd.dump())
+                                    if len(parsed_addr) <= len( re.split(
+                                            '[0xL]', hex(2 ** amode - 1))[2]
+                                        ):
+                                        res[0][indx] = str(int(parsed_addr, 16))
+                                    else:
+                                        indx_s = spi[line_num].index(
+                                            res[0][indx]
+                                            )
+                                        __INFO('E', line_num, (
+                                                146,
+                                                indx_s,
+                                                indx_s + len(res[0][indx]),
+                                                ))
                                 except:
-                                    pass # err has been processed
+                                    zPE.abort(
+                                        92, 'Error: {0}'.format(res[0][indx]) +
+                                        ': Fail to parse the expression.\n'
+                                              )
                         # end of processing res
 
                         if __INFO_GE(line_num, 'E'):
@@ -995,7 +1024,18 @@ def pass_2(rc):
                 arg_indx += 1 # start at 1, since op_code = ('xx', ...)
 
                 if lbl[0] == '=':
-                    pass        # mark
+                    symbol = __HAS_EQ(lbl, scope_id)
+
+                    if symbol == None:
+                        if not __INFO_GE(line_num, 'E'):
+                            zPE.abort(90, 'Error: ' + lbl +
+                                      ': symbol not in EQ table.\n')
+                    elif symbol.defn == None:
+                        zPE.abort(90, 'Error: ' + lbl +
+                                  ': symbol not allocated.\n')
+                    else:
+                        pass##########
+
                 elif re.match('[A-Z@#$]', lbl[0]):
                     # parse label
                     bad_lbl = zPE.bad_label(lbl)
@@ -1030,6 +1070,7 @@ def pass_2(rc):
                         op_code[arg_indx].set(int_val)
                     except:
                         pass
+
             ## end of checking references
 
 
@@ -1060,6 +1101,12 @@ def __ALLOC_EQ(lbl, symbol):
     if lbl not in SYMBOL_EQ:
         SYMBOL_EQ[lbl] = []
     SYMBOL_EQ[lbl].append(symbol) # mark =const as allocable
+
+def __HAS_EQ(lbl, scope_id):
+    for symbol in SYMBOL_EQ[lbl]:
+        if symbol.id == scope_id:
+            return symbol
+    return None                 # nor found
 
 def __IS_ADDRESSABLE(lbl, csect_lbl, ex_dis = 0):
     if (lbl[0] != '*') and (lbl not in SYMBOL):
@@ -1146,7 +1193,7 @@ def __PARSE_ARG(arg_str):
         else:                   # number / symbol
             res = zPE.resplit_sq('[*/+-]', reminder)[0]
 
-            bad_lbl = zPE.bad_label(res)
+            bad_lbl = zPE.bad_label(zPE.resplit_sq('\(', res)[0])
             if bad_lbl:
                 try:
                     sd_info = zPE.core.asm.parse_sd(res)
@@ -1164,6 +1211,9 @@ def __PARSE_ARG(arg_str):
                         descs.append('inline_const')
                     except:     # invalid constant; return err pos
                         return len(arg_str) - len(reminder)
+                elif res[0] == '=': # =constant
+                    parts.append(res)
+                    descs.append('eq_constant')
                 else:           # invalid operand; return err pos
                     return len(arg_str) - len(reminder)
             else:
