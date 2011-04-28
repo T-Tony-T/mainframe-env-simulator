@@ -128,13 +128,50 @@ ext_mnem = {
     }
 # Basic Instruction
 op_code = {
+    'A'    : lambda: ('5A', R(), X()),
+    'AR'   : lambda: ('1A', R(), R()),
+
+    'BAL'  : lambda: ('45', R(), X()),
+    'BALR' : lambda: ('05', R(), X()),
     'BC'   : lambda: ('47', R(), X()),
     'BCR'  : lambda: ('07', R(), R()),
+    'BCT'  : lambda: ('46', R(), X()),
+    'BCTR' : lambda: ('06', R(), R()),
+
+    'C'    : lambda: ('59', R(), X()),
+    'CL'   : lambda: ('55', R(), X()),
+    'CLR'  : lambda: ('15', R(), R()),
+    'CR'   : lambda: ('19', R(), R()),
+
+    'D'    : lambda: ('5D', R(), X()),
+    'DR'   : lambda: ('1D', R(), R()),
+
+    'EX'   : lambda: ('44', R(), X()),
+
+    'IC'   : lambda: ('43', R(), X()),
     'L'    : lambda: ('58', R(), X()),
     'LA'   : lambda: ('41', R(), X()),
+    'LCR'  : lambda: ('13', R(), R()),
     'LR'   : lambda: ('18', R(), R()),
+    'LTR'  : lambda: ('12', R(), R()),
+
+    'M'    : lambda: ('5C', R(), X()),
+    'MR'   : lambda: ('1C', R(), R()),
+
+    'N'    : lambda: ('54', R(), X()),
+    'NR'   : lambda: ('14', R(), R()),
+
+    'O'    : lambda: ('56', R(), X()),
+    'OR'   : lambda: ('16', R(), R()),
+
+    'S'    : lambda: ('5B', R(), X()),
     'SR'   : lambda: ('1B', R(), R()),
+
     'ST'   : lambda: ('50', R(), X()),
+    'STC'  : lambda: ('42', R(), X()),
+
+    'X'    : lambda: ('57', R(), X()),
+    'XR'   : lambda: ('17', R(), R()),
     }
 
 
