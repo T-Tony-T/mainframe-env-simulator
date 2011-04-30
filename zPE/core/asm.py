@@ -14,6 +14,7 @@ import re
 # int_4 => ( 'r', '' )
 class R(object):
     def __init__(self, val = None):
+        self.type = 'R'
         if val == None:
             self.valid = False
             self.__val = None
@@ -52,6 +53,7 @@ class R(object):
 # int_12(int_4, int_4) => ( 'xbddd', '' )
 class X(object):
     def __init__(self, dsplc = None, indx = 0, base = 0):
+        self.type = 'X'
         if dsplc == None:
             self.valid = False
             self.__dsplc = None
@@ -253,8 +255,8 @@ class C_(object):
         ch_len = len(ch_str)
         if not length:
             length = ch_len
-        # calculate natual length; in unit of hex_digit
-        self.natual_len = length * 2 # for char, natual length = 2 * len(str)
+        # calculate natual length; in unit of bin_digit
+        self.natual_len = length * 8 # for char, natual length = 8 * len(str)
         # convert encoding
         self.__vals = [ord(' '.encode('EBCDIC-CP-US'))] * length
                                 # initialize to all spaces
@@ -287,10 +289,10 @@ class X_(object):
         return int(self.get(), 16)
     def set(self, hex_str, length = 0):
         hex_len = len(hex_str)
-        # calculate natual length; in unit of hex_digit
-        self.natual_len = length * 2
-        if not self.natual_len: # for hex, natual length = len(str)
-            self.natual_len = hex_len
+        # calculate natual length; in unit of bin_digit
+        self.natual_len = length * 8
+        if not self.natual_len: # for hex, natual length = 4 * len(str)
+            self.natual_len = hex_len * 4
         # align to byte
         hex_len += hex_len % 2
         hex_str = '{0:0>{1}}'.format(hex_str, hex_len)
@@ -330,10 +332,10 @@ class B_(object):
         return int(self.get(), 2)
     def set(self, bin_str, length = 0):
         bin_len = len(bin_str)
-        # calculate natual length; in unit of hex_digit
-        self.natual_len = length * 2
-        if not self.natual_len: # for bin, natual length = (len(str) + 3) / 4
-            self.natual_len = (bin_len + 3) / 4
+        # calculate natual length; in unit of bin_digit
+        self.natual_len = length * 8
+        if not self.natual_len: # for bin, natual length = len(str)
+            self.natual_len = bin_len
         # align to byte
         bin_len += 8 - bin_len % 8
         bin_str = '{0:0>{1}}'.format(bin_str, bin_len)
@@ -465,8 +467,8 @@ class Z_(object):
         ch_len = len(ch_str)
         if not length:
             length = ch_len
-        # calculate natual length; in unit of hex_digit
-        self.natual_len = length # for zone, natual length = len(str)
+        # calculate natual length; in unit of bin_digit
+        self.natual_len = length * 4 # for zone, natual length = 4 * len(str)
         # convert encoding
         self.__vals = [ord('0'.encode('EBCDIC-CP-US'))] * length
                                 # initialize to all zeros
@@ -518,7 +520,7 @@ class Z_(object):
 #   ValueError: if length (required or actual) greater than 4
 class F_(object):
     def __init__(self, int_str, length = 0):
-        self.natual_len = 8     # must be 8
+        self.natual_len = 32    # must be 32
         self.set(int_str, length)
 
     def __len__(self):
@@ -554,7 +556,7 @@ class F_(object):
                 int(hex_str[4:6], 16),
                 int(hex_str[6:8], 16),
                 ),
-            8
+            self.natual_len
             )
     def fill__(self, dump):      # no error checking
         self.__val = int(self.tr(dump))
@@ -579,7 +581,7 @@ class F_(object):
 #   ValueError: if length (required or actual) greater than 2
 class H_(object):
     def __init__(self, int_str, length = 0):
-        self.natual_len = 4     # must be 4
+        self.natual_len = 16    # must be 16
         self.set(int_str, length)
 
     def __len__(self):
@@ -613,7 +615,7 @@ class H_(object):
                 int(hex_str[0:2], 16),
                 int(hex_str[2:4], 16),
                 ),
-            4
+            self.natual_len
             )
     def fill__(self, dump):      # no error checking
         self.__val = int(self.tr(dump))
@@ -638,7 +640,7 @@ class H_(object):
 #   ValueError: if length (required or actual) greater than 4
 class A_(object):
     def __init__(self, int_str, length = 0):
-        self.natual_len = 8     # must be 8
+        self.natual_len = 32    # must be 32
         self.set(int_str, length)
 
     def __len__(self):
@@ -669,7 +671,7 @@ class A_(object):
                 int(hex_str[4:6], 16),
                 int(hex_str[6:8], 16),
                 ),
-            8
+            self.natual_len
             )
     def fill__(self, vals):      # no error checking
         self.__val = int(self.tr(dump)[2:], 16)
@@ -742,7 +744,7 @@ def update_sd(sd_list, sd_info):
             sd_list[indx].set(sd_info[4][indx], sd_info[3])        
 
 
-# rv: ( const_type, multiplier, ch, length, init_val )
+# rv: ( const_type, multiplier, ch, length, init_val, has_L )
 #   const_type: 'a' | 's'
 #   init_val:   str(num) | [ symbol ]
 # exception:
@@ -799,6 +801,7 @@ def parse_sd(sd_arg):
 
     # parse length
     if match == 0:              # no '?L' found
+        has_L = False
         if L[2] == '':
             if const_tp == 's' and sd_val != None:
                 sd_len = len(const_s[sd_ch](sd_val))
@@ -810,6 +813,7 @@ def parse_sd(sd_arg):
         else:
             raise SyntaxError
     elif match == 1:            # one '?L' found
+        has_L = True
         if L[2] == '':
             raise SyntaxError
         else:
@@ -817,7 +821,7 @@ def parse_sd(sd_arg):
     else:                       # more than one '?L' found
         raise SyntaxError
 
-    return (const_tp, sd_mul, sd_ch, sd_len, sd_val)
+    return (const_tp, sd_mul, sd_ch, sd_len, sd_val, has_L)
 
 
 # it takes a string like F'12' or A(CARD)
@@ -839,6 +843,6 @@ def value_sd(sd_info):
     sd = get_sd(sd_info)[0]
     if sd.value() == None:
         raise ValueError
-    return sd.value()
+    return ( sd.value(), sd.natual_len, )
 
 ### end of Constant Type Definition
