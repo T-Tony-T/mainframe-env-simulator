@@ -134,7 +134,7 @@ op_code = {
     'AR'   : lambda: ('1A', R(), R()),
 
     'BAL'  : lambda: ('45', R(), X()),
-    'BALR' : lambda: ('05', R(), X()),
+    'BALR' : lambda: ('05', R(), R()),
     'BC'   : lambda: ('47', R(), X()),
     'BCR'  : lambda: ('07', R(), R()),
     'BCT'  : lambda: ('46', R(), X()),
