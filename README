@@ -21,11 +21,11 @@ PRE-INSTALL
 Make sure you have python 2.x (not python 3) and setuptools
 installed correctly.
 
-You can find the python 2 here:
+You can find the python 2.x here:
 http://python.org/download/
 
 And you can find the setuptools here:
-http://pypi.python.org/pypi/setuptools
+http://pypi.python.org/pypi/setuptools#files
 
 Under Windows, please make sure the Environment Variable "HOME"
 and "Path" are set correctly.
