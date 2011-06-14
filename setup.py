@@ -22,6 +22,9 @@ setup(
         'console_scripts': [
             'zsub = zPE.scripts.zsub:main',
         ],
+        'gui_scripts': [
+            'zPE = zPE.scripts.zPE:main',
+        ],
     },
     long_description=read('README'),
 )
