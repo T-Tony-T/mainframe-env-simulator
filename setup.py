@@ -23,8 +23,11 @@ setup(
             'zsub = zPE.scripts.zsub:main',
         ],
         'gui_scripts': [
-            'zPE = zPE.scripts.zPE:main',
+            'zPE = zPE.zPE_gtk:main',
         ],
+    },
+    package_data = {
+        'UI': [ '*.svg', '*.png' ]
     },
     long_description=read('README'),
 )

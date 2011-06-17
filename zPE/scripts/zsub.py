@@ -4,10 +4,6 @@ import os, sys
 from optparse import OptionParser
 
 
-if __name__ == '__main__':
-    main()
-
-
 def main():
     zPE.read_rc()
 
@@ -71,3 +67,7 @@ def prepare_option(parser):
                       default=False,
                       help="list all supported programs (PGM)")
     return parser
+
+
+if __name__ == '__main__':
+    main()
