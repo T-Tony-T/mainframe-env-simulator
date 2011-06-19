@@ -18,77 +18,77 @@ class BaseFrame(object):
 
     def __init__(self):
         ### create top-level frame
-        self.w = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        self.root = gtk.Window(gtk.WINDOW_TOPLEVEL)
 
-        self.w.connect("delete_event", self.delete_event)
-        self.w.connect("destroy", self.destroy)
+        self.root.connect("delete_event", self.delete_event)
+        self.root.connect("destroy", self.destroy)
 
-        self.w.set_title("zPE - Mainframe Programming Environment Simulator")
-        self.w.set_icon_from_file( os.path.join(
+        self.root.set_title("zPE - Mainframe Programming Environment Simulator")
+        self.root.set_icon_from_file( os.path.join(
                 os.path.dirname(__file__), "image", "icon_zPE.svg"
                 ) )
-        self.w.set_size_request(600, 400)
+        self.root.set_size_request(600, 400)
 
-        self.agr = gtk.AccelGroup()
-        self.w.add_accel_group(self.agr)
+        agr = gtk.AccelGroup()
+        self.root.add_accel_group(agr)
 
         ### create layout
-        self.vbox = gtk.VBox()
-        self.w.add(self.vbox)
+        w_vbox = gtk.VBox()
+        self.root.add(w_vbox)
 
         ### create menu bar
-        self.mb = gtk.MenuBar()
-        self.vbox.pack_start(self.mb, False, False, 0)
+        self.menubar = gtk.MenuBar()
+        w_vbox.pack_start(self.menubar, False, False, 0)
 
         ## file menu
-        self.m_file = gtk.MenuItem("_File")
-        self.sm_file = gtk.Menu()
-        self.m_file.set_submenu(self.sm_file)
-        self.mb.append(self.m_file)
+        m_file = gtk.MenuItem("_File")
+        sm_file = gtk.Menu()
+        m_file.set_submenu(sm_file)
+        self.menubar.append(m_file)
 
         # file menu item - new
-        self.mi_new = gtk.ImageMenuItem(gtk.STOCK_NEW, self.agr)
-        self.sm_file.append(self.mi_new)
+        mi_new = gtk.ImageMenuItem(gtk.STOCK_NEW, agr)
+        sm_file.append(mi_new)
 	 
         # file menu item - open
-        self.mi_open = gtk.ImageMenuItem(gtk.STOCK_OPEN, self.agr)
-        self.sm_file.append(self.mi_open)
+        mi_open = gtk.ImageMenuItem(gtk.STOCK_OPEN, agr)
+        sm_file.append(mi_open)
 	 
         # file menu item - separator
-        self.sm_file.append(gtk.SeparatorMenuItem())
+        sm_file.append(gtk.SeparatorMenuItem())
 	 
         # file menu item - quit
-        self.mi_quit = gtk.ImageMenuItem(gtk.STOCK_QUIT, self.agr)
-        self.mi_quit.connect("activate", gtk.main_quit)
-        self.sm_file.append(self.mi_quit)
+        mi_quit = gtk.ImageMenuItem(gtk.STOCK_QUIT, agr)
+        mi_quit.connect("activate", gtk.main_quit)
+        sm_file.append(mi_quit)
 
 
         ## view menu
-        self.m_view = gtk.MenuItem("_View")
-        self.sm_view = gtk.Menu()
-        self.m_view.set_submenu(self.sm_view)
-        self.mb.append(self.m_view)
+        m_view = gtk.MenuItem("_View")
+        sm_view = gtk.Menu()
+        m_view.set_submenu(sm_view)
+        self.menubar.append(m_view)
 	 
         # view menu item - status bar
-        self.mi_stat = gtk.CheckMenuItem("View Statusbar")
-        self.mi_stat.set_active(True)
-        self.mi_stat.connect("activate", self.on_status_active)
-        self.sm_view.append(self.mi_stat)
+        mi_stat = gtk.CheckMenuItem("View Statusbar")
+        mi_stat.set_active(True)
+        mi_stat.connect("activate", self.on_status_active)
+        sm_view.append(mi_stat)
 
 
         ### create status bar
-        self.sb = gtk.Statusbar()
-        self.sb.push(1, "Ready")
-        self.vbox.pack_end(self.sb, False, False, 0)
+        self.statusbar = gtk.Statusbar()
+        self.statusbar.push(1, "Ready")
+        w_vbox.pack_end(self.statusbar, False, False, 0)
 
 
         ### create main window
         self.mw = comp.MainWindow()
-        self.vbox.pack_start(self.mw, True, True, 0)
+        w_vbox.pack_start(self.mw, True, True, 0)
 
 
         ### show all parts
-        self.w.show_all()
+        self.root.show_all()
 
 
     def toggle_status(self, widget):
@@ -97,9 +97,9 @@ class BaseFrame(object):
 
     def on_status_active(self, widget):
         if widget.active:
-            self.sb.show()
+            self.statusbar.show()
         else:
-            self.sb.hide()
+            self.statusbar.hide()
 
 
     def main(self):
