@@ -8,20 +8,74 @@ import os, sys, pickle
 import re
 
 ### Diagnostic Function Definition
-# Suggested Return Code:
-#    0: normal end
-#    1: currently not supported
-#    5: SPOOL error
-#    9: JCL error
-#   90: Assembler pass 1 error
-#   92: Assembler pass 2 error
-#   -1: zPE error
 def abort(rc, msg):
+    """
+    Abort the entire program with the given return code and
+    error message.
+
+    Suggested Return Code:
+       0: normal end
+       1: currently not supported
+       5: SPOOL error
+       9: JCL error
+      90: Assembler pass 1 error
+      92: Assembler pass 2 error
+      -1: zPE error
+    """
     sys.stderr.write(msg)
     sys.exit(rc)
 
 def mark4future(feature):
+    """Mark the function as \"not implemented\"."""
     abort(1, '\n\n!!! ' + feature + ': feature not supported !!!\n\n')
+
+
+### Utility Function Definition
+def dic_find_key(dic, val):
+    """Return the (first) key of the dic that has the given val"""
+    return [k for k, v in dic.iteritems() if v == val][0]
+
+def resplit_sq(pattern, string, maxsplit = 0):
+    """See resplit() for detials"""
+    return resplit(pattern, string, "'", "'", maxsplit)
+
+def resplit_dq(pattern, string, maxsplit = 0):
+    """See resplit() for detials"""
+    return resplit(pattern, string, '"', '"', maxsplit)
+
+def resplit_sp(pattern, string, maxsplit = 0):
+    """See resplit() for detials"""
+    return resplit(pattern, string, '(', ')', maxsplit)
+
+def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
+    """
+    Split the string using the given pattern like re.split(),
+    except when the patten is in between skip_l and skip_r.
+
+    There are three pre-defined skip-pattern:
+      resplit_sq ==> single quotes
+      resplit_dq ==> double quotes
+      resplit_sp ==> single pair of parentheses
+
+
+    Note: 
+      - Only include the chars as they are in skip_l/r.
+        do not escape special chars.
+        (no '\' unless that is one of the boundary char)
+
+      - If the pattern contains the "skip pattern", then
+        the functions behaves exactly the same as re.split()
+    """
+    if len(skip_l) != len(skip_r):
+        raise ValueError
+    for ch in skip_l:
+        if ch in pattern:
+            return re.split(pattern, string, maxsplit)
+    for ch in skip_r:
+        if ch in pattern:
+            return re.split(pattern, string, maxsplit)
+    return __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit)
+
 
 ### Architectural Definition
 
@@ -29,10 +83,13 @@ JOB_ID_MIN = 10000              # the smallest job ID
 JOB_ID_MAX = 65535              # the largest job ID
 TMP_FILE_ID = 101               # the smallest tmp file identifier
 
-# Return the position (start at 1) of the first invalid char;
-# Return 0 if all good;
-# Return None if no label
 def bad_label(label):
+    """
+    Return:
+      - the position (start at 1) of the first invalid char
+      - 0 if all good
+      - None if no label
+    """
     if len(label) == 0:
         return None             # no lable
     if len(label) > 8:
@@ -43,35 +100,6 @@ def bad_label(label):
         if not re.match('[A-Z@#$0-9]', label[indx]):
             return indx         # (indx+1)th character not legal
     return 0                    # all good
-
-# Behave similarly as re.split(), except that the splits won't happen inside:
-#   _sq ==> single quotes
-#   _dq ==> double quotes
-#   _sp ==> single pair of parentheses
-# 
-# Note: if the pattern contains the "skip pattern", then the functions
-# behaves exactly the same as re.split()
-def resplit_sq(pattern, string, maxsplit = 0):
-    return resplit(pattern, string, "'", "'", maxsplit)
-
-def resplit_dq(pattern, string, maxsplit = 0):
-    return resplit(pattern, string, '"', '"', maxsplit)
-
-def resplit_sp(pattern, string, maxsplit = 0):
-    return resplit(pattern, string, '(', ')', maxsplit)
-
-# Note: only include the char(s) in skip_l/r, do not escape
-#       (no '\' unless that is what need to be excluded)
-def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
-    if len(skip_l) != len(skip_r):
-        raise ValueError
-    for ch in skip_l:
-        if ch in pattern:
-            return re.split(pattern, string, maxsplit)
-    for ch in skip_r:
-        if ch in pattern:
-            return re.split(pattern, string, maxsplit)
-    return __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit)
 
 
 ## Return Code
@@ -358,11 +386,12 @@ JES = {                         # JES storage management map
     'tmp'       : 'SMS',        # '// DD other'
     }
 
-# converts "ABCD.EFG" to ["ABCD", "EFG"]
 def conv_path(fn):
+    '''Converts "ABCD.EFG" to ["ABCD", "EFG"]'''
     return re.split('\.', fn)
 
 def conv_back(fn_list):
+    '''Converts ["ABCD", "EFG"] to "ABCD.EFG"'''
     return '.'.join(fn_list)
 
 def is_file(dsn):
@@ -371,12 +400,12 @@ def is_file(dsn):
 def is_dir(dsn):
     return os.path.isdir(os.path.join(* dsn))
 
-# open the target file in regardless of the existance
 def open_file(dsn, mode, f_type):
+    """Open the target file in regardless of the existance"""
     return eval('core.' + JES[f_type] + '.open_file')(dsn, mode)
 
-# flush the indicated SPOOL to the indicated File
 def flush(sp):
+    """Flush the indicated SPOOL to the indicated file"""
     if sp.mode == 'i':
         return -1
 
@@ -398,7 +427,8 @@ PGM_SUPPORTED = {         # all supported programs and their bindings
     'IEFBR14'   : 'zPE.pgm.IEFBR14.init',
     }
 
-def LIST_PGM():                # list all supported languages out
+def LIST_PGM():
+    """List all supported languages out"""
     print 'All programs (PGM) that are currently supported:'
     print '  ASMA90     -- High-Level Assembler'
     print '  ASSIST     -- ASSIST Assembler'
