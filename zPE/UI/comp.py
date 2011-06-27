@@ -64,6 +64,7 @@ class MainWindow(gtk.Frame):
 	    self.ctrl_bar[pos].connect_object('clicked', self.add_frame, self.mw_center, pos)
 	    self.ctrl_bar[pos].drag_source_set(gtk.gdk.BUTTON1_MASK, [], 0)
 	    self.ctrl_bar[pos].connect('drag_begin', self._sig_ctrl_drag, drag_icon, pos)
+            self.ctrl_bar[pos].connect('button-release-event', self._sig_ctrl_drop)
 
 	self.mw_center.drag_dest_set(gtk.DEST_DEFAULT_HIGHLIGHT, [], 0)
 	self.mw_center.connect('drag_motion', self._sig_mw_motion)
@@ -88,14 +89,15 @@ class MainWindow(gtk.Frame):
         self.mw_center.timer = True
         gobject.timeout_add(20, self.update_mw, pos)
 
+    def _sig_ctrl_drop(self, widget, event):
+        # stop the timer
+        self.mw_center.timer = False
+
     def _sig_mw_motion(self, widget, context, x, y, time):
 	context.drag_status(gtk.gdk.ACTION_COPY, time)
 	return True
 
     def _sig_mw_drop(self, widget, context, x, y, time):
-        # stop the timer
-        self.mw_center.timer = False
-
 	pos = zPE.dic_find_key(self.ctrl_bar, context.get_source_widget())
 	paned = self.add_frame(self.mw_center, pos)
 
