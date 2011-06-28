@@ -94,6 +94,15 @@ class MainWindow(gtk.Frame):
         self.sd_layer_cr.set_line_width(1)
         self.sd_layer_cr.set_source_rgba(0, 0, 0, 0.3)
 
+        # limit the drawing area
+        alloc = self.mw_center.get_allocation()
+        ( ptr_x,     ptr_y     ) = self.mw_center.get_pointer()
+        ( ptr_abs_x, ptr_abs_y ) = self.sd_layer.get_pointer()[:2]
+        ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x, ptr_abs_y - ptr_y )
+
+        self.sd_layer_cr.rectangle(base_x, base_y, alloc.width, alloc.height)
+        self.sd_layer_cr.clip()
+
         # start the timer
         self.mw_center.timer = True
         gobject.timeout_add(20, self.update_mw, pos)
