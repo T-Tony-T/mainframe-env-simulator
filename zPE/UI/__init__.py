@@ -1,5 +1,5 @@
 # modules that will be auto imported
-import comp
+import comp, conf
 
 import os, sys
 import pygtk
@@ -17,6 +17,8 @@ class BaseFrame(object):
         gtk.main_quit()
 
     def __init__(self):
+        conf.read_rc()
+
         ### create top-level frame
         self.root = gtk.Window(gtk.WINDOW_TOPLEVEL)
 
@@ -27,7 +29,7 @@ class BaseFrame(object):
         self.root.set_icon_from_file( os.path.join(
                 os.path.dirname(__file__), "image", "icon_zPE.svg"
                 ) )
-        self.root.set_size_request(600, 400)
+        self.root.set_size_request(800, 560)
 
         agr = gtk.AccelGroup()
         self.root.add_accel_group(agr)
@@ -104,3 +106,4 @@ class BaseFrame(object):
 
     def main(self):
         gtk.main()
+

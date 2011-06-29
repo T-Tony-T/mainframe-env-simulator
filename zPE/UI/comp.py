@@ -1,17 +1,34 @@
 # this is the UI components file
 
-import zPE
+import conf
+import io_encap
+# this package should implement the following APIs:
+#
+#   is_file(fn_list):           test if the fn_list corresponding to a file
+#   is_dir(fn_list):            test if the fn_list corresponding to a directory
+#
+#   open_file(fn_list, mode):   open the file with the indicated mode
+#
+#   fetch(buff):                read content from the corresponding file to the MainWindowBuffer
+#   flush(buff):                write content from the MainWindowBuffer to the corresponding file
+# 
 
 import os, sys
 import pygtk
 pygtk.require('2.0')
 import gtk
-import gobject
+import gobject, pango
 
 
 class MainWindow(gtk.Frame):
     def __init__(self):
         super(MainWindow, self).__init__()
+
+        # open default buffers
+        for buff_name, buff_type in MainWindowBuffer.DEFAULT_BUFFER.items():
+            MainWindowBuffer(buff_name, buff_type)
+        MainWindowBuffer(['/', 'home', 'tony', 'Desktop', 'perl_test'], 'textview') # test, mark
+
 
         # layout of the frame:
         # 
@@ -155,20 +172,6 @@ class MainWindow(gtk.Frame):
         menu.show_all()
     ### end of signal for MWF
 
-
-    def new_frame(self, f_type = None, f_data = None):
-        # prepare frame info
-        if f_type in (None, 'textview'):
-            widget = gtk.TextView()
-        else:
-            widget = gtk.Lable("Error: MainWindow.new_frame():\n" +
-                               "       f_type not supported.\n")
-
-        frame = MainWindowFrame(widget, f_data)
-        frame.ct_pop_id = frame.connect_center('populate-popup', self._sig_popup_manip)
-
-        return frame
-
     def add_paned(self, parent, pos):
         child = parent.child
 
@@ -193,6 +196,13 @@ class MainWindow(gtk.Frame):
 
         parent.show_all()
         return paned
+
+    def new_frame(self, buffer_path = None, buffer_type = None):
+        # prepare frame info
+        frame = MainWindowFrame(buffer_path, buffer_type)
+        frame.ct_pop_id = frame.connect_center('populate-popup', self._sig_popup_manip)
+
+        return frame
 
     def rm_frame(self, widget, child_rm):
         if widget == self.mw_center:    # the only frame
@@ -275,13 +285,14 @@ class MainWindow(gtk.Frame):
 
 
 class MainWindowFrame(gtk.VBox):
-    def __init__(self, widget, buffer_name):
+    def __init__(self, buffer_path, buffer_type):
         super(MainWindowFrame, self).__init__()
-        self.active_buff = ''
+        self.active_buffer = None
+        self.buffer_type = None
 
         # create the main window frame
         self.center = None
-        self.switch(widget, buffer_name)
+        self.switch(buffer_path, buffer_type)
 
         # create the status bar
         self.bottom = gtk.Button('test')
@@ -289,16 +300,114 @@ class MainWindowFrame(gtk.VBox):
 
     def connect_center(self, sig, cb):
         if sig in [ 'populate-popup' ]:
-            if isinstance(self.center, gtk.TextView):
+            if self.buffer_type == 'textview':
                 return self.center.connect('populate-popup', cb)
 
-    def switch(self, widget, buffer_name):
-        # switch widget
-        if self.center:
-            self.remove(self.center)
-        self.center = widget
-        self.pack_start(self.center, True, True, 0)
+    def switch(self, buffer_path, buffer_type):
+        # switch buffer
+        new_buff = MainWindowBuffer(buffer_path, buffer_type)
 
-        if buffer_name != self.active_buff:
-            # switch buffer
-            self.active_buff = buffer_name
+        if new_buff.name != self.active_buffer:
+            self.active_buffer = new_buff.name
+
+        if new_buff.type != self.buffer_type:
+            # create widget
+            if new_buff.type == 'textview':
+                widget = gtk.TextView()
+                widget.modify_font(pango.FontDescription('monospace ' + conf.Config['font_sz']))
+            else:
+                widget = gtk.Label("Error: MainWindowFrame.switch():\n" +
+                                   "       buffer_type not supported.\n")
+            # switch widget
+            if self.center:
+                self.remove(self.center)
+            self.center = widget
+            self.buffer_type = new_buff.type
+            self.pack_start(self.center, True, True, 0)
+
+        # connect buffer
+        if self.buffer_type == 'textview':
+            self.center.set_buffer(new_buff.buffer)
+
+
+class MainWindowBuffer(object):
+    DEFAULT_BUFFER = {
+        '*scratch*' : 'textview',
+        }
+    buff_list = {
+        # 'buffer_name' : MainWindowBuffer()
+        }
+    __buff_rec = {
+        # buffer_path[-1] : [
+        #                     ( 'buffer_name',    buffer_path, opened ),
+        #                     ( 'buffer_name(1)', buffer_path, opened ),
+        #                      ...
+        #                     ]
+        }
+
+    def __new__(cls, buffer_path = None, buffer_type = None):
+        self = object.__new__(cls)
+        if buffer_path == None:
+            buffer_path = '*scratch*'
+
+        if isinstance(buffer_path, str):
+            if buffer_path in self.DEFAULT_BUFFER:
+                self.name = buffer_path
+                self.path = None
+                self.type = self.DEFAULT_BUFFER[self.name]
+            else:               # treat as typo, add [] around
+                self.name = buffer_path
+                self.path = [ buffer_path ]
+                self.type = buffer_type
+        else:
+            self.name = buffer_path[-1]
+            self.path = buffer_path
+            self.type = buffer_type
+
+        no_rec = True           # assume first encounter of the name
+        if self.name in self.__buff_rec:
+            # name is recorded, check for duplication
+            for [name, path, opened] in self.__buff_rec[self.name]:
+                if path == self.path:
+                    # same path ==> has record
+                    no_rec = False
+
+                    if opened:
+                        # return old file reference
+                        return self.buff_list[name] # early return
+                    else:
+                        # re-open it
+                        self.name = name
+                        break
+            if no_rec:
+                # no duplication, generate new name of the new file
+                self.name += "(" + str(len(self.__buff_rec[self.name])) + ")"
+
+        if no_rec:
+            # name not in record, add it
+            self.__buff_rec[self.name] = [ (self.name, self.path, True) ]
+        self.buff_list[self.name] = self
+
+        # fetch content
+        if buffer_type == 'textview':
+            self.buffer = gtk.TextBuffer()
+            if self.name == '*scratch*':
+                # tmp buffer
+                self.buffer.set_text(
+'''//*
+//* This buffer is for notes you don't want to save.
+//* If you want to create a file, use 'File' -> 'New'
+//* or save this buffer explicitly.
+//*
+'''
+)
+            elif io_encap.is_file(self.path):
+                # existing file
+                if not io_encap.fetch(self):
+                    raise ValueError
+            else:
+                # new file
+                pass
+            self.modified = False
+
+        return self

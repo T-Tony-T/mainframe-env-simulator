@@ -9,7 +9,7 @@ import re
 
 ### Diagnostic Function Definition
 def abort(rc, msg):
-    """
+    '''
     Abort the entire program with the given return code and
     error message.
 
@@ -21,34 +21,34 @@ def abort(rc, msg):
       90: Assembler pass 1 error
       92: Assembler pass 2 error
       -1: zPE error
-    """
+    '''
     sys.stderr.write(msg)
     sys.exit(rc)
 
 def mark4future(feature):
-    """Mark the function as \"not implemented\"."""
+    '''Mark the function as \"not implemented\".'''
     abort(1, '\n\n!!! ' + feature + ': feature not supported !!!\n\n')
 
 
 ### Utility Function Definition
 def dic_find_key(dic, val):
-    """Return the (first) key of the dic that has the given val"""
+    '''Return the (first) key of the dic that has the given val'''
     return [k for k, v in dic.iteritems() if v == val][0]
 
 def resplit_sq(pattern, string, maxsplit = 0):
-    """See resplit() for detials"""
+    '''See resplit() for detials'''
     return resplit(pattern, string, "'", "'", maxsplit)
 
 def resplit_dq(pattern, string, maxsplit = 0):
-    """See resplit() for detials"""
+    '''See resplit() for detials'''
     return resplit(pattern, string, '"', '"', maxsplit)
 
 def resplit_sp(pattern, string, maxsplit = 0):
-    """See resplit() for detials"""
+    '''See resplit() for detials'''
     return resplit(pattern, string, '(', ')', maxsplit)
 
 def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
-    """
+    '''
     Split the string using the given pattern like re.split(),
     except when the patten is in between skip_l and skip_r.
 
@@ -65,7 +65,7 @@ def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
 
       - If the pattern contains the "skip pattern", then
         the functions behaves exactly the same as re.split()
-    """
+    '''
     if len(skip_l) != len(skip_r):
         raise ValueError
     for ch in skip_l:
@@ -84,12 +84,12 @@ JOB_ID_MAX = 65535              # the largest job ID
 TMP_FILE_ID = 101               # the smallest tmp file identifier
 
 def bad_label(label):
-    """
+    '''
     Return:
       - the position (start at 1) of the first invalid char
       - 0 if all good
       - None if no label
-    """
+    '''
     if len(label) == 0:
         return None             # no lable
     if len(label) > 8:
@@ -401,11 +401,11 @@ def is_dir(dsn):
     return os.path.isdir(os.path.join(* dsn))
 
 def open_file(dsn, mode, f_type):
-    """Open the target file in regardless of the existance"""
+    '''Open the target file in regardless of the existance'''
     return eval('core.' + JES[f_type] + '.open_file')(dsn, mode)
 
 def flush(sp):
-    """Flush the indicated SPOOL to the indicated file"""
+    '''Flush the indicated SPOOL to the indicated file'''
     if sp.mode == 'i':
         return -1
 
@@ -428,7 +428,7 @@ PGM_SUPPORTED = {         # all supported programs and their bindings
     }
 
 def LIST_PGM():
-    """List all supported languages out"""
+    '''List all supported languages out'''
     print 'All programs (PGM) that are currently supported:'
     print '  ASMA90     -- High-Level Assembler'
     print '  ASSIST     -- ASSIST Assembler'
