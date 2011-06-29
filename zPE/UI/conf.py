@@ -4,7 +4,7 @@ import re
 
 ## Configurable Definition
 DEFAULT = {
-    'FONT_SZ'   : '12',
+    'FONT_SZ'   : 12,
     'TAB_ON'    : 'off',
     'TAB_MODE'  : 'group',
     }
@@ -30,7 +30,7 @@ def read_rc():
 
         if k == 'font_sz':
             try:
-                Config[k] = str(int(v))
+                Config[k] = int(v)
             except ValueError:
                 Config[k] = DEFAULT['FONT_SZ']
                 sys.stderr.write('CONFIG WARNING: ' + v +
@@ -68,8 +68,8 @@ def __CK_CONFIG():
 
 def __TOUCH_RC():
     fp = open(CONFIG_PATH['gui_rc'], 'w')
-    fp.write('font_sz = ' + Config['font_sz'] + '\n')
-    fp.write('tab_on = ' + Config['tab_on'] + '\n')
-    fp.write('tab_mode = ' + Config['tab_mode'] + '\n')
+    fp.write('font_sz = {0}\n'.format(Config['font_sz']))
+    fp.write('tab_on = {0}\n'.format(Config['tab_on']))
+    fp.write('tab_mode = {0}\n'.format(Config['tab_mode']))
     fp.close()
 

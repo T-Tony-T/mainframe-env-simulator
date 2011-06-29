@@ -1,6 +1,5 @@
 # this is the UI components file
 
-import conf
 import io_encap
 # this package should implement the following APIs:
 #
@@ -9,8 +8,8 @@ import io_encap
 #
 #   open_file(fn_list, mode):   open the file with the indicated mode
 #
-#   fetch(buff):                read content from the corresponding file to the MainWindowBuffer
-#   flush(buff):                write content from the MainWindowBuffer to the corresponding file
+#   fetch(buff):                read content from the corresponding file to the zEditBuffer
+#   flush(buff):                write content from the zEditBuffer to the corresponding file
 # 
 
 import os, sys
@@ -20,15 +19,58 @@ import gtk
 import gobject, pango
 
 
-class MainWindow(gtk.Frame):
-    def __init__(self):
-        super(MainWindow, self).__init__()
+class SplitScreen(gtk.Frame):
+    def __init__(self,
+                 frame, frame_alist = [],
+                 frame_init = None,
+                 frame_split_dup = None,
+                 frame_sz_min = (40, 40)
+                 ):
+        '''
+        frame
+            a construction function of a GtkWidget which will be
+            the frame of the inner window.
 
-        # open default buffers
-        for buff_name, buff_type in MainWindowBuffer.SYSTEM_BUFFER.items():
-            MainWindowBuffer(buff_name, buff_type)
-        MainWindowBuffer(['/', 'home', 'tony', 'Desktop', 'perl_test'], 'textview') # test, mark
+            e.g. comp.SplitScreen(gtk.Label)
 
+        frame_alist = []
+            the argument list of the "frame".
+
+            e.g. comp.SplitScreen(gtk.Label, ['Test Label'])
+
+        frame_init = None
+            a callback function that will be called after every
+            creation of the "frame" to initialize it
+            (connect signals, for example)
+
+            if set to None, no action will applied
+
+            the callback function should be:
+                def callback(frame):
+                    ...
+
+        frame_split_dup = None
+            a callback function that will be called after every
+            split of the screen to duplicate the original "frame"
+
+            if set to None, a default "frame" will be created
+
+            the callback function should be:
+                def callback(frame):
+                    ...
+                    return new_frame
+
+        frame_sz_min
+            the minimum size required for each "frame"
+        '''
+        super(SplitScreen, self).__init__()
+
+
+        self.frame = frame
+        self.frame_alist = frame_alist
+        self.frame_init = frame_init
+        self.frame_split_dup = frame_split_dup
+        self.frame_sz_min = frame_sz_min
 
         # layout of the frame:
         # 
@@ -52,7 +94,6 @@ class MainWindow(gtk.Frame):
 
         self.sd_layer = None    # init shading-layer to None
 
-        self.__mw_frame_sz = (40, 40) # the minimum size required for each MainWindowFrame
         self.__ctrl_pos = {
             'a' : ( 'lt', 'rt', 'tp', 'bm', ), # all
             'b' : ( 'lt',       'tp',       ), # begin
@@ -66,7 +107,8 @@ class MainWindow(gtk.Frame):
         self.ctrl_bar['tp'] = gtk.Button()
         self.ctrl_bar['bm'] = gtk.Button()
         self.mw_center = gtk.Frame()
-        self.mw_center.add(self.new_frame())
+        self.active_frame = self.new_frame(self.frame_alist) # keep track of the focus
+        self.mw_center.add(self.active_frame)
 
         root_frame.attach(self.ctrl_bar['lt'], 0, 1, 1, 2, xoptions=gtk.SHRINK)
         root_frame.attach(self.ctrl_bar['rt'], 2, 3, 1, 2, xoptions=gtk.SHRINK)
@@ -138,10 +180,10 @@ class MainWindow(gtk.Frame):
         ptr_pos = self.mw_center.get_pointer()
 
         correct_pos = self._correct_pos(
-            ptr_pos,                               # the current ptr pos
-            (0, 0),                                # the frame size - low bound
-            (alloc.width, alloc.height),           # the frame size - high bound
-            [sp + 10 for sp in self.__mw_frame_sz] # the min spacing + 10
+            ptr_pos,                              # the current ptr pos
+            (0, 0),                               # the frame size - low bound
+            (alloc.width, alloc.height),          # the frame size - high bound
+            [sp + 10 for sp in self.frame_sz_min] # the min spacing + 10
             )
 
         # add paned if in center
@@ -160,16 +202,11 @@ class MainWindow(gtk.Frame):
     def _sig_div_drop(self, widget, event):
         for child in widget.get_children():
             alloc = child.get_allocation()
-            if ( alloc.width < self.__mw_frame_sz[0] or
-                 alloc.height < self.__mw_frame_sz[1]
+            if ( alloc.width < self.frame_sz_min[0] or
+                 alloc.height < self.frame_sz_min[1]
                  ):
                 self.rm_frame(widget, child)
                 break
-
-    def _sig_popup_manip(self, widget, menu):
-        menu.remove(menu.get_children()[-1])
-        menu.append(gtk.MenuItem("test"))
-        menu.show_all()
     ### end of signal for MWF
 
     def add_paned(self, parent, pos):
@@ -181,14 +218,20 @@ class MainWindow(gtk.Frame):
         else:
             paned = gtk.VPaned()
 
+        # create new frame
+        if self.frame_split_dup:
+            new_child = self.frame_split_dup(self.active_frame)
+        else:
+            new_child = self.new_frame(self.frame_alist)
+
         # re-parent the widgets
         parent.remove(child)
         if pos in self.__ctrl_pos['b']:
-            paned.pack1(self.new_frame(), True, True)
+            paned.pack1(new_child, True, True)
             paned.pack2(child, True, True)
         else:
             paned.pack1(child, True, True)
-            paned.pack2(self.new_frame(), True, True)
+            paned.pack2(new_child, True, True)
         parent.add(paned)
 
         # connect signals
@@ -197,10 +240,12 @@ class MainWindow(gtk.Frame):
         parent.show_all()
         return paned
 
-    def new_frame(self, buffer_path = None, buffer_type = None):
+    def new_frame(self, alist):
         # prepare frame info
-        frame = MainWindowFrame(buffer_path, buffer_type)
-        frame.ct_pop_id = frame.connect_center('populate-popup', self._sig_popup_manip)
+        frame = self.frame(* alist)
+
+        if self.frame_init:
+            self.frame_init(frame)
 
         return frame
 
@@ -246,10 +291,10 @@ class MainWindow(gtk.Frame):
 
         # validate position
         correct_pos = self._correct_pos(
-            (ptr_x, ptr_y),                        # the current ptr pos
-            (0, 0),                                # the frame size - low bound
-            (alloc.width, alloc.height),           # the frame size - high bound
-            [sp + 10 for sp in self.__mw_frame_sz] # the min spacing + 10
+            (ptr_x, ptr_y),                       # the current ptr pos
+            (0, 0),                               # the frame size - low bound
+            (alloc.width, alloc.height),          # the frame size - high bound
+            [sp + 10 for sp in self.frame_sz_min] # the min spacing + 10
             )
         if not correct_pos:
             return True
@@ -284,11 +329,15 @@ class MainWindow(gtk.Frame):
         return ct_pos
 
 
-class MainWindowFrame(gtk.VBox):
-    def __init__(self, buffer_path, buffer_type):
-        super(MainWindowFrame, self).__init__()
+######## ######## ######## ######## 
+######## ######## ######## ######## 
+######## ######## ######## ######## 
+
+
+class zEdit(gtk.VBox):
+    def __init__(self, buffer_path = None, buffer_type = None):
+        super(zEdit, self).__init__()
         self.active_buffer = None
-        self.buffer_type = None
 
         # create the main window frame
         self.scrolled = gtk.ScrolledWindow()
@@ -297,7 +346,7 @@ class MainWindowFrame(gtk.VBox):
         self.scrolled.set_placement(gtk.CORNER_TOP_RIGHT)
 
         self.center = None
-        self.switch(buffer_path, buffer_type)
+        self.set_buffer(buffer_path, buffer_type)
 
         # create the status bar
         self.bottom = gtk.HBox()
@@ -305,49 +354,64 @@ class MainWindowFrame(gtk.VBox):
 
         # create buffer switcher
         self.buffer_sw_tm = gtk.ListStore(str, bool) # define TreeModel
-        for buff in MainWindowBuffer.SYSTEM_BUFFER:  # add all system-opened buffers
+        for buff in zEditBuffer.SYSTEM_BUFFER:  # add all system-opened buffers
             self.buffer_sw_tm.append([buff, False])
         self.buffer_sw_tm.append(['NanI', True]) # not an item, this item should not be seen
 
         self.buffer_sw = gtk.ComboBox(self.buffer_sw_tm)
         self.bottom.pack_start(self.buffer_sw, False, False, 0)
 
-        cell = gtk.CellRendererText()
-        cell.set_property(
-            'font-desc',
-            pango.FontDescription('monospace {0}'.format(int( int( conf.Config['font_sz']) * 0.75 ) ))
-            )
-        self.buffer_sw.pack_start(cell, True)
-        self.buffer_sw.add_attribute(cell, "text", 0)
+        self.buffer_sw_cell = gtk.CellRendererText()
+        self.buffer_sw.pack_start(self.buffer_sw_cell, True)
+        self.buffer_sw.add_attribute(self.buffer_sw_cell, "text", 0)
         self.buffer_sw.set_row_separator_func(self.separater)
 
         # init the switcher
         self.buffer_iter = self.buffer_sw_tm.get_iter_first()
-        while self.buffer_sw_tm.get_value(self.buffer_iter, 0) != MainWindowBuffer.DEFAULT_BUFFER:
+        while self.buffer_sw_tm.get_value(self.buffer_iter, 0) != zEditBuffer.DEFAULT_BUFFER:
             self.buffer_iter = self.buffer_sw_tm.iter_next(self.buffer_iter)
         self.buffer_sw.set_active_iter(self.buffer_iter)
 
+        # set font
+        self.set_font('monospace', 10) # default font
+
+
+    def connect_center(self, sig, cb):
+        if sig in [ 'populate-popup' ]:
+            if self.active_buffer.type == 'textview':
+                return self.center.connect(sig, cb)
 
     def separater(self, model, iter, data = None):
         return model.get_value(iter, 1)
 
-    def connect_center(self, sig, cb):
-        if sig in [ 'populate-popup' ]:
-            if self.buffer_type == 'textview':
-                return self.center.connect('populate-popup', cb)
+    def get_font(self):
+        return self.font
 
-    def switch(self, buffer_path, buffer_type):
+    def set_font(self, font_name, font_size):
+        self.font = ( font_name, font_size )
+
+        self.center.modify_font(
+            pango.FontDescription('{0} {1}'.format(font_name, font_size))
+            )
+
+        self.buffer_sw_cell.set_property(
+            'font-desc',
+            pango.FontDescription('{0} {1}'.format(font_name, int(font_size * 0.75)))
+            )
+
+    def get_buffer(self):
+        return (self.active_buffer.path, self.active_buffer.type)
+
+    def set_buffer(self, buffer_path, buffer_type):
         # switch buffer
-        new_buff = MainWindowBuffer(buffer_path, buffer_type)
+        new_buff = zEditBuffer(buffer_path, buffer_type)
 
-        if new_buff.name != self.active_buffer:
-            self.active_buffer = new_buff.name
-
-        if new_buff.type != self.buffer_type:
+        if ( self.active_buffer == None or
+             self.active_buffer.type != new_buff.type
+             ):
             # create widget
             if new_buff.type == 'textview':
                 widget = gtk.TextView()
-                widget.modify_font(pango.FontDescription('monospace ' + conf.Config['font_sz']))
             else:
                 raise KeyError
 
@@ -355,31 +419,33 @@ class MainWindowFrame(gtk.VBox):
             if self.center:
                 self.remove(self.center)
             self.center = widget
-            self.buffer_type = new_buff.type
             self.scrolled.add(self.center)
 
+        if new_buff != self.active_buffer:
+            self.active_buffer = new_buff
+
         # connect buffer
-        if self.buffer_type == 'textview':
+        if self.active_buffer.type == 'textview':
             self.center.set_buffer(new_buff.buffer)
 
 
-class MainWindowBuffer(object):
+class zEditBuffer(object):
     DEFAULT_BUFFER = '*scratch*'
     SYSTEM_BUFFER = {
         '*scratch*' : 'textview',
         }
     buff_list = {
-        # 'buff_sys'    : MainWindowBuffer()
-        # 'buff_user'   : MainWindowBuffer()
-        # 'buff_sys(1)' : MainWindowBuffer()
-        # 'buff_sys(2)' : MainWindowBuffer()
+        # 'buff_sys'    : zEditBuffer()
+        # 'buff_user'   : zEditBuffer()
+        # 'buff_sys(1)' : zEditBuffer()
+        # 'buff_sys(2)' : zEditBuffer()
         #  ...
         }
     buff_group = {
         'system' : [], # [ 'buff_sys', 'buff_sys(1)', 'buff_sys(2)', ]
         'user'   : [], # [ 'buff_user', ]
         }
-    __buff_rec = { # no-removal record
+    buff_rec = { # no-removal record
         # 'buff_sys'  : [ ( 'buff_sys',    buff_path, opened ),
         #                 ( 'buff_sys(1)', buff_path, opened ),
         #                 ( 'buff_sys(2)', buff_path, opened ),
@@ -411,9 +477,9 @@ class MainWindowBuffer(object):
             self.type = buffer_type
 
         no_rec = True           # assume first encounter of the name
-        if self.name in self.__buff_rec:
+        if self.name in self.buff_rec:
             # name is recorded, check for duplication
-            for [name, path, opened] in self.__buff_rec[self.name]:
+            for [name, path, opened] in self.buff_rec[self.name]:
                 if path == self.path:
                     # same path ==> has record
                     no_rec = False
@@ -427,11 +493,11 @@ class MainWindowBuffer(object):
                         break
             if no_rec:
                 # no duplication, generate new name of the new file
-                self.name += "(" + str(len(self.__buff_rec[self.name])) + ")"
+                self.name += "(" + str(len(self.buff_rec[self.name])) + ")"
 
         if no_rec:
             # name not in record, add it
-            self.__buff_rec[self.name] = [ (self.name, self.path, True) ]
+            self.buff_rec[self.name] = [ (self.name, self.path, True) ]
         self.buff_list[self.name] = self
         self.buff_group[buff_group].append(self.name)
 
