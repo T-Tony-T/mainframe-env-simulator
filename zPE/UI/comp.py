@@ -291,10 +291,10 @@ class MainWindowFrame(gtk.VBox):
         self.buffer_type = None
 
         # create the main window frame
-        self.scrooled = gtk.ScrolledWindow()
-        self.pack_start(self.scrooled, True, True, 0)
-        self.scrooled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
-        self.scrooled.set_placement(gtk.CORNER_TOP_RIGHT)
+        self.scrolled = gtk.ScrolledWindow()
+        self.pack_start(self.scrolled, True, True, 0)
+        self.scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
+        self.scrolled.set_placement(gtk.CORNER_TOP_RIGHT)
 
         self.center = None
         self.switch(buffer_path, buffer_type)
@@ -356,7 +356,7 @@ class MainWindowFrame(gtk.VBox):
                 self.remove(self.center)
             self.center = widget
             self.buffer_type = new_buff.type
-            self.scrooled.add(self.center)
+            self.scrolled.add(self.center)
 
         # connect buffer
         if self.buffer_type == 'textview':
