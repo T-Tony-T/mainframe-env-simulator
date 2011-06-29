@@ -25,7 +25,7 @@ class MainWindow(gtk.Frame):
         super(MainWindow, self).__init__()
 
         # open default buffers
-        for buff_name, buff_type in MainWindowBuffer.DEFAULT_BUFFER.items():
+        for buff_name, buff_type in MainWindowBuffer.SYSTEM_BUFFER.items():
             MainWindowBuffer(buff_name, buff_type)
         MainWindowBuffer(['/', 'home', 'tony', 'Desktop', 'perl_test'], 'textview') # test, mark
 
@@ -291,12 +291,45 @@ class MainWindowFrame(gtk.VBox):
         self.buffer_type = None
 
         # create the main window frame
+        self.scrooled = gtk.ScrolledWindow()
+        self.pack_start(self.scrooled, True, True, 0)
+        self.scrooled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
+        self.scrooled.set_placement(gtk.CORNER_TOP_RIGHT)
+
         self.center = None
         self.switch(buffer_path, buffer_type)
 
         # create the status bar
-        self.bottom = gtk.Button('test')
+        self.bottom = gtk.HBox()
         self.pack_end(self.bottom, False, False, 0)
+
+        # create buffer switcher
+        self.buffer_sw_tm = gtk.ListStore(str, bool) # define TreeModel
+        for buff in MainWindowBuffer.SYSTEM_BUFFER:  # add all system-opened buffers
+            self.buffer_sw_tm.append([buff, False])
+        self.buffer_sw_tm.append(['NanI', True]) # not an item, this item should not be seen
+
+        self.buffer_sw = gtk.ComboBox(self.buffer_sw_tm)
+        self.bottom.pack_start(self.buffer_sw, False, False, 0)
+
+        cell = gtk.CellRendererText()
+        cell.set_property(
+            'font-desc',
+            pango.FontDescription('monospace {0}'.format(int( int( conf.Config['font_sz']) * 0.75 ) ))
+            )
+        self.buffer_sw.pack_start(cell, True)
+        self.buffer_sw.add_attribute(cell, "text", 0)
+        self.buffer_sw.set_row_separator_func(self.separater)
+
+        # init the switcher
+        self.buffer_iter = self.buffer_sw_tm.get_iter_first()
+        while self.buffer_sw_tm.get_value(self.buffer_iter, 0) != MainWindowBuffer.DEFAULT_BUFFER:
+            self.buffer_iter = self.buffer_sw_tm.iter_next(self.buffer_iter)
+        self.buffer_sw.set_active_iter(self.buffer_iter)
+
+
+    def separater(self, model, iter, data = None):
+        return model.get_value(iter, 1)
 
     def connect_center(self, sig, cb):
         if sig in [ 'populate-popup' ]:
@@ -316,14 +349,14 @@ class MainWindowFrame(gtk.VBox):
                 widget = gtk.TextView()
                 widget.modify_font(pango.FontDescription('monospace ' + conf.Config['font_sz']))
             else:
-                widget = gtk.Label("Error: MainWindowFrame.switch():\n" +
-                                   "       buffer_type not supported.\n")
+                raise KeyError
+
             # switch widget
             if self.center:
                 self.remove(self.center)
             self.center = widget
             self.buffer_type = new_buff.type
-            self.pack_start(self.center, True, True, 0)
+            self.scrooled.add(self.center)
 
         # connect buffer
         if self.buffer_type == 'textview':
@@ -331,32 +364,45 @@ class MainWindowFrame(gtk.VBox):
 
 
 class MainWindowBuffer(object):
-    DEFAULT_BUFFER = {
+    DEFAULT_BUFFER = '*scratch*'
+    SYSTEM_BUFFER = {
         '*scratch*' : 'textview',
         }
     buff_list = {
-        # 'buffer_name' : MainWindowBuffer()
+        # 'buff_sys'    : MainWindowBuffer()
+        # 'buff_user'   : MainWindowBuffer()
+        # 'buff_sys(1)' : MainWindowBuffer()
+        # 'buff_sys(2)' : MainWindowBuffer()
+        #  ...
         }
-    __buff_rec = {
-        # buffer_path[-1] : [
-        #                     ( 'buffer_name',    buffer_path, opened ),
-        #                     ( 'buffer_name(1)', buffer_path, opened ),
-        #                      ...
-        #                     ]
+    buff_group = {
+        'system' : [], # [ 'buff_sys', 'buff_sys(1)', 'buff_sys(2)', ]
+        'user'   : [], # [ 'buff_user', ]
+        }
+    __buff_rec = { # no-removal record
+        # 'buff_sys'  : [ ( 'buff_sys',    buff_path, opened ),
+        #                 ( 'buff_sys(1)', buff_path, opened ),
+        #                 ( 'buff_sys(2)', buff_path, opened ),
+        #                 ],
+        # 'buff_user' : [ ( 'buff_user',  buff_user_path, opened ),
+        #                 ],
+        #  ...
         }
 
     def __new__(cls, buffer_path = None, buffer_type = None):
         self = object.__new__(cls)
         if buffer_path == None:
-            buffer_path = '*scratch*'
+            buffer_path = self.DEFAULT_BUFFER
 
+        buff_group = 'user'     # assume user-opened buffer
         if isinstance(buffer_path, str):
-            if buffer_path in self.DEFAULT_BUFFER:
-                self.name = buffer_path
+            self.name = buffer_path
+            if buffer_path in self.SYSTEM_BUFFER:
+                # system-opened buffer
+                buff_group = 'system'
                 self.path = None
-                self.type = self.DEFAULT_BUFFER[self.name]
-            else:               # treat as typo, add [] around
-                self.name = buffer_path
+                self.type = self.SYSTEM_BUFFER[self.name]
+            else:       # treat as a single node, add [] around
                 self.path = [ buffer_path ]
                 self.type = buffer_type
         else:
@@ -387,10 +433,12 @@ class MainWindowBuffer(object):
             # name not in record, add it
             self.__buff_rec[self.name] = [ (self.name, self.path, True) ]
         self.buff_list[self.name] = self
+        self.buff_group[buff_group].append(self.name)
 
         # fetch content
         if buffer_type == 'textview':
             self.buffer = gtk.TextBuffer()
+
             if self.name == '*scratch*':
                 # tmp buffer
                 self.buffer.set_text(
@@ -409,5 +457,8 @@ class MainWindowBuffer(object):
                 # new file
                 pass
             self.modified = False
+        else:
+            self.buffer = None
+            self.modified = None
 
         return self
