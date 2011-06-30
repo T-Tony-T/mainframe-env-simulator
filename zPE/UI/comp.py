@@ -243,7 +243,6 @@ class SplitScreen(gtk.Frame):
             paned = gtk.HPaned()
         else:
             paned = gtk.VPaned()
-        paned.set_property('can_focus', False)
 
         # create new frame
         if self.frame_split_dup:
