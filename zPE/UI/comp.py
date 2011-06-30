@@ -19,12 +19,16 @@ import gtk
 import gobject, pango
 
 
+######## ######## ######## ######## 
+########    SplitScreen    ######## 
+######## ######## ######## ######## 
+
 class SplitScreen(gtk.Frame):
     def __init__(self,
                  frame, frame_alist = [],
                  frame_init = None,
                  frame_split_dup = None,
-                 frame_sz_min = (40, 40)
+                 frame_sz_min = (50, 50)
                  ):
         '''
         frame
@@ -107,8 +111,13 @@ class SplitScreen(gtk.Frame):
         self.ctrl_bar['tp'] = gtk.Button()
         self.ctrl_bar['bm'] = gtk.Button()
         self.mw_center = gtk.Frame()
-        self.active_frame = self.new_frame(self.frame_alist) # keep track of the focus
-        self.mw_center.add(self.active_frame)
+        frame = self.new_frame(self.frame_alist) # keep track of the focus
+        frame.connect('focus-in-event', self._sig_focus_in)
+        self.mw_center.add(frame)
+
+        # remove shadow
+        self.set_shadow_type(gtk.SHADOW_NONE)
+        self.mw_center.set_shadow_type(gtk.SHADOW_NONE)
 
         root_frame.attach(self.ctrl_bar['lt'], 0, 1, 1, 2, xoptions=gtk.SHRINK)
         root_frame.attach(self.ctrl_bar['rt'], 2, 3, 1, 2, xoptions=gtk.SHRINK)
@@ -164,7 +173,7 @@ class SplitScreen(gtk.Frame):
 
         # start the timer
         self.mw_center.timer = True
-        gobject.timeout_add(20, self.update_mw, pos)
+        gobject.timeout_add(20, self.update_sd, pos)
 
     def _sig_ctrl_drop(self, widget, event, pos):
         # remove the shading-layer
@@ -183,7 +192,7 @@ class SplitScreen(gtk.Frame):
             ptr_pos,                              # the current ptr pos
             (0, 0),                               # the frame size - low bound
             (alloc.width, alloc.height),          # the frame size - high bound
-            [sp + 10 for sp in self.frame_sz_min] # the min spacing + 10
+            [sp + 20 for sp in self.frame_sz_min] # the min spacing + 20
             )
 
         # add paned if in center
@@ -191,14 +200,15 @@ class SplitScreen(gtk.Frame):
             paned = self.add_paned(self.mw_center, pos)
 
             # re-position the newly added frame
+            handle_sz = paned.style_get_property('handle-size')
             if pos in self.__ctrl_pos['h']:
-                # -6 to cancel the width of the divider
-                paned.set_position(correct_pos[0] - 6)
+                # - handle_sz cancel the width of the divider
+                paned.set_position(correct_pos[0] - handle_sz)
             else:
-                paned.set_position(correct_pos[1] - 6)
+                paned.set_position(correct_pos[1] - handle_sz)
     ### end of signal for DnD
 
-    ### signal for MWF
+    ### signal for center frame
     def _sig_div_drop(self, widget, event):
         for child in widget.get_children():
             alloc = child.get_allocation()
@@ -207,7 +217,23 @@ class SplitScreen(gtk.Frame):
                  ):
                 self.rm_frame(widget, child)
                 break
-    ### end of signal for MWF
+
+    def _sig_focus_in(self, widget, event):
+        pass # mark
+    ### end of signal for center frame
+
+    def active_frame(self, current):
+        if isinstance(current, self.frame):
+            if current.is_focus():
+                return current  # found the frame
+            else:
+                return None     # end of the path
+
+        for child in current.get_children():
+            found = self.active_frame(child)
+            if found:
+                return found    # found in previous search
+        return None             # not found at all
 
     def add_paned(self, parent, pos):
         child = parent.child
@@ -217,10 +243,11 @@ class SplitScreen(gtk.Frame):
             paned = gtk.HPaned()
         else:
             paned = gtk.VPaned()
+        paned.set_property('can_focus', False)
 
         # create new frame
         if self.frame_split_dup:
-            new_child = self.frame_split_dup(self.active_frame)
+            new_child = self.frame_split_dup(self.active_frame(self.mw_center))
         else:
             new_child = self.new_frame(self.frame_alist)
 
@@ -236,8 +263,12 @@ class SplitScreen(gtk.Frame):
 
         # connect signals
         paned.connect('button-release-event', self._sig_div_drop)
+        new_child.connect('focus-in-event', self._sig_focus_in)
 
+        # show widgets
         parent.show_all()
+        new_child.grab_focus()
+
         return paned
 
     def new_frame(self, alist):
@@ -277,7 +308,8 @@ class SplitScreen(gtk.Frame):
             parent.remove(widget)
             eval(add_cmd)
 
-    def update_mw(self, pos):
+
+    def update_sd(self, pos):
         if not self.mw_center.timer:
             return False
 
@@ -330,11 +362,31 @@ class SplitScreen(gtk.Frame):
 
 
 ######## ######## ######## ######## 
-######## ######## ######## ######## 
+########       zEdit       ######## 
 ######## ######## ######## ######## 
 
 
 class zEdit(gtk.VBox):
+    font = {
+        'name' : 'monospace',
+        'size' : 12,
+        }
+    theme = {
+        'text'          : '#000000',
+        'text-selected' : '#000000',
+        'base'          : '#FBEFCD',#'#FFF7EA',
+        'base-selected' : '#FFA500',
+        'status'        : '#A9A297',
+        'status-active' : '#D9D2C7',
+        }
+
+    __auto_update = {
+        # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
+        'update_buffer_list'    : [  ],
+        'update_font'           : [  ],
+        'update_theme'          : [  ],
+        }
+
     def __init__(self, buffer_path = None, buffer_type = None):
         super(zEdit, self).__init__()
         self.active_buffer = None
@@ -349,55 +401,130 @@ class zEdit(gtk.VBox):
         self.set_buffer(buffer_path, buffer_type)
 
         # create the status bar
+        self.bottom_bg = gtk.EventBox()
+        self.pack_end(self.bottom_bg, False, False, 0)
         self.bottom = gtk.HBox()
-        self.pack_end(self.bottom, False, False, 0)
+        self.bottom_bg.add(self.bottom)
 
         # create buffer switcher
         self.buffer_sw_tm = gtk.ListStore(str, bool) # define TreeModel
-        for buff in zEditBuffer.SYSTEM_BUFFER:  # add all system-opened buffers
-            self.buffer_sw_tm.append([buff, False])
-        self.buffer_sw_tm.append(['NanI', True]) # not an item, this item should not be seen
-
         self.buffer_sw = gtk.ComboBox(self.buffer_sw_tm)
         self.bottom.pack_start(self.buffer_sw, False, False, 0)
+        self.buffer_sw.set_property('focus-on-click', False)
 
         self.buffer_sw_cell = gtk.CellRendererText()
         self.buffer_sw.pack_start(self.buffer_sw_cell, True)
         self.buffer_sw.add_attribute(self.buffer_sw_cell, "text", 0)
-        self.buffer_sw.set_row_separator_func(self.separater)
+        self.buffer_sw.set_row_separator_func(self.separator)
 
-        # init the switcher
-        self.buffer_iter = self.buffer_sw_tm.get_iter_first()
-        while self.buffer_sw_tm.get_value(self.buffer_iter, 0) != zEditBuffer.DEFAULT_BUFFER:
-            self.buffer_iter = self.buffer_sw_tm.iter_next(self.buffer_iter)
-        self.buffer_sw.set_active_iter(self.buffer_iter)
+        # connect auto-update items
+        self.register('update_buffer_list', zEdit._sig_update_buffer_list)
+        zEdit._sig_update_buffer_list(self)
+        self.register('update_font', zEdit._sig_update_font)
+        zEdit._sig_update_font(self)
+        self.register('update_theme', zEdit._sig_update_theme)
+        zEdit._sig_update_theme(self)
 
-        # set font
-        self.set_font('monospace', 10) # default font
+        # connect signal
+        self.center.connect('focus-in-event', self._sig_focus_in)
+        self.center.connect('focus-out-event', self._sig_focus_out)
+        self.buffer_sw.connect('changed', self._sig_buffer_changed)
 
+    ### signal-like auto-update function
+    def register(self, sig, callback, *data):
+        '''This function register a function to a signal-like string'''
+        zEdit.__auto_update[sig].append((self, callback, data))
 
-    def connect_center(self, sig, cb):
-        if sig in [ 'populate-popup' ]:
-            if self.active_buffer.type == 'textview':
-                return self.center.connect(sig, cb)
+    @staticmethod
+    def emit(sig):
+        '''This function emit the signal to all registered object'''
+        for (widget, callback, data_list) in zEdit.__auto_update[sig]:
+            callback(widget, *data_list)
 
-    def separater(self, model, iter, data = None):
-        return model.get_value(iter, 1)
+    @staticmethod
+    def _sig_update_buffer_list(widget):
+        # clear the list
+        widget.buffer_sw_tm.clear()
 
-    def get_font(self):
-        return self.font
+        # add system-opened buffers
+        for buff in zEditBuffer.buff_group['system']:
+            widget.buffer_sw_tm.append([buff, False])
+        # add user-opened buffers, if exist
+        if len(zEditBuffer.buff_group['user']):
+            # add separator: Not an Item, this item should not be seen
+            widget.buffer_sw_tm.append(['NanI', True])
+            # add user-opened buffers
+            for buff in zEditBuffer.buff_group['user']:
+                widget.buffer_sw_tm.append([buff, False])
 
-    def set_font(self, font_name, font_size):
-        self.font = ( font_name, font_size )
-
-        self.center.modify_font(
-            pango.FontDescription('{0} {1}'.format(font_name, font_size))
+        # set active
+        buffer_iter = widget.buffer_sw_tm.get_iter_first()
+        while widget.buffer_sw_tm.get_value(buffer_iter, 0) != widget.active_buffer.name:
+            buffer_iter = widget.buffer_sw_tm.iter_next(buffer_iter)
+        widget.buffer_sw.set_active_iter(buffer_iter)
+        
+    @staticmethod
+    def _sig_update_font(widget):
+        widget.center.modify_font(
+            pango.FontDescription('{0} {1}'.format(zEdit.font['name'], zEdit.font['size']))
             )
 
-        self.buffer_sw_cell.set_property(
+        widget.buffer_sw_cell.set_property(
             'font-desc',
-            pango.FontDescription('{0} {1}'.format(font_name, int(font_size * 0.75)))
+            pango.FontDescription('{0} {1}'.format(zEdit.font['name'], int(zEdit.font['size'] * 0.75)))
             )
+
+    @staticmethod
+    def _sig_update_theme(widget):
+        widget.center.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['text']))
+        widget.center.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['base']))
+
+        widget.center.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zEdit.theme['text']))
+        widget.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zEdit.theme['base']))
+
+        widget.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zEdit.theme['text-selected']))
+        widget.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zEdit.theme['base-selected']))
+
+        if widget.is_focus():
+            widget.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status-active']))
+        else:
+            widget.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status']))
+    ### end of signal-like auto-update function
+
+
+    ### signal for center
+    def _sig_focus_in(self, widget, event):
+        self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status-active']))
+
+    def _sig_focus_out(self, widget, event):
+        self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status']))
+    ### end of signal for center
+
+
+    ### signal for bottom
+    def _sig_buffer_changed(self, combobox):
+        active_iter = combobox.get_active_iter()
+        if not active_iter:
+            return              # early return
+        buffer_name = self.buffer_sw_tm.get_value(active_iter, 0)
+        buff = zEditBuffer.buff_list[buffer_name]
+        self.set_buffer(buff.path, buff.type)
+        # set focus
+        self.grab_focus()
+    ### end of signal for bottom
+
+
+    ### overloaded function definition
+    def connect(self, sig, *data):
+        return self.center.connect(sig, *data)
+
+    def is_focus(self):
+        return self.center.is_focus()
+
+    def grab_focus(self):
+        self.center.grab_focus()
+    ### end of overloaded function definition
+
 
     def get_buffer(self):
         return (self.active_buffer.path, self.active_buffer.type)
@@ -428,6 +555,27 @@ class zEdit(gtk.VBox):
         if self.active_buffer.type == 'textview':
             self.center.set_buffer(new_buff.buffer)
 
+    def get_font(self):
+        return zEdit.font
+
+    def set_font(self, dic):
+        for k,v in dic.items():
+            if k in zEdit.font:
+                zEdit.font[k] = v
+        zEdit.emit('update_font')
+
+    def get_theme(self):
+        return zEdit.theme
+
+    def set_theme(self, dic):
+        for k,v in dic.items():
+            if k in zEdit.theme:
+                zEdit.font[k] = v
+        zEdit.emit('update_theme')
+
+    def separator(self, model, iter, data = None):
+        return model.get_value(iter, 1)
+
 
 class zEditBuffer(object):
     DEFAULT_BUFFER = '*scratch*'
@@ -435,39 +583,42 @@ class zEditBuffer(object):
         '*scratch*' : 'textview',
         }
     buff_list = {
-        # 'buff_sys'    : zEditBuffer()
-        # 'buff_user'   : zEditBuffer()
-        # 'buff_sys(1)' : zEditBuffer()
-        # 'buff_sys(2)' : zEditBuffer()
+        # 'buff_user'    : zEditBuffer()
+        # 'buff_sys'     : zEditBuffer()
+        # 'buff_user(1)' : zEditBuffer()
+        # 'buff_another' : zEditBuffer()
+        # 'buff_user(2)' : zEditBuffer()
         #  ...
         }
     buff_group = {
-        'system' : [], # [ 'buff_sys', 'buff_sys(1)', 'buff_sys(2)', ]
-        'user'   : [], # [ 'buff_user', ]
+        'system' : [], # [ 'buff_sys', ]
+        'user'   : [], # [ 'buff_user', 'buff_user(1)', 'buff_another', 'buff_user(2)', ]
         }
     buff_rec = { # no-removal record
-        # 'buff_sys'  : [ ( 'buff_sys',    buff_path, opened ),
-        #                 ( 'buff_sys(1)', buff_path, opened ),
-        #                 ( 'buff_sys(2)', buff_path, opened ),
-        #                 ],
-        # 'buff_user' : [ ( 'buff_user',  buff_user_path, opened ),
-        #                 ],
+        # 'buff_sys'     : [ ( 'buff_sys',  buff_sys_path, opened ),
+        #                    ],
+        # 'buff_user'    : [ ( 'buff_user',    buff_user_0_path, opened ),
+        #                    ( 'buff_user(1)', buff_user_1_path, opened ),
+        #                    ( 'buff_user(2)', buff_user_2_path, opened ),
+        #                    ],
+        # 'buff_another' : [ ( 'buff_another',  buff_another_path, opened ),
+        #                    ],
         #  ...
         }
 
     def __new__(cls, buffer_path = None, buffer_type = None):
         self = object.__new__(cls)
         if buffer_path == None:
-            buffer_path = self.DEFAULT_BUFFER
+            buffer_path = zEditBuffer.DEFAULT_BUFFER
 
         buff_group = 'user'     # assume user-opened buffer
         if isinstance(buffer_path, str):
             self.name = buffer_path
-            if buffer_path in self.SYSTEM_BUFFER:
+            if buffer_path in zEditBuffer.SYSTEM_BUFFER:
                 # system-opened buffer
                 buff_group = 'system'
                 self.path = None
-                self.type = self.SYSTEM_BUFFER[self.name]
+                self.type = zEditBuffer.SYSTEM_BUFFER[self.name]
             else:       # treat as a single node, add [] around
                 self.path = [ buffer_path ]
                 self.type = buffer_type
@@ -477,29 +628,31 @@ class zEditBuffer(object):
             self.type = buffer_type
 
         no_rec = True           # assume first encounter of the name
-        if self.name in self.buff_rec:
+        if self.name in zEditBuffer.buff_rec:
             # name is recorded, check for duplication
-            for [name, path, opened] in self.buff_rec[self.name]:
+            for [name, path, opened] in zEditBuffer.buff_rec[self.name]:
                 if path == self.path:
                     # same path ==> has record
                     no_rec = False
 
                     if opened:
                         # return old file reference
-                        return self.buff_list[name] # early return
+                        return zEditBuffer.buff_list[name] # early return
                     else:
                         # re-open it
                         self.name = name
                         break
             if no_rec:
                 # no duplication, generate new name of the new file
-                self.name += "(" + str(len(self.buff_rec[self.name])) + ")"
+                self.name += "(" + str(len(zEditBuffer.buff_rec[self.name])) + ")"
 
         if no_rec:
             # name not in record, add it
-            self.buff_rec[self.name] = [ (self.name, self.path, True) ]
-        self.buff_list[self.name] = self
-        self.buff_group[buff_group].append(self.name)
+            zEditBuffer.buff_rec[self.name] = [ (self.name, self.path, True) ]
+        zEditBuffer.buff_list[self.name] = self
+
+        zEditBuffer.buff_group[buff_group].append(self.name)
+        zEdit.emit('update_buffer_list')
 
         # fetch content
         if buffer_type == 'textview':
@@ -528,3 +681,18 @@ class zEditBuffer(object):
             self.modified = None
 
         return self
+
+######## ######## ######## ######## 
+########    MODULE INIT    ######## 
+######## ######## ######## ######## 
+
+# change gtk settings
+settings = gtk.settings_get_default()
+settings.set_property('gtk-show-input-method-menu', False)
+settings.set_property('gtk-show-unicode-menu', False)
+
+settings.set_property('gtk-cursor-blink', False)
+
+# open default buffers
+for buff_name, buff_type in zEditBuffer.SYSTEM_BUFFER.items():
+    zEditBuffer(buff_name, buff_type)

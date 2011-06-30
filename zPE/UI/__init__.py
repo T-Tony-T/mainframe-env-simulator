@@ -84,14 +84,9 @@ class BaseFrame(object):
         w_vbox.pack_end(self.statusbar, False, False, 0)
 
 
-        # open default buffers
-        for buff_name, buff_type in comp.zEditBuffer.SYSTEM_BUFFER.items():
-            comp.zEditBuffer(buff_name, buff_type)
-        #comp.zEditBuffer(['/', 'home', 'tony', 'Desktop', 'perl_test'], 'textview') # test, mark
-
-
         ### create main window
         self.mw = comp.SplitScreen(comp.zEdit, [], self.frame_init, self.frame_split_dup)
+#        comp.zEditBuffer(['/', 'home', 'tony', 'Desktop', 'perl_test'], 'textview') # test, mark
         w_vbox.pack_start(self.mw, True, True, 0)
 
 
@@ -101,19 +96,22 @@ class BaseFrame(object):
 
     ### callback functions for SplitScreen
     def frame_init(self, frame):
-        frame.set_font('monospace', conf.Config['font_sz'])
-        frame.ct_pop_id = frame.connect_center('populate-popup', self._sig_popup_manip)
+        frame.set_font({ 'name' : 'monospace', 'size' : conf.Config['font_sz'] })
+        frame.ct_pop_id = frame.connect('populate-popup', self._sig_popup_manip)
 
     def frame_split_dup(self, frame):
-        new_frame = comp.zEdit(* frame.get_buffer())
-        self.frame_init(new_frame)
+        if frame:
+            new_frame = comp.zEdit(* frame.get_buffer())
+        else:
+            new_frame = comp.zEdit()
 
+        self.frame_init(new_frame)
         return new_frame
     ### end of callback functions for SplitScreen
 
     ### signals for SplitScreen
     def _sig_popup_manip(self, widget, menu):
-        menu.remove(menu.get_children()[-1])
+        menu.append(gtk.SeparatorMenuItem())
         menu.append(gtk.MenuItem("test"))
         menu.show_all()
     ### end of signals for SplitScreen
@@ -131,5 +129,13 @@ class BaseFrame(object):
 
 
     def main(self):
+        # set default theme
+        gtk.rc_parse_string('''
+style 'zTheme' {
+    GtkPaned::handle-size = 8
+}
+widget '*' style 'zTheme'
+''')
+
         gtk.main()
 
