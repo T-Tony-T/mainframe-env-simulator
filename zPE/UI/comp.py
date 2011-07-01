@@ -19,6 +19,86 @@ import gtk
 import gobject, pango
 
 
+
+######## ######## ######## ######## 
+########     LastLine      ######## 
+######## ######## ######## ######## 
+
+class LastLine(gtk.HBox):
+    def __init__(self, label = ''):
+        '''
+        label
+            the label in front of the last-line panel
+        '''
+        super(LastLine, self).__init__()
+
+
+        self.__label = gtk.Label(label)
+        self.pack_start(self.__label, False, False, 0)
+
+        self.__line_fix = gtk.Label()
+        self.pack_start(self.__line_fix, False, False, 0)
+
+        self.__line_inter = gtk.Entry()
+        self.pack_start(self.__line_inter, True, True, 0)
+
+        self.__line_inter.set_has_frame(False)
+
+        self.set_editable(False)
+
+
+        # connect auto-update items
+        zEdit.register('update_font', zEdit._sig_update_font_modify, self.__label)
+        zEdit._sig_update_font_modify(self.__label)
+
+        zEdit.register('update_font', zEdit._sig_update_font_modify, self.__line_fix)
+        zEdit._sig_update_font_modify(self.__line_fix)
+
+        zEdit.register('update_font', zEdit._sig_update_font_modify, self.__line_inter)
+        zEdit._sig_update_font_modify(self.__line_inter)
+
+        zEdit.register('update_theme', self._sig_update_theme, self)
+        self._sig_update_theme()
+
+
+    ### signal-like auto-update function
+    def _sig_update_theme(self, widget = None):
+        self.__line_fix.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['reserve']))
+
+        self.__line_inter.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['text']))
+        self.__line_inter.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['base']))
+
+        self.__line_inter.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zEdit.theme['text']))
+        self.__line_inter.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zEdit.theme['base']))
+    ### end of signal-like auto-update function
+
+    ### overloaded function definition
+    def connect(self, sig, *data):
+        return self.__line_inter.connect(sig, *data)
+    ### end of overloaded function definition
+
+    def get_label(self):
+        return self.__label.get_text()
+
+    def set_label(self, string):
+        self.__label.set_text(string)
+
+    def set_highlight_text(self, string):
+        self.__line_fix.set_markup('<b>{0}</b>'.format(string))
+
+    def get_text(self):
+        return self.__line_inter.get_text()
+
+    def set_text(self, string):
+        self.__line_inter.set_text(string)
+
+    def set_editable(self, setting):
+        self.__line_inter.set_property('can_focus', setting)
+        self.__line_inter.set_editable(setting)
+        self.__line_inter.grab_focus()
+
+
+
 ######## ######## ######## ######## 
 ########    SplitScreen    ######## 
 ######## ######## ######## ######## 
@@ -371,12 +451,18 @@ class zEdit(gtk.VBox):
         'size' : 12,
         }
     theme = {
-        'text'          : '#000000',
-        'text-selected' : '#000000',
-        'base'          : '#FBEFCD',#'#FFF7EA',
-        'base-selected' : '#FFA500',
-        'status'        : '#A9A297',
-        'status-active' : '#D9D2C7',
+        # reguler
+        'text'          : '#000000', # black
+        'text-selected' : '#000000', # black
+        'base'          : '#FBEFCD', # wheat - mod
+        'base-selected' : '#FFA500', # orenge
+        'status'        : '#808080', # gray
+        'status-active' : '#C0C0C0', # silver
+        # highlight
+        'reserve'       : '#0000FF', # blue
+        'comment'       : '#008000', # green
+        'literal'       : '#FF0000', # red
+        'label'         : '#808000', # olive
         }
 
     __auto_update = {
@@ -387,6 +473,24 @@ class zEdit(gtk.VBox):
         }
 
     def __init__(self, buffer_path = None, buffer_type = None):
+        '''
+        buffer_path
+            a list of nodes representing the path of the file/buffer
+            the editor is suppose to open.
+
+            examples:
+               OS    |          file             |             buffer_path
+            ---------+---------------------------+-------------------------------------------
+              Linux  | /home/user/doc/file       | [ '/', 'home', 'user', 'doc', 'file'    ]
+             Windows | C:\User\Document\file.txt | [ 'C:\', 'User', 'Document', 'file.txt' ]
+
+            Note: any system-opened buffer should has "None" as the path.
+
+        buffer_type
+            'file' : the buffer corresponds to a file (hopefully a text file)
+            'dir'  : the buffer corresponds to a directory
+            'disp' : the buffer corresponds to a display panel (read-only)
+        '''
         super(zEdit, self).__init__()
         self.active_buffer = None
 
@@ -414,15 +518,21 @@ class zEdit(gtk.VBox):
         self.buffer_sw_cell = gtk.CellRendererText()
         self.buffer_sw.pack_start(self.buffer_sw_cell, True)
         self.buffer_sw.add_attribute(self.buffer_sw_cell, "text", 0)
+
         self.buffer_sw.set_row_separator_func(self.separator)
 
         # connect auto-update items
-        self.register('update_buffer_list', zEdit._sig_update_buffer_list)
-        zEdit._sig_update_buffer_list(self)
-        self.register('update_font', zEdit._sig_update_font)
-        zEdit._sig_update_font(self)
-        self.register('update_theme', zEdit._sig_update_theme)
-        zEdit._sig_update_theme(self)
+        zEdit.register('update_buffer_list', zEdit._sig_update_buffer_list, self.buffer_sw, self)
+        zEdit._sig_update_buffer_list(self.buffer_sw, self)
+
+        zEdit.register('update_font', zEdit._sig_update_font_modify, self.center)
+        zEdit._sig_update_font_modify(self.center)
+
+        zEdit.register('update_font', zEdit._sig_update_font_property, self.buffer_sw_cell, 0.75)
+        zEdit._sig_update_font_property(self.buffer_sw_cell, 0.75)
+
+        zEdit.register('update_theme', self._sig_update_theme, self)
+        self._sig_update_theme()
 
         # connect signal
         self.center.connect('focus-in-event', self._sig_focus_in)
@@ -430,9 +540,10 @@ class zEdit(gtk.VBox):
         self.buffer_sw.connect('changed', self._sig_buffer_changed)
 
     ### signal-like auto-update function
-    def register(self, sig, callback, *data):
+    @staticmethod
+    def register(sig, callback, widget, *data):
         '''This function register a function to a signal-like string'''
-        zEdit.__auto_update[sig].append((self, callback, data))
+        zEdit.__auto_update[sig].append((widget, callback, data))
 
     @staticmethod
     def emit(sig):
@@ -441,62 +552,73 @@ class zEdit(gtk.VBox):
             callback(widget, *data_list)
 
     @staticmethod
-    def _sig_update_buffer_list(widget):
+    def _sig_update_buffer_list(combo, z_editor):
+        tm = combo.get_model()
+
         # clear the list
-        widget.buffer_sw_tm.clear()
+        tm.clear()
 
         # add system-opened buffers
         for buff in zEditBuffer.buff_group['system']:
-            widget.buffer_sw_tm.append([buff, False])
+            tm.append([buff, False])
         # add user-opened buffers, if exist
         if len(zEditBuffer.buff_group['user']):
             # add separator: Not an Item, this item should not be seen
-            widget.buffer_sw_tm.append(['NanI', True])
+            tm.append(['NanI', True])
             # add user-opened buffers
             for buff in zEditBuffer.buff_group['user']:
-                widget.buffer_sw_tm.append([buff, False])
+                tm.append([buff, False])
 
         # set active
-        buffer_iter = widget.buffer_sw_tm.get_iter_first()
-        while widget.buffer_sw_tm.get_value(buffer_iter, 0) != widget.active_buffer.name:
-            buffer_iter = widget.buffer_sw_tm.iter_next(buffer_iter)
-        widget.buffer_sw.set_active_iter(buffer_iter)
+        buffer_iter = tm.get_iter_first()
+        while tm.get_value(buffer_iter, 0) != z_editor.active_buffer.name:
+            buffer_iter = tm.iter_next(buffer_iter)
+        combo.set_active_iter(buffer_iter)
         
     @staticmethod
-    def _sig_update_font(widget):
-        widget.center.modify_font(
-            pango.FontDescription('{0} {1}'.format(zEdit.font['name'], zEdit.font['size']))
-            )
-
-        widget.buffer_sw_cell.set_property(
-            'font-desc',
-            pango.FontDescription('{0} {1}'.format(zEdit.font['name'], int(zEdit.font['size'] * 0.75)))
+    def _sig_update_font_modify(widget, weight = 1):
+        widget.modify_font(
+            pango.FontDescription('{0} {1}'.format(zEdit.font['name'], int(zEdit.font['size'] * weight)))
             )
 
     @staticmethod
-    def _sig_update_theme(widget):
-        widget.center.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['text']))
-        widget.center.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['base']))
+    def _sig_update_font_property(widget, weight = 1):
+        widget.set_property(
+            'font-desc',
+            pango.FontDescription('{0} {1}'.format(zEdit.font['name'], int(zEdit.font['size'] * weight)))
+            )
 
-        widget.center.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zEdit.theme['text']))
-        widget.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zEdit.theme['base']))
+    def _sig_update_theme(self, widget = None):
+        self.center.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['text']))
+        self.center.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['base']))
 
-        widget.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zEdit.theme['text-selected']))
-        widget.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zEdit.theme['base-selected']))
+        self.center.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zEdit.theme['text']))
+        self.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zEdit.theme['base']))
 
-        if widget.is_focus():
-            widget.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status-active']))
+        self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zEdit.theme['text-selected']))
+        self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zEdit.theme['base-selected']))
+
+        if self.is_focus():
+            self.update_theme_focus_in()
         else:
-            widget.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status']))
+            self.update_theme_focus_out()
+
+    def update_theme_focus_in(self):
+        self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status-active']))
+        self.buffer_sw_cell.set_property('background-gdk', gtk.gdk.color_parse(zEdit.theme['status-active']))
+
+    def update_theme_focus_out(self):
+        self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status']))
+        self.buffer_sw_cell.set_property('background-gdk', gtk.gdk.color_parse(zEdit.theme['status']))
     ### end of signal-like auto-update function
 
 
     ### signal for center
     def _sig_focus_in(self, widget, event):
-        self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status-active']))
+        self.update_theme_focus_in()
 
     def _sig_focus_out(self, widget, event):
-        self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zEdit.theme['status']))
+        self.update_theme_focus_out()
     ### end of signal for center
 
 
@@ -536,7 +658,7 @@ class zEdit(gtk.VBox):
              self.active_buffer.type != new_buff.type
              ):
             # create widget
-            if new_buff.type == 'textview':
+            if new_buff.type == 'file':
                 widget = gtk.TextView()
             else:
                 raise KeyError
@@ -551,7 +673,7 @@ class zEdit(gtk.VBox):
             self.active_buffer = new_buff
 
         # connect buffer
-        if self.active_buffer.type == 'textview':
+        if self.active_buffer.type == 'file':
             self.center.set_buffer(new_buff.buffer)
 
     def get_font(self):
@@ -579,7 +701,7 @@ class zEdit(gtk.VBox):
 class zEditBuffer(object):
     DEFAULT_BUFFER = '*scratch*'
     SYSTEM_BUFFER = {
-        '*scratch*' : 'textview',
+        '*scratch*' : 'file',
         }
     buff_list = {
         # 'buff_user'    : zEditBuffer()
@@ -594,13 +716,13 @@ class zEditBuffer(object):
         'user'   : [], # [ 'buff_user', 'buff_user(1)', 'buff_another', 'buff_user(2)', ]
         }
     buff_rec = { # no-removal record
-        # 'buff_sys'     : [ ( 'buff_sys',  buff_sys_path, opened ),
+        # 'buff_sys'     : [ ( 'buff_sys',     buff_sys_path,     opened ),
         #                    ],
-        # 'buff_user'    : [ ( 'buff_user',    buff_user_0_path, opened ),
-        #                    ( 'buff_user(1)', buff_user_1_path, opened ),
-        #                    ( 'buff_user(2)', buff_user_2_path, opened ),
+        # 'buff_user'    : [ ( 'buff_user',    buff_user_0_path,  opened ),
+        #                    ( 'buff_user(1)', buff_user_1_path,  opened ),
+        #                    ( 'buff_user(2)', buff_user_2_path,  opened ),
         #                    ],
-        # 'buff_another' : [ ( 'buff_another',  buff_another_path, opened ),
+        # 'buff_another' : [ ( 'buff_another', buff_another_path, opened ),
         #                    ],
         #  ...
         }
@@ -654,7 +776,7 @@ class zEditBuffer(object):
         zEdit.emit('update_buffer_list')
 
         # fetch content
-        if buffer_type == 'textview':
+        if buffer_type == 'file':
             self.buffer = gtk.TextBuffer()
 
             if self.name == '*scratch*':
@@ -675,9 +797,12 @@ class zEditBuffer(object):
                 # new file
                 pass
             self.modified = False
-        else:
+        elif buffer_type == 'dir':
             self.buffer = None
             self.modified = None
+            pass                # mark
+        else:
+            raise TypeError
 
         return self
 
@@ -690,7 +815,18 @@ settings = gtk.settings_get_default()
 settings.set_property('gtk-show-input-method-menu', False)
 settings.set_property('gtk-show-unicode-menu', False)
 
-settings.set_property('gtk-cursor-blink', False)
+# set default theme
+gtk.rc_parse_string('''
+style 'zTheme' {
+    GtkButton::focus-line-width = 0
+    GtkButton::focus-padding = 0
+
+    GtkComboBox::appears-as-list = 1
+
+    GtkPaned::handle-size = 8
+}
+widget '*' style 'zTheme'
+''')
 
 # open default buffers
 for buff_name, buff_type in zEditBuffer.SYSTEM_BUFFER.items():
