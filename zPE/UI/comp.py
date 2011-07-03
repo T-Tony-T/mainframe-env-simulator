@@ -192,7 +192,6 @@ class SplitScreen(gtk.Frame):
         self.ctrl_bar['bm'] = gtk.Button()
         self.mw_center = gtk.Frame()
         frame = self.new_frame(self.frame_alist) # keep track of the focus
-        frame.connect('focus-in-event', self._sig_focus_in)
         self.mw_center.add(frame)
 
         # remove shadow
@@ -297,10 +296,20 @@ class SplitScreen(gtk.Frame):
                  ):
                 self.rm_frame(widget, child)
                 break
-
-    def _sig_focus_in(self, widget, event):
-        pass # mark
     ### end of signal for center frame
+
+
+    ### overloaded function definition
+    def is_focus(self):
+        return self.active_frame(self.mw_center) != None
+
+    def grab_focus(self):
+        child = self.mw_center.child
+        while not isinstance(child, self.frame):
+            child = child.get_children()[0]
+        child.grab_focus()
+    ### end of overloaded function definition
+
 
     def active_frame(self, current):
         if isinstance(current, self.frame):
@@ -342,7 +351,6 @@ class SplitScreen(gtk.Frame):
 
         # connect signals
         paned.connect('button-release-event', self._sig_div_drop)
-        new_child.connect('focus-in-event', self._sig_focus_in)
 
         # show widgets
         parent.show_all()
@@ -784,10 +792,10 @@ class zEditBuffer(object):
                 self.buffer.set_text(
 '''//*
 //* This buffer is for notes you don't want to save.
-//* If you want to create a file, use 'File' -> 'New'
+//* If you want to create a file, use {0}
 //* or save this buffer explicitly.
 //*
-'''
+'''.format('"Open a New Buffer"')
 )
             elif io_encap.is_file(self.path):
                 # existing file
