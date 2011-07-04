@@ -12,7 +12,7 @@ import io_encap
 #   flush(buff):                write content from the zEditBuffer to the corresponding file
 # 
 
-import os, sys
+import os, sys, stat, time
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -156,7 +156,7 @@ class SplitScreen(gtk.Frame):
         self.frame_split_dup = frame_split_dup
         self.frame_sz_min = frame_sz_min
 
-        # layout of the frame:
+        # layout of the SplitScreen:
         # 
         #   0 1          2 3
         # 0 +-+----------+-+ 0
@@ -361,9 +361,8 @@ class SplitScreen(gtk.Frame):
     def new_frame(self, alist):
         # prepare frame info
         frame = self.frame(* alist)
-
-        if self.frame_init:
-            self.frame_init(frame)
+        frame.set_init(self.frame_init)
+        frame.exec_init()
 
         return frame
 
@@ -492,24 +491,32 @@ class zEdit(gtk.VBox):
               Linux  | /home/user/doc/file       | [ '/', 'home', 'user', 'doc', 'file'    ]
              Windows | C:\User\Document\file.txt | [ 'C:\', 'User', 'Document', 'file.txt' ]
 
-            Note: any system-opened buffer should has "None" as the path.
-
         buffer_type
-            'file' : the buffer corresponds to a file (hopefully a text file)
-            'dir'  : the buffer corresponds to a directory
-            'disp' : the buffer corresponds to a display panel (read-only)
+            'file' : the buffer corresponds to a file (hopefully a text file) [read-write]
+            'dir'  : the buffer corresponds to a directory [read-only]
+            'disp' : the buffer corresponds to a display panel [read-only]
+
+        Note:
+          - any system-opened "file" buffer should has "None" as the ".path" property.
+          - any system-opened "non-file" buffer should has "None" as the ".buffer" property.
         '''
         super(zEdit, self).__init__()
         self.active_buffer = None
+        self.ui_init = None
 
-        # create the main window frame
-        self.scrolled = gtk.ScrolledWindow()
-        self.pack_start(self.scrolled, True, True, 0)
-        self.scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
-        self.scrolled.set_placement(gtk.CORNER_TOP_RIGHT)
-
-        self.center = None
-        self.set_buffer(buffer_path, buffer_type)
+        # layout of the frame:
+        # 
+        #   +------------+_
+        #   |+----------+| \
+        #   ||          ||  center_shell
+        #   ||          ||
+        #   ||  center  ||
+        #   ||          ||
+        #   ||          ||
+        #   |+----------+|
+        #   +--+---------+
+        #   |sw| bottom  |
+        #   +--+---------+
 
         # create the status bar
         self.bottom_bg = gtk.EventBox()
@@ -527,24 +534,27 @@ class zEdit(gtk.VBox):
         self.buffer_sw.pack_start(self.buffer_sw_cell, True)
         self.buffer_sw.add_attribute(self.buffer_sw_cell, "text", 0)
 
-        self.buffer_sw.set_row_separator_func(self.separator)
+        self.buffer_sw.set_row_separator_func(self.__separator)
+
+        # create the main window frame
+        self.scrolled = gtk.ScrolledWindow()
+        self.pack_start(self.scrolled, True, True, 0)
+        self.scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
+        self.scrolled.set_placement(gtk.CORNER_TOP_RIGHT)
+
+        self.center = None
+        self.set_buffer(buffer_path, buffer_type)
 
         # connect auto-update items
         zEdit.register('update_buffer_list', zEdit._sig_update_buffer_list, self.buffer_sw, self)
-        zEdit._sig_update_buffer_list(self.buffer_sw, self)
-
-        zEdit.register('update_font', zEdit._sig_update_font_modify, self.center)
-        zEdit._sig_update_font_modify(self.center)
-
         zEdit.register('update_font', zEdit._sig_update_font_property, self.buffer_sw_cell, 0.75)
-        zEdit._sig_update_font_property(self.buffer_sw_cell, 0.75)
-
         zEdit.register('update_theme', self._sig_update_theme, self)
+
+        zEdit._sig_update_buffer_list(self.buffer_sw, self)
+        zEdit._sig_update_font_property(self.buffer_sw_cell, 0.75)
         self._sig_update_theme()
 
         # connect signal
-        self.center.connect('focus-in-event', self._sig_focus_in)
-        self.center.connect('focus-out-event', self._sig_focus_out)
         self.buffer_sw.connect('changed', self._sig_buffer_changed)
 
     ### signal-like auto-update function
@@ -552,6 +562,12 @@ class zEdit(gtk.VBox):
     def register(sig, callback, widget, *data):
         '''This function register a function to a signal-like string'''
         zEdit.__auto_update[sig].append((widget, callback, data))
+
+    @staticmethod
+    def unregister(sig, widget):
+        '''This function un-register a widget from a signal-like string'''
+        for item in zEdit.__auto_update[sig]:
+            zEdit.__auto_update[sig].remove(item)
 
     @staticmethod
     def emit(sig):
@@ -644,8 +660,11 @@ class zEdit(gtk.VBox):
 
 
     ### overloaded function definition
-    def connect(self, sig, *data):
-        return self.center.connect(sig, *data)
+    def connect(self, sig, callback, *data):
+        [ trans_sig, trans_callback ] = zEdit.__trans_signal(
+            self.active_buffer.type, sig, callback
+            )
+        return self.center.connect(trans_sig, trans_callback, *data)
 
     def is_focus(self):
         return self.center.is_focus()
@@ -653,6 +672,14 @@ class zEdit(gtk.VBox):
     def grab_focus(self):
         self.center.grab_focus()
     ### end of overloaded function definition
+
+
+    def exec_init(self):
+        if self.ui_init:
+            self.ui_init(self)
+
+    def set_init(self, ui_init):
+        self.ui_init = ui_init
 
 
     def get_buffer(self):
@@ -668,14 +695,23 @@ class zEdit(gtk.VBox):
             # create widget
             if new_buff.type == 'file':
                 widget = gtk.TextView()
+            elif new_buff.type == 'dir':
+                widget = zFileManager()
             else:
                 raise KeyError
 
             # switch widget
             if self.center:
-                self.remove(self.center)
+                zEdit.unregister('update_font', self.center)
+                self.center.disconnect(self.focus_in_id)
+                self.center.disconnect(self.focus_out_id)
+                self.scrolled.remove(self.center)
             self.center = widget
             self.scrolled.add(self.center)
+            zEdit.register('update_font', zEdit._sig_update_font_modify, self.center)
+            self.focus_in_id = self.center.connect('focus-in-event', self._sig_focus_in)
+            self.focus_out_id = self.center.connect('focus-out-event', self._sig_focus_out)
+            zEdit._sig_update_font_modify(self.center)
 
         if new_buff != self.active_buffer:
             self.active_buffer = new_buff
@@ -683,6 +719,15 @@ class zEdit(gtk.VBox):
         # connect buffer
         if self.active_buffer.type == 'file':
             self.center.set_buffer(new_buff.buffer)
+        elif self.active_buffer.type == 'dir':
+            pass
+            if self.active_buffer.path and io_encap.is_dir(self.active_buffer.path):
+                self.center.set_folder(os.path.join(* self.active_buffer.path))
+
+        self.exec_init()
+        self._sig_update_theme()
+        self.show_all()
+
 
     def get_font(self):
         return zEdit.font
@@ -702,14 +747,61 @@ class zEdit(gtk.VBox):
                 zEdit.font[k] = v
         zEdit.emit('update_theme')
 
-    def separator(self, model, iter, data = None):
-        return model.get_value(iter, 1)
+
+    ### supporting function
+    def __separator(self, model, iterator, data = None):
+        return model.get_value(iterator, 1)
+
+    @staticmethod
+    def __trans_signal(buffer_type, sig, callback):
+        if buffer_type == 'file':
+            return [ sig, callback ]
+        elif buffer_type == 'dir':
+            if sig == 'populate-popup':
+                return [ 'button-press-event', zEdit.__trans_popup(callback) ]
+
+    @staticmethod
+    def __trans_popup(func):
+        def new_func(treeview, event, data = None):
+            if event.button != 3:
+                return
+
+            # create the menu
+            menu = gtk.Menu()
+
+            # fill the menu
+            paths = treeview.get_path_at_pos(int(event.x), int(event.y))
+            model = treeview.get_model()
+
+            if paths is None:
+                raise LookupError
+            elif len(paths) > 0:
+                iterator = model.get_iter(paths[0])
+                obj = model[iterator][0]
+            else:
+                raise ValueError
+
+            menu.append(gtk.MenuItem('Open "{0}"'.format(obj)))
+
+            # callback
+            func(treeview, menu, data)
+
+            # popup the menu
+            menu.popup(None, None, None, event.button, event.time)
+        return new_func
+    ### end of supporting function
+
 
 
 class zEditBuffer(object):
-    DEFAULT_BUFFER = '*scratch*'
+    DEFAULT_BUFFER = {
+        None   : '*scratch*',
+        'file' : '*scratch*',
+        'dir'  : '*browser*',
+        }
     SYSTEM_BUFFER = {
         '*scratch*' : 'file',
+        '*browser*' : 'dir',
         }
     buff_list = {
         # 'buff_user'    : zEditBuffer()
@@ -719,12 +811,12 @@ class zEditBuffer(object):
         # 'buff_user(2)' : zEditBuffer()
         #  ...
         }
-    buff_group = {
+    buff_group = {              # group::user should only contain type::file
         'system' : [], # [ 'buff_sys', ]
         'user'   : [], # [ 'buff_user', 'buff_user(1)', 'buff_another', 'buff_user(2)', ]
         }
     buff_rec = { # no-removal record
-        # 'buff_sys'     : [ ( 'buff_sys',     buff_sys_path,     opened ),
+        # 'buff_sys'     : [ ( 'buff_sys',     None,              opened ),
         #                    ],
         # 'buff_user'    : [ ( 'buff_user',    buff_user_0_path,  opened ),
         #                    ( 'buff_user(1)', buff_user_1_path,  opened ),
@@ -737,54 +829,86 @@ class zEditBuffer(object):
 
     def __new__(cls, buffer_path = None, buffer_type = None):
         self = object.__new__(cls)
-        if buffer_path == None:
-            buffer_path = zEditBuffer.DEFAULT_BUFFER
 
-        buff_group = 'user'     # assume user-opened buffer
+        if buffer_path == None:
+            # no path => system-opened buffer
+            buffer_path = zEditBuffer.DEFAULT_BUFFER[buffer_type]
+            buffer_type = zEditBuffer.SYSTEM_BUFFER[buffer_path]
+
+        # init buffer properties
         if isinstance(buffer_path, str):
-            self.name = buffer_path
-            if buffer_path in zEditBuffer.SYSTEM_BUFFER:
-                # system-opened buffer
+            # path not a list, check for name
+            if ( buffer_path in zEditBuffer.SYSTEM_BUFFER and
+                 buffer_type == zEditBuffer.SYSTEM_BUFFER[buffer_path]
+                 ):
+                # both name and type match => system-opened buffer
                 buff_group = 'system'
-                self.path = None
-                self.type = zEditBuffer.SYSTEM_BUFFER[self.name]
-            else:       # treat as a single node, add [] around
-                self.path = [ buffer_path ]
+                self.name = buffer_path
+                self.path = None # path is ".name", no information for ".path"
                 self.type = buffer_type
-        else:
+            else:
+                # not system-opened buffer => error
+                raise ValueError
+        elif buffer_type in [ None, 'file' ]:
+            # file with a path => user-opened buffer
+            buff_group = 'user'
             self.name = buffer_path[-1]
             self.path = buffer_path
+            self.type = 'file'  # must be type::file
+        else:
+            # not type::file, must be system-opened buffer
+            buff_group = 'system'
+            self.name = zEditBuffer.DEFAULT_BUFFER[buffer_type]
+            self.path = buffer_path # not type::file, no limitation on ".path" property
             self.type = buffer_type
 
-        no_rec = True           # assume first encounter of the name
-        if self.name in zEditBuffer.buff_rec:
-            # name is recorded, check for duplication
-            for [name, path, opened] in zEditBuffer.buff_rec[self.name]:
-                if path == self.path:
-                    # same path ==> has record
-                    no_rec = False
+        # update buffer list
+        if self.type == 'file':
+            # only record type::file for user-opened buffer
+            no_rec = True           # assume first encounter of the name
+            if self.name in zEditBuffer.buff_rec:
+                # name is recorded, check for duplication
+                for [name, path, opened] in zEditBuffer.buff_rec[self.name]:
+                    if path == self.path:
+                        # same path ==> has record
+                        no_rec = False
 
-                    if opened:
-                        # return old file reference
-                        return zEditBuffer.buff_list[name] # early return
-                    else:
-                        # re-open it
-                        self.name = name
-                        break
+                        if opened:
+                            # return old file reference
+                            return zEditBuffer.buff_list[name] # early return
+                        else:
+                            # re-open it
+                            self.name = name
+                            break
+                if no_rec:
+                    # no duplication, generate new name of the new file
+                    self.name += "(" + str(len(zEditBuffer.buff_rec[self.name])) + ")"
+
             if no_rec:
-                # no duplication, generate new name of the new file
-                self.name += "(" + str(len(zEditBuffer.buff_rec[self.name])) + ")"
+                # name not in record, add it
+                zEditBuffer.buff_rec[self.name] = [ (self.name, self.path, True) ]
+            zEditBuffer.buff_list[self.name] = self
 
-        if no_rec:
+            zEditBuffer.buff_group[buff_group].append(self.name)
+
+        elif buff_group == 'system':
+            # system-opened non-type::file buffer
+            if self.name in zEditBuffer.buff_rec:
+                # name is recorded, update it
+                zEditBuffer.buff_list[self.name].path = self.path
+                return zEditBuffer.buff_list[self.name] # early return
+
             # name not in record, add it
-            zEditBuffer.buff_rec[self.name] = [ (self.name, self.path, True) ]
-        zEditBuffer.buff_list[self.name] = self
+            zEditBuffer.buff_rec[self.name] = [ (self.name, None, None) ]
+            zEditBuffer.buff_list[self.name] = self
 
-        zEditBuffer.buff_group[buff_group].append(self.name)
+            zEditBuffer.buff_group[buff_group].append(self.name)
+        else:
+            raise SystemError   # this should never happen
         zEdit.emit('update_buffer_list')
 
         # fetch content
-        if buffer_type == 'file':
+        if self.type == 'file':
             self.buffer = gtk.TextBuffer()
 
             if self.name == '*scratch*':
@@ -800,7 +924,7 @@ class zEditBuffer(object):
             elif io_encap.is_file(self.path):
                 # existing file
                 if not io_encap.fetch(self):
-                    raise ValueError
+                    raise BufferError
             else:
                 # new file
                 pass
@@ -808,11 +932,178 @@ class zEditBuffer(object):
         elif buffer_type == 'dir':
             self.buffer = None
             self.modified = None
-            pass                # mark
         else:
             raise TypeError
 
         return self
+
+
+######## ######## ######## ######## 
+########   zFileManager    ######## 
+######## ######## ######## ######## 
+
+class zFileManager(gtk.TreeView):
+    folderxpm = [
+        "17 16 7 1",
+        "  c #000000",
+        ". c #808000",
+        "X c yellow",
+        "o c #808080",
+        "O c #c0c0c0",
+        "+ c white",
+        "@ c None",
+        "@@@@@@@@@@@@@@@@@",
+        "@@@@@@@@@@@@@@@@@",
+        "@@+XXXX.@@@@@@@@@",
+        "@+OOOOOO.@@@@@@@@",
+        "@+OXOXOXOXOXOXO. ",
+        "@+XOXOXOXOXOXOX. ",
+        "@+OXOXOXOXOXOXO. ",
+        "@+XOXOXOXOXOXOX. ",
+        "@+OXOXOXOXOXOXO. ",
+        "@+XOXOXOXOXOXOX. ",
+        "@+OXOXOXOXOXOXO. ",
+        "@+XOXOXOXOXOXOX. ",
+        "@+OOOOOOOOOOOOO. ",
+        "@                ",
+        "@@@@@@@@@@@@@@@@@",
+        "@@@@@@@@@@@@@@@@@"
+        ]
+    folderpb = gtk.gdk.pixbuf_new_from_xpm_data(folderxpm)
+
+    filexpm = [
+        "12 12 3 1",
+        "  c #000000",
+        ". c #ffff04",
+        "X c #b2c0dc",
+        "X        XXX",
+        "X ...... XXX",
+        "X ......   X",
+        "X .    ... X",
+        "X ........ X",
+        "X .   .... X",
+        "X ........ X",
+        "X .     .. X",
+        "X ........ X",
+        "X .     .. X",
+        "X ........ X",
+        "X          X"
+        ]
+    filepb = gtk.gdk.pixbuf_new_from_xpm_data(filexpm)
+
+    column_names = ['Name', 'Size', 'Last Changed']
+
+    def __init__(self, dname = None):
+        super(zFileManager, self).__init__()
+
+
+        # create the TreeViewColumns to display the data
+        cell_data_funcs = (None, self.__file_size, self.__file_last_changed)
+
+        self.fm_column = [None] * len(zFileManager.column_names)
+
+        cellpb = gtk.CellRendererPixbuf()
+        self.fm_column[0] = gtk.TreeViewColumn(self.column_names[0], cellpb)
+        self.fm_column[0].set_cell_data_func(cellpb, self.__file_pixbuf)
+
+        cell = gtk.CellRendererText()
+        self.fm_column[0].pack_start(cell, False)
+        self.fm_column[0].set_cell_data_func(cell, self.__file_name)
+
+        self.append_column(self.fm_column[0])
+
+        for n in range(1, len(self.column_names)):
+            cell = gtk.CellRendererText()
+            self.fm_column[n] = gtk.TreeViewColumn(self.column_names[n], cell)
+            if n == 1:
+                cell.set_property('xalign', 1.0)
+            self.fm_column[n].set_cell_data_func(cell, cell_data_funcs[n])
+            self.append_column(self.fm_column[n])
+
+        # connect signal
+        self.connect('row-activated', self._sig_open_file)
+
+        # set cwd
+        self.set_folder(dname)
+
+
+    ### signal definition
+    def _sig_open_file(self, treeview, path, column):
+        model = self.get_model()
+        iterator = model.get_iter(path)
+        filename = os.path.join(self.dirname, model.get_value(iterator, 0))
+        filestat = os.stat(filename)
+        if stat.S_ISDIR(filestat.st_mode):
+            self.set_folder(filename)
+    ### end of signal definition
+
+
+    ### overloaded function definition
+    def grab_focus(self):
+        super(zFileManager, self).grab_focus()
+        self.set_cursor((0,))
+    ### end of overloaded function definition
+
+
+    def set_folder(self, dname=None):
+        if not dname:
+            self.dirname = os.path.expanduser('~')
+        else:
+            self.dirname = os.path.abspath(dname)
+
+        files = [f for f in os.listdir(self.dirname) if f[0] <> '.']
+        files.sort()
+        files = ['..'] + files
+        listmodel = gtk.ListStore(object)
+        for f in files:
+            listmodel.append([f])
+        self.set_model(listmodel)
+        self.grab_focus()
+
+
+    ### supporting function
+    def __file_pixbuf(self, column, cell, model, iterator):
+        filename = os.path.join(self.dirname, model.get_value(iterator, 0))
+        filestat = os.stat(filename)
+        if stat.S_ISDIR(filestat.st_mode):
+            pb = zFileManager.folderpb
+        else:
+            pb = zFileManager.filepb
+        cell.set_property('pixbuf', pb)
+
+
+    def __file_name(self, column, cell, model, iterator):
+        cell.set_property('text', model.get_value(iterator, 0))
+
+
+    def __file_size(self, column, cell, model, iterator):
+        filename = os.path.join(self.dirname, model.get_value(iterator, 0))
+        filestat = os.stat(filename)
+        size = filestat.st_size
+        if size < 1024:
+            size = '{0}.0'.format(size) # the extra '.0' is required to pass the parser
+            unit = 'B'
+        elif size < 1048576:            # 1024 ^ 2
+            size = '{0:.1f}'.format(size / 1024.0)
+            unit = 'K'
+        elif size < 1073741824:         # 1024 ^ 3
+            size = '{0:.1f}'.format(size / 1048576.0)
+            unit = 'M'
+        else:
+            size = '{0:.1f}'.format(size / 1073741824.0)
+            unit = 'G'
+        if size[-2:] == '.0':
+            size = size[:-2]
+        cell.set_property('text', size + unit)
+
+
+    def __file_last_changed(self, column, cell, model, iterator):
+        filename = os.path.join(self.dirname, model.get_value(iterator, 0))
+        filestat = os.stat(filename)
+        cell.set_property('text', time.ctime(filestat.st_mtime))
+    ### end of supporting function
+
+
 
 ######## ######## ######## ######## 
 ########    MODULE INIT    ######## 

@@ -28,9 +28,11 @@ class BaseFrame(object):
                 ) )
         self.root.set_size_request(800, 560)
 
+
         ### create layout
         w_vbox = gtk.VBox()
         self.root.add(w_vbox)
+
 
         ### create toolbar
         self.toolbar = gtk.Toolbar()
@@ -74,6 +76,7 @@ class BaseFrame(object):
         self.lastline = comp.LastLine('z# ')
         w_vbox.pack_end(self.lastline, False, False, 0)
 
+
         ### set accel
         self.agr = gtk.AccelGroup()
         self.root.add_accel_group(self.agr)
@@ -85,6 +88,7 @@ class BaseFrame(object):
             gtk.ACCEL_VISIBLE,
             lambda *s: self._sig_quit(None)
             )
+
 
         ### show all parts
         self.agr.lock()
@@ -102,7 +106,7 @@ class BaseFrame(object):
 
 
     ### signals for SplitScreen
-    def _sig_popup_manip(self, widget, menu):
+    def _sig_popup_manip(self, widget, menu, data = None):
         menu.append(gtk.SeparatorMenuItem())
         menu.append(gtk.MenuItem("test"))
         menu.show_all()
@@ -123,7 +127,6 @@ class BaseFrame(object):
         self.frame_init(new_frame)
         return new_frame
     ### end of callback functions for SplitScreen
-
 
 
     def main(self):
