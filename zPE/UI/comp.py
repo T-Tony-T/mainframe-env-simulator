@@ -552,7 +552,6 @@ class zEdit(gtk.VBox):
 
         zEdit._sig_update_buffer_list(self.buffer_sw, self)
         zEdit._sig_update_font_property(self.buffer_sw_cell, 0.75)
-        self._sig_update_theme()
 
         # connect signal
         self.buffer_sw.connect('changed', self._sig_buffer_changed)
@@ -733,19 +732,25 @@ class zEdit(gtk.VBox):
         return zEdit.font
 
     def set_font(self, dic):
+        modified = False
         for k,v in dic.items():
-            if k in zEdit.font:
+            if k in zEdit.font and v != zEdit.font[k]:
+                modified = True
                 zEdit.font[k] = v
-        zEdit.emit('update_font')
+        if modified:
+            zEdit.emit('update_font')
 
     def get_theme(self):
         return zEdit.theme
 
     def set_theme(self, dic):
+        modified = False
         for k,v in dic.items():
-            if k in zEdit.theme:
-                zEdit.font[k] = v
-        zEdit.emit('update_theme')
+            if k in zEdit.theme and v != zEdit.theme[k]:
+                modified = True
+                zEdit.theme[k] = v
+        if modified:
+            zEdit.emit('update_theme')
 
 
     ### supporting function
