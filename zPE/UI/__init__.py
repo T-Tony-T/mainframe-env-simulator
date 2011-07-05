@@ -15,6 +15,7 @@ class BaseFrame(object):
 
     def __init__(self):
         conf.read_rc()
+        comp.zTheme.set_font({ 'name' : 'monospace', 'size' : conf.Config['font_sz'] })
 
         ### create top-level frame
         self.root = gtk.Window(gtk.WINDOW_TOPLEVEL)
@@ -72,12 +73,12 @@ class BaseFrame(object):
 
 
         ### create main window
-        self.mw = comp.SplitScreen(comp.zEdit, [], self.frame_init, self.frame_split_dup)
+        self.mw = comp.zSplitScreen(comp.zEdit, [], self.frame_init, self.frame_split_dup)
         w_vbox.pack_start(self.mw, True, True, 0)
 
 
         ### create last-line
-        self.lastline = comp.LastLine('z# ')
+        self.lastline = comp.zLastLine('z# ')
         w_vbox.pack_end(self.lastline, False, False, 0)
 
 
@@ -155,8 +156,7 @@ class BaseFrame(object):
 
     ### callback functions for SplitScreen
     def frame_init(self, frame):
-        frame.set_font({ 'name' : 'monospace', 'size' : conf.Config['font_sz'] })
-        frame.connect('populate-popup', self._sig_popup_manip)
+        frame.connect('populate_popup', self._sig_popup_manip)
 
     def frame_split_dup(self, frame):
         if frame:
