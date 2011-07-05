@@ -156,7 +156,7 @@ class BaseFrame(object):
     ### callback functions for SplitScreen
     def frame_init(self, frame):
         frame.set_font({ 'name' : 'monospace', 'size' : conf.Config['font_sz'] })
-        frame.ct_pop_id = frame.connect('populate-popup', self._sig_popup_manip)
+        frame.connect('populate-popup', self._sig_popup_manip)
 
     def frame_split_dup(self, frame):
         if frame:
@@ -164,7 +164,6 @@ class BaseFrame(object):
         else:
             new_frame = comp.zEdit()
 
-        self.frame_init(new_frame)
         return new_frame
     ### end of callback functions for SplitScreen
 

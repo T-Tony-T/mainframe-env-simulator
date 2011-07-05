@@ -325,7 +325,7 @@ class SplitScreen(gtk.Frame):
 
         # create new frame
         if self.frame_split_dup:
-            new_child = self.frame_split_dup(self.active_frame())
+            new_child = self.new_frame_on_dup()
         else:
             new_child = self.new_frame(self.frame_alist)
 
@@ -351,10 +351,21 @@ class SplitScreen(gtk.Frame):
     def new_frame(self, alist):
         # prepare frame info
         frame = self.frame(* alist)
-        frame.set_init(self.frame_init)
-        frame.exec_init()
+
+        frame.set_init_func(self.frame_init)
+        frame.exec_init_func()
 
         return frame
+
+    def new_frame_on_dup(self):
+        # prepare frame info
+        frame = self.frame_split_dup(self.active_frame())
+
+        frame.set_init_func(self.frame_init)
+        frame.exec_init_func()
+
+        return frame
+
 
     def rm_frame(self, widget, child_rm):
         if widget == self.mw_center:    # the only frame
@@ -483,7 +494,11 @@ class zEdit(gtk.VBox):
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'buffer_focus_in'       : [  ],
         'buffer_focus_out'      : [  ],
+
+        'populate-popup'        : [  ],
+
         'update_buffer_list'    : [  ],
+
         'update_font'           : [  ],
         'update_theme'          : [  ],
         }
@@ -510,8 +525,12 @@ class zEdit(gtk.VBox):
           - any system-opened "non-file" buffer should has "None" as the ".buffer" property.
         '''
         super(zEdit, self).__init__()
+
         self.active_buffer = None
-        self.ui_init = None
+        self.sig_id = {}        # a dict holds all handler id
+
+        self.ui_init_func = None
+        self.need_init = None   # since no init_func is set at this time
 
         # layout of the frame:
         # 
@@ -563,7 +582,7 @@ class zEdit(gtk.VBox):
         zEdit._sig_update_font_property(self.buffer_sw_cell, 0.75)
 
         # connect signal
-        self.buffer_sw.connect('changed', self._sig_buffer_changed)
+        self.sig_id['buffer_changed'] = self.buffer_sw.connect('changed', self._sig_buffer_changed)
 
     ### signal-like auto-update function
     @staticmethod
@@ -575,13 +594,32 @@ class zEdit(gtk.VBox):
     def unregister(sig, widget):
         '''This function un-register a widget from a signal-like string'''
         for item in zEdit.__auto_update[sig]:
-            zEdit.__auto_update[sig].remove(item)
+            if widget == item[0]:
+                zEdit.__auto_update[sig].remove(item)
 
     @staticmethod
-    def emit(sig):
-        '''This function emit the signal to all registered object'''
+    def emit(sig, info = None):
+        '''
+        This function emit the signal to all registered object
+
+        Caution: may cause multiple emission. To avoid that,
+                 use emit_from() instead.
+        '''
         for (widget, callback, data_list) in zEdit.__auto_update[sig]:
-            callback(widget, *data_list)
+            if info:
+                callback(widget, info, *data_list)
+            else:
+                callback(widget, *data_list)
+
+    @staticmethod
+    def emit_from(sig, target, info = None):
+        '''This function emit the signal to the indicated registered object'''
+        for (widget, callback, data_list) in zEdit.__auto_update[sig]:
+            if target == widget:
+                if info:
+                    callback(widget, info, *data_list)
+                else:
+                    callback(widget, *data_list)
 
     @staticmethod
     def _sig_update_buffer_list(combo, z_editor):
@@ -646,6 +684,36 @@ class zEdit(gtk.VBox):
 
 
     ### signal for center
+    def _sig_button_press(self, widget, event, data = None):
+        if event.button != 3:
+            return
+
+        # create the menu
+        menu = gtk.Menu()
+
+        # fill the menu
+        ( tree_path, tree_col, tree_x, tree_y ) = widget.get_path_at_pos(int(event.x), int(event.y))
+        model = widget.get_model()
+
+        if tree_path is None:
+            raise LookupError
+        elif len(tree_path) > 0:
+            iterator = model.get_iter(tree_path)
+            obj = model[iterator][0]
+        else:
+            raise ValueError
+
+        mi_open = gtk.MenuItem('_Open')
+        menu.append(mi_open)
+        mi_open.connect_object("activate", widget._sig_open_file, widget, tree_path, tree_col)
+
+        # callback
+        zEdit.emit_from('populate-popup', self.center, menu)
+
+        # popup the menu
+        menu.popup(None, None, None, event.button, event.time)
+
+
     def _sig_focus_in(self, widget, event):
         if len(zEdit.__auto_update['buffer_focus_in']):
             zEdit.emit('buffer_focus_in')
@@ -673,10 +741,20 @@ class zEdit(gtk.VBox):
 
     ### overloaded function definition
     def connect(self, sig, callback, *data):
-        [ trans_sig, trans_callback ] = zEdit.__trans_signal(
-            self.active_buffer.type, sig, callback
-            )
-        return self.center.connect(trans_sig, trans_callback, *data)
+        if sig not in zEdit.__auto_update:
+            return self.center.connect(sig, callback, *data)
+
+        if self.active_buffer.type == 'file': # after re-write TextView, this should not be tested
+            return self.center.connect(sig, callback, *data)
+
+        zEdit.register(sig, callback, self.center, *data)
+        return (sig, self.center)
+
+    def disconnect(self, sig_id):
+        if isinstance(sig_id, int):
+            self.center.disconnect(sig_id)
+        else:
+            zEdit.unregister(sig, self.center)
 
     def is_focus(self):
         return self.center.is_focus()
@@ -686,60 +764,71 @@ class zEdit(gtk.VBox):
     ### end of overloaded function definition
 
 
-    def exec_init(self):
-        if self.ui_init:
-            self.ui_init(self)
+    def exec_init_func(self):
+        if self.need_init:
+            self.ui_init_func(self)
 
-    def set_init(self, ui_init):
-        self.ui_init = ui_init
+    def set_init_func(self, ui_init_func):
+        self.ui_init_func = ui_init_func
+        self.need_init = True
 
 
     def get_buffer(self):
         return (self.active_buffer.path, self.active_buffer.type)
 
     def set_buffer(self, buffer_path, buffer_type):
-        # switch buffer
         new_buff = zEditBuffer(buffer_path, buffer_type)
+
+        if new_buff == self.active_buffer:
+            return              # no need to switch, early return
 
         if ( self.active_buffer == None or
              self.active_buffer.type != new_buff.type
              ):
+            # widget need to be switched, mark for init unless no such func
+            if self.need_init != None:
+                self.need_init = True
+
             # create widget
             if new_buff.type == 'file':
                 widget = gtk.TextView()
             elif new_buff.type == 'dir':
                 widget = zFileManager()
+                self.sig_id['button_press'] = widget.connect('button-press-event', self._sig_button_press)
             else:
                 raise KeyError
 
             # switch widget
             if self.center:
                 zEdit.unregister('update_font', self.center)
-                self.center.disconnect(self.focus_in_id)
-                self.center.disconnect(self.focus_out_id)
+                if self.active_buffer.type == 'dir':
+                    self.center.disconnect(self.sig_id['button_press'])
+                    zEdit.unregister('populate-popup', self.center)
+                self.center.disconnect(self.sig_id['focus_in'])
+                self.center.disconnect(self.sig_id['focus_out'])
                 self.scrolled.remove(self.center)
             self.center = widget
             self.scrolled.add(self.center)
             zEdit.register('update_font', zEdit._sig_update_font_modify, self.center)
-            self.focus_in_id = self.center.connect('focus-in-event', self._sig_focus_in)
-            self.focus_out_id = self.center.connect('focus-out-event', self._sig_focus_out)
+            self.sig_id['focus_in'] = self.center.connect('focus-in-event', self._sig_focus_in)
+            self.sig_id['focus_out'] = self.center.connect('focus-out-event', self._sig_focus_out)
 
             zEdit._sig_update_font_modify(self.center)
             self._sig_update_theme()
 
-        if new_buff != self.active_buffer:
-            self.active_buffer = new_buff
-            zEdit._sig_update_buffer_list(self.buffer_sw, self)
+        # switch buffer
+        self.active_buffer = new_buff
+        zEdit._sig_update_buffer_list(self.buffer_sw, self)
 
         # connect buffer
         if self.active_buffer.type == 'file':
             self.center.set_buffer(new_buff.buffer)
         elif self.active_buffer.type == 'dir':
-            pass
             if self.active_buffer.path and io_encap.is_dir(self.active_buffer.path):
                 self.center.set_folder(os.path.join(* self.active_buffer.path))
 
-        self.exec_init()
+        if self.need_init:
+            self.exec_init_func()
         self.show_all()
 
 
@@ -771,44 +860,6 @@ class zEdit(gtk.VBox):
     ### supporting function
     def __separator(self, model, iterator, data = None):
         return model.get_value(iterator, 1)
-
-    @staticmethod
-    def __trans_signal(buffer_type, sig, callback):
-        if buffer_type == 'file':
-            return [ sig, callback ]
-        elif buffer_type == 'dir':
-            if sig == 'populate-popup':
-                return [ 'button-press-event', zEdit.__trans_popup(callback) ]
-
-    @staticmethod
-    def __trans_popup(func):
-        def new_func(treeview, event, data = None):
-            if event.button != 3:
-                return
-
-            # create the menu
-            menu = gtk.Menu()
-
-            # fill the menu
-            paths = treeview.get_path_at_pos(int(event.x), int(event.y))
-            model = treeview.get_model()
-
-            if paths is None:
-                raise LookupError
-            elif len(paths) > 0:
-                iterator = model.get_iter(paths[0])
-                obj = model[iterator][0]
-            else:
-                raise ValueError
-
-            menu.append(gtk.MenuItem('Open "{0}"'.format(obj)))
-
-            # callback
-            func(treeview, menu, data)
-
-            # popup the menu
-            menu.popup(None, None, None, event.button, event.time)
-        return new_func
     ### end of supporting function
 
 
@@ -1048,18 +1099,18 @@ class zFileManager(gtk.TreeView):
 
 
     ### signal definition
-    def _sig_open_file(self, treeview, path, column):
+    def _sig_open_file(self, treeview, tree_path, column):
         model = self.get_model()
-        iterator = model.get_iter(path)
+        iterator = model.get_iter(tree_path)
 
-        filename = model.get_value(iterator, 0)
-        full_path = os.path.join(self.dirname, filename)
+        file_name = model.get_value(iterator, 0)
+        file_path = os.path.join(self.dirname, file_name)
 
-        filestat = os.stat(full_path)
-        if stat.S_ISDIR(filestat.st_mode):
-            self.set_folder(full_path)
-        elif stat.S_ISREG(filestat.st_mode):
-            self.open_file([self.dirname, filename])
+        file_stat = os.stat(file_path)
+        if stat.S_ISDIR(file_stat.st_mode):
+            self.set_folder(file_path)
+        elif stat.S_ISREG(file_stat.st_mode):
+            self.open_file([self.dirname, file_name])
     ### end of signal definition
 
 
