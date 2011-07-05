@@ -267,7 +267,7 @@ class SplitScreen(gtk.Frame):
         alloc = self.mw_center.get_allocation()
         ptr_pos = self.mw_center.get_pointer()
 
-        correct_pos = self._correct_pos(
+        correct_pos = self.__correct_pos(
             ptr_pos,                              # the current ptr pos
             (0, 0),                               # the frame size - low bound
             (alloc.width, alloc.height),          # the frame size - high bound
@@ -301,7 +301,7 @@ class SplitScreen(gtk.Frame):
 
     ### overloaded function definition
     def is_focus(self):
-        return self.active_frame(self.mw_center) != None
+        return self.active_frame() != None
 
     def grab_focus(self):
         child = self.mw_center.child
@@ -311,18 +311,8 @@ class SplitScreen(gtk.Frame):
     ### end of overloaded function definition
 
 
-    def active_frame(self, current):
-        if isinstance(current, self.frame):
-            if current.is_focus():
-                return current  # found the frame
-            else:
-                return None     # end of the path
-
-        for child in current.get_children():
-            found = self.active_frame(child)
-            if found:
-                return found    # found in previous search
-        return None             # not found at all
+    def active_frame(self):
+        return self.__active_frame(self.mw_center)
 
     def add_paned(self, parent, pos):
         child = parent.child
@@ -335,7 +325,7 @@ class SplitScreen(gtk.Frame):
 
         # create new frame
         if self.frame_split_dup:
-            new_child = self.frame_split_dup(self.active_frame(self.mw_center))
+            new_child = self.frame_split_dup(self.active_frame())
         else:
             new_child = self.new_frame(self.frame_alist)
 
@@ -408,7 +398,7 @@ class SplitScreen(gtk.Frame):
         self.sd_layer.clear()
 
         # validate position
-        correct_pos = self._correct_pos(
+        correct_pos = self.__correct_pos(
             (ptr_x, ptr_y),                       # the current ptr pos
             (0, 0),                               # the frame size - low bound
             (alloc.width, alloc.height),          # the frame size - high bound
@@ -431,8 +421,24 @@ class SplitScreen(gtk.Frame):
 
         return True
 
-    # all three args should all be tuples/lists with the same length
-    def _correct_pos(self, pos, limit_low, limit_high, spacing):
+
+    ### supporting function
+    def __active_frame(self, current):
+        '''recursive function, should start with SplitScreen.mw_center'''
+        if isinstance(current, self.frame):
+            if current.is_focus():
+                return current  # found the frame
+            else:
+                return None     # end of the path
+
+        for child in current.get_children():
+            found = self.__active_frame(child)
+            if found:
+                return found    # found in previous search
+        return None             # not found at all
+
+    def __correct_pos(self, pos, limit_low, limit_high, spacing):
+        '''all three args should all be tuples/lists with the same length'''
         ct_pos = [None] * len(pos)
         for i in range(len(pos)):
             if pos[i] < limit_low[i] or pos[i] > limit_high[i]:
@@ -445,6 +451,7 @@ class SplitScreen(gtk.Frame):
             else:
                 ct_pos[i] = pos[i]
         return ct_pos
+    ### end of supporting function
 
 
 ######## ######## ######## ######## 
@@ -474,6 +481,8 @@ class zEdit(gtk.VBox):
 
     __auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
+        'buffer_focus_in'       : [  ],
+        'buffer_focus_out'      : [  ],
         'update_buffer_list'    : [  ],
         'update_font'           : [  ],
         'update_theme'          : [  ],
@@ -638,9 +647,13 @@ class zEdit(gtk.VBox):
 
     ### signal for center
     def _sig_focus_in(self, widget, event):
+        if len(zEdit.__auto_update['buffer_focus_in']):
+            zEdit.emit('buffer_focus_in')
         self.update_theme_focus_in()
 
     def _sig_focus_out(self, widget, event):
+        if len(zEdit.__auto_update['buffer_focus_out']):
+            zEdit.emit('buffer_focus_out')
         self.update_theme_focus_out()
     ### end of signal for center
 
@@ -710,10 +723,13 @@ class zEdit(gtk.VBox):
             zEdit.register('update_font', zEdit._sig_update_font_modify, self.center)
             self.focus_in_id = self.center.connect('focus-in-event', self._sig_focus_in)
             self.focus_out_id = self.center.connect('focus-out-event', self._sig_focus_out)
+
             zEdit._sig_update_font_modify(self.center)
+            self._sig_update_theme()
 
         if new_buff != self.active_buffer:
             self.active_buffer = new_buff
+            zEdit._sig_update_buffer_list(self.buffer_sw, self)
 
         # connect buffer
         if self.active_buffer.type == 'file':
@@ -724,7 +740,6 @@ class zEdit(gtk.VBox):
                 self.center.set_folder(os.path.join(* self.active_buffer.path))
 
         self.exec_init()
-        self._sig_update_theme()
         self.show_all()
 
 
@@ -1036,10 +1051,15 @@ class zFileManager(gtk.TreeView):
     def _sig_open_file(self, treeview, path, column):
         model = self.get_model()
         iterator = model.get_iter(path)
-        filename = os.path.join(self.dirname, model.get_value(iterator, 0))
-        filestat = os.stat(filename)
+
+        filename = model.get_value(iterator, 0)
+        full_path = os.path.join(self.dirname, filename)
+
+        filestat = os.stat(full_path)
         if stat.S_ISDIR(filestat.st_mode):
-            self.set_folder(filename)
+            self.set_folder(full_path)
+        elif stat.S_ISREG(filestat.st_mode):
+            self.open_file([self.dirname, filename])
     ### end of signal definition
 
 
@@ -1048,6 +1068,10 @@ class zFileManager(gtk.TreeView):
         super(zFileManager, self).grab_focus()
         self.set_cursor((0,))
     ### end of overloaded function definition
+
+
+    def open_file(self, fn_list):
+        self.parent.parent.set_buffer(fn_list, 'file')
 
 
     def set_folder(self, dname=None):

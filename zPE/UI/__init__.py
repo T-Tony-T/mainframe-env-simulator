@@ -63,7 +63,11 @@ class BaseFrame(object):
         self.toolbar.insert(gtk.SeparatorToolItem(), 4)
         self.toolbar.insert(self.tool_quit, 5)
 
+        ## connect auto-update items
+        comp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
+
         ## connect signals
+        self.tool_buff_open.connect('clicked', self._sig_buff_manip, 'open')
         self.tool_quit.connect('clicked', self._sig_quit)
 
 
@@ -96,7 +100,43 @@ class BaseFrame(object):
         self.root.show_all()
 
 
+    ### signal-like auto-update function
+    def _sig_buffer_focus_in(self, widget = None):
+        # get current buffer
+        buff = self.mw.active_frame().active_buffer
+        is_file = (buff.type == 'file')
+        is_dir  = (buff.type == 'dir')
+
+        # update toolbar
+        self.tool_buff_open.set_property('sensitive', not is_dir)
+        self.tool_buff_save.set_property('sensitive', is_file and buff.modified)
+        self.tool_buff_save_as.set_property('sensitive', is_file and buff.modified)
+        self.tool_buff_close.set_property('sensitive', is_file)
+    ### end of signal-like auto-update function
+
+
     ### top level signals
+    def _sig_buff_manip(self, widget, task):
+        # get current buffer
+        frame = self.mw.active_frame()
+        buff = frame.active_buffer
+
+        if task == 'open':
+            if buff.type != 'dir':
+                if buff.path:
+                    frame.set_buffer(buff.path[:-1], 'dir')
+                else:
+                    frame.set_buffer(None, 'dir')
+        elif task == 'save':
+            pass
+        elif task == 'save-as':
+            pass
+        elif task == 'close':
+            pass
+        else:
+            raise KeyError
+
+
     def _sig_quit(self, widget, data = None):
         #########################
         # check save here       #
