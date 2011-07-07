@@ -598,7 +598,7 @@ class zEditBuffer(z_ABC):
 ######## ######## ######## ########
 
 class zErrConsole(gtk.Window):
-    def __init__(self):
+    def __init__(self, show_on_change = False):
         super(zErrConsole, self).__init__()
 
         self.set_destroy_with_parent(True)
@@ -658,6 +658,10 @@ class zErrConsole(gtk.Window):
         self.bottom.pack_end(self.bttn_close, False, False, 5)
         self.bottom.pack_end(self.bttn_clear, False, False, 5)
 
+        # connect signal
+        if show_on_change:
+            self.center.get_buffer().connect('changed', self._sig_open_console)
+
         layout.show_all()
         self.resize()
 
@@ -679,6 +683,9 @@ class zErrConsole(gtk.Window):
     def _sig_clear(self, widget):
         self.clear()
 
+    def _sig_open_console(self, *arg):
+        self.open()
+
     def _sig_close_console(self, *arg):
         self.close()
         return True
@@ -688,6 +695,12 @@ class zErrConsole(gtk.Window):
     ### overloaded function definition
     def clear(self):
         self.set_text('')
+
+    def open(self):
+        if self.get_property('visible'):
+            self.window.show()
+        else:
+            self.show()
 
     def close(self):
         self.hide()
@@ -710,8 +723,8 @@ class zErrConsole(gtk.Window):
         self.set_default_size(char_w * 80 + ex_w, char_h * 25)
 
     def write(self, text):
-        old_text = self.get_text()
-        self.set_text(old_text + text)
+        buff = self.center.get_buffer()
+        buff.insert(buff.get_end_iter(), text)
     ### end of overloaded function definition
 
 

@@ -15,14 +15,12 @@ class BaseFrame(object):
 
 
     def __init__(self):
-        # redirect STDOUT and STDERR to the error console
-        self.err_console = comp.zErrConsole()
-        sys.stdout = self.err_console
-        sys.stderr = self.err_console
-
         # retrive GUI configuration
         conf.read_rc()
         comp.zTheme.set_font({ 'name' : 'monospace', 'size' : conf.Config['font_sz'] })
+
+        # create error console
+        self.err_console = comp.zErrConsole(True)
 
         ### create top-level frame
         self.root = gtk.Window(gtk.WINDOW_TOPLEVEL)
@@ -80,7 +78,7 @@ class BaseFrame(object):
         ## connect signals
         self.tool_buff_open.connect('clicked', self._sig_buff_manip, 'open')
 
-        self.tool_err_console.connect('clicked', lambda *arg: self.err_console.show())
+        self.tool_err_console.connect('clicked', lambda *arg: self.err_console.open())
         self.tool_quit.connect('clicked', self._sig_quit)
 
 
@@ -125,6 +123,10 @@ class BaseFrame(object):
         self.agr_root.lock()
         w_vbox.set_focus_chain((self.mw, self.lastline)) # prevent toolbar from getting focus
         self.root.show_all()
+
+        # redirect STDOUT and STDERR to the error console
+        sys.stdout = self.err_console
+        sys.stderr = self.err_console
 
 
     ### signal-like auto-update function
