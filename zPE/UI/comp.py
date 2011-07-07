@@ -32,8 +32,6 @@ class zEdit(gtk.VBox):
         'buffer_focus_out'      : [  ],
 
         'populate_popup'        : [  ],
-
-        'update_buffer_list'    : [  ],
         }
 
     def __init__(self, buffer_path = None, buffer_type = None):
@@ -94,6 +92,7 @@ class zEdit(gtk.VBox):
         self.buffer_sw_cell = gtk.CellRendererText()
         self.buffer_sw.pack_start(self.buffer_sw_cell, True)
         self.buffer_sw.add_attribute(self.buffer_sw_cell, "text", 0)
+        self.buffer_sw_cell.props.ellipsize = pango.ELLIPSIZE_END
 
         self.buffer_sw.set_row_separator_func(self.__separator)
 
@@ -107,12 +106,12 @@ class zEdit(gtk.VBox):
         self.set_buffer(buffer_path, buffer_type)
 
         # connect auto-update items
-        zEdit.register('update_buffer_list', zEdit._sig_update_buffer_list, self.buffer_sw, self)
-        zTheme.register('update_font', zTheme._sig_update_font_property, self.buffer_sw_cell, 0.75)
+        zEditBuffer.register('buffer_list_modified', zEdit._sig_buffer_list_modified, self.buffer_sw, self)
+        zTheme.register('update_font', self._sig_update_font, self.buffer_sw_cell)
         zTheme.register('update_color_map', self._sig_update_color_map, self)
 
-        zEdit._sig_update_buffer_list(self.buffer_sw, self)
-        zTheme._sig_update_font_property(self.buffer_sw_cell, 0.75)
+        zEdit._sig_buffer_list_modified(self.buffer_sw, self)
+        self._sig_update_font()
 
         # connect signal
         self.sig_id['buffer_changed'] = self.buffer_sw.connect('changed', self._sig_buffer_changed)
@@ -155,7 +154,7 @@ class zEdit(gtk.VBox):
                     callback(widget, *data_list)
 
     @staticmethod
-    def _sig_update_buffer_list(combo, z_editor):
+    def _sig_buffer_list_modified(combo, z_editor):
         tm = combo.get_model()
 
         # clear the list
@@ -178,6 +177,10 @@ class zEdit(gtk.VBox):
             buffer_iter = tm.iter_next(buffer_iter)
         combo.set_active_iter(buffer_iter)
         
+    def _sig_update_font(self, widget = None):
+        zTheme._sig_update_font_property(self.buffer_sw_cell, 0.75)
+        self.resize()
+
     def _sig_update_color_map(self, widget = None):
         self.center.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
         self.center.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['base']))
@@ -251,9 +254,13 @@ class zEdit(gtk.VBox):
         active_iter = combobox.get_active_iter()
         if not active_iter:
             return              # early return
+
         buffer_name = self.buffer_sw_tm.get_value(active_iter, 0)
-        buff = zEditBuffer.buff_list[buffer_name]
-        self.set_buffer(buff.path, buff.type)
+
+        if buffer_name != self.active_buffer.name:
+            buff = zEditBuffer.buff_list[buffer_name]
+            self.set_buffer(buff.path, buff.type)
+
         # set focus
         self.grab_focus()
     ### end of signal for bottom
@@ -281,6 +288,11 @@ class zEdit(gtk.VBox):
 
     def grab_focus(self):
         self.center.grab_focus()
+
+    def resize(self):
+        ( char_w, char_h ) = self.buffer_sw.create_pango_layout('w').get_pixel_size()
+        ( cell_w, cell_h ) =  self.buffer_sw.size_request()
+        self.buffer_sw.set_size_request(char_w * 10, cell_h)
     ### end of overloaded function definition
 
 
@@ -297,7 +309,11 @@ class zEdit(gtk.VBox):
         return (self.active_buffer.path, self.active_buffer.type)
 
     def set_buffer(self, buffer_path, buffer_type):
-        new_buff = zEditBuffer(buffer_path, buffer_type)
+        try:
+            new_buff = zEditBuffer(buffer_path, buffer_type)
+        except:
+            zEditBuffer.restore()
+            raise
 
         if new_buff == self.active_buffer:
             return              # no need to switch, early return
@@ -324,11 +340,15 @@ class zEdit(gtk.VBox):
                 if self.active_buffer.type == 'dir':
                     self.center.disconnect(self.sig_id['button_press'])
                     zEdit.unregister('populate_popup', self.center)
+
+                zTheme.unregister('update_font', self.center)
                 self.center.disconnect(self.sig_id['focus_in'])
                 self.center.disconnect(self.sig_id['focus_out'])
+
                 self.scrolled.remove(self.center)
             self.center = widget
             self.scrolled.add(self.center)
+
             zTheme.register('update_font', zTheme._sig_update_font_modify, self.center)
             self.sig_id['focus_in'] = self.center.connect('focus-in-event', self._sig_focus_in)
             self.sig_id['focus_out'] = self.center.connect('focus-out-event', self._sig_focus_out)
@@ -338,7 +358,7 @@ class zEdit(gtk.VBox):
 
         # switch buffer
         self.active_buffer = new_buff
-        zEdit._sig_update_buffer_list(self.buffer_sw, self)
+        zEdit._sig_buffer_list_modified(self.buffer_sw, self)
 
         # connect buffer
         if self.active_buffer.type == 'file':
@@ -393,8 +413,15 @@ class zEditBuffer(object):
         #  ...
         }
 
+    __auto_update = {
+        # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
+        'buffer_list_modified'    : [  ],
+        }
+
     def __new__(cls, buffer_path = None, buffer_type = None):
         self = object.__new__(cls)
+
+        zEditBuffer.backup()
 
         if buffer_path == None:
             # no path => system-opened buffer
@@ -471,7 +498,7 @@ class zEditBuffer(object):
             zEditBuffer.buff_group[buff_group].append(self.name)
         else:
             raise SystemError   # this should never happen
-        zEdit.emit('update_buffer_list')
+        zEditBuffer.emit('buffer_list_modified')
 
         # fetch content
         if self.type == 'file':
@@ -502,6 +529,216 @@ class zEditBuffer(object):
             raise TypeError
 
         return self
+
+
+    ### signal-like auto-update function
+    @staticmethod
+    def register(sig, callback, widget, *data):
+        '''This function register a function to a signal-like string'''
+        zEditBuffer.__auto_update[sig].append((widget, callback, data))
+
+    @staticmethod
+    def unregister(sig, widget):
+        '''This function un-register a widget from a signal-like string'''
+        for item in zEditBuffer.__auto_update[sig]:
+            if widget == item[0]:
+                zEditBuffer.__auto_update[sig].remove(item)
+
+    @staticmethod
+    def emit(sig, info = None):
+        '''
+        This function emit the signal to all registered object
+
+        Caution: may cause multiple emission. To avoid that,
+                 use emit_from() instead.
+        '''
+        for (widget, callback, data_list) in zEditBuffer.__auto_update[sig]:
+            if info:
+                callback(widget, info, *data_list)
+            else:
+                callback(widget, *data_list)
+
+    @staticmethod
+    def emit_from(sig, target, info = None):
+        '''This function emit the signal to the indicated registered object'''
+        for (widget, callback, data_list) in zEditBuffer.__auto_update[sig]:
+            if target == widget:
+                if info:
+                    callback(widget, info, *data_list)
+                else:
+                    callback(widget, *data_list)
+    ### signal-like auto-update function
+
+
+    @staticmethod
+    def backup():
+        if zEditBuffer.buff_rec:
+            gtk.main_iteration()
+
+        zEditBuffer.__buff_list = {}
+        zEditBuffer.__buff_group = {}
+        zEditBuffer.__buff_rec = {}
+
+        for k, v in zEditBuffer.buff_list.items():
+            zEditBuffer.__buff_list[k] = v
+
+        for k, v in zEditBuffer.buff_group.items():
+            zEditBuffer.__buff_group[k] = []
+            for item in v:
+                zEditBuffer.__buff_group[k].append(item)
+
+        for k, v in zEditBuffer.buff_rec.items():
+            zEditBuffer.__buff_rec[k] = []
+            for item in v:
+                zEditBuffer.__buff_rec[k].append(item)
+
+
+    @staticmethod
+    def restore():
+        zEditBuffer.buff_list = {}
+        zEditBuffer.buff_group = {}
+        zEditBuffer.buff_rec = {}
+
+        for k, v in zEditBuffer.__buff_list.items():
+            zEditBuffer.buff_list[k] = v
+
+        for k, v in zEditBuffer.__buff_group.items():
+            zEditBuffer.buff_group[k] = []
+            for item in v:
+                zEditBuffer.buff_group[k].append(item)
+
+        for k, v in zEditBuffer.__buff_rec.items():
+            zEditBuffer.buff_rec[k] = []
+            for item in v:
+                zEditBuffer.buff_rec[k].append(item)
+
+        zEditBuffer.emit('buffer_list_modified')
+
+        zEditBuffer.__buff_list = {}
+        zEditBuffer.__buff_group = {}
+        zEditBuffer.__buff_rec = {}
+
+
+######## ######## ######## ########
+########    zErrConsole    ########
+######## ######## ######## ########
+
+class zErrConsole(gtk.Window):
+    def __init__(self):
+        super(zErrConsole, self).__init__()
+
+        self.set_destroy_with_parent(True)
+        self.connect("delete_event", self._sig_close_console)
+
+        self.set_title('zPE Error Console')
+
+
+        # layout of the frame:
+        # 
+        #   +------------+_
+        #   |+----------+| \
+        #   ||          ||  scrolled_window
+        #   ||          ||
+        #   ||  center  ||
+        #   ||          ||
+        #   ||          ||
+        #   |+----------+|
+        #   +------+--+--+-- separator
+        #   |      |bt|bt|
+        #   +------+--+--+
+
+        layout = gtk.VBox()
+        self.add(layout)
+
+        # create center
+        scrolled = gtk.ScrolledWindow()
+        layout.pack_start(scrolled, True, True, 0)
+        scrolled.set_policy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
+        scrolled.set_placement(gtk.CORNER_TOP_RIGHT)
+
+        self.center = gtk.TextView()
+        scrolled.add(self.center)
+        self.center.set_wrap_mode(gtk.WRAP_CHAR)
+        self.center.set_editable(False)
+        self.center.set_cursor_visible(False)
+
+        zTheme.register('update_font', zTheme._sig_update_font_modify, self.center, 0.85)
+        zTheme._sig_update_font_modify(self.center, 0.85)
+        zTheme.register('update_color_map', self._sig_update_color_map, self.center)
+	self._sig_update_color_map()
+
+        # separator
+        layout.pack_start(gtk.HSeparator(), False, False, 0)
+
+        # create bottom
+        self.bottom = gtk.HBox()
+        layout.pack_end(self.bottom, False, False, 0)
+
+        self.bttn_clear = gtk.Button('Clear', gtk.STOCK_CLEAR)
+        self.bttn_close = gtk.Button('Close', gtk.STOCK_CLOSE)
+
+        self.bttn_clear.connect('clicked', self._sig_clear)
+        self.bttn_close.connect('clicked', self._sig_close_console)
+
+        self.bottom.pack_start(gtk.Label(), True, True, 0)
+        self.bottom.pack_end(self.bttn_close, False, False, 5)
+        self.bottom.pack_end(self.bttn_clear, False, False, 5)
+
+        layout.show_all()
+        self.resize()
+
+
+    ### signal-like auto-update function
+    def _sig_update_color_map(self, widget = None):
+        self.center.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.center.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['base']))
+
+        self.center.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
+
+        self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['text-selected']))
+        self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base-selected']))
+    ### end of signal-like auto-update function
+
+
+    ### signal definition
+    def _sig_clear(self, widget):
+        self.clear()
+
+    def _sig_close_console(self, *arg):
+        self.close()
+        return True
+    ### end of signal definition
+
+
+    ### overloaded function definition
+    def clear(self):
+        self.set_text('')
+
+    def close(self):
+        self.hide()
+
+    def get_text(self):
+        buff = self.center.get_buffer()
+        return buff.get_text(buff.get_start_iter(), buff.get_end_iter())
+
+    def set_text(self, text):
+        self.center.get_buffer().set_text(text)
+
+    def resize(self):
+        ( char_w, char_h ) = self.center.create_pango_layout('w').get_pixel_size()
+
+        ex_w = 2 # to "somewhat" cancel the border width, since there is no way to get that value
+        scrolled = self.center.parent
+        ex_w += scrolled.get_hscrollbar().style_get_property('slider-width')
+        ex_w += scrolled.style_get_property('scrollbar-spacing')
+
+        self.set_default_size(char_w * 80 + ex_w, char_h * 25)
+
+    def write(self, text):
+        old_text = self.get_text()
+        self.set_text(old_text + text)
+    ### end of overloaded function definition
 
 
 ######## ######## ######## ########
@@ -954,6 +1191,10 @@ class zSplitScreen(gtk.Frame):
                  alloc.height < self.frame_sz_min[1]
                  ):
                 self.rm_frame(widget, child)
+
+                # adjust focus
+                if not self.is_focus():
+                    self.grab_focus()
                 break
     ### end of signal for center frame
 

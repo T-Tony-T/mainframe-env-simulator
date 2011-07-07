@@ -5,6 +5,7 @@ import os, sys
 import pygtk
 pygtk.require('2.0')
 import gtk
+import gobject
 
 
 class BaseFrame(object):
@@ -13,7 +14,14 @@ class BaseFrame(object):
         # with a "delete_event".
         return False
 
+
     def __init__(self):
+        # redirect STDOUT and STDERR to the error console
+        self.err_console = comp.zErrConsole()
+        sys.stdout = self.err_console
+        sys.stderr = self.err_console
+
+        # retrive GUI configuration
         conf.read_rc()
         comp.zTheme.set_font({ 'name' : 'monospace', 'size' : conf.Config['font_sz'] })
 
@@ -53,6 +61,8 @@ class BaseFrame(object):
         self.tool_buff_close = gtk.ToolButton(gtk.STOCK_CLOSE)
         self.tool_buff_close.set_tooltip_text('Close Current Buffer')
 
+        self.tool_err_console = gtk.ToolButton(gtk.STOCK_DIALOG_WARNING)
+        self.tool_err_console.set_tooltip_text('Show the Error Console')
         self.tool_quit = gtk.ToolButton(gtk.STOCK_QUIT)
         self.tool_quit.set_tooltip_text('Quit the Simulator')
 
@@ -62,13 +72,16 @@ class BaseFrame(object):
         self.toolbar.insert(self.tool_buff_save_as, 2)
         self.toolbar.insert(self.tool_buff_close, 3)
         self.toolbar.insert(gtk.SeparatorToolItem(), 4)
-        self.toolbar.insert(self.tool_quit, 5)
+        self.toolbar.insert(self.tool_err_console, 5)
+        self.toolbar.insert(self.tool_quit, 6)
 
         ## connect auto-update items
         comp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
 
         ## connect signals
         self.tool_buff_open.connect('clicked', self._sig_buff_manip, 'open')
+
+        self.tool_err_console.connect('clicked', lambda *arg: self.err_console.show())
         self.tool_quit.connect('clicked', self._sig_quit)
 
 
@@ -83,20 +96,34 @@ class BaseFrame(object):
 
 
         ### set accel
-        self.agr = gtk.AccelGroup()
-        self.root.add_accel_group(self.agr)
+
+        ## for root window
+        self.agr_root = gtk.AccelGroup()
+        self.root.add_accel_group(self.agr_root)
 
         # C-q ==> fouce quit
-        self.agr.connect_group(
+        self.agr_root.connect_group(
             gtk.gdk.keyval_from_name('q'),
             gtk.gdk.CONTROL_MASK,
             gtk.ACCEL_VISIBLE,
             lambda *s: self._sig_quit(None)
             )
 
+        ## for error console
+        self.agr_err = gtk.AccelGroup()
+        self.err_console.add_accel_group(self.agr_err)
+
+        # ESC ==> close
+        self.agr_err.connect_group(
+            gtk.keysyms.Escape,
+            0,
+            gtk.ACCEL_VISIBLE,
+            lambda *s: self.err_console.close()
+            )
+
 
         ### show all parts
-        self.agr.lock()
+        self.agr_root.lock()
         w_vbox.set_focus_chain((self.mw, self.lastline)) # prevent toolbar from getting focus
         self.root.show_all()
 

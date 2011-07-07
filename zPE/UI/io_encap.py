@@ -19,6 +19,9 @@ def fetch(buff):
     if buff.path == None:
         return False
 
+    if is_binary(os.path.join(*buff.path)):
+        return False
+
     fp = open_file(buff.path, 'r')
     tb = buff.buffer
     tb.set_text(fp.read())
@@ -33,3 +36,26 @@ def flush(buff):
     tb = buff.buffer
     fp.write(tb.get_text(tb.get_start_iter(), tb.get_end_iter(), True))
     return True
+
+
+# supporting function
+def is_binary(filename):
+    """Return true if the given filename is binary.
+    @raise EnvironmentError: if the file does not exist or cannot be accessed.
+    @attention: found @ http://bytes.com/topic/python/answers/21222-determine-file-type-binary-text on 6/08/2010
+    @author: Trent Mick <TrentM@ActiveState.com>
+    @author: Jorge Orpinel <jorge@orpinel.com>"""
+    fin = open(filename, 'rb')
+    try:
+        CHUNKSIZE = 1024
+        while 1:
+            chunk = fin.read(CHUNKSIZE)
+            if '\0' in chunk: # found null byte
+                return True
+            if len(chunk) < CHUNKSIZE:
+                break # done
+    # A-wooo! Mira, python no necesita el "except:". Achis... Que listo es.
+    finally:
+        fin.close()
+
+    return False
