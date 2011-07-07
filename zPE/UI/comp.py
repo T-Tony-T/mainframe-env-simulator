@@ -21,12 +21,55 @@ import gobject, pango
 
 
 ######## ######## ######## ########
+########       z_ABC       ########
+######## ######## ######## ########
+
+class z_ABC(object):
+    @classmethod
+    def register(cls, sig, callback, widget, *data):
+        '''This function register a function to a signal-like string'''
+        cls._auto_update[sig].append((widget, callback, data))
+
+    @classmethod
+    def unregister(cls, sig, widget):
+        '''This function un-register a widget from a signal-like string'''
+        for item in cls._auto_update[sig]:
+            if widget == item[0]:
+                cls._auto_update[sig].remove(item)
+
+    @classmethod
+    def emit(cls, sig, info = None):
+        '''
+        This function emit the signal to all registered object
+
+        Caution: may cause multiple emission. To avoid that,
+                 use emit_from() instead.
+        '''
+        for (widget, callback, data_list) in cls._auto_update[sig]:
+            if info:
+                callback(widget, info, *data_list)
+            else:
+                callback(widget, *data_list)
+
+    @classmethod
+    def emit_from(cls, sig, target, info = None):
+        '''This function emit the signal to the indicated registered object'''
+        for (widget, callback, data_list) in cls._auto_update[sig]:
+            if target == widget:
+                if info:
+                    callback(widget, info, *data_list)
+                else:
+                    callback(widget, *data_list)
+
+
+
+######## ######## ######## ########
 ########       zEdit       ########
 ######## ######## ######## ########
 
 
-class zEdit(gtk.VBox):
-    __auto_update = {
+class zEdit(z_ABC, gtk.VBox):
+    _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'buffer_focus_in'       : [  ],
         'buffer_focus_out'      : [  ],
@@ -62,6 +105,8 @@ class zEdit(gtk.VBox):
 
         self.ui_init_func = None
         self.need_init = None   # since no init_func is set at this time
+
+        self.silence_sw = False # silence switch: switch the buffer at background
 
         # layout of the frame:
         # 
@@ -118,42 +163,6 @@ class zEdit(gtk.VBox):
 
     ### signal-like auto-update function
     @staticmethod
-    def register(sig, callback, widget, *data):
-        '''This function register a function to a signal-like string'''
-        zEdit.__auto_update[sig].append((widget, callback, data))
-
-    @staticmethod
-    def unregister(sig, widget):
-        '''This function un-register a widget from a signal-like string'''
-        for item in zEdit.__auto_update[sig]:
-            if widget == item[0]:
-                zEdit.__auto_update[sig].remove(item)
-
-    @staticmethod
-    def emit(sig, info = None):
-        '''
-        This function emit the signal to all registered object
-
-        Caution: may cause multiple emission. To avoid that,
-                 use emit_from() instead.
-        '''
-        for (widget, callback, data_list) in zEdit.__auto_update[sig]:
-            if info:
-                callback(widget, info, *data_list)
-            else:
-                callback(widget, *data_list)
-
-    @staticmethod
-    def emit_from(sig, target, info = None):
-        '''This function emit the signal to the indicated registered object'''
-        for (widget, callback, data_list) in zEdit.__auto_update[sig]:
-            if target == widget:
-                if info:
-                    callback(widget, info, *data_list)
-                else:
-                    callback(widget, *data_list)
-
-    @staticmethod
     def _sig_buffer_list_modified(combo, z_editor):
         tm = combo.get_model()
 
@@ -176,7 +185,8 @@ class zEdit(gtk.VBox):
         while tm.get_value(buffer_iter, 0) != z_editor.active_buffer.name:
             buffer_iter = tm.iter_next(buffer_iter)
         combo.set_active_iter(buffer_iter)
-        
+
+
     def _sig_update_font(self, widget = None):
         zTheme._sig_update_font_property(self.buffer_sw_cell, 0.75)
         self.resize()
@@ -238,14 +248,16 @@ class zEdit(gtk.VBox):
 
 
     def _sig_focus_in(self, widget, event):
-        if len(zEdit.__auto_update['buffer_focus_in']):
+        if len(zEdit._auto_update['buffer_focus_in']):
             zEdit.emit('buffer_focus_in')
         self.update_theme_focus_in()
+        self.silence_sw = False
 
     def _sig_focus_out(self, widget, event):
-        if len(zEdit.__auto_update['buffer_focus_out']):
+        if len(zEdit._auto_update['buffer_focus_out']):
             zEdit.emit('buffer_focus_out')
         self.update_theme_focus_out()
+        self.silence_sw = True
     ### end of signal for center
 
 
@@ -262,13 +274,14 @@ class zEdit(gtk.VBox):
             self.set_buffer(buff.path, buff.type)
 
         # set focus
-        self.grab_focus()
+        if not self.silence_sw:
+            self.grab_focus()
     ### end of signal for bottom
 
 
     ### overloaded function definition
     def connect(self, sig, callback, *data):
-        if sig not in zEdit.__auto_update:
+        if sig not in zEdit._auto_update:
             return self.center.connect(sig, callback, *data)
 
         if self.active_buffer.type == 'file': # after re-write TextView, this should not be tested
@@ -379,7 +392,7 @@ class zEdit(gtk.VBox):
 
 
 
-class zEditBuffer(object):
+class zEditBuffer(z_ABC):
     DEFAULT_BUFFER = {
         None   : '*scratch*',
         'file' : '*scratch*',
@@ -413,7 +426,7 @@ class zEditBuffer(object):
         #  ...
         }
 
-    __auto_update = {
+    _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'buffer_list_modified'    : [  ],
         }
@@ -529,45 +542,6 @@ class zEditBuffer(object):
             raise TypeError
 
         return self
-
-
-    ### signal-like auto-update function
-    @staticmethod
-    def register(sig, callback, widget, *data):
-        '''This function register a function to a signal-like string'''
-        zEditBuffer.__auto_update[sig].append((widget, callback, data))
-
-    @staticmethod
-    def unregister(sig, widget):
-        '''This function un-register a widget from a signal-like string'''
-        for item in zEditBuffer.__auto_update[sig]:
-            if widget == item[0]:
-                zEditBuffer.__auto_update[sig].remove(item)
-
-    @staticmethod
-    def emit(sig, info = None):
-        '''
-        This function emit the signal to all registered object
-
-        Caution: may cause multiple emission. To avoid that,
-                 use emit_from() instead.
-        '''
-        for (widget, callback, data_list) in zEditBuffer.__auto_update[sig]:
-            if info:
-                callback(widget, info, *data_list)
-            else:
-                callback(widget, *data_list)
-
-    @staticmethod
-    def emit_from(sig, target, info = None):
-        '''This function emit the signal to the indicated registered object'''
-        for (widget, callback, data_list) in zEditBuffer.__auto_update[sig]:
-            if target == widget:
-                if info:
-                    callback(widget, info, *data_list)
-                else:
-                    callback(widget, *data_list)
-    ### signal-like auto-update function
 
 
     @staticmethod
@@ -1190,11 +1164,19 @@ class zSplitScreen(gtk.Frame):
             if ( alloc.width < self.frame_sz_min[0] or
                  alloc.height < self.frame_sz_min[1]
                  ):
+                # record focus
+                focus = self.active_frame() # get focused frame
+                if self.__active_frame(child):
+                    focus = None # focus in child_rm, delete it
+
+                # remove the child
                 self.rm_frame(widget, child)
 
                 # adjust focus
-                if not self.is_focus():
+                if not focus:
                     self.grab_focus()
+                else:
+                    focus.grab_focus()
                 break
     ### end of signal for center frame
 
@@ -1369,7 +1351,7 @@ class zSplitScreen(gtk.Frame):
 ########      zTheme       ########
 ######## ######## ######## ########
 
-class zTheme(object):
+class zTheme(z_ABC):
     font = {
         'name' : 'monospace',
         'size' : 12,
@@ -1390,49 +1372,13 @@ class zTheme(object):
         }
 
 
-    __auto_update = {
+    _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'update_font'           : [  ],
         'update_color_map'      : [  ],
         }
 
     ### signal-like auto-update function
-    @staticmethod
-    def register(sig, callback, widget, *data):
-        '''This function register a function to a signal-like string'''
-        zTheme.__auto_update[sig].append((widget, callback, data))
-
-    @staticmethod
-    def unregister(sig, widget):
-        '''This function un-register a widget from a signal-like string'''
-        for item in zTheme.__auto_update[sig]:
-            if widget == item[0]:
-                zTheme.__auto_update[sig].remove(item)
-
-    @staticmethod
-    def emit(sig, info = None):
-        '''
-        This function emit the signal to all registered object
-
-        Caution: may cause multiple emission. To avoid that,
-                 use emit_from() instead.
-        '''
-        for (widget, callback, data_list) in zTheme.__auto_update[sig]:
-            if info:
-                callback(widget, info, *data_list)
-            else:
-                callback(widget, *data_list)
-
-    @staticmethod
-    def emit_from(sig, target, info = None):
-        '''This function emit the signal to the indicated registered object'''
-        for (widget, callback, data_list) in zTheme.__auto_update[sig]:
-            if target == widget:
-                if info:
-                    callback(widget, info, *data_list)
-                else:
-                    callback(widget, *data_list)
-
     @staticmethod
     def _sig_update_font_modify(widget, weight = 1):
         widget.modify_font(
