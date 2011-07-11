@@ -12,7 +12,7 @@ import io_encap
 #   flush(buff):                write content from the zEditBuffer to the corresponding file
 # 
 
-import os, sys, stat, time
+import os, sys, stat, time, copy
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -69,12 +69,29 @@ class z_ABC(object):
 
 
 class zEdit(z_ABC, gtk.VBox):
+    __style = 'other'
+    __key_binding = {}
+    __tab_on = False
+    __tab_grouped = False
+
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'buffer_focus_in'       : [  ],
         'buffer_focus_out'      : [  ],
 
         'populate_popup'        : [  ],
+
+        # for key binding
+        'buffer_open'           : [  ],
+        'buffer_save'           : [  ],
+        'buffer_save_as'        : [  ],
+        'buffer_close'          : [  ],
+
+        'prog_show_config'      : [  ],
+        'prog_show_error'       : [  ],
+        'prog_show_help'        : [  ],
+        'prog_show_about'       : [  ],
+        'prog_quit'             : [  ],
         }
 
     def __init__(self, buffer_path = None, buffer_type = None):
@@ -159,7 +176,10 @@ class zEdit(z_ABC, gtk.VBox):
         self._sig_update_font()
 
         # connect signal
+        self.connect('key-press-event', self._sig_key_pressed)
+
         self.sig_id['buffer_changed'] = self.buffer_sw.connect('changed', self._sig_buffer_changed)
+
 
     ### signal-like auto-update function
     @staticmethod
@@ -198,8 +218,8 @@ class zEdit(z_ABC, gtk.VBox):
         self.center.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['text']))
         self.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
 
-        self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['text-selected']))
-        self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base-selected']))
+        self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['text_selected']))
+        self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
 
         if self.is_focus():
             self.update_theme_focus_in()
@@ -207,13 +227,54 @@ class zEdit(z_ABC, gtk.VBox):
             self.update_theme_focus_out()
 
     def update_theme_focus_in(self):
-        self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status-active']))
-        self.buffer_sw_cell.set_property('background-gdk', gtk.gdk.color_parse(zTheme.color_map['status-active']))
+        self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
+        self.buffer_sw_cell.set_property('background-gdk', gtk.gdk.color_parse(zTheme.color_map['status_active']))
 
     def update_theme_focus_out(self):
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
         self.buffer_sw_cell.set_property('background-gdk', gtk.gdk.color_parse(zTheme.color_map['status']))
     ### end of signal-like auto-update function
+
+
+    ### top-level signal
+    def _sig_key_pressed(self, widget, event, data = None):
+        if event.type != gtk.gdk.KEY_PRESS:
+            return False
+
+        if event.is_modifier:
+            return False
+
+        ctrl_mod_mask = gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
+
+        if (event.state & ctrl_mod_mask) == ctrl_mod_mask:
+            stroke = 'C-M-' + gtk.gdk.keyval_name(event.keyval)
+
+        elif event.state & gtk.gdk.CONTROL_MASK:
+            stroke = 'C-' + gtk.gdk.keyval_name(event.keyval)
+
+        elif event.state & gtk.gdk.MOD1_MASK:
+            stroke = 'M-' + gtk.gdk.keyval_name(event.keyval)
+
+        else:
+            stroke = gtk.gdk.keyval_name(event.keyval)
+
+        if zEdit.__style == 'emacs':
+            # style::emacs
+            pass
+        else:
+            # style::other
+            key_binding = zEdit.__key_binding
+            reg_func = zEdit._auto_update
+            if ( stroke in key_binding            and # is a binded key stroke
+                 key_binding[stroke] in reg_func  and # is a valid functionality
+                 len(reg_func[key_binding[stroke]])   # has registered functions
+                 ):
+                zEdit.emit(key_binding[stroke])
+            else:
+                return False
+
+        return True
+    ### end of top-level signal
 
 
     ### signal for center
@@ -385,6 +446,39 @@ class zEdit(z_ABC, gtk.VBox):
         self.show_all()
 
 
+    @staticmethod
+    def get_key_binding():
+        return zEdit.__key_binding
+
+    @staticmethod
+    def set_key_binding(dic):
+        zEdit.__key_binding = copy.deepcopy(dic)
+
+    @staticmethod
+    def get_style():
+        return zEdit.__style
+
+    @staticmethod
+    def set_style(style):
+        zEdit.__style = style
+
+    @staticmethod
+    def get_tab_on():
+        return zEdit.__tab_on
+
+    @staticmethod
+    def set_tab_on(setting):
+        zEdit.__tab_on = setting
+
+    @staticmethod
+    def get_tab_grouped():
+        return zEdit.__tab_grouped
+
+    @staticmethod
+    def set_tab_grouped(setting):
+        zEdit.__tab_grouped = setting
+
+
     ### supporting function
     def __separator(self, model, iterator, data = None):
         return model.get_value(iterator, 1)
@@ -549,42 +643,16 @@ class zEditBuffer(z_ABC):
         if zEditBuffer.buff_rec:
             gtk.main_iteration()
 
-        zEditBuffer.__buff_list = {}
-        zEditBuffer.__buff_group = {}
-        zEditBuffer.__buff_rec = {}
-
-        for k, v in zEditBuffer.buff_list.items():
-            zEditBuffer.__buff_list[k] = v
-
-        for k, v in zEditBuffer.buff_group.items():
-            zEditBuffer.__buff_group[k] = []
-            for item in v:
-                zEditBuffer.__buff_group[k].append(item)
-
-        for k, v in zEditBuffer.buff_rec.items():
-            zEditBuffer.__buff_rec[k] = []
-            for item in v:
-                zEditBuffer.__buff_rec[k].append(item)
+        zEditBuffer.__buff_list  = copy.copy(zEditBuffer.buff_list) # never deepcopy this
+        zEditBuffer.__buff_group = copy.deepcopy(zEditBuffer.buff_group)
+        zEditBuffer.__buff_rec   = copy.deepcopy(zEditBuffer.buff_rec)
 
 
     @staticmethod
     def restore():
-        zEditBuffer.buff_list = {}
-        zEditBuffer.buff_group = {}
-        zEditBuffer.buff_rec = {}
-
-        for k, v in zEditBuffer.__buff_list.items():
-            zEditBuffer.buff_list[k] = v
-
-        for k, v in zEditBuffer.__buff_group.items():
-            zEditBuffer.buff_group[k] = []
-            for item in v:
-                zEditBuffer.buff_group[k].append(item)
-
-        for k, v in zEditBuffer.__buff_rec.items():
-            zEditBuffer.buff_rec[k] = []
-            for item in v:
-                zEditBuffer.buff_rec[k].append(item)
+        zEditBuffer.buff_list  = copy.copy(zEditBuffer.__buff_list) # never deepcopy this
+        zEditBuffer.buff_group = copy.deepcopy(zEditBuffer.__buff_group)
+        zEditBuffer.buff_rec   = copy.deepcopy(zEditBuffer.__buff_rec)
 
         zEditBuffer.emit('buffer_list_modified')
 
@@ -598,13 +666,23 @@ class zEditBuffer(z_ABC):
 ######## ######## ######## ########
 
 class zErrConsole(gtk.Window):
-    def __init__(self, show_on_change = False):
+    def __init__(self, title, show_on_change = False):
+        '''
+        title
+            the title of the zErrConsole.
+
+        show_on_change
+            whether the zErrConsole should automatically show when
+            new messages are added.
+        '''
         super(zErrConsole, self).__init__()
+
+        self.setup = True       # in setup phase, write to stderr as well
 
         self.set_destroy_with_parent(True)
         self.connect("delete_event", self._sig_close_console)
 
-        self.set_title('zPE Error Console')
+        self.set_title(title)
 
 
         # layout of the frame:
@@ -674,8 +752,8 @@ class zErrConsole(gtk.Window):
         self.center.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['text']))
         self.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
 
-        self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['text-selected']))
-        self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base-selected']))
+        self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['text_selected']))
+        self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
     ### end of signal-like auto-update function
 
 
@@ -684,7 +762,8 @@ class zErrConsole(gtk.Window):
         self.clear()
 
     def _sig_open_console(self, *arg):
-        self.open()
+        if not self.setup:
+            self.open()
 
     def _sig_close_console(self, *arg):
         self.close()
@@ -725,6 +804,8 @@ class zErrConsole(gtk.Window):
     def write(self, text):
         buff = self.center.get_buffer()
         buff.insert(buff.get_end_iter(), text)
+        if self.setup:
+            sys.__stderr__.write(text)
     ### end of overloaded function definition
 
 
@@ -1366,17 +1447,17 @@ class zSplitScreen(gtk.Frame):
 
 class zTheme(z_ABC):
     font = {
-        'name' : 'monospace',
+        'name' : 'Monospace',
         'size' : 12,
         }
     color_map = {
         # reguler
         'text'          : '#000000', # black
-        'text-selected' : '#000000', # black
+        'text_selected' : '#000000', # black
         'base'          : '#FBEFCD', # wheat - mod
-        'base-selected' : '#FFA500', # orenge
+        'base_selected' : '#FFA500', # orenge
         'status'        : '#808080', # gray
-        'status-active' : '#C0C0C0', # silver
+        'status_active' : '#C0C0C0', # silver
         # highlight
         'reserve'       : '#0000FF', # blue
         'comment'       : '#008000', # green
@@ -1414,7 +1495,7 @@ class zTheme(z_ABC):
     @staticmethod
     def set_font(dic):
         modified = False
-        for k,v in dic.items():
+        for (k, v) in dic.items():
             if k in zTheme.font and v != zTheme.font[k]:
                 modified = True
                 zTheme.font[k] = v
@@ -1428,7 +1509,7 @@ class zTheme(z_ABC):
     @staticmethod
     def set_color_map(dic):
         modified = False
-        for k,v in dic.items():
+        for (k, v) in dic.items():
             if k in zTheme.color_map and v != zTheme.color_map[k]:
                 modified = True
                 zTheme.color_map[k] = v

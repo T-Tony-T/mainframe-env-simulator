@@ -15,12 +15,39 @@ class BaseFrame(object):
 
 
     def __init__(self):
-        # retrive GUI configuration
-        conf.read_rc()
-        comp.zTheme.set_font({ 'name' : 'monospace', 'size' : conf.Config['font_sz'] })
+        self.__key_binding_func = {
+            'prog_show_config'      : lambda *arg: self.config_window.open(),
+            'prog_show_error'       : lambda *arg: self.err_console.open(),
+            'prog_quit'             : lambda *arg: self._sig_quit(None),
+            }
 
-        # create error console
-        self.err_console = comp.zErrConsole(True)
+
+        ### redirect STDOUT and STDERR to the error console
+        self.err_console = comp.zErrConsole('zPE Error Console', True)
+        sys.stdout = self.err_console
+        sys.stderr = self.err_console
+
+        ### retrive GUI configuration
+        conf.read_rc()
+        comp.zTheme.set_font(conf.Config['FONT'])
+        comp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+
+        comp.zEdit.set_style(conf.Config['MISC']['key_binding'])
+        comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+
+        if conf.Config['MISC']['tab_on'] == 'on':
+            comp.zEdit.set_tab_on(True)
+        else:
+            comp.zEdit.set_tab_on(False)
+
+        if conf.Config['MISC']['tab_mode'] == 'group':
+            comp.zEdit.set_tab_grouped(True)
+        else:
+            comp.zEdit.set_tab_grouped(False)
+
+
+        ### create config window
+        self.config_window = ConfigWindow()
 
         ### create top-level frame
         self.root = gtk.Window(gtk.WINDOW_TOPLEVEL)
@@ -58,6 +85,8 @@ class BaseFrame(object):
         self.tool_buff_close = gtk.ToolButton(gtk.STOCK_CLOSE)
         self.tool_buff_close.set_tooltip_text('Close Current Buffer')
 
+        self.tool_config = gtk.ToolButton(gtk.STOCK_PREFERENCES)
+        self.tool_config.set_tooltip_text('Show the Config Window')
         self.tool_err_console = gtk.ToolButton(gtk.STOCK_DIALOG_WARNING)
         self.tool_err_console.set_tooltip_text('Show the Error Console')
         self.tool_quit = gtk.ToolButton(gtk.STOCK_QUIT)
@@ -68,9 +97,12 @@ class BaseFrame(object):
         self.toolbar.insert(self.tool_buff_save, 1)
         self.toolbar.insert(self.tool_buff_save_as, 2)
         self.toolbar.insert(self.tool_buff_close, 3)
+
         self.toolbar.insert(gtk.SeparatorToolItem(), 4)
-        self.toolbar.insert(self.tool_err_console, 5)
-        self.toolbar.insert(self.tool_quit, 6)
+
+        self.toolbar.insert(self.tool_config, 5)
+        self.toolbar.insert(self.tool_err_console, 6)
+        self.toolbar.insert(self.tool_quit, 7)
 
         ## connect auto-update items
         comp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
@@ -78,8 +110,9 @@ class BaseFrame(object):
         ## connect signals
         self.tool_buff_open.connect('clicked', self._sig_buff_manip, 'open')
 
-        self.tool_err_console.connect('clicked', lambda *arg: self.err_console.open())
-        self.tool_quit.connect('clicked', self._sig_quit)
+        self.tool_config.connect('clicked', self.__key_binding_func['prog_show_config'])
+        self.tool_err_console.connect('clicked', self.__key_binding_func['prog_show_error'])
+        self.tool_quit.connect('clicked', self.__key_binding_func['prog_quit'])
 
 
         ### create main window
@@ -95,15 +128,18 @@ class BaseFrame(object):
         ### set accel
 
         ## for root window
-        self.agr_root = gtk.AccelGroup()
-        self.root.add_accel_group(self.agr_root)
+        self.set_accel()
 
-        # C-q ==> fouce quit
-        self.agr_root.connect_group(
-            gtk.gdk.keyval_from_name('q'),
-            gtk.gdk.CONTROL_MASK,
+        ## for config window
+        self.agr_conf = gtk.AccelGroup()
+        self.config_window.add_accel_group(self.agr_conf)
+
+        # ESC ==> close
+        self.agr_conf.connect_group(
+            gtk.keysyms.Escape,
+            0,
             gtk.ACCEL_VISIBLE,
-            lambda *s: self._sig_quit(None)
+            lambda *s: self.config_window.close()
             )
 
         ## for error console
@@ -118,15 +154,14 @@ class BaseFrame(object):
             lambda *s: self.err_console.close()
             )
 
-
         ### show all parts
-        self.agr_root.lock()
+        self.agr_err.lock()
         w_vbox.set_focus_chain((self.mw, self.lastline)) # prevent toolbar from getting focus
         self.root.show_all()
 
-        # redirect STDOUT and STDERR to the error console
-        sys.stdout = self.err_console
-        sys.stderr = self.err_console
+        self.err_console.setup = False # signal the end of the setup phase; no more stderr
+        if self.err_console.get_text():
+            self.err_console.open()
 
 
     ### signal-like auto-update function
@@ -196,6 +231,108 @@ class BaseFrame(object):
     ### end of callback functions for SplitScreen
 
 
+    ### key binding
+    def set_accel(self):
+        for (k, v) in conf.Config['FUNC_BINDING'].items():
+            if k in self.__key_binding_func:
+                comp.zEdit.register(k, self.__key_binding_func[k], self)
+    ### end of key binding
+
+
     def main(self):
         gtk.main()
+
+
+
+######## ######## ######## ########
+########      Config       ########
+######## ######## ######## ########
+
+class ConfigWindow(gtk.Window):
+    def __init__(self):
+        super(ConfigWindow, self).__init__()
+
+        self.set_destroy_with_parent(True)
+        self.connect("delete_event", self._sig_close_console)
+
+        self.set_title('zPE Config')
+
+
+        # layout of the frame:
+        # 
+        #   +--+--+--+---+_
+        #   +--+--+--+---+ \
+        #   |            |  tab
+        #   |            |
+        #   |   center   |
+        #   |            |
+        #   |            |
+        #   +------+--+--+-- separator
+        #   |      |bt|bt|
+        #   +------+--+--+
+
+        layout = gtk.VBox()
+        self.add(layout)
+
+        ### create center
+        self.center = gtk.Notebook()
+        layout.pack_start(self.center, True, True, 0)
+
+        ## 
+        self.ct_1 = gtk.Label('page 1')
+        self.center.append_page(self.ct_1, gtk.Label('tab 1'))
+
+        # separator
+        layout.pack_start(gtk.HSeparator(), False, False, 0)
+
+        # create bottom
+        self.bottom = gtk.HBox()
+        layout.pack_end(self.bottom, False, False, 0)
+
+        self.bttn_cancel = gtk.Button('Cancel', gtk.STOCK_CANCEL)
+        self.bttn_save = gtk.Button('Save', gtk.STOCK_APPLY)
+
+        self.bttn_cancel.connect('clicked', self._sig_close_console)
+        self.bttn_save.connect('clicked', self._sig_save_config)
+
+        self.bottom.pack_start(gtk.Label(), True, True, 0)
+        self.bottom.pack_end(self.bttn_save, False, False, 5)
+        self.bottom.pack_end(self.bttn_cancel, False, False, 5)
+
+
+        layout.show_all()
+
+
+    ### signal definition
+    def _sig_default(self, widget):
+        self.default()
+
+    def _sig_open_console(self, *arg):
+        self.open()
+
+    def _sig_save_config(self, *arg):
+        conf.write_rc()
+        self.close()
+
+    def _sig_close_console(self, *arg):
+        self.close()
+        return True
+    ### end of signal definition
+
+
+    ### overloaded function definition
+    def default(self):
+        pass                    # retrive info
+
+    def open(self):
+        if self.get_property('visible'):
+            self.window.show()
+        else:
+            self.show()
+        self.default()
+
+    def close(self):
+        self.hide()
+    ### end of overloaded function definition
+
 
