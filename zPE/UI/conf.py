@@ -263,8 +263,8 @@ def read_rc():
 
 __PATTERN = {
     'terminal' : '''
-( BACKSPACE | Backspace | backspace ) |
-( ESC       | Ese       | esc       ) |
+( BACKSPACE | BackSpace | backspace ) |
+( ESCAPE    | Eseape    | escape    ) |
 ( ENTER     | Enter     | enter     ) |
 ( SPACE     | Space     | space     ) |
 ( TAB       | Tab       | tab       ) |
@@ -273,8 +273,8 @@ __PATTERN = {
 ( DELETE    | Delete    | delete    ) |
 ( HOME      | Home      | home      ) |
 ( END       | End       | end       ) |
-( PAGEUP    | PageUp    | pageup    ) |
-( PAGEDN    | PageDn    | pagedn    ) |
+( PAGE_UP   | Page_Up   | page_up   ) |
+( PAGE_DOWN | Page_Down | page_down ) |
 
 ( LEFT      | Left      | left      ) |
 ( RIGHT     | Rignt     | right     ) |

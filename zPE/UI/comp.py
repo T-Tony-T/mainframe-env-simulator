@@ -25,6 +25,7 @@ import gobject, pango
 ######## ######## ######## ########
 
 class z_ABC(object):
+    '''z Abstract Base Class'''
     @classmethod
     def register(cls, sig, callback, widget, *data):
         '''This function register a function to a signal-like string'''
@@ -33,9 +34,24 @@ class z_ABC(object):
     @classmethod
     def unregister(cls, sig, widget):
         '''This function un-register a widget from a signal-like string'''
+        reserve = []
         for item in cls._auto_update[sig]:
-            if widget == item[0]:
-                cls._auto_update[sig].remove(item)
+            if widget != item[0]:
+                reserve.append(item)
+        cls._auto_update[sig] = reserve
+
+    @classmethod
+    def clean_up(cls):
+        '''This function un-register all invisible widgets from the list'''
+        for sig in cls._auto_update:
+            reserve = []
+            for item in cls._auto_update[sig]:
+                try:
+                    if item[0].get_property('visible'):
+                        reserve.append(item)
+                except:
+                    reserve.append(item)
+            cls._auto_update[sig] = reserve
 
     @classmethod
     def emit(cls, sig, info = None):
@@ -69,10 +85,17 @@ class z_ABC(object):
 
 
 class zEdit(z_ABC, gtk.VBox):
-    __style = 'other'
-    __key_binding = {}
-    __tab_on = False
-    __tab_grouped = False
+    __style = 'other'           # see zEdit.set_style()
+    __key_binding = {}          # see zEdit.set_key_binding()
+    __tab_on = False            # see zEdit.set_tab_on()
+    __tab_grouped = False       # see zEdit.set_tab_grouped()
+
+
+    _buff_sw_sig_id = {
+        # combobox : sig_id
+        }
+
+    _focus = None
 
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
@@ -122,8 +145,6 @@ class zEdit(z_ABC, gtk.VBox):
 
         self.ui_init_func = None
         self.need_init = None   # since no init_func is set at this time
-
-        self.silence_sw = False # silence switch: switch the buffer at background
 
         # layout of the frame:
         # 
@@ -176,14 +197,17 @@ class zEdit(z_ABC, gtk.VBox):
         self._sig_update_font()
 
         # connect signal
-        self.connect('key-press-event', self._sig_key_pressed)
-
-        self.sig_id['buffer_changed'] = self.buffer_sw.connect('changed', self._sig_buffer_changed)
+        zEdit._buff_sw_sig_id[self.buffer_sw] = self.buffer_sw.connect('changed', self._sig_buffer_changed)
 
 
     ### signal-like auto-update function
     @staticmethod
     def _sig_buffer_list_modified(combo, z_editor):
+        # temporarily block combobox::changed signal
+        for (k, v) in zEdit._buff_sw_sig_id.items():
+            k.handler_block(v)
+
+        # get model
         tm = combo.get_model()
 
         # clear the list
@@ -199,6 +223,10 @@ class zEdit(z_ABC, gtk.VBox):
             # add user-opened buffers
             for buff in zEditBuffer.buff_group['user']:
                 tm.append([buff, False])
+
+        # unblock combobox::changed signal
+        for (k, v) in zEdit._buff_sw_sig_id.items():
+            k.handler_unblock(v)
 
         # set active
         buffer_iter = tm.get_iter_first()
@@ -309,16 +337,16 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     def _sig_focus_in(self, widget, event):
+        zEdit._focus = self
+
         if len(zEdit._auto_update['buffer_focus_in']):
             zEdit.emit('buffer_focus_in')
         self.update_theme_focus_in()
-        self.silence_sw = False
 
     def _sig_focus_out(self, widget, event):
         if len(zEdit._auto_update['buffer_focus_out']):
             zEdit.emit('buffer_focus_out')
         self.update_theme_focus_out()
-        self.silence_sw = True
     ### end of signal for center
 
 
@@ -335,12 +363,36 @@ class zEdit(z_ABC, gtk.VBox):
             self.set_buffer(buff.path, buff.type)
 
         # set focus
-        if not self.silence_sw:
+        if zEdit._focus:
+            zEdit._focus.grab_focus()
+        else:
             self.grab_focus()
     ### end of signal for bottom
 
 
-    ### overloaded function definition
+    ### overridden function definition
+    @classmethod
+    def clean_up(cls):
+        '''This function un-register all invisible widgets from the list'''
+        for sig in cls._auto_update:
+            reserve = []
+            for item in cls._auto_update[sig]:
+                try:
+                    if item[0].get_property('visible'):
+                        reserve.append(item)
+                except:
+                    reserve.append(item)
+            cls._auto_update[sig] = reserve
+
+        reserve = {}
+        for (k, v) in cls._buff_sw_sig_id.items():
+            if k.get_property('visible'):
+                reserve[k] = v
+            else:
+                k.disconnect(v)
+        cls._buff_sw_sig_id = reserve
+
+
     def connect(self, sig, callback, *data):
         if sig not in zEdit._auto_update:
             return self.center.connect(sig, callback, *data)
@@ -367,7 +419,7 @@ class zEdit(z_ABC, gtk.VBox):
         ( char_w, char_h ) = self.buffer_sw.create_pango_layout('w').get_pixel_size()
         ( cell_w, cell_h ) =  self.buffer_sw.size_request()
         self.buffer_sw.set_size_request(char_w * 10, cell_h)
-    ### end of overloaded function definition
+    ### end of overridden function definition
 
 
     def exec_init_func(self):
@@ -418,6 +470,7 @@ class zEdit(z_ABC, gtk.VBox):
                 zTheme.unregister('update_font', self.center)
                 self.center.disconnect(self.sig_id['focus_in'])
                 self.center.disconnect(self.sig_id['focus_out'])
+                self.center.disconnect(self.sig_id['key_press'])
 
                 self.scrolled.remove(self.center)
             self.center = widget
@@ -426,6 +479,7 @@ class zEdit(z_ABC, gtk.VBox):
             zTheme.register('update_font', zTheme._sig_update_font_modify, self.center)
             self.sig_id['focus_in'] = self.center.connect('focus-in-event', self._sig_focus_in)
             self.sig_id['focus_out'] = self.center.connect('focus-out-event', self._sig_focus_out)
+            self.sig_id['key_press'] = self.center.connect('key-press-event', self._sig_key_pressed)
 
             zTheme._sig_update_font_modify(self.center)
             self._sig_update_color_map()
@@ -524,6 +578,8 @@ class zEditBuffer(z_ABC):
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'buffer_list_modified'    : [  ],
         }
+
+    _on_restore = False
 
     def __new__(cls, buffer_path = None, buffer_type = None):
         self = object.__new__(cls)
@@ -640,7 +696,7 @@ class zEditBuffer(z_ABC):
 
     @staticmethod
     def backup():
-        if zEditBuffer.buff_rec:
+        if zEditBuffer._on_restore:
             gtk.main_iteration()
 
         zEditBuffer.__buff_list  = copy.copy(zEditBuffer.buff_list) # never deepcopy this
@@ -650,15 +706,15 @@ class zEditBuffer(z_ABC):
 
     @staticmethod
     def restore():
+        zEditBuffer._on_restore = True
+
         zEditBuffer.buff_list  = copy.copy(zEditBuffer.__buff_list) # never deepcopy this
         zEditBuffer.buff_group = copy.deepcopy(zEditBuffer.__buff_group)
         zEditBuffer.buff_rec   = copy.deepcopy(zEditBuffer.__buff_rec)
 
         zEditBuffer.emit('buffer_list_modified')
 
-        zEditBuffer.__buff_list = {}
-        zEditBuffer.__buff_group = {}
-        zEditBuffer.__buff_rec = {}
+        zEditBuffer._on_restore = False
 
 
 ######## ######## ######## ########
@@ -771,7 +827,7 @@ class zErrConsole(gtk.Window):
     ### end of signal definition
 
 
-    ### overloaded function definition
+    ### overridden function definition
     def clear(self):
         self.set_text('')
 
@@ -806,7 +862,7 @@ class zErrConsole(gtk.Window):
         buff.insert(buff.get_end_iter(), text)
         if self.setup:
             sys.__stderr__.write(text)
-    ### end of overloaded function definition
+    ### end of overridden function definition
 
 
 ######## ######## ######## ########
@@ -914,11 +970,11 @@ class zFileManager(gtk.TreeView):
     ### end of signal definition
 
 
-    ### overloaded function definition
+    ### overridden function definition
     def grab_focus(self):
         super(zFileManager, self).grab_focus()
         self.set_cursor((0,))
-    ### end of overloaded function definition
+    ### end of overridden function definition
 
 
     def open_file(self, fn_list):
@@ -1036,10 +1092,10 @@ class zLastLine(gtk.HBox):
         self.__line_inter.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
     ### end of signal-like auto-update function
 
-    ### overloaded function definition
+    ### overridden function definition
     def connect(self, sig, *data):
         return self.__line_inter.connect(sig, *data)
-    ### end of overloaded function definition
+    ### end of overridden function definition
 
     def get_label(self):
         return self.__label.get_text()
@@ -1067,15 +1123,21 @@ class zLastLine(gtk.HBox):
 ########   zSplitScreen    ########
 ######## ######## ######## ########
 
-class zSplitScreen(gtk.Frame):
+class zSplitScreen(z_ABC, gtk.Frame):
+    _auto_update = {
+        # 'signal_like_string'  : [ callback, ... ]
+        'frame_removed'         : [  ],
+        }
+
+
     def __init__(self,
-                 frame, frame_alist = [],
+                 frame = zEdit, frame_alist = [],
                  frame_init = None,
                  frame_split_dup = None,
                  frame_sz_min = (50, 50)
                  ):
         '''
-        frame
+        frame = zEdit
             a construction function of a GtkWidget which will be
             the frame of the inner window.
 
@@ -1275,7 +1337,27 @@ class zSplitScreen(gtk.Frame):
     ### end of signal for center frame
 
 
-    ### overloaded function definition
+    ### overridden function definition
+    @classmethod
+    def register(cls, sig, callback):
+        '''This function register a function to a signal-like string'''
+        cls._auto_update[sig].append(callback)
+
+    @classmethod
+    def unregister(cls, sig, callback):
+        '''This function un-register a function from a signal-like string'''
+        reserve = []
+        for cb in cls._auto_update[sig]:
+            if callback != cb:
+                reserve.append(cb)
+        cls._auto_update[sig] = reserve
+
+    @classmethod
+    def emit(cls, sig):
+        '''This function emit the signal to all registered object'''
+        for cb in cls._auto_update[sig]:
+            cb()
+
     def is_focus(self):
         return self.active_frame() != None
 
@@ -1284,7 +1366,7 @@ class zSplitScreen(gtk.Frame):
         while not isinstance(child, self.frame):
             child = child.get_children()[0]
         child.grab_focus()
-    ### end of overloaded function definition
+    ### end of overridden function definition
 
 
     def active_frame(self):
@@ -1342,11 +1424,14 @@ class zSplitScreen(gtk.Frame):
 
         return frame
 
-
     def rm_frame(self, widget, child_rm):
         if widget == self.mw_center:    # the only frame
             widget.remove(child_rm)
             widget.add(self.new_frame())
+
+            # clean up
+            child_rm.hide_all()
+            zSplitScreen.emit('frame_removed')
             return              # early return
 
         # not the only frame, get parent and child info
@@ -1370,6 +1455,10 @@ class zSplitScreen(gtk.Frame):
                 add_cmd = 'parent.pack2(child_kp, True, True)'
             parent.remove(widget)
             eval(add_cmd)
+
+        # clean up
+        child_rm.hide_all()
+        zSplitScreen.emit('frame_removed')
 
 
     def update_sd(self, pos):

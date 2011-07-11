@@ -16,9 +16,11 @@ class BaseFrame(object):
 
     def __init__(self):
         self.__key_binding_func = {
-            'prog_show_config'      : lambda *arg: self.config_window.open(),
-            'prog_show_error'       : lambda *arg: self.err_console.open(),
-            'prog_quit'             : lambda *arg: self._sig_quit(None),
+            'buffer_open'               : lambda *arg: self._sig_buff_manip(None, 'open'),
+
+            'prog_show_config'          : lambda *arg: self.config_window.open(),
+            'prog_show_error'           : lambda *arg: self.err_console.open(),
+            'prog_quit'                 : lambda *arg: self._sig_quit(None),
             }
 
 
@@ -106,6 +108,11 @@ class BaseFrame(object):
 
         ## connect auto-update items
         comp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
+
+        comp.zSplitScreen.register('frame_removed', comp.zEdit.clean_up)
+        comp.zSplitScreen.register('frame_removed', comp.zEditBuffer.clean_up)
+        comp.zSplitScreen.register('frame_removed', comp.zTheme.clean_up)
+
 
         ## connect signals
         self.tool_buff_open.connect('clicked', self._sig_buff_manip, 'open')
