@@ -52,7 +52,7 @@ class BaseFrame(object):
 
         self.root.set_title("zPE - Mainframe Programming Environment Simulator")
         self.root.set_icon_from_file( os.path.join(
-                os.path.dirname(__file__), "image", "icon_zPE.svg"
+                os.path.dirname(__file__), "image", "icon_zPE.gif"
                 ) )
         self.root.set_size_request(800, 560)
 
