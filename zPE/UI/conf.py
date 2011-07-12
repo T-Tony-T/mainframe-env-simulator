@@ -8,6 +8,9 @@ import pango                    # for parsing the font
 import re                       # for parsing the string
 
 
+# constant that will be treated as false
+STR_FALSE = [ '0', 'nil', 'false', 'False' ]
+
 # get monospace font list
 MONO_FONT = {
     # 'font family name' : pango.FontFamily object
@@ -53,8 +56,8 @@ DEFAULT = {
         'KEY_BINDING'   : 'other',   # style ~ ( emacs, vi*, other )
                                      # note: vi mode not implemented
 
-        'TAB_ON'        : 'off',     # ( on, off )
-        'TAB_MODE'      : 'group',   # ( all, group )
+        'TAB_ON'        : 0,
+        'TAB_GROUPED'   : 1,
         },
 
     'FONT' : {
@@ -115,7 +118,7 @@ Config = {
         'key_binding'   : DEFAULT['MISC']['KEY_BINDING'],
 
         'tab_on'        : DEFAULT['MISC']['TAB_ON'],
-        'tab_mode'      : DEFAULT['MISC']['TAB_MODE'],
+        'tab_grouped'   : DEFAULT['MISC']['TAB_GROUPED'],
         },
 
     'FONT' : {
@@ -184,18 +187,16 @@ def read_rc():
                     sys.stderr.write('CONFIG WARNING: {0}: Invalid key binding style.\n'.format(v))
 
             elif k == 'tab_on':
-                if v in [ 'on', 'off' ]:
-                    Config[label][k] = v
+                if v and v not in STR_FALSE:
+                    Config[label][k] = 1
                 else:
-                    Config[label][k] = DEFAULT['MISC']['TAB_ON']
-                    sys.stderr.write('CONFIG WARNING: {0}: Invalid TAB switch.\n'.format(v))
+                    Config[label][k] = 0
 
-            elif k == 'tab_mode':
-                if v in [ 'all', 'group' ]:
-                    Config[label][k] = v
+            elif k == 'tab_grouped':
+                if v and v not in STR_FALSE:
+                    Config[label][k] = 1
                 else:
-                    Config[label][k] = DEFAULT['MISC']['TAB_MODE']
-                    sys.stderr.write('CONFIG WARNING: {0}: Invalid TAB mode.\n'.format(v))
+                    Config[label][k] = 0
 
         elif label == 'FONT':
             if k == 'name':

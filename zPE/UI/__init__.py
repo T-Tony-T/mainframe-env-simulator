@@ -37,15 +37,8 @@ class BaseFrame(object):
         comp.zEdit.set_style(conf.Config['MISC']['key_binding'])
         comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
 
-        if conf.Config['MISC']['tab_on'] == 'on':
-            comp.zEdit.set_tab_on(True)
-        else:
-            comp.zEdit.set_tab_on(False)
-
-        if conf.Config['MISC']['tab_mode'] == 'group':
-            comp.zEdit.set_tab_grouped(True)
-        else:
-            comp.zEdit.set_tab_grouped(False)
+        comp.zEdit.set_tab_on(conf.Config['MISC']['tab_on'])
+        comp.zEdit.set_tab_grouped(conf.Config['MISC']['tab_grouped'])
 
 
         ### create config window
@@ -263,7 +256,7 @@ class ConfigWindow(gtk.Window):
         self.connect("delete_event", self._sig_close_console)
 
         self.set_title('zPE Config')
-
+        self.config = conf.Config
 
         # layout of the frame:
         # 
@@ -281,37 +274,66 @@ class ConfigWindow(gtk.Window):
         layout = gtk.VBox()
         self.add(layout)
 
+        self.set_default_size(320, 400)
+
         ### create center
         self.center = gtk.Notebook()
         layout.pack_start(self.center, True, True, 0)
 
-        ## 
-        self.ct_1 = gtk.Label('page 1')
-        self.center.append_page(self.ct_1, gtk.Label('tab 1'))
+        ## GUI
+        self.ct_gui = gtk.VBox()
+        self.center.append_page(self.ct_gui, gtk.Label('GUI'))
+
+        # tabbar
+        self.ct_gui_tab = gtk.HBox()
+        self.ct_gui.pack_start(self.ct_gui_tab, False, False, 10)
+
+        self.tabbar_on = gtk.CheckButton('Show Tabbar')
+        self.tabbar_grouped = gtk.CheckButton('Group Tabs in Tabbar')
+
+        self.ct_gui_tab.pack_start(self.tabbar_on, False, False, 5)
+        self.ct_gui_tab.pack_end(self.tabbar_grouped, False, False, 5)
+
+        self.tabbar_on.connect('toggled', self._sig_tabbar_on)
+        self.tabbar_grouped.connect('toggled', self._sig_tabbar_grouped)
+
+        self.ct_gui.pack_start(gtk.HSeparator(), False, False, 2)
 
         # separator
-        layout.pack_start(gtk.HSeparator(), False, False, 0)
+        layout.pack_start(gtk.HSeparator(), False, False, 2)
 
-        # create bottom
+
+        ### create bottom
         self.bottom = gtk.HBox()
         layout.pack_end(self.bottom, False, False, 0)
 
-        self.bttn_cancel = gtk.Button('Cancel', gtk.STOCK_CANCEL)
-        self.bttn_save = gtk.Button('Save', gtk.STOCK_APPLY)
+        ## create buttons
+        self.bttn_default = gtk.Button(stock = gtk.STOCK_REVERT_TO_SAVED)
+        self.bttn_default.set_label('_Default')
 
-        self.bttn_cancel.connect('clicked', self._sig_close_console)
-        self.bttn_save.connect('clicked', self._sig_save_config)
+        self.bttn_cancel = gtk.Button(stock = gtk.STOCK_CANCEL)
+        self.bttn_cancel.set_label('_Cancel')
+        self.bttn_save = gtk.Button(stock = gtk.STOCK_APPLY)
+        self.bttn_save.set_label('_Save')
 
+        ## add buttons to bottom
+        self.bottom.pack_start(self.bttn_default, False, False, 5)
         self.bottom.pack_start(gtk.Label(), True, True, 0)
         self.bottom.pack_end(self.bttn_save, False, False, 5)
         self.bottom.pack_end(self.bttn_cancel, False, False, 5)
 
+        ## connect signals
+        self.bttn_default.connect('clicked', self._sig_restore_default)
 
+        self.bttn_cancel.connect('clicked', self._sig_close_console)
+        self.bttn_save.connect('clicked', self._sig_save_config)
+
+        ## show
         layout.show_all()
 
 
-    ### signal definition
-    def _sig_default(self, widget):
+    ### top-level signal definition
+    def _sig_restore_default(self, widget):
         self.default()
 
     def _sig_open_console(self, *arg):
@@ -324,22 +346,35 @@ class ConfigWindow(gtk.Window):
     def _sig_close_console(self, *arg):
         self.close()
         return True
-    ### end of signal definition
+    ### end of top-level signal definition
+
+    ### signal for GUI
+    def _sig_tabbar_on(self, bttn):
+        self.config['MISC']['tab_on'] = bttn.get_active()
+        comp.zEdit.set_tab_on(conf.Config['MISC']['tab_on'])
+        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
+
+    def _sig_tabbar_grouped(self, bttn):
+        self.config['MISC']['tab_grouped'] = bttn.get_active()
+        comp.zEdit.set_tab_grouped(conf.Config['MISC']['tab_grouped'])
+        
+    ### signal for GUI
 
 
     ### overloaded function definition
     def default(self):
-        pass                    # retrive info
+        self.tabbar_on.set_active(self.config['MISC']['tab_on'])
+        self.tabbar_grouped.set_active(self.config['MISC']['tab_grouped'])
+        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
 
     def open(self):
         if self.get_property('visible'):
             self.window.show()
         else:
+            self.default()
             self.show()
-        self.default()
 
     def close(self):
         self.hide()
     ### end of overloaded function definition
-
 

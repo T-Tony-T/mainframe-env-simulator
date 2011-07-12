@@ -87,6 +87,7 @@ class z_ABC(object):
 class zEdit(z_ABC, gtk.VBox):
     __style = 'other'           # see zEdit.set_style()
     __key_binding = {}          # see zEdit.set_key_binding()
+
     __tab_on = False            # see zEdit.set_tab_on()
     __tab_grouped = False       # see zEdit.set_tab_grouped()
 
@@ -103,6 +104,8 @@ class zEdit(z_ABC, gtk.VBox):
         'buffer_focus_out'      : [  ],
 
         'populate_popup'        : [  ],
+
+        'update_tabbar'         : [  ],
 
         # for key binding
         'buffer_open'           : [  ],
@@ -140,6 +143,9 @@ class zEdit(z_ABC, gtk.VBox):
         '''
         super(zEdit, self).__init__()
 
+        self.__on_init = True
+        self.__on_mod_buff_list = False
+
         self.active_buffer = None
         self.sig_id = {}        # a dict holds all handler id
 
@@ -147,8 +153,10 @@ class zEdit(z_ABC, gtk.VBox):
         self.need_init = None   # since no init_func is set at this time
 
         # layout of the frame:
-        # 
-        #   +------------+_
+        #
+        #                   tabbar (can be turn off)
+        #   +--+--+------+_/
+        #   +--+--+------+_
         #   |+----------+| \
         #   ||          ||  center_shell
         #   ||          ||
@@ -160,6 +168,13 @@ class zEdit(z_ABC, gtk.VBox):
         #   |sw| bottom  |
         #   +--+---------+
 
+        # create tabbar if turned on
+        self.tab_on_current = False
+        self.__tab_list = []    # list of gtk.Frame that contain gtk.ToolButton
+        self.__tab_sig_map = {} # gtk.Frame : handler_id
+        if zEdit.__tab_on:
+            self._sig_update_tabbar()
+
         # create the status bar
         self.bottom_bg = gtk.EventBox()
         self.pack_end(self.bottom_bg, False, False, 0)
@@ -170,6 +185,8 @@ class zEdit(z_ABC, gtk.VBox):
         self.buffer_sw_tm = gtk.ListStore(str, bool) # define TreeModel
         self.buffer_sw = gtk.ComboBox(self.buffer_sw_tm)
         self.bottom.pack_start(self.buffer_sw, False, False, 0)
+        self.buffer_sw.set_property('can-default', False)
+        self.buffer_sw.set_property('can-focus', False)
         self.buffer_sw.set_property('focus-on-click', False)
 
         self.buffer_sw_cell = gtk.CellRendererText()
@@ -189,51 +206,150 @@ class zEdit(z_ABC, gtk.VBox):
         self.set_buffer(buffer_path, buffer_type)
 
         # connect auto-update items
-        zEditBuffer.register('buffer_list_modified', zEdit._sig_buffer_list_modified, self.buffer_sw, self)
-        zTheme.register('update_font', self._sig_update_font, self.buffer_sw_cell)
-        zTheme.register('update_color_map', self._sig_update_color_map, self)
+        zEdit.register('update_tabbar', self._sig_update_tabbar, self)
+        self._sig_update_tabbar()
 
-        zEdit._sig_buffer_list_modified(self.buffer_sw, self)
+        zEditBuffer.register('buffer_list_modified', zEdit._sig_buffer_list_modified, self)
+        zEdit._sig_buffer_list_modified(self)
+
+        zTheme.register('update_font', self._sig_update_font, self.buffer_sw_cell)
         self._sig_update_font()
+
+        zTheme.register('update_color_map', self._sig_update_color_map, self)
 
         # connect signal
         zEdit._buff_sw_sig_id[self.buffer_sw] = self.buffer_sw.connect('changed', self._sig_buffer_changed)
 
+        self.__on_init = False
+
 
     ### signal-like auto-update function
+    def _sig_update_tabbar(self, widget = None):
+        if zEdit.__tab_on:
+            # turn on the tabbar
+            if not self.tab_on_current:
+                # tabbar off
+                self.tabbar_bg = gtk.EventBox()
+                if not self.__on_init:
+                    self.remove(self.scrolled)
+                self.pack_start(self.tabbar_bg, False, False, 0)
+                if not self.__on_init:
+                    self.pack_start(self.scrolled, True, True, 0)
+
+                self.tabbar = gtk.HBox()
+                self.tabbar_bg.add(self.tabbar)
+
+                if self.__on_init:
+                    self.tab_on_current = True
+                    return      # rest will be done by the constructor
+
+            # update buffer list
+            zEdit._sig_buffer_list_modified(self, None, True)
+            self.tabbar_bg.show_all()
+
+            # retain focus
+            if zEdit._focus:
+                zEdit._focus.grab_focus()
+            else:
+                self.grab_focus()
+
+            self.tab_on_current = True
+
+            # init focus theme
+            if self.is_focus():
+                self.update_theme_focus_in()
+            else:
+                self.update_theme_focus_out()
+        else:
+            # turn off the tabbar
+            if self.tab_on_current:
+                # tabbar on
+                self.remove(self.tabbar_bg)
+                for child in self.__tab_list:
+                    child.child.disconnect(self.__tab_sig_map[child])
+
+                self.__tab_list = []
+                self.__tab_sig_map = {}
+                self.tabbar_bg.hide_all()
+
+                # retain focus
+                if zEdit._focus:
+                    zEdit._focus.grab_focus()
+                else:
+                    self.grab_focus()
+
+                self.tab_on_current = False
+
+
     @staticmethod
-    def _sig_buffer_list_modified(combo, z_editor):
+    def _sig_buffer_list_modified(z_editor, new_buff = None, skip_sw = False):
+        z_editor.__on_mod_buff_list = True
+
+        ### for tabbar
+        if zEdit.__tab_on:
+            if not new_buff or not z_editor.is_focus():
+                new_buff = z_editor.active_buffer
+
+            z_editor.rebuild_tabbar(new_buff)
+            z_editor.update_buffer_list_selected(True, False)
+
+            z_editor.tabbar.show_all()
+
+        ### for buffer switcher
+        if skip_sw:
+            z_editor.__on_mod_buff_list = False
+            return              # early return
+
         # temporarily block combobox::changed signal
         for (k, v) in zEdit._buff_sw_sig_id.items():
             k.handler_block(v)
 
-        # get model
-        tm = combo.get_model()
-
         # clear the list
-        tm.clear()
+        z_editor.buffer_sw_tm.clear()
 
         # add system-opened buffers
         for buff in zEditBuffer.buff_group['system']:
-            tm.append([buff, False])
+            z_editor.buffer_sw_tm.append([buff, False])
         # add user-opened buffers, if exist
         if len(zEditBuffer.buff_group['user']):
             # add separator: Not an Item, this item should not be seen
-            tm.append(['NanI', True])
+            z_editor.buffer_sw_tm.append(['NanI', True])
             # add user-opened buffers
             for buff in zEditBuffer.buff_group['user']:
-                tm.append([buff, False])
+                z_editor.buffer_sw_tm.append([buff, False])
 
         # unblock combobox::changed signal
         for (k, v) in zEdit._buff_sw_sig_id.items():
             k.handler_unblock(v)
 
         # set active
-        buffer_iter = tm.get_iter_first()
-        while tm.get_value(buffer_iter, 0) != z_editor.active_buffer.name:
-            buffer_iter = tm.iter_next(buffer_iter)
-        combo.set_active_iter(buffer_iter)
+        z_editor.update_buffer_list_selected(False, True)
 
+        z_editor.__on_mod_buff_list = False
+
+    def update_buffer_list_selected(self, mask_tab = True, mask_sw = True):
+        ### for tabbar
+        if mask_tab and self.__tab_on:
+            frame_list = self.tabbar.get_children()
+            if self.active_buffer.name not in [ frame.child.get_label() for frame in frame_list ]:
+                self.rebuild_tabbar(self.active_buffer)
+                frame_list = self.tabbar.get_children()
+
+            for frame in frame_list:
+                if frame.child.get_label() == self.active_buffer.name:
+                    frame.set_shadow_type(gtk.SHADOW_ETCHED_OUT)
+                    frame.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['reserve']))
+                else:
+                    frame.set_shadow_type(gtk.SHADOW_OUT)
+                    frame.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
+
+        ### for switcher
+        if mask_sw:
+            buffer_iter = self.buffer_sw_tm.get_iter_first()
+            if buffer_iter:
+                while self.buffer_sw_tm.get_value(buffer_iter, 0) != self.active_buffer.name:
+                    buffer_iter = self.buffer_sw_tm.iter_next(buffer_iter)
+                self.buffer_sw.set_active_iter(buffer_iter)
 
     def _sig_update_font(self, widget = None):
         zTheme._sig_update_font_property(self.buffer_sw_cell, 0.75)
@@ -255,10 +371,14 @@ class zEdit(z_ABC, gtk.VBox):
             self.update_theme_focus_out()
 
     def update_theme_focus_in(self):
+        if self.tab_on_current:
+            self.tabbar_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
         self.buffer_sw_cell.set_property('background-gdk', gtk.gdk.color_parse(zTheme.color_map['status_active']))
 
     def update_theme_focus_out(self):
+        if self.tab_on_current:
+            self.tabbar_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
         self.buffer_sw_cell.set_property('background-gdk', gtk.gdk.color_parse(zTheme.color_map['status']))
     ### end of signal-like auto-update function
@@ -347,15 +467,30 @@ class zEdit(z_ABC, gtk.VBox):
         if len(zEdit._auto_update['buffer_focus_out']):
             zEdit.emit('buffer_focus_out')
         self.update_theme_focus_out()
+
+    def _sig_tab_clicked(self, widget):
+        buffer_name = widget.get_label()
+
+        if buffer_name != self.active_buffer.name:
+            buff = zEditBuffer.buff_list[buffer_name]
+            self.set_buffer(buff.path, buff.type)
+
+        # set focus
+        if zEdit._focus and self.__on_mod_buff_list:
+            zEdit._focus.grab_focus()
+        else:
+            self.grab_focus()
     ### end of signal for center
 
 
     ### signal for bottom
     def _sig_buffer_changed(self, combobox):
+        # check for switcher items
         active_iter = combobox.get_active_iter()
         if not active_iter:
             return              # early return
 
+        # switch buffer
         buffer_name = self.buffer_sw_tm.get_value(active_iter, 0)
 
         if buffer_name != self.active_buffer.name:
@@ -363,7 +498,7 @@ class zEdit(z_ABC, gtk.VBox):
             self.set_buffer(buff.path, buff.type)
 
         # set focus
-        if zEdit._focus:
+        if zEdit._focus and self.__on_mod_buff_list:
             zEdit._focus.grab_focus()
         else:
             self.grab_focus()
@@ -420,6 +555,45 @@ class zEdit(z_ABC, gtk.VBox):
         ( cell_w, cell_h ) =  self.buffer_sw.size_request()
         self.buffer_sw.set_size_request(char_w * 10, cell_h)
     ### end of overridden function definition
+
+
+    def rebuild_tabbar(self, target_buff):
+        if not zEdit.__tab_on:
+            return
+
+        for child in self.__tab_list:
+            # clear the current tabbar
+            self.tabbar.remove(child)
+            child.child.disconnect(self.__tab_sig_map[child])
+
+        tab_list = []
+        self.__tab_list = []
+        self.__tab_sig_map = {}
+
+        if ( target_buff.name in zEditBuffer.buff_group['system'] or
+             not zEdit.__tab_grouped
+             ):
+            # add system-opened buffers
+            for buff in zEditBuffer.buff_group['system']:
+                tab_list.append(gtk.ToolButton(label = buff))
+        if ( target_buff.name in zEditBuffer.buff_group['user'] or
+             not zEdit.__tab_grouped
+             ):
+            # add user-opened buffers
+            for buff in zEditBuffer.buff_group['user']:
+                tab_list.append(gtk.ToolButton(label = buff))
+
+        # add tabs to the tabbar
+        for tab in tab_list:
+            tab.set_property('can-default', False)
+            tab.set_property('can-focus', False)
+
+            frame = gtk.Frame()
+            frame.add(tab)
+            self.tabbar.pack_start(frame, False, False, 0)
+
+            self.__tab_list.append(frame)
+            self.__tab_sig_map[frame] = tab.connect('clicked', self._sig_tab_clicked)
 
 
     def exec_init_func(self):
@@ -486,7 +660,7 @@ class zEdit(z_ABC, gtk.VBox):
 
         # switch buffer
         self.active_buffer = new_buff
-        zEdit._sig_buffer_list_modified(self.buffer_sw, self)
+        self.update_buffer_list_selected(True, True)
 
         # connect buffer
         if self.active_buffer.type == 'file':
@@ -522,7 +696,9 @@ class zEdit(z_ABC, gtk.VBox):
 
     @staticmethod
     def set_tab_on(setting):
-        zEdit.__tab_on = setting
+        if zEdit.__tab_on != setting:
+            zEdit.__tab_on = setting
+            zEdit.emit('update_tabbar')
 
     @staticmethod
     def get_tab_grouped():
@@ -530,7 +706,9 @@ class zEdit(z_ABC, gtk.VBox):
 
     @staticmethod
     def set_tab_grouped(setting):
-        zEdit.__tab_grouped = setting
+        if zEdit.__tab_grouped != setting:
+            zEdit.__tab_grouped = setting
+            zEdit.emit('update_tabbar')
 
 
     ### supporting function
@@ -661,7 +839,7 @@ class zEditBuffer(z_ABC):
             zEditBuffer.buff_group[buff_group].append(self.name)
         else:
             raise SystemError   # this should never happen
-        zEditBuffer.emit('buffer_list_modified')
+        zEditBuffer.emit('buffer_list_modified', self)
 
         # fetch content
         if self.type == 'file':
@@ -776,14 +954,16 @@ class zErrConsole(gtk.Window):
 	self._sig_update_color_map()
 
         # separator
-        layout.pack_start(gtk.HSeparator(), False, False, 0)
+        layout.pack_start(gtk.HSeparator(), False, False, 2)
 
         # create bottom
         self.bottom = gtk.HBox()
         layout.pack_end(self.bottom, False, False, 0)
 
-        self.bttn_clear = gtk.Button('Clear', gtk.STOCK_CLEAR)
-        self.bttn_close = gtk.Button('Close', gtk.STOCK_CLOSE)
+        self.bttn_clear = gtk.Button(stock = gtk.STOCK_CLEAR)
+        self.bttn_clear.set_label('C_lear')
+        self.bttn_close = gtk.Button(stock = gtk.STOCK_CLOSE)
+        self.bttn_close.set_label('_Close')
 
         self.bttn_clear.connect('clicked', self._sig_clear)
         self.bttn_close.connect('clicked', self._sig_close_console)
@@ -1113,7 +1293,8 @@ class zLastLine(gtk.HBox):
         self.__line_inter.set_text(string)
 
     def set_editable(self, setting):
-        self.__line_inter.set_property('can_focus', setting)
+        self.__line_inter.set_property('can-default', setting)
+        self.__line_inter.set_property('can-focus', setting)
         self.__line_inter.set_editable(setting)
         self.__line_inter.grab_focus()
 
@@ -1235,7 +1416,8 @@ class zSplitScreen(z_ABC, gtk.Frame):
             os.path.join(os.path.dirname(__file__), "image", "min_empty.gif")
             )
         for pos in self.__ctrl_pos['a']:
-            self.ctrl_bar[pos].set_property('can_focus', False)
+            self.ctrl_bar[pos].set_property('can-default', False)
+            self.ctrl_bar[pos].set_property('can-focus', False)
             self.ctrl_bar[pos].connect_object('clicked', self.add_paned, self.mw_center, pos)
             self.ctrl_bar[pos].drag_source_set(gtk.gdk.BUTTON1_MASK, [], 0)
             self.ctrl_bar[pos].connect('drag_begin', self._sig_ctrl_drag, drag_icon, pos)
