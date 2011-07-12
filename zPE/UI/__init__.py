@@ -1,7 +1,7 @@
 # modules that will be auto imported
 import comp, conf
 
-import os, sys
+import os, sys, copy
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -256,7 +256,8 @@ class ConfigWindow(gtk.Window):
         self.connect("delete_event", self._sig_close_console)
 
         self.set_title('zPE Config')
-        self.config = conf.Config
+        self.__config = conf.Config
+        self.config = copy.deepcopy(self.__config)
 
         # layout of the frame:
         # 
@@ -351,21 +352,22 @@ class ConfigWindow(gtk.Window):
     ### signal for GUI
     def _sig_tabbar_on(self, bttn):
         self.config['MISC']['tab_on'] = bttn.get_active()
-        comp.zEdit.set_tab_on(conf.Config['MISC']['tab_on'])
-        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
+        comp.zEdit.set_tab_on(self.config['MISC']['tab_on'])
+        self.tabbar_grouped.set_property('sensitive', self.config['MISC']['tab_on'])
 
     def _sig_tabbar_grouped(self, bttn):
         self.config['MISC']['tab_grouped'] = bttn.get_active()
-        comp.zEdit.set_tab_grouped(conf.Config['MISC']['tab_grouped'])
+        comp.zEdit.set_tab_grouped(self.config['MISC']['tab_grouped'])
         
     ### signal for GUI
 
 
     ### overloaded function definition
     def default(self):
+        self.config = copy.deepcopy(self.__config)
         self.tabbar_on.set_active(self.config['MISC']['tab_on'])
         self.tabbar_grouped.set_active(self.config['MISC']['tab_grouped'])
-        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
+        self.tabbar_grouped.set_property('sensitive', self.config['MISC']['tab_on'])
 
     def open(self):
         if self.get_property('visible'):
@@ -375,6 +377,7 @@ class ConfigWindow(gtk.Window):
             self.show()
 
     def close(self):
+        self.default()
         self.hide()
     ### end of overloaded function definition
 
