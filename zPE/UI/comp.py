@@ -19,6 +19,16 @@ import gtk
 import gobject, pango
 
 
+######## ######## ######## ########
+######## Supported Feature ########
+######## ######## ######## ########
+
+SUPPORT = { }
+if gtk.gdk.screen_get_default().get_rgba_colormap():
+    SUPPORT['rgba'] = True
+else:
+    SUPPORT['rgba'] = False
+
 
 ######## ######## ######## ########
 ########       z_ABC       ########
@@ -1310,6 +1320,10 @@ class zSplitScreen(z_ABC, gtk.Frame):
         'frame_removed'         : [  ],
         }
 
+    __handle_sz = max(
+        gtk.HPaned().style_get_property('handle-size'),
+        gtk.VPaned().style_get_property('handle-size')
+        )
 
     def __init__(self,
                  frame = zEdit, frame_alist = [],
@@ -1430,15 +1444,29 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
         # create the shading-layer
         root = widget.get_root_window()
-        (root_w, root_h) = root.get_size()
-        screen = widget.get_toplevel().get_screen()
+        screen = gtk.gdk.screen_get_default()
+
+        alloc = self.mw_center.get_allocation()
+        self.sd_w = alloc.width
+        self.sd_h = alloc.height
+        if SUPPORT['rgba']:
+            visual = screen.get_rgba_visual()
+            colormap = screen.get_rgba_colormap()
+        else:
+            if pos in self.__ctrl_pos['h']:
+                self.sd_w = self.__handle_sz
+            else:
+                self.sd_h = self.__handle_sz
+            visual = screen.get_rgb_visual()
+            colormap = screen.get_rgb_colormap()
+
         self.sd_layer = gtk.gdk.Window(
-            root, root_w, root_h,
+            root, self.sd_w, self.sd_h,
             gtk.gdk.WINDOW_TEMP,
             gtk.gdk.ALL_EVENTS_MASK,
             gtk.gdk.INPUT_OUTPUT,
             '', 0, 0,
-            screen.get_rgba_visual(), screen.get_rgba_colormap(), gtk.gdk.Cursor(gtk.gdk.PLUS),
+            visual, colormap, gtk.gdk.Cursor(gtk.gdk.PLUS),
             '', '', True
             )
         self.sd_layer.show()
@@ -1447,16 +1475,19 @@ class zSplitScreen(z_ABC, gtk.Frame):
         self.sd_layer_cr = self.sd_layer.cairo_create()
 
         self.sd_layer_cr.set_line_width(1)
-        self.sd_layer_cr.set_source_rgba(0, 0, 0, 0.3)
-
-        # limit the drawing area
-        alloc = self.mw_center.get_allocation()
-        ( ptr_x,     ptr_y     ) = self.mw_center.get_pointer()
-        ( ptr_abs_x, ptr_abs_y ) = self.sd_layer.get_pointer()[:2]
-        ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x, ptr_abs_y - ptr_y )
-
-        self.sd_layer_cr.rectangle(base_x, base_y, alloc.width, alloc.height)
-        self.sd_layer_cr.clip()
+        # set shade color
+        sd_fg_rgb = [ int(zTheme.color_map['text'][i:i+2], 16) / 255.0 # scale hex color code to [0, 1]
+                      for i in [ 1, 3, 5 ] # starting index in pattern '#rrggbb'
+                      ]
+        sd_bg_rgb = [ int(zTheme.color_map['base'][i:i+2], 16) / 255.0 # scale hex color code to [0, 1]
+                      for i in [ 1, 3, 5 ] # starting index in pattern '#rrggbb'
+                      ]
+        if SUPPORT['rgba']:
+            alpha = 0.3
+            self.sd_layer_cr.set_source_rgba(* (sd_fg_rgb + [ alpha ]))
+        else:
+            alpha = 0.5
+            self.sd_layer_cr.set_source_rgb(* [ sd_fg_rgb[i] * alpha + sd_bg_rgb[i] * (1 - alpha) for i in range(3) ])
 
         # start the timer
         self.mw_center.timer = True
@@ -1487,12 +1518,11 @@ class zSplitScreen(z_ABC, gtk.Frame):
             paned = self.add_paned(self.mw_center, pos)
 
             # re-position the newly added frame
-            handle_sz = paned.style_get_property('handle-size')
             if pos in self.__ctrl_pos['h']:
                 # - handle_sz cancel the width of the divider
-                paned.set_position(correct_pos[0] - handle_sz)
+                paned.set_position(correct_pos[0] - self.__handle_sz / 2)
             else:
-                paned.set_position(correct_pos[1] - handle_sz)
+                paned.set_position(correct_pos[1] - self.__handle_sz / 2)
     ### end of signal for DnD
 
     ### signal for center frame
@@ -1648,12 +1678,11 @@ class zSplitScreen(z_ABC, gtk.Frame):
             return False
 
         # calculate position
+        root = self.mw_center.get_root_window()
         alloc = self.mw_center.get_allocation()
         ( ptr_x,     ptr_y     ) = self.mw_center.get_pointer()
-        ( ptr_abs_x, ptr_abs_y ) = self.sd_layer.get_pointer()[:2]
+        ( ptr_abs_x, ptr_abs_y ) = root.get_pointer()[:2]
         ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x, ptr_abs_y - ptr_y )
-
-        self.sd_layer.clear()
 
         # validate position
         correct_pos = self.__correct_pos(
@@ -1662,20 +1691,33 @@ class zSplitScreen(z_ABC, gtk.Frame):
             (alloc.width, alloc.height),          # the frame size - high bound
             [sp + 10 for sp in self.frame_sz_min] # the min spacing + 10
             )
-        if not correct_pos:
+
+        if correct_pos:
+            self.sd_layer.show()
+        else:
+            self.sd_layer.hide()
             return True
 
         # draw on shading-layer
-        if pos == 'lt':
-            self.sd_layer_cr.rectangle(base_x,    base_y,    ptr_x,               alloc.height        )
-        elif pos == 'tp':
-            self.sd_layer_cr.rectangle(base_x,    base_y,    alloc.width,         ptr_y               )
-        elif pos == 'rt':
-            self.sd_layer_cr.rectangle(ptr_abs_x, base_y,    alloc.width - ptr_x, alloc.height        )
+        if SUPPORT['rgba']:
+            if pos == 'lt':
+                self.sd_layer.move_resize(base_x,    base_y,    ptr_x,             self.sd_h        )
+            elif pos == 'tp':
+                self.sd_layer.move_resize(base_x,    base_y,    self.sd_w,         ptr_y            )
+            elif pos == 'rt':
+                self.sd_layer.move_resize(ptr_abs_x, base_y,    self.sd_w - ptr_x, self.sd_h        )
+            else:
+                self.sd_layer.move_resize(base_x,    ptr_abs_y, self.sd_w,         self.sd_h - ptr_y)
         else:
-            self.sd_layer_cr.rectangle(base_x,    ptr_abs_y, alloc.width,         alloc.height - ptr_y)
+            if pos in self.__ctrl_pos['h']:
+                self.sd_layer.move(ptr_abs_x - self.sd_w / 2, base_y)
+            else:
+                self.sd_layer.move(base_x, ptr_abs_y - self.sd_h / 2)
 
+        self.sd_layer_cr.rectangle(0, 0, self.sd_w, self.sd_h)
+        self.sd_layer.clear()
         self.sd_layer_cr.fill()
+
 
         return True
 
