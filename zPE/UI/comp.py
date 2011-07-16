@@ -495,7 +495,7 @@ class zEdit(z_ABC, gtk.VBox):
                     return      # rest will be done by the constructor
 
             # update buffer list
-            zEdit._sig_buffer_list_modified(self, None, True)
+            zEdit._sig_buffer_list_modified(self, skip_sw = True)
             self.tabbar.show_all()
 
             # retain focus
@@ -533,6 +533,8 @@ class zEdit(z_ABC, gtk.VBox):
 
     @staticmethod
     def _sig_buffer_list_modified(z_editor, new_buff = None, skip_sw = False):
+        z_editor.__list_modified = True
+
         ### for tabbar
         if zEdit.__tab_on:
             if not new_buff or not z_editor.is_focus():
@@ -569,6 +571,8 @@ class zEdit(z_ABC, gtk.VBox):
 
         # set active
         z_editor.update_buffer_list_selected(False, True)
+
+        z_editor.__list_modified = False
 
 
     def update_buffer_list_selected(self, mask_tab = True, mask_sw = True):
@@ -738,7 +742,7 @@ class zEdit(z_ABC, gtk.VBox):
             self.set_buffer(buff.path, buff.type)
 
         # set focus
-        if zEdit._focus:
+        if zEdit._focus and self.__list_modified:
             zEdit._focus.grab_focus()
         else:
             self.grab_focus()
