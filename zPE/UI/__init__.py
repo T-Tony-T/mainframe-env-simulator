@@ -273,30 +273,60 @@ class ConfigWindow(gtk.Window):
         layout = gtk.VBox()
         self.add(layout)
 
-        self.set_default_size(320, 400)
+#        self.set_default_size(320, 400)
 
         ### create center
-        self.center = gtk.Notebook()
-        layout.pack_start(self.center, True, True, 0)
+        center = gtk.Notebook()
+        layout.pack_start(center, True, True, 0)
 
         ## GUI
-        self.ct_gui = gtk.VBox()
-        self.center.append_page(self.ct_gui, gtk.Label('GUI'))
+        ct_gui = gtk.VBox()
+        center.append_page(ct_gui, gtk.Label('GUI'))
 
-        # tabbar
-        self.ct_gui_tab = gtk.Frame('Tabbar')
-        self.ct_gui.pack_start(self.ct_gui_tab, False, False, 10)
-        self.ct_gui_tab.add(gtk.HBox())
+        # Tabbar
+        ct_gui_tab = gtk.Frame('Tabbar')
+        ct_gui.pack_start(ct_gui_tab, False, False, 10)
+        ct_gui_tab.add(gtk.HBox())
 
         self.tabbar_on = gtk.CheckButton('Show Tabbar')
         self.tabbar_grouped = gtk.CheckButton('Group Tabs in Tabbar')
 
-        self.ct_gui_tab.child.pack_start(self.tabbar_on, False, False, 5)
-        self.ct_gui_tab.child.pack_end(self.tabbar_grouped, False, False, 5)
+        ct_gui_tab.child.pack_start(self.tabbar_on, False, False, 5)
+        ct_gui_tab.child.pack_end(self.tabbar_grouped, False, False, 5)
 
         self.tabbar_on.connect('toggled', self._sig_tabbar_on)
         self.tabbar_grouped.connect('toggled', self._sig_tabbar_grouped)
 
+        # Font
+        ct_gui_font = gtk.Frame('Font')
+        ct_gui.pack_start(ct_gui_font, False, False, 10)
+        ct_gui_font.add(gtk.HBox())
+
+        self.font_sw = {}
+        self.font_sw_tm = {}
+        font_sw_cell = {}
+
+        for key in conf.Config['FONT']:
+            self.font_sw_tm[key] = gtk.ListStore(type(conf.Config['FONT'][key]))
+            self.font_sw[key] = gtk.ComboBox(self.font_sw_tm[key])
+            font_sw_cell[key] = gtk.CellRendererText()
+
+            self.font_sw[key].pack_start(font_sw_cell[key], True)
+            self.font_sw[key].add_attribute(font_sw_cell[key], "text", 0)
+
+            ct_gui_font.child.pack_start(gtk.Label('{0}:'.format(key.title())), False, False, 5)
+            ct_gui_font.child.pack_start(self.font_sw[key], False, False, 5)
+
+            self.font_sw[key].connect('changed', self._sig_font_changed)
+
+        for font in conf.MONO_FONT:
+            self.font_sw_tm['name'].append([font])
+        for size in range(6, 73):
+            self.font_sw_tm['size'].append([size])
+
+        # Theme
+#        ct_gui_theme = gtk.Frame('Theme')
+#        ct_gui.pack_start(ct_gui_theme, False, False, 10)
 
         # separator
         layout.pack_start(gtk.HSeparator(), False, False, 2)
@@ -357,16 +387,31 @@ class ConfigWindow(gtk.Window):
     def _sig_tabbar_grouped(self, bttn):
         self.config['MISC']['tab_grouped'] = bttn.get_active()
         comp.zEdit.set_tab_grouped(self.config['MISC']['tab_grouped'])
-        
+
+    def _sig_font_changed(self, combo):
+        new_font = {}
+        for key in self.config['FONT']:
+            font_iter = self.font_sw[key].get_active_iter()
+            if not font_iter:
+                return          # early return
+            new_font[key] = self.font_sw_tm[key].get_value(font_iter, 0)
+
+        self.config['FONT'] = new_font
+        comp.zTheme.set_font(self.config['FONT'])
     ### signal for GUI
 
 
     ### overloaded function definition
     def default(self):
         self.config = copy.deepcopy(conf.Config)
+
+        # GUI->Tabbar
         self.tabbar_on.set_active(self.config['MISC']['tab_on'])
         self.tabbar_grouped.set_active(self.config['MISC']['tab_grouped'])
         self.tabbar_grouped.set_property('sensitive', self.config['MISC']['tab_on'])
+
+        # GUI->Font
+        self.select_font(self.config['FONT'])
 
     def open(self):
         if self.get_property('visible'):
@@ -380,3 +425,15 @@ class ConfigWindow(gtk.Window):
         self.hide()
     ### end of overloaded function definition
 
+
+    def select_font(self, font_dic):
+        for key in font_dic:
+            font_iter = self.font_sw_tm[key].get_iter_first()
+            if not font_iter:
+                return          # early return
+
+            while self.font_sw_tm[key].get_value(font_iter, 0) != font_dic[key]:
+                if not font_iter:
+                    return      # early return
+                font_iter = self.font_sw_tm[key].iter_next(font_iter)
+            self.font_sw[key].set_active_iter(font_iter)
