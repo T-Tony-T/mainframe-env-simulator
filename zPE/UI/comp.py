@@ -435,8 +435,6 @@ class zEdit(z_ABC, gtk.VBox):
 
         # create tabbar if turned on
         self.tab_on_current = False
-        self.__tab_list = []    # list of gtk.Frame that contain gtk.ToolButton
-        self.__tab_sig_map = {} # gtk.Frame : handler_id
         if zEdit.__tab_on:
             self._sig_update_tabbar()
 
@@ -485,15 +483,12 @@ class zEdit(z_ABC, gtk.VBox):
             # turn on the tabbar
             if not self.tab_on_current:
                 # tabbar off
-                self.tabbar_bg = gtk.EventBox()
+                self.tabbar = zTabbar()
                 if not self.__on_init:
                     self.remove(self.scrolled)
-                self.pack_start(self.tabbar_bg, False, False, 0)
+                self.pack_start(self.tabbar, False, False, 0)
                 if not self.__on_init:
                     self.pack_start(self.scrolled, True, True, 0)
-
-                self.tabbar = gtk.HBox()
-                self.tabbar_bg.add(self.tabbar)
 
                 if self.__on_init:
                     self.tab_on_current = True
@@ -501,7 +496,7 @@ class zEdit(z_ABC, gtk.VBox):
 
             # update buffer list
             zEdit._sig_buffer_list_modified(self, None, True)
-            self.tabbar_bg.show_all()
+            self.tabbar.show_all()
 
             # retain focus
             if zEdit._focus:
@@ -520,13 +515,12 @@ class zEdit(z_ABC, gtk.VBox):
             # turn off the tabbar
             if self.tab_on_current:
                 # tabbar on
-                self.remove(self.tabbar_bg)
-                for child in self.__tab_list:
-                    child.child.disconnect(self.__tab_sig_map[child])
+                self.remove(self.tabbar)
+                for tab in self.tabbar.get_tab_list():
+                    zTabbar.unregister('changed', tab)
 
-                self.__tab_list = []
-                self.__tab_sig_map = {}
-                self.tabbar_bg.hide_all()
+                self.tabbar.hide_all()
+                self.tabbar = None
 
                 # retain focus
                 if zEdit._focus:
@@ -580,35 +574,32 @@ class zEdit(z_ABC, gtk.VBox):
     def update_buffer_list_selected(self, mask_tab = True, mask_sw = True):
         ### for tabbar
         if mask_tab and self.__tab_on:
-            frame_list = self.tabbar.get_children()
-            if self.active_buffer.name not in [ frame.child.get_label() for frame in frame_list ]:
+            if self.active_buffer.name not in self.tabbar.get_tab_label_list():
                 self.rebuild_tabbar(self.active_buffer)
-                frame_list = self.tabbar.get_children()
 
-            for frame in frame_list:
-                if frame.child.get_label() == self.active_buffer.name:
-                    frame.set_shadow_type(gtk.SHADOW_ETCHED_OUT)
-                    frame.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['reserve']))
-                else:
-                    frame.set_shadow_type(gtk.SHADOW_OUT)
-                    frame.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
+            self.tabbar.set_active(self.active_buffer.name)
 
         ### for switcher
         if mask_sw:
             self.buffer_sw.set_active([self.active_buffer.name, False])
 
     def _sig_update_font(self, widget = None):
+        if self.tab_on_current:
+            zTheme._sig_update_font_modify(self.tabbar, 0.75)
         zTheme._sig_update_font_modify(self.buffer_sw, 0.75)
         self.resize()
 
     def _sig_update_color_map(self, widget = None):
+        if self.tab_on_current:
+            self.tabbar.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
+            self.tabbar.modify_fg(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['reserve']))
+
         self.center.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
-        self.center.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['base']))
-
         self.center.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['text']))
-        self.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
-
         self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['text_selected']))
+
+        self.center.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['base']))
+        self.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
         self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
 
         self.buffer_sw.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
@@ -621,12 +612,12 @@ class zEdit(z_ABC, gtk.VBox):
 
     def update_theme_focus_in(self):
         if self.tab_on_current:
-            self.tabbar_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
+            self.tabbar.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
 
     def update_theme_focus_out(self):
         if self.tab_on_current:
-            self.tabbar_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
+            self.tabbar.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
     ### end of signal-like auto-update function
 
@@ -715,8 +706,8 @@ class zEdit(z_ABC, gtk.VBox):
             zEdit.reg_emit('buffer_focus_out')
         self.update_theme_focus_out()
 
-    def _sig_tab_clicked(self, widget):
-        buffer_name = widget.get_label()
+    def _sig_tab_clicked(self, tab):
+        buffer_name = self.tabbar.get_label_of(tab)
 
         if buffer_name != self.active_buffer.name:
             buff = zEditBuffer.buff_list[buffer_name]
@@ -798,39 +789,29 @@ class zEdit(z_ABC, gtk.VBox):
         if not zEdit.__tab_on:
             return
 
-        for child in self.__tab_list:
+        for tab in self.tabbar.get_tab_list():
             # clear the current tabbar
-            self.tabbar.remove(child)
-            child.child.disconnect(self.__tab_sig_map[child])
+            self.tabbar.remove(tab)
+            zTabbar.unregister('changed', tab)
 
-        tab_list = []
-        self.__tab_list = []
-        self.__tab_sig_map = {}
+        tab_label_list = []
 
         if ( target_buff.name in zEditBuffer.buff_group['system'] or
              not zEdit.__tab_grouped
              ):
             # add system-opened buffers
-            for buff in zEditBuffer.buff_group['system']:
-                tab_list.append(gtk.ToolButton(label = buff))
+            tab_label_list.extend(zEditBuffer.buff_group['system'])
         if ( target_buff.name in zEditBuffer.buff_group['user'] or
              not zEdit.__tab_grouped
              ):
             # add user-opened buffers
-            for buff in zEditBuffer.buff_group['user']:
-                tab_list.append(gtk.ToolButton(label = buff))
+            tab_label_list.extend(zEditBuffer.buff_group['user'])
 
         # add tabs to the tabbar
-        for tab in tab_list:
-            tab.set_property('can-default', False)
-            tab.set_property('can-focus', False)
-
-            frame = gtk.Frame()
-            frame.add(tab)
-            self.tabbar.pack_start(frame, False, False, 0)
-
-            self.__tab_list.append(frame)
-            self.__tab_sig_map[frame] = tab.connect('clicked', self._sig_tab_clicked)
+        for tab_label in tab_label_list:
+            tab = self.tabbar.new_tab(tab_label)
+            self.tabbar.append(tab)
+            zTabbar.register('changed', self._sig_tab_clicked, tab)
 
 
     def exec_init_func(self):
@@ -1987,6 +1968,127 @@ class zSplitScreen(z_ABC, gtk.Frame):
                 ct_pos[i] = pos[i]
         return ct_pos
     ### end of supporting function
+
+
+######## ######## ######## ########
+########      zTabbar      ########
+######## ######## ######## ########
+
+class zTabbar(z_ABC, gtk.EventBox):
+    '''A Flat (Inline) Tabbar'''
+    _auto_update = {
+        # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
+        'changed'               : [  ],
+        }
+    def __init__(self):
+        super(zTabbar, self).__init__()
+
+
+        self.active_tab = None
+        self.tab_fg = {}        # state : color
+        self.tab_bg = {}        # state : color
+
+        self.hbox = gtk.HBox()
+        self.add(self.hbox)
+
+
+    ### signal definition
+    def _sig_clicked(self, tab):
+        if self.active_tab == tab:
+            return              # no need to change, early return
+
+        self.set_active(tab)
+    ### end of signal definition
+
+
+    ### overridden function definition
+    def append(self, tab):
+        self.hbox.pack_start(tab.frame, False, False, 0)
+
+    def remove(self, tab):
+        self.hbox.remove(tab.frame)
+        tab.disconnect(tab.sig_id)
+
+
+    def modify_font(self, font_desc):
+        for tab in self.get_tab_list():
+            tab.label.modify_font(font_desc)
+
+    def modify_fg(self, state, color):
+        for tab in self.get_tab_list():
+            tab.label.modify_fg(state, color)
+        self.tab_fg[state] = color
+
+    def modify_bg(self, state, color):
+        super(zTabbar, self).modify_bg(state, color)
+        for tab in self.get_tab_list():
+            tab.label.modify_bg(state, color)
+        self.tab_bg[state] = color
+
+
+    def get_active(self):
+        return self.active_tab
+
+    def set_active(self, tab):
+        '''can take a zTabbar tab or a label as argument'''
+        for iter_tab in self.get_tab_list():
+            if ( (isinstance(tab, str) and self.get_label_of(iter_tab) == tab) or
+                 iter_tab == tab
+                 ):
+                if isinstance(tab, str):
+                    tab = iter_tab
+                self.set_shadow_type(iter_tab, gtk.SHADOW_IN)
+                state = gtk.STATE_ACTIVE
+            else:
+                self.set_shadow_type(iter_tab, gtk.SHADOW_OUT)
+                state = gtk.STATE_NORMAL
+
+            if state in self.tab_fg:
+                iter_tab.label.modify_fg(gtk.STATE_NORMAL, self.tab_fg[state]) # state should always be NORMAL
+            if state in self.tab_bg:
+                iter_tab.label.modify_bg(gtk.STATE_NORMAL, self.tab_bg[state]) # currently not working
+
+        if not self.active_tab or self.active_tab != tab:
+            self.active_tab = tab
+            zTabbar.reg_emit_from('changed', tab)
+
+
+    def get_shadow_type(self, tab):
+        return tab.frame.get_shadow_type()
+
+    def set_shadow_type(self, tab, shadow_type):
+        tab.frame.set_shadow_type(shadow_type)
+    ### end of overridden function definition
+
+
+    def new_tab(self, tab_label):
+        tab = gtk.ToolButton()
+        tab.label = gtk.Label(tab_label)
+        tab.set_label_widget(tab.label)
+
+        tab.set_property('can-default', False)
+        tab.set_property('can-focus', False)
+
+        tab.frame = gtk.Frame()
+        tab.frame.add(tab)
+
+        tab.sig_id = tab.connect('clicked', self._sig_clicked)
+
+        return tab
+
+
+    def get_tab_list(self):
+        return [ frame.child for frame in self.hbox.get_children() ]
+
+    def get_label_of(self, tab):
+        return tab.label.get_label()
+
+    def set_label_of(self, tab, label):
+        tab.label.set_label(label)
+
+    def get_tab_label_list(self):
+        return [ self.get_label_of(tab) for tab in self.get_tab_list() ]
+
 
 
 ######## ######## ######## ########
