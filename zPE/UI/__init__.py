@@ -286,19 +286,19 @@ class ConfigWindow(gtk.Window):
         self.center.append_page(self.ct_gui, gtk.Label('GUI'))
 
         # tabbar
-        self.ct_gui_tab = gtk.HBox()
+        self.ct_gui_tab = gtk.Frame('Tabbar')
         self.ct_gui.pack_start(self.ct_gui_tab, False, False, 10)
+        self.ct_gui_tab.add(gtk.HBox())
 
         self.tabbar_on = gtk.CheckButton('Show Tabbar')
         self.tabbar_grouped = gtk.CheckButton('Group Tabs in Tabbar')
 
-        self.ct_gui_tab.pack_start(self.tabbar_on, False, False, 5)
-        self.ct_gui_tab.pack_end(self.tabbar_grouped, False, False, 5)
+        self.ct_gui_tab.child.pack_start(self.tabbar_on, False, False, 5)
+        self.ct_gui_tab.child.pack_end(self.tabbar_grouped, False, False, 5)
 
         self.tabbar_on.connect('toggled', self._sig_tabbar_on)
         self.tabbar_grouped.connect('toggled', self._sig_tabbar_grouped)
 
-        self.ct_gui.pack_start(gtk.HSeparator(), False, False, 2)
 
         # separator
         layout.pack_start(gtk.HSeparator(), False, False, 2)

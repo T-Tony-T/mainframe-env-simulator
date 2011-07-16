@@ -35,7 +35,7 @@ else:
 ######## ######## ######## ########
 
 class z_ABC(object):
-    '''z Abstract Base Class'''
+    '''z Abstract Base Class:  Implemetation of a Signal-Like System'''
     @classmethod
     def register(cls, sig, callback, widget, *data):
         '''This function register a function to a signal-like string'''
@@ -90,11 +90,34 @@ class z_ABC(object):
 
 
 ######## ######## ######## ########
+########     zComboBox     ########
+######## ######## ######## ########
+
+class zComboBox(gtk.ComboBox):
+    '''A Flat (Inline) ComboBox'''
+    def __init__(self, model = None):
+        super(zComboBox, self).__init__(model)
+
+
+        self.set_property('can-default', False)
+        self.set_property('can-focus', False)
+        self.set_property('focus-on-click', False)
+        self.set_property('has-frame', False)
+
+
+    def set_char_len(self, str_len):
+        ( char_w, char_h ) = self.create_pango_layout('w').get_pixel_size()
+        ( cell_w, cell_h ) =  self.size_request()
+        self.set_size_request(char_w * str_len, cell_h)
+
+
+
+######## ######## ######## ########
 ########       zEdit       ########
 ######## ######## ######## ########
 
-
 class zEdit(z_ABC, gtk.VBox):
+    '''A Multi-Buffer Text Editor with an Internal File Browser'''
     __style = 'other'           # see zEdit.set_style()
     __key_binding = {}          # see zEdit.set_key_binding()
 
@@ -193,11 +216,8 @@ class zEdit(z_ABC, gtk.VBox):
 
         # create buffer switcher
         self.buffer_sw_tm = gtk.ListStore(str, bool) # define TreeModel
-        self.buffer_sw = gtk.ComboBox(self.buffer_sw_tm)
+        self.buffer_sw = zComboBox(self.buffer_sw_tm)
         self.bottom.pack_start(self.buffer_sw, False, False, 0)
-        self.buffer_sw.set_property('can-default', False)
-        self.buffer_sw.set_property('can-focus', False)
-        self.buffer_sw.set_property('focus-on-click', False)
 
         self.buffer_sw_cell = gtk.CellRendererText()
         self.buffer_sw.pack_start(self.buffer_sw_cell, True)
@@ -561,9 +581,7 @@ class zEdit(z_ABC, gtk.VBox):
         self.center.grab_focus()
 
     def resize(self):
-        ( char_w, char_h ) = self.buffer_sw.create_pango_layout('w').get_pixel_size()
-        ( cell_w, cell_h ) =  self.buffer_sw.size_request()
-        self.buffer_sw.set_size_request(char_w * 10, cell_h)
+        self.buffer_sw.set_char_len(10)
     ### end of overridden function definition
 
 
@@ -727,8 +745,12 @@ class zEdit(z_ABC, gtk.VBox):
     ### end of supporting function
 
 
+######## ######## ######## ########
+########    zEditBuffer    ########
+######## ######## ######## ########
 
 class zEditBuffer(z_ABC):
+    '''The Centralized Buffer Allocator and Controller that Supports zEdit Class'''
     DEFAULT_BUFFER = {
         None   : '*scratch*',
         'file' : '*scratch*',
@@ -910,6 +932,7 @@ class zEditBuffer(z_ABC):
 ######## ######## ######## ########
 
 class zErrConsole(gtk.Window):
+    '''An Error Console Widget'''
     def __init__(self, title, show_on_change = False):
         '''
         title
@@ -1060,6 +1083,7 @@ class zErrConsole(gtk.Window):
 ######## ######## ######## ########
 
 class zFileManager(gtk.TreeView):
+    '''A Light-Weighted File Manager Used by zEdit Class'''
     folderxpm = [
         "17 16 7 1",
         "  c #000000",
@@ -1235,6 +1259,7 @@ class zFileManager(gtk.TreeView):
 ######## ######## ######## ########
 
 class zLastLine(gtk.HBox):
+    '''An Emacs Style Last-Line Statusbar'''
     def __init__(self, label = ''):
         '''
         label
@@ -1315,6 +1340,7 @@ class zLastLine(gtk.HBox):
 ######## ######## ######## ########
 
 class zSplitScreen(z_ABC, gtk.Frame):
+    '''A Split-Screen Frame with DnD Splitting Supported'''
     _auto_update = {
         # 'signal_like_string'  : [ callback, ... ]
         'frame_removed'         : [  ],
@@ -1759,6 +1785,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
 ######## ######## ######## ########
 
 class zTheme(z_ABC):
+    '''The Theme Control Class Used by z* Classes'''
     font = {
         'name' : 'Monospace',
         'size' : 12,
