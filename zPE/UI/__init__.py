@@ -102,9 +102,9 @@ class BaseFrame(object):
         ## connect auto-update items
         comp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
 
-        comp.zSplitScreen.register('frame_removed', comp.zEdit.clean_up)
-        comp.zSplitScreen.register('frame_removed', comp.zEditBuffer.clean_up)
-        comp.zSplitScreen.register('frame_removed', comp.zTheme.clean_up)
+        comp.zSplitScreen.register('frame_removed', comp.zEdit.reg_clean_up)
+        comp.zSplitScreen.register('frame_removed', comp.zEditBuffer.reg_clean_up)
+        comp.zSplitScreen.register('frame_removed', comp.zTheme.reg_clean_up)
 
 
         ## connect signals

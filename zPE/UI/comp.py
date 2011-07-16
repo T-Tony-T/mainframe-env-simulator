@@ -36,6 +36,13 @@ else:
 
 class z_ABC(object):
     '''z Abstract Base Class:  Implemetation of a Signal-Like System'''
+    _auto_update = {
+        # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
+        }
+    _auto_update_blocked = [
+        # 'signal_like_string'
+        ]
+
     @classmethod
     def register(cls, sig, callback, widget, *data):
         '''This function register a function to a signal-like string'''
@@ -43,7 +50,7 @@ class z_ABC(object):
 
     @classmethod
     def unregister(cls, sig, widget):
-        '''This function un-register a widget from a signal-like string'''
+        '''This function un-register the widget from the signal-like string'''
         reserve = []
         for item in cls._auto_update[sig]:
             if widget != item[0]:
@@ -51,7 +58,19 @@ class z_ABC(object):
         cls._auto_update[sig] = reserve
 
     @classmethod
-    def clean_up(cls):
+    def reg_block(cls, sig):
+        '''This function block the signal to disable its emission'''
+        if sig not in cls._auto_update_blocked:
+            cls._auto_update_blocked.append(sig)
+
+    @classmethod
+    def reg_unblock(cls, sig):
+        '''This function unblock the signal to enable its emission'''
+        if sig in cls._auto_update_blocked:
+            cls._auto_update_blocked.remove(sig)
+
+    @classmethod
+    def reg_clean_up(cls):
         '''This function un-register all invisible widgets from the list'''
         for sig in cls._auto_update:
             reserve = []
@@ -64,13 +83,16 @@ class z_ABC(object):
             cls._auto_update[sig] = reserve
 
     @classmethod
-    def emit(cls, sig, info = None):
+    def reg_emit(cls, sig, info = None):
         '''
         This function emit the signal to all registered object
 
         Caution: may cause multiple emission. To avoid that,
-                 use emit_from() instead.
+                 use reg_emit_from() instead.
         '''
+        if sig in cls._auto_update_blocked:
+            return              # signal being blocked, early return
+
         for (widget, callback, data_list) in cls._auto_update[sig]:
             if info:
                 callback(widget, info, *data_list)
@@ -78,8 +100,11 @@ class z_ABC(object):
                 callback(widget, *data_list)
 
     @classmethod
-    def emit_from(cls, sig, target, info = None):
+    def reg_emit_from(cls, sig, target, info = None):
         '''This function emit the signal to the indicated registered object'''
+        if sig in cls._auto_update_blocked:
+            return              # signal being blocked, early return
+
         for (widget, callback, data_list) in cls._auto_update[sig]:
             if target == widget:
                 if info:
@@ -93,23 +118,213 @@ class z_ABC(object):
 ########     zComboBox     ########
 ######## ######## ######## ########
 
-class zComboBox(gtk.ComboBox):
+class zComboBox(z_ABC, gtk.ToolButton):
     '''A Flat (Inline) ComboBox'''
-    def __init__(self, model = None):
-        super(zComboBox, self).__init__(model)
+    _auto_update = {
+        # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
+        'changed'               : [  ],
+        }
+    def __init__(self):
+        super(zComboBox, self).__init__()
 
+        # init label
+        self.set_label_widget(gtk.Label())
+        self.label = self.get_label_widget()
 
+        # init item list
+        self.__item_list = [
+            # [ col_0, col_1, ... ]
+            #  ...
+            ]
+        self.active_item = None
+        self.effective_colomn = 0
+        self.row_separator_func = None
+
+        self.menu = None
+
+        # set style
+        self.set_border_width(0)
         self.set_property('can-default', False)
         self.set_property('can-focus', False)
-        self.set_property('focus-on-click', False)
-        self.set_property('has-frame', False)
+        self.child.set_alignment(0, 0.5) # set text alignment on button
+
+        # connect signals
+        self.connect('clicked', self._sig_combo_clicked)
+
+    ### signal definition
+    def _sig_combo_clicked(self, widget):
+        self.popup()
+
+    def _sig_item_selected(self, widget, indx):
+        self.popdown()
+
+        if self.active_item == indx:
+            return              # no need to change, early return
+
+        self.set_active_indx(indx)
+    ### end of signal definition
 
 
-    def set_char_len(self, str_len):
-        ( char_w, char_h ) = self.create_pango_layout('w').get_pixel_size()
-        ( cell_w, cell_h ) =  self.size_request()
-        self.set_size_request(char_w * str_len, cell_h)
+    ### overridden function definition
+    def insert(self, indx, item):
+        self.__item_list.insert(indx, item)
+        if self.active_item == None:
+            self.set_active_indx(indx)
+        zComboBox.reg_emit_from('changed', self)
 
+    def prepend(self, item):
+        self.insert(0, item)
+
+    def append(self, item):
+        self.insert(len(self.__item_list), item)
+
+    def reorder(self, new_order):
+        item_list = []
+        for indx in new_order:
+            item_list.append(self.__item_list[indx])
+        self.__item_list = item_list
+        self.active_item = new_order.index(indx)
+
+    def move_after(self, src_indx, dest_indx):
+        if src_indx >= dest_indx:
+            dest_indx += 1
+        self.insert(dest_indx, self.__item_list.pop(src_indx))
+
+    def move_before(self, src_indx, dest_indx):
+        if src_indx >= dest_indx:
+            dest_indx -= 1
+        self.insert(dest_indx, self.__item_list.pop(src_indx))
+
+    def remove(self, indx):
+        self.__item_list.pop(indx)
+        if indx == self.active_item:
+            self.set_active(None)
+        zComboBox.reg_emit_from('changed', self)
+
+    def clear(self):
+        self.__item_list = []
+        self.set_active(None)
+        zComboBox.reg_emit_from('changed', self)
+
+    def index(self, item):
+        try:
+            return self.__item_list.index(item)
+        except:
+            return None
+
+
+    def modify_font(self, font_desc):
+        self.label.modify_font(font_desc)
+
+
+    def popup(self):
+        # create the menu
+        self.menu = gtk.Menu()
+
+        # fill the menu
+        for indx in range(len(self.__item_list)):
+            item = self.__item_list[indx]
+
+            if self.row_separator_func and self.row_separator_func(item):
+                self.menu.append(gtk.SeparatorMenuItem())
+            else:
+                mi = gtk.MenuItem(item[self.effective_colomn], False)
+                self.menu.append(mi)
+                mi.connect("activate", self._sig_item_selected, indx)
+
+        self.menu.show_all()
+        self.menu.popup(None, None, self.__menu_position_below, 1, 0)
+
+    def popdown(self):
+        self.menu.popdown()
+        self.menu = None
+
+
+    def get_active(self):
+        if self.active_item != None:
+            return self.__item_list[self.active_item]
+        else:
+            return None
+
+    def set_active(self, item):
+        self.set_active_indx(self.index(item))
+
+    def get_active_indx(self):
+        return self.active_item
+
+    def set_active_indx(self, indx):
+        if indx == self.active_item:
+            return
+        try:
+            self.set_label(self.__item_list[indx][self.effective_colomn])
+            self.active_item = indx
+        except:
+            self.set_label('')
+            self.active_item = None
+        zComboBox.reg_emit_from('changed', self)
+
+
+    def get_label(self):
+        return self.label.get_label()
+
+    def set_label(self, label):
+        w = self.get_width_chars()
+        if w > 0 and len(label) > w:
+            label = label[:w-2] + '..'
+        return self.label.set_label(label)
+
+
+    def get_value(self, indx, col):
+        try:
+            return self.__item_list[indx][col]
+        except:
+            return None
+
+    def set_value(self, indx, col, item):
+        self.__item_list[indx][col] = item
+
+        if indx == self.active_item:
+            self.set_active(indx)
+
+
+    def get_width_chars(self):
+        return self.label.get_width_chars()
+
+    def set_width_chars(self, n_chars):
+        self.label.set_width_chars(n_chars)
+        self.set_active_indx(self.get_active_indx())
+
+    def set_row_separator_func(self, callback):
+        '''
+        the callback function should be defined as:
+            def callback(item)
+        where "item" is the item been inserted/prepended/appended
+
+        the callback should return True if the row shall be
+        treated as separator; otherwise, False should be returned
+        '''
+        self.row_separator_func = callback
+    ### end of overridden function definition
+
+
+    def get_effective_colomn(self):
+        return self.effective_colomn
+
+    def set_effective_colomn(self, col):
+        self.effective_colomn = col
+
+
+    ### supporting function
+    def __menu_position_below(self, menu):
+        # calculate position
+        root = self.get_root_window()
+        alloc = self.get_allocation()
+        ( ptr_x,     ptr_y     ) = self.get_pointer()
+        ( ptr_abs_x, ptr_abs_y ) = root.get_pointer()[:2]
+        ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x, ptr_abs_y - ptr_y )
+
+        return (base_x, base_y + alloc.height, False)
+    ### end of supporting function
 
 
 ######## ######## ######## ########
@@ -124,10 +339,6 @@ class zEdit(z_ABC, gtk.VBox):
     __tab_on = False            # see zEdit.set_tab_on()
     __tab_grouped = False       # see zEdit.set_tab_grouped()
 
-
-    _buff_sw_sig_id = {
-        # combobox : sig_id
-        }
 
     _focus = None
 
@@ -177,7 +388,6 @@ class zEdit(z_ABC, gtk.VBox):
         super(zEdit, self).__init__()
 
         self.__on_init = True
-        self.__on_mod_buff_list = False
 
         self.active_buffer = None
         self.sig_id = {}        # a dict holds all handler id
@@ -215,14 +425,8 @@ class zEdit(z_ABC, gtk.VBox):
         self.bottom_bg.add(self.bottom)
 
         # create buffer switcher
-        self.buffer_sw_tm = gtk.ListStore(str, bool) # define TreeModel
-        self.buffer_sw = zComboBox(self.buffer_sw_tm)
+        self.buffer_sw = zComboBox()
         self.bottom.pack_start(self.buffer_sw, False, False, 0)
-
-        self.buffer_sw_cell = gtk.CellRendererText()
-        self.buffer_sw.pack_start(self.buffer_sw_cell, True)
-        self.buffer_sw.add_attribute(self.buffer_sw_cell, "text", 0)
-        self.buffer_sw_cell.props.ellipsize = pango.ELLIPSIZE_END
 
         self.buffer_sw.set_row_separator_func(self.__separator)
 
@@ -242,13 +446,13 @@ class zEdit(z_ABC, gtk.VBox):
         zEditBuffer.register('buffer_list_modified', zEdit._sig_buffer_list_modified, self)
         zEdit._sig_buffer_list_modified(self)
 
-        zTheme.register('update_font', self._sig_update_font, self.buffer_sw_cell)
+        zTheme.register('update_font', self._sig_update_font, self.buffer_sw)
         self._sig_update_font()
 
         zTheme.register('update_color_map', self._sig_update_color_map, self)
 
         # connect signal
-        zEdit._buff_sw_sig_id[self.buffer_sw] = self.buffer_sw.connect('changed', self._sig_buffer_changed)
+        zComboBox.register('changed', self._sig_combo_changed, self.buffer_sw)
 
         self.__on_init = False
 
@@ -313,8 +517,6 @@ class zEdit(z_ABC, gtk.VBox):
 
     @staticmethod
     def _sig_buffer_list_modified(z_editor, new_buff = None, skip_sw = False):
-        z_editor.__on_mod_buff_list = True
-
         ### for tabbar
         if zEdit.__tab_on:
             if not new_buff or not z_editor.is_focus():
@@ -327,35 +529,31 @@ class zEdit(z_ABC, gtk.VBox):
 
         ### for buffer switcher
         if skip_sw:
-            z_editor.__on_mod_buff_list = False
             return              # early return
 
-        # temporarily block combobox::changed signal
-        for (k, v) in zEdit._buff_sw_sig_id.items():
-            k.handler_block(v)
+        # temporarily block combobox signals
+        zComboBox.reg_block('changed')
 
         # clear the list
-        z_editor.buffer_sw_tm.clear()
+        z_editor.buffer_sw.clear()
 
         # add system-opened buffers
         for buff in zEditBuffer.buff_group['system']:
-            z_editor.buffer_sw_tm.append([buff, False])
+            z_editor.buffer_sw.append([buff, False])
         # add user-opened buffers, if exist
         if len(zEditBuffer.buff_group['user']):
             # add separator: Not an Item, this item should not be seen
-            z_editor.buffer_sw_tm.append(['NanI', True])
+            z_editor.buffer_sw.append(['NanI', True])
             # add user-opened buffers
             for buff in zEditBuffer.buff_group['user']:
-                z_editor.buffer_sw_tm.append([buff, False])
+                z_editor.buffer_sw.append([buff, False])
 
-        # unblock combobox::changed signal
-        for (k, v) in zEdit._buff_sw_sig_id.items():
-            k.handler_unblock(v)
+        # unblock combobox signals
+        zComboBox.reg_unblock('changed')
 
         # set active
         z_editor.update_buffer_list_selected(False, True)
 
-        z_editor.__on_mod_buff_list = False
 
     def update_buffer_list_selected(self, mask_tab = True, mask_sw = True):
         ### for tabbar
@@ -375,14 +573,10 @@ class zEdit(z_ABC, gtk.VBox):
 
         ### for switcher
         if mask_sw:
-            buffer_iter = self.buffer_sw_tm.get_iter_first()
-            if buffer_iter:
-                while self.buffer_sw_tm.get_value(buffer_iter, 0) != self.active_buffer.name:
-                    buffer_iter = self.buffer_sw_tm.iter_next(buffer_iter)
-                self.buffer_sw.set_active_iter(buffer_iter)
+            self.buffer_sw.set_active([self.active_buffer.name, False])
 
     def _sig_update_font(self, widget = None):
-        zTheme._sig_update_font_property(self.buffer_sw_cell, 0.75)
+        zTheme._sig_update_font_modify(self.buffer_sw, 0.75)
         self.resize()
 
     def _sig_update_color_map(self, widget = None):
@@ -404,13 +598,11 @@ class zEdit(z_ABC, gtk.VBox):
         if self.tab_on_current:
             self.tabbar_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
-        self.buffer_sw_cell.set_property('background-gdk', gtk.gdk.color_parse(zTheme.color_map['status_active']))
 
     def update_theme_focus_out(self):
         if self.tab_on_current:
             self.tabbar_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
-        self.buffer_sw_cell.set_property('background-gdk', gtk.gdk.color_parse(zTheme.color_map['status']))
     ### end of signal-like auto-update function
 
 
@@ -447,7 +639,7 @@ class zEdit(z_ABC, gtk.VBox):
                  key_binding[stroke] in reg_func  and # is a valid functionality
                  len(reg_func[key_binding[stroke]])   # has registered functions
                  ):
-                zEdit.emit(key_binding[stroke])
+                zEdit.reg_emit(key_binding[stroke])
             else:
                 return False
 
@@ -480,7 +672,7 @@ class zEdit(z_ABC, gtk.VBox):
         mi_open.connect_object("activate", widget._sig_open_file, widget, tree_path, tree_col)
 
         # callback
-        zEdit.emit_from('populate_popup', self.center, menu)
+        zEdit.reg_emit_from('populate_popup', self.center, menu)
 
         # popup the menu
         menu.popup(None, None, None, event.button, event.time)
@@ -490,12 +682,12 @@ class zEdit(z_ABC, gtk.VBox):
         zEdit._focus = self
 
         if len(zEdit._auto_update['buffer_focus_in']):
-            zEdit.emit('buffer_focus_in')
+            zEdit.reg_emit('buffer_focus_in')
         self.update_theme_focus_in()
 
     def _sig_focus_out(self, widget, event):
         if len(zEdit._auto_update['buffer_focus_out']):
-            zEdit.emit('buffer_focus_out')
+            zEdit.reg_emit('buffer_focus_out')
         self.update_theme_focus_out()
 
     def _sig_tab_clicked(self, widget):
@@ -506,7 +698,7 @@ class zEdit(z_ABC, gtk.VBox):
             self.set_buffer(buff.path, buff.type)
 
         # set focus
-        if zEdit._focus and self.__on_mod_buff_list:
+        if zEdit._focus:
             zEdit._focus.grab_focus()
         else:
             self.grab_focus()
@@ -514,21 +706,21 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     ### signal for bottom
-    def _sig_buffer_changed(self, combobox):
+    def _sig_combo_changed(self, combobox):
         # check for switcher items
-        active_iter = combobox.get_active_iter()
-        if not active_iter:
+        active_item = combobox.get_active()
+        if not active_item:
             return              # early return
 
         # switch buffer
-        buffer_name = self.buffer_sw_tm.get_value(active_iter, 0)
+        buffer_name = active_item[0]
 
         if buffer_name != self.active_buffer.name:
             buff = zEditBuffer.buff_list[buffer_name]
             self.set_buffer(buff.path, buff.type)
 
         # set focus
-        if zEdit._focus and self.__on_mod_buff_list:
+        if zEdit._focus:
             zEdit._focus.grab_focus()
         else:
             self.grab_focus()
@@ -537,7 +729,7 @@ class zEdit(z_ABC, gtk.VBox):
 
     ### overridden function definition
     @classmethod
-    def clean_up(cls):
+    def reg_clean_up(cls):
         '''This function un-register all invisible widgets from the list'''
         for sig in cls._auto_update:
             reserve = []
@@ -548,14 +740,6 @@ class zEdit(z_ABC, gtk.VBox):
                 except:
                     reserve.append(item)
             cls._auto_update[sig] = reserve
-
-        reserve = {}
-        for (k, v) in cls._buff_sw_sig_id.items():
-            if k.get_property('visible'):
-                reserve[k] = v
-            else:
-                k.disconnect(v)
-        cls._buff_sw_sig_id = reserve
 
 
     def connect(self, sig, callback, *data):
@@ -581,7 +765,7 @@ class zEdit(z_ABC, gtk.VBox):
         self.center.grab_focus()
 
     def resize(self):
-        self.buffer_sw.set_char_len(10)
+        self.buffer_sw.set_width_chars(16)
     ### end of overridden function definition
 
 
@@ -726,7 +910,7 @@ class zEdit(z_ABC, gtk.VBox):
     def set_tab_on(setting):
         if zEdit.__tab_on != setting:
             zEdit.__tab_on = setting
-            zEdit.emit('update_tabbar')
+            zEdit.reg_emit('update_tabbar')
 
     @staticmethod
     def get_tab_grouped():
@@ -736,12 +920,12 @@ class zEdit(z_ABC, gtk.VBox):
     def set_tab_grouped(setting):
         if zEdit.__tab_grouped != setting:
             zEdit.__tab_grouped = setting
-            zEdit.emit('update_tabbar')
+            zEdit.reg_emit('update_tabbar')
 
 
     ### supporting function
-    def __separator(self, model, iterator, data = None):
-        return model.get_value(iterator, 1)
+    def __separator(self, item):
+        return item[1]
     ### end of supporting function
 
 
@@ -871,7 +1055,7 @@ class zEditBuffer(z_ABC):
             zEditBuffer.buff_group[buff_group].append(self.name)
         else:
             raise SystemError   # this should never happen
-        zEditBuffer.emit('buffer_list_modified', self)
+        zEditBuffer.reg_emit('buffer_list_modified', self)
 
         # fetch content
         if self.type == 'file':
@@ -922,7 +1106,7 @@ class zEditBuffer(z_ABC):
         zEditBuffer.buff_group = copy.deepcopy(zEditBuffer.__buff_group)
         zEditBuffer.buff_rec   = copy.deepcopy(zEditBuffer.__buff_rec)
 
-        zEditBuffer.emit('buffer_list_modified')
+        zEditBuffer.reg_emit('buffer_list_modified')
 
         zEditBuffer._on_restore = False
 
@@ -1591,7 +1775,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
         cls._auto_update[sig] = reserve
 
     @classmethod
-    def emit(cls, sig):
+    def reg_emit(cls, sig):
         '''This function emit the signal to all registered object'''
         for cb in cls._auto_update[sig]:
             cb()
@@ -1669,7 +1853,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
             # clean up
             child_rm.hide_all()
-            zSplitScreen.emit('frame_removed')
+            zSplitScreen.reg_emit('frame_removed')
             return              # early return
 
         # not the only frame, get parent and child info
@@ -1696,7 +1880,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
         # clean up
         child_rm.hide_all()
-        zSplitScreen.emit('frame_removed')
+        zSplitScreen.reg_emit('frame_removed')
 
 
     def update_sd(self, pos):
@@ -1840,7 +2024,7 @@ class zTheme(z_ABC):
                 modified = True
                 zTheme.font[k] = v
         if modified:
-            zTheme.emit('update_font')
+            zTheme.reg_emit('update_font')
 
     @staticmethod
     def get_color_map():
@@ -1854,7 +2038,7 @@ class zTheme(z_ABC):
                 modified = True
                 zTheme.color_map[k] = v
         if modified:
-            zTheme.emit('update_color_map')
+            zTheme.reg_emit('update_color_map')
 
 
 ######## ######## ######## ######## 
@@ -1871,8 +2055,6 @@ gtk.rc_parse_string('''
 style 'zTheme' {
     GtkButton::focus-line-width = 0
     GtkButton::focus-padding = 0
-
-    GtkComboBox::appears-as-list = 1
 
     GtkPaned::handle-size = 8
 }
