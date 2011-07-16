@@ -140,7 +140,11 @@ class zComboBox(z_ABC, gtk.ToolButton):
         self.effective_colomn = 0
         self.row_separator_func = None
 
+        # init menu
         self.menu = None
+        self.menu_width = None
+        self.color_fg = {}      # state : color
+        self.color_bg = {}      # state : color
 
         # set style
         self.set_border_width(0)
@@ -216,10 +220,21 @@ class zComboBox(z_ABC, gtk.ToolButton):
     def modify_font(self, font_desc):
         self.label.modify_font(font_desc)
 
+    def modify_fg(self, state, color):
+        self.label.modify_fg(state, color)
+        self.color_fg[state] = color
+
+    def modify_bg(self, state, color):
+        super(zComboBox, self).modify_bg(state, color)
+        self.color_bg[state] = color
+
 
     def popup(self):
         # create the menu
         self.menu = gtk.Menu()
+        self.menu.set_property('reserve-toggle-size', False)
+        alloc = self.label.get_allocation()
+        self.menu.set_size_request(alloc.x + alloc.width, -1)
 
         # fill the menu
         for indx in range(len(self.__item_list)):
@@ -231,6 +246,12 @@ class zComboBox(z_ABC, gtk.ToolButton):
                 mi = gtk.MenuItem(item[self.effective_colomn], False)
                 self.menu.append(mi)
                 mi.connect("activate", self._sig_item_selected, indx)
+
+                for (k, v) in self.color_fg.items():
+                    mi.child.modify_fg(k, v)
+
+        for (k, v) in self.color_bg.items():
+            self.menu.modify_bg(k, v)
 
         self.menu.show_all()
         self.menu.popup(None, None, self.__menu_position_below, 1, 0)
@@ -292,7 +313,8 @@ class zComboBox(z_ABC, gtk.ToolButton):
 
     def set_width_chars(self, n_chars):
         self.label.set_width_chars(n_chars)
-        self.set_active_indx(self.get_active_indx())
+        self.set_label(self.get_label())
+
 
     def set_row_separator_func(self, callback):
         '''
@@ -588,6 +610,9 @@ class zEdit(z_ABC, gtk.VBox):
 
         self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['text_selected']))
         self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
+
+        self.buffer_sw.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_sw.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
 
         if self.is_focus():
             self.update_theme_focus_in()
