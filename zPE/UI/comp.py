@@ -461,7 +461,6 @@ class zEdit(z_ABC, gtk.VBox):
 
         # connect auto-update items
         zEdit.register('update_tabbar', self._sig_update_tabbar, self)
-        self._sig_update_tabbar()
 
         zEditBuffer.register('buffer_list_modified', zEdit._sig_buffer_list_modified, self)
         zEdit._sig_buffer_list_modified(self)
@@ -2079,7 +2078,7 @@ class zTabbar(z_ABC, gtk.EventBox):
                 iter_tab.set_active(False)
                 state = gtk.STATE_NORMAL
 
-            if gtk.STATE_PRELIGHT not in self.tab_fg:
+            if state in self.tab_fg and gtk.STATE_PRELIGHT not in self.tab_fg:
                 iter_tab.label.modify_fg(gtk.STATE_PRELIGHT, self.tab_fg[state])
 
             iter_tab.handler_unblock(iter_tab.sig_id) # unblock signal

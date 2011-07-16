@@ -256,8 +256,6 @@ class ConfigWindow(gtk.Window):
         self.connect("delete_event", self._sig_close_console)
 
         self.set_title('zPE Config')
-        self.__config = conf.Config
-        self.config = copy.deepcopy(self.__config)
 
         # layout of the frame:
         # 
@@ -341,6 +339,7 @@ class ConfigWindow(gtk.Window):
         self.open()
 
     def _sig_save_config(self, *arg):
+        conf.Config = copy.deepcopy(self.config)
         conf.write_rc()
         self.close()
 
@@ -364,7 +363,7 @@ class ConfigWindow(gtk.Window):
 
     ### overloaded function definition
     def default(self):
-        self.config = copy.deepcopy(self.__config)
+        self.config = copy.deepcopy(conf.Config)
         self.tabbar_on.set_active(self.config['MISC']['tab_on'])
         self.tabbar_grouped.set_active(self.config['MISC']['tab_grouped'])
         self.tabbar_grouped.set_property('sensitive', self.config['MISC']['tab_on'])
