@@ -613,11 +613,13 @@ class zEdit(z_ABC, gtk.VBox):
     def update_theme_focus_in(self):
         if self.tab_on_current:
             self.tabbar.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
+            self.tabbar.modify_bg(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['status_active']))
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
 
     def update_theme_focus_out(self):
         if self.tab_on_current:
             self.tabbar.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
+            self.tabbar.modify_bg(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['status']))
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
     ### end of signal-like auto-update function
 
@@ -1976,6 +1978,30 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
 class zTabbar(z_ABC, gtk.EventBox):
     '''A Flat (Inline) Tabbar'''
+    class zTab(gtk.ToggleButton):
+        def __init__(self):
+            super(zTabbar.zTab, self).__init__()
+
+        def get_label_widget(self, current = None):
+            if current == None:
+                current = self
+
+            try:
+                if not len(current.get_children()):
+                    raise AttributeError
+            except:
+                if isinstance(current, gtk.Label):
+                    return current  # found the label
+                else:
+                    return None     # end of the path
+
+            for child in current.get_children():
+                found = self.get_label_widget(child)
+                if found:
+                    return found    # found in previous search
+            return None             # not found at all
+
+
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'changed'               : [  ],
@@ -1988,13 +2014,17 @@ class zTabbar(z_ABC, gtk.EventBox):
         self.tab_fg = {}        # state : color
         self.tab_bg = {}        # state : color
 
+
         self.hbox = gtk.HBox()
         self.add(self.hbox)
 
 
     ### signal definition
-    def _sig_clicked(self, tab):
+    def _sig_toggled(self, tab):
         if self.active_tab == tab:
+            tab.handler_block(tab.sig_id)       # block signal until active statue modified
+            tab.set_active(True)
+            tab.handler_unblock(tab.sig_id)     # unblock signal
             return              # no need to change, early return
 
         self.set_active(tab)
@@ -2003,10 +2033,10 @@ class zTabbar(z_ABC, gtk.EventBox):
 
     ### overridden function definition
     def append(self, tab):
-        self.hbox.pack_start(tab.frame, False, False, 0)
+        self.hbox.pack_start(tab, False, False, 0)
 
     def remove(self, tab):
-        self.hbox.remove(tab.frame)
+        self.hbox.remove(tab)
         tab.disconnect(tab.sig_id)
 
 
@@ -2022,7 +2052,7 @@ class zTabbar(z_ABC, gtk.EventBox):
     def modify_bg(self, state, color):
         super(zTabbar, self).modify_bg(state, color)
         for tab in self.get_tab_list():
-            tab.label.modify_bg(state, color)
+            tab.modify_bg(state, color)
         self.tab_bg[state] = color
 
 
@@ -2030,61 +2060,58 @@ class zTabbar(z_ABC, gtk.EventBox):
         return self.active_tab
 
     def set_active(self, tab):
-        '''can take a zTabbar tab or a label as argument'''
+        '''can take a zTabbar.zTab or a label as argument'''
         for iter_tab in self.get_tab_list():
+            iter_tab.handler_block(iter_tab.sig_id) # block signal until active statue modified
+
             if ( (isinstance(tab, str) and self.get_label_of(iter_tab) == tab) or
                  iter_tab == tab
                  ):
                 if isinstance(tab, str):
                     tab = iter_tab
-                self.set_shadow_type(iter_tab, gtk.SHADOW_IN)
+                iter_tab.set_active(True)
                 state = gtk.STATE_ACTIVE
             else:
-                self.set_shadow_type(iter_tab, gtk.SHADOW_OUT)
+                iter_tab.set_active(False)
                 state = gtk.STATE_NORMAL
 
-            if state in self.tab_fg:
-                iter_tab.label.modify_fg(gtk.STATE_NORMAL, self.tab_fg[state]) # state should always be NORMAL
-            if state in self.tab_bg:
-                iter_tab.label.modify_bg(gtk.STATE_NORMAL, self.tab_bg[state]) # currently not working
+            if gtk.STATE_PRELIGHT not in self.tab_fg:
+                iter_tab.label.modify_fg(gtk.STATE_PRELIGHT, self.tab_fg[state])
+
+            iter_tab.handler_unblock(iter_tab.sig_id) # unblock signal
 
         if not self.active_tab or self.active_tab != tab:
             self.active_tab = tab
             zTabbar.reg_emit_from('changed', tab)
-
-
-    def get_shadow_type(self, tab):
-        return tab.frame.get_shadow_type()
-
-    def set_shadow_type(self, tab, shadow_type):
-        tab.frame.set_shadow_type(shadow_type)
     ### end of overridden function definition
 
 
     def new_tab(self, tab_label):
-        tab = gtk.ToolButton()
-        tab.label = gtk.Label(tab_label)
-        tab.set_label_widget(tab.label)
+        tab = zTabbar.zTab()
+        tab.set_label(tab_label)
+        tab.label = tab.get_label_widget()
 
         tab.set_property('can-default', False)
         tab.set_property('can-focus', False)
 
-        tab.frame = gtk.Frame()
-        tab.frame.add(tab)
+        for state in self.tab_fg:
+            tab.label.modify_fg(state, self.tab_fg[state])
+        for state in self.tab_bg:
+            tab.modify_bg(state, self.tab_bg[state])
 
-        tab.sig_id = tab.connect('clicked', self._sig_clicked)
+        tab.sig_id = tab.connect('toggled', self._sig_toggled)
 
         return tab
 
 
     def get_tab_list(self):
-        return [ frame.child for frame in self.hbox.get_children() ]
+        return self.hbox.get_children()
 
     def get_label_of(self, tab):
-        return tab.label.get_label()
+        return tab.label.get_text()
 
     def set_label_of(self, tab, label):
-        tab.label.set_label(label)
+        tab.label.set_text(label)
 
     def get_tab_label_list(self):
         return [ self.get_label_of(tab) for tab in self.get_tab_list() ]
