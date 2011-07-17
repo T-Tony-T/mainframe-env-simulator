@@ -86,9 +86,9 @@ DEFAULT = {
 DEFAULT_FUNC_KEY_BIND = {
     'emacs' : {
         'buffer_open'           : 'C-x C-f',
-#        'buffer_save'           : '',
-#        'buffer_save_as'        : '',
-#        'buffer_close'          : '',
+        'buffer_save'           : 'C-x C-s',
+        'buffer_save_as'        : 'C-x C-w',
+        'buffer_close'          : 'C-x k',
 
         'prog_show_config'      : 'C-c c',
         'prog_show_error'       : 'C-c e',
@@ -103,9 +103,9 @@ DEFAULT_FUNC_KEY_BIND = {
 
     'other' : {
         'buffer_open'           : 'C-o',
-#        'buffer_save'           : '',
-#        'buffer_save_as'        : '',
-#        'buffer_close'          : '',
+        'buffer_save'           : 'C-s',
+        'buffer_save_as'        : 'C-S',
+        'buffer_close'          : 'F4',
 
         'prog_show_config'      : 'C-p',
         'prog_show_error'       : 'C-J',
@@ -146,6 +146,8 @@ def init_rc():
 
     Config['FUNC_BINDING'] = copy.deepcopy(DEFAULT_FUNC_KEY_BIND[ Config['MISC']['key_binding'] ])
     Config['KEY_BINDING'] = dict((v, k) for (k, v) in Config['FUNC_BINDING'].iteritems())
+    if '' in Config['KEY_BINDING']:
+        del Config['KEY_BINDING'][''] # remove empty binding
 
 
 CONFIG_PATH = {
@@ -232,6 +234,9 @@ def read_rc():
 
     Config['FUNC_BINDING'] = copy.deepcopy(DEFAULT_FUNC_KEY_BIND[ Config['MISC']['key_binding'] ])
     Config['KEY_BINDING'] = dict((v, k) for (k, v) in Config['FUNC_BINDING'].iteritems())
+    if '' in Config['KEY_BINDING']:
+        del Config['KEY_BINDING'][''] # remove empty binding
+
     for line in open(CONFIG_PATH[ 'key_{0}'.format(Config['MISC']['key_binding']) ], 'r'):
         line = line[:-1]        # get rid of the '\n'
 
@@ -247,6 +252,26 @@ def read_rc():
         if k not in Config['FUNC_BINDING']:
             sys.stderr.write('CONFIG WARNING: {0}: Invalid key binding.\n'.format(k))
         else:
+            if Config['FUNC_BINDING'][k] == v:
+                continue        # alread in, skip
+
+            # remove conflict v
+            if v in Config['KEY_BINDING']:
+                old_k = Config['KEY_BINDING'][v] # could be empty
+                del Config['KEY_BINDING'][v]     # remove v
+            else:
+                old_k = ''      # old_k not found
+
+            old_v = Config['FUNC_BINDING'][k] # will never be empty
+            if old_v in Config['KEY_BINDING']:
+                del Config['KEY_BINDING'][old_v] # remove old_v
+
+            # reset conflict k
+            Config['FUNC_BINDING'][k] = ''
+            if old_k:
+                Config['FUNC_BINDING'][old_k] = ''
+
+            # add new k and v
             Config['FUNC_BINDING'][k] = v
             Config['KEY_BINDING'][v] = k
 

@@ -467,6 +467,7 @@ class ConfigWindow(gtk.Window):
     def _sig_save_config(self, *arg):
         conf.Config = copy.deepcopy(self.config)
         conf.write_rc()         # write changes
+        conf.read_rc()          # validate new config
         self.close()
 
     def _sig_cancel_mod(self, *arg):
