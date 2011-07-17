@@ -1,10 +1,11 @@
 # modules that will be auto imported
 import comp, conf
 
-import os, sys, copy
+import os, sys, copy, re
 import pygtk
 pygtk.require('2.0')
 import gtk
+import pango
 
 
 class BaseFrame(object):
@@ -253,9 +254,18 @@ class ConfigWindow(gtk.Window):
         super(ConfigWindow, self).__init__()
 
         self.set_destroy_with_parent(True)
-        self.connect("delete_event", self._sig_close_console)
+        self.connect("delete_event", self._sig_cancel_mod)
 
         self.set_title('zPE Config')
+
+        # lists for managing font
+        self.__label = {
+            'TAB' : [],         # weight = 1.2
+            'FRAME' : [],       # weight = 1
+            'LABEL' : [],       # weight = 0.8
+            }
+        self.__entry = []
+
 
         # layout of the frame:
         # 
@@ -270,8 +280,11 @@ class ConfigWindow(gtk.Window):
         #   |      |bt|bt|
         #   +------+--+--+
 
+        self.__ebox = gtk.EventBox()
+        self.add(self.__ebox)
+
         layout = gtk.VBox()
-        self.add(layout)
+        self.__ebox.add(layout)
 
 #        self.set_default_size(320, 400)
 
@@ -281,25 +294,35 @@ class ConfigWindow(gtk.Window):
 
         ## GUI
         ct_gui = gtk.VBox()
-        center.append_page(ct_gui, gtk.Label('GUI'))
+        self.__label['TAB'].append(gtk.Label('GUI'))
+        center.append_page(ct_gui, self.__label['TAB'][-1])
 
         # Tabbar
-        ct_gui_tab = gtk.Frame('Tabbar')
+        self.__label['FRAME'].append(gtk.Label('Tabbar'))
+        ct_gui_tab = gtk.Frame()
+        ct_gui_tab.set_label_widget(self.__label['FRAME'][-1])
         ct_gui.pack_start(ct_gui_tab, False, False, 10)
+
         ct_gui_tab.add(gtk.HBox())
 
-        self.tabbar_on = gtk.CheckButton('Show Tabbar')
+        self.tabbar_on =      gtk.CheckButton('Show Tabbar         ')
         self.tabbar_grouped = gtk.CheckButton('Group Tabs in Tabbar')
 
+        self.__label['LABEL'].append(self.get_label_widget(self.tabbar_on))
+        self.__label['LABEL'].append(self.get_label_widget(self.tabbar_grouped))
+
         ct_gui_tab.child.pack_start(self.tabbar_on, False, False, 5)
-        ct_gui_tab.child.pack_end(self.tabbar_grouped, False, False, 5)
+        ct_gui_tab.child.pack_start(self.tabbar_grouped, False, False, 5)
 
         self.tabbar_on.connect('toggled', self._sig_tabbar_on)
         self.tabbar_grouped.connect('toggled', self._sig_tabbar_grouped)
 
         # Font
-        ct_gui_font = gtk.Frame('Font')
+        self.__label['FRAME'].append(gtk.Label('Font'))
+        ct_gui_font = gtk.Frame()
+        ct_gui_font.set_label_widget(self.__label['FRAME'][-1])
         ct_gui.pack_start(ct_gui_font, False, False, 10)
+
         ct_gui_font.add(gtk.HBox())
 
         self.font_sw = {}
@@ -314,7 +337,8 @@ class ConfigWindow(gtk.Window):
             self.font_sw[key].pack_start(font_sw_cell[key], True)
             self.font_sw[key].add_attribute(font_sw_cell[key], "text", 0)
 
-            ct_gui_font.child.pack_start(gtk.Label('{0}:'.format(key.title())), False, False, 5)
+            self.__label['LABEL'].append(gtk.Label('{0}:'.format(key.title())))
+            ct_gui_font.child.pack_start(self.__label['LABEL'][-1], False, False, 5)
             ct_gui_font.child.pack_start(self.font_sw[key], False, False, 5)
 
             self.font_sw[key].connect('changed', self._sig_font_changed)
@@ -325,8 +349,58 @@ class ConfigWindow(gtk.Window):
             self.font_sw_tm['size'].append([size])
 
         # Theme
-#        ct_gui_theme = gtk.Frame('Theme')
-#        ct_gui.pack_start(ct_gui_theme, False, False, 10)
+        self.__label['FRAME'].append(gtk.Label('Theme'))
+        ct_gui_theme = gtk.Frame()
+        ct_gui_theme.set_label_widget(self.__label['FRAME'][-1])
+        ct_gui.pack_start(ct_gui_theme, False, False, 10)
+
+        ct_gui_theme.add(gtk.Table(3, 6, False))
+        ct_gui_theme.child.set_col_spacings(5)
+
+        color_pos = {
+            # +--------+--------+
+            # |   -1   |   +1   |
+            # +--------+--------+
+            # |   -2   |   +2   |
+            # +--------+--------+
+            # |   -3   |   +3   |
+            # +--------+--------+
+            'text'          : -1, # len = 4
+            'text_selected' : +1, # len = 13
+
+            'base'          : -2, # len = 4
+            'base_selected' : +2, # len = 13
+
+            'status'        : -3, # len = 6
+            'status_active' : +3, # len = 13
+            }
+        label_len = [ 6, 13 ]   # [ max_len[col_0], max_len[col_1] ]
+
+        self.color_label = {}
+        self.color_entry = {}
+        self.color_picker = {}
+
+        for key in color_pos:
+            row = abs(color_pos[key])
+            col = (row + color_pos[key]) / (row + row)
+
+            self.color_label[key] = gtk.Label('{0:<{1}}'.format(key.replace('_', ' ').title(), label_len[col]))
+            self.color_entry[key] = gtk.Entry(7)
+            self.color_picker[key] = comp.zColorPicker(self.__ebox, self._sig_color_selected)
+
+            self.color_entry[key].set_property('width-chars', 7)
+
+            col *= 3            # each column has 3 sub-column: label, entry, and picker
+            ct_gui_theme.child.attach(self.color_label[key],  0 + col, 1 + col, row, 1 + row, xoptions=gtk.SHRINK)
+            ct_gui_theme.child.attach(self.color_entry[key],  1 + col, 2 + col, row, 1 + row, xoptions=gtk.SHRINK)
+            ct_gui_theme.child.attach(self.color_picker[key], 2 + col, 3 + col, row, 1 + row, xoptions=gtk.SHRINK)
+
+            self.color_entry[key].connect('activate', self._sig_color_entry_activate, key)
+
+
+        self.__label['LABEL'].extend(self.color_label.values())
+        self.__entry.extend(self.color_entry.values())
+
 
         # separator
         layout.pack_start(gtk.HSeparator(), False, False, 2)
@@ -337,8 +411,10 @@ class ConfigWindow(gtk.Window):
         layout.pack_end(self.bottom, False, False, 0)
 
         ## create buttons
-        self.bttn_default = gtk.Button(stock = gtk.STOCK_REVERT_TO_SAVED)
+        self.bttn_default = gtk.Button(stock = gtk.STOCK_CLEAR)
         self.bttn_default.set_label('_Default')
+        self.bttn_revert = gtk.Button(stock = gtk.STOCK_REVERT_TO_SAVED)
+        self.bttn_revert.set_label('_Revert')
 
         self.bttn_cancel = gtk.Button(stock = gtk.STOCK_CANCEL)
         self.bttn_cancel.set_label('_Cancel')
@@ -347,33 +423,54 @@ class ConfigWindow(gtk.Window):
 
         ## add buttons to bottom
         self.bottom.pack_start(self.bttn_default, False, False, 5)
+        self.bottom.pack_start(self.bttn_revert, False, False, 5)
         self.bottom.pack_start(gtk.Label(), True, True, 0)
         self.bottom.pack_end(self.bttn_save, False, False, 5)
         self.bottom.pack_end(self.bttn_cancel, False, False, 5)
 
         ## connect signals
-        self.bttn_default.connect('clicked', self._sig_restore_default)
+        self.bttn_default.connect('clicked', self._sig_clear_rc)
+        self.bttn_revert.connect('clicked', self._sig_reload_rc)
 
-        self.bttn_cancel.connect('clicked', self._sig_close_console)
+        self.bttn_cancel.connect('clicked', self._sig_cancel_mod)
         self.bttn_save.connect('clicked', self._sig_save_config)
 
-        ## show
-        layout.show_all()
+
+        ### update config window fonts
+        for label in self.__label['TAB']:
+            self.set_font_modify(label, 'Serif')
+        for label in self.__label['FRAME']:
+            self.set_font_modify(label, 'Serif')
+        for label in self.__label['LABEL']:
+            self.set_font_modify(label, 'Monospace')
+
+        for entry in self.__entry:
+            self.set_font_modify(entry, 'Monospace')
+
+        ### show
+        self.__ebox.show_all()
 
 
     ### top-level signal definition
-    def _sig_restore_default(self, widget):
-        self.default()
+    def _sig_clear_rc(self, *arg):
+        conf.init_rc()
+        conf.write_rc()
+        self.load_rc()
 
     def _sig_open_console(self, *arg):
         self.open()
 
+    def _sig_reload_rc(self, *arg):
+        conf.Config = copy.deepcopy(self.config_bkup) # restore the backup setting
+        self.load_rc()
+
     def _sig_save_config(self, *arg):
         conf.Config = copy.deepcopy(self.config)
-        conf.write_rc()
+        conf.write_rc()         # write changes
         self.close()
 
-    def _sig_close_console(self, *arg):
+    def _sig_cancel_mod(self, *arg):
+        self._sig_reload_rc()   # cancel changes
         self.close()
         return True
     ### end of top-level signal definition
@@ -398,11 +495,36 @@ class ConfigWindow(gtk.Window):
 
         self.config['FONT'] = new_font
         comp.zTheme.set_font(self.config['FONT'])
+
+    def _sig_color_entry_activate(self, entry, key):
+        color_code = entry.get_text()
+        if not re.match('^#[0-9a-fA-F]{6}$', color_code):
+            entry.set_text('')
+            return
+        self.set_color_modify(key, color_code)
+        comp.zTheme.set_color_map(self.config['COLOR_MAP'])
+
+    def _sig_color_selected(self, widget, color_code):
+        print widget, color_code
     ### signal for GUI
 
 
     ### overloaded function definition
-    def default(self):
+    def open(self):
+        if self.get_property('visible'):
+            self.window.show()
+        else:
+            self.config_bkup = copy.deepcopy(conf.Config) # backup settings
+            self.load_rc()
+            self.show()
+
+    def close(self):
+        self.hide()
+    ### end of overloaded function definition
+
+
+    ### support function definition
+    def load_rc(self):
         self.config = copy.deepcopy(conf.Config)
 
         # GUI->Tabbar
@@ -413,17 +535,10 @@ class ConfigWindow(gtk.Window):
         # GUI->Font
         self.select_font(self.config['FONT'])
 
-    def open(self):
-        if self.get_property('visible'):
-            self.window.show()
-        else:
-            self.default()
-            self.show()
-
-    def close(self):
-        self.default()
-        self.hide()
-    ### end of overloaded function definition
+        # GUI->Theme
+        for key in self.color_entry:
+            self.set_color_modify(key, self.config['COLOR_MAP'][key])
+        comp.zTheme.set_color_map(self.config['COLOR_MAP'])
 
 
     def select_font(self, font_dic):
@@ -437,3 +552,37 @@ class ConfigWindow(gtk.Window):
                     return      # early return
                 font_iter = self.font_sw_tm[key].iter_next(font_iter)
             self.font_sw[key].set_active_iter(font_iter)
+
+
+    def set_color_modify(self, key, color_code):
+        self.color_entry[key].set_text(color_code.upper())
+        self.color_picker[key].modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(color_code))
+        self.color_picker[key].modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(color_code))
+
+        self.config['COLOR_MAP'][key] = color_code
+    ### end of support function definition
+
+
+    ### utility function definition
+    def get_label_widget(self, current):
+        try:
+            if not len(current.get_children()):
+                raise AttributeError
+        except:
+            if isinstance(current, gtk.Label):
+                return current  # found the label
+            else:
+                return None     # end of the path
+
+        for child in current.get_children():
+            found = self.get_label_widget(child)
+            if found:
+                return found    # found in previous search
+        return None             # not found at all
+
+
+    def set_font_modify(self, widget, font, size = None):
+        if size:
+            font += ' {}'.format(size)
+        widget.modify_font(pango.FontDescription(font))
+    ### end of utility function definition

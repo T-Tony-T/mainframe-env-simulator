@@ -113,20 +113,22 @@ DEFAULT_FUNC_KEY_BIND = {
         },
     }
 
-Config = {
-    'MISC' : {
+Config = {}
+
+def init_rc():
+    Config['MISC'] = {
         'key_binding'   : DEFAULT['MISC']['KEY_BINDING'],
 
         'tab_on'        : DEFAULT['MISC']['TAB_ON'],
         'tab_grouped'   : DEFAULT['MISC']['TAB_GROUPED'],
-        },
+        }
 
-    'FONT' : {
+    Config['FONT'] = {
         'name'          : DEFAULT['FONT']['NAME'],
         'size'          : DEFAULT['FONT']['SIZE'],
-        },
+        }
 
-    'COLOR_MAP' : {
+    Config['COLOR_MAP'] =  {
         'text'          : DEFAULT['COLOR_MAP']['TEXT'],
         'text_selected' : DEFAULT['COLOR_MAP']['TEXT_SELECTED'],
 
@@ -140,17 +142,10 @@ Config = {
         'comment'       : DEFAULT['COLOR_MAP']['COMMENT'],
         'literal'       : DEFAULT['COLOR_MAP']['LITERAL'],
         'label'         : DEFAULT['COLOR_MAP']['LABEL'],
-        },
-
-    'FUNC_BINDING' : {
-        # will be filled after MISC::key_binding is read
-        # func_name : key_sequence_string
-        },
-
-    'KEY_BINDING' : {
-        # key_sequence_string : func_name
         }
-    }
+
+    Config['FUNC_BINDING'] = copy.deepcopy(DEFAULT_FUNC_KEY_BIND[ Config['MISC']['key_binding'] ])
+    Config['KEY_BINDING'] = dict((v, k) for (k, v) in Config['FUNC_BINDING'].iteritems())
 
 
 CONFIG_PATH = {
@@ -163,9 +158,9 @@ CONFIG_PATH = {
 
 def read_rc():
     __CK_CONFIG()
+    init_rc()
 
     label = None
-
     for line in open(CONFIG_PATH['gui_rc'], 'r'):
         line = line[:-1]        # get rid of the '\n'
 
@@ -236,6 +231,7 @@ def read_rc():
                 sys.stderr.write('CONFIG WARNING: {0}: Invalid color mapping.\n'.format(k))
 
     Config['FUNC_BINDING'] = copy.deepcopy(DEFAULT_FUNC_KEY_BIND[ Config['MISC']['key_binding'] ])
+    Config['KEY_BINDING'] = dict((v, k) for (k, v) in Config['FUNC_BINDING'].iteritems())
     for line in open(CONFIG_PATH[ 'key_{0}'.format(Config['MISC']['key_binding']) ], 'r'):
         line = line[:-1]        # get rid of the '\n'
 
@@ -248,16 +244,11 @@ def read_rc():
 
         v = ' '.join(seq)       # normalize the key sequence
 
-        if k in Config['FUNC_BINDING']:
-            if v not in Config['KEY_BINDING']:
-                Config['FUNC_BINDING'][k] = v
-                Config['KEY_BINDING'][v] = k
-            else:
-                sys.stderr.write('CONFIG WARNING: {0} = {1}: Conflict with {2} = {1}\n'.format(
-                        k, v, Config['KEY_BINDING'][v]
-                        ))
-        else:
+        if k not in Config['FUNC_BINDING']:
             sys.stderr.write('CONFIG WARNING: {0}: Invalid key binding.\n'.format(k))
+        else:
+            Config['FUNC_BINDING'][k] = v
+            Config['KEY_BINDING'][v] = k
 
     write_rc()
 

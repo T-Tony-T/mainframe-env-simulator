@@ -113,6 +113,110 @@ class z_ABC(object):
                     callback(widget, *data_list)
 
 
+######## ######## ######## ########
+########    zColorPicker   ########
+######## ######## ######## ########
+
+class zColorPicker(gtk.Button):
+    '''A Firefox Style Color Picker'''
+    def __init__(self, active_scope, callback):
+        '''
+        active_scope
+            the GtkEventBox widget that defines the active
+            scope of the menu-popdown-on-click
+
+        callback
+            the callback function to be invoked when a color
+            has been picked
+
+            should be defined as:
+                def callback(widget, color_code)
+        '''
+        super(zColorPicker, self).__init__()
+
+
+        self.active_scope = active_scope
+        self.callback = callback
+        self.toplevel = self.active_scope.get_toplevel()
+
+        self.set_size_request(30, -1)
+
+        # create the popup menu
+        self.menu = gtk.Window(gtk.WINDOW_POPUP)
+
+        self.menu.set_transient_for(self.toplevel)
+        self.menu.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_MENU)
+        self.menu.set_destroy_with_parent(True)
+
+        # fill the menu
+        frame = gtk.Table(2, 2, True)
+        self.menu.add(frame)
+
+        frame.attach(gtk.Button('-1'), 0, 1, 0, 1)
+        frame.attach(gtk.Button('+1'), 1, 2, 0, 1)
+        frame.attach(gtk.Button('-2'), 0, 1, 1, 2)
+        frame.attach(gtk.Button('+2'), 1, 2, 1, 2)
+
+        # connect signals
+        self.top_id = {
+            'as' : [
+                self.active_scope.connect('button-press-event', self._sig_popdown),
+                ],
+            'tl' : [
+                self.toplevel.connect('configure-event', self._sig_popdown),
+                self.toplevel.connect('window-state-event', self._sig_popdown),
+                ],
+            }
+        self.connect('clicked', self._sig_popup)
+
+        self.popdown()
+
+
+    ### signal definition
+    def _sig_popup(self, bttn):
+        if self.is_shown:
+            self.popdown()
+        else:
+            self.popup()
+
+    def _sig_popdown(self, widget, event):
+        self.popdown()
+        return True
+    ### end of signal definition
+
+
+    ### overridden function definition
+    def popup(self):
+        self.is_shown = True
+
+        # calculate position
+        root = self.get_root_window()
+        alloc = self.get_allocation()
+        ( ptr_x,     ptr_y     ) = self.get_pointer()
+        ( ptr_abs_x, ptr_abs_y ) = root.get_pointer()[:2]
+        ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x, ptr_abs_y - ptr_y )
+
+        # popup the menu
+        self.menu.move(base_x, base_y + alloc.height)
+        self.menu.show_all()
+
+        for handler in self.top_id['as']:
+            self.active_scope.handler_unblock(handler)
+        for handler in self.top_id['tl']:
+            self.toplevel.handler_unblock(handler)
+        self.active_scope.set_above_child(True)
+
+    def popdown(self):
+        for handler in self.top_id['as']:
+            self.active_scope.handler_block(handler)
+        for handler in self.top_id['tl']:
+            self.toplevel.handler_block(handler)
+        self.active_scope.set_above_child(False)
+
+        self.menu.hide_all()
+        self.is_shown = False
+    ### end of overridden function definition
+
 
 ######## ######## ######## ########
 ########     zComboBox     ########
@@ -137,7 +241,7 @@ class zComboBox(z_ABC, gtk.ToolButton):
             #  ...
             ]
         self.active_item = None
-        self.effective_colomn = 0
+        self.effective_column = 0
         self.row_separator_func = None
 
         # init menu
@@ -243,7 +347,7 @@ class zComboBox(z_ABC, gtk.ToolButton):
             if self.row_separator_func and self.row_separator_func(item):
                 self.menu.append(gtk.SeparatorMenuItem())
             else:
-                mi = gtk.MenuItem(item[self.effective_colomn], False)
+                mi = gtk.MenuItem(item[self.effective_column], False)
                 self.menu.append(mi)
                 mi.connect("activate", self._sig_item_selected, indx)
 
@@ -277,7 +381,7 @@ class zComboBox(z_ABC, gtk.ToolButton):
         if indx == self.active_item:
             return
         try:
-            self.set_label(self.__item_list[indx][self.effective_colomn])
+            self.set_label(self.__item_list[indx][self.effective_column])
             self.active_item = indx
         except:
             self.set_label('')
@@ -329,11 +433,11 @@ class zComboBox(z_ABC, gtk.ToolButton):
     ### end of overridden function definition
 
 
-    def get_effective_colomn(self):
-        return self.effective_colomn
+    def get_effective_column(self):
+        return self.effective_column
 
-    def set_effective_colomn(self, col):
-        self.effective_colomn = col
+    def set_effective_column(self, col):
+        self.effective_column = col
 
 
     ### supporting function
