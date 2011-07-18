@@ -119,6 +119,16 @@ class z_ABC(object):
 
 class zColorPicker(gtk.Button):
     '''A Firefox Style Color Picker'''
+    default_color_matrix = [    # The one that FireFox is using
+        [ '#FFFFFF', '#FFCCCC', '#FFCC99', '#FFFF99', '#FFFFCC', '#99FF99', '#99FFFF', '#CCFFFF', '#CCCCFF', '#FFCCFF', ],
+        [ '#CCCCCC', '#FF6666', '#FF9966', '#FFFF66', '#FFFF33', '#66FF99', '#33FFFF', '#66FFFF', '#9999FF', '#FF99FF', ],
+        [ '#C0C0C0', '#FF0000', '#FF9900', '#FFCC66', '#FFFF00', '#33FF33', '#66CCCC', '#33CCFF', '#6666CC', '#CC66CC', ],
+        [ '#999999', '#CC0000', '#FF6600', '#FFCC33', '#FFCC00', '#33CC00', '#00CCCC', '#3366FF', '#6633FF', '#CC33CC', ],
+        [ '#666666', '#990000', '#CC6600', '#CC9933', '#999900', '#009900', '#339999', '#3333FF', '#6600CC', '#993399', ],
+        [ '#333333', '#660000', '#993300', '#996633', '#666600', '#006600', '#336666', '#000099', '#333399', '#663366', ],
+        [ '#000000', '#330000', '#663300', '#663333', '#333300', '#003300', '#003333', '#006666', '#330099', '#330033', ],
+        ]
+
     def __init__(self, active_scope, callback):
         '''
         active_scope
@@ -139,7 +149,8 @@ class zColorPicker(gtk.Button):
         self.callback = callback
         self.toplevel = self.active_scope.get_toplevel()
 
-        self.set_size_request(30, -1)
+        self.__size_button = [ 45, 25 ]
+        self.__size_menu_button = [ 30, 25 ]
 
         # create the popup menu
         self.menu = gtk.Window(gtk.WINDOW_POPUP)
@@ -148,28 +159,25 @@ class zColorPicker(gtk.Button):
         self.menu.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_MENU)
         self.menu.set_destroy_with_parent(True)
 
-        # fill the menu
-        frame = gtk.Table(2, 2, True)
-        self.menu.add(frame)
-
-        frame.attach(gtk.Button('-1'), 0, 1, 0, 1)
-        frame.attach(gtk.Button('+1'), 1, 2, 0, 1)
-        frame.attach(gtk.Button('-2'), 0, 1, 1, 2)
-        frame.attach(gtk.Button('+2'), 1, 2, 1, 2)
+        self.build_menu(rebuild = False)
 
         # connect signals
+        self.active_scope.set_events(gtk.gdk.BUTTON_PRESS_MASK)
         self.top_id = {
             'as' : [
                 self.active_scope.connect('button-press-event', self._sig_popdown),
                 ],
             'tl' : [
                 self.toplevel.connect('configure-event', self._sig_popdown),
+                self.toplevel.connect('focus-out-event', self._sig_popdown),
                 self.toplevel.connect('window-state-event', self._sig_popdown),
                 ],
             }
         self.connect('clicked', self._sig_popup)
 
         self.popdown()
+        self.set_size_button(* self.__size_button)
+        self.set_size_menu_button(* self.__size_menu_button)
 
 
     ### signal definition
@@ -182,6 +190,10 @@ class zColorPicker(gtk.Button):
     def _sig_popdown(self, widget, event):
         self.popdown()
         return True
+
+    def _sig_menu_bttn_clicked(self, widget):
+        self.callback(self, widget.color_code)
+        self.popdown()
     ### end of signal definition
 
 
@@ -197,8 +209,12 @@ class zColorPicker(gtk.Button):
         ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x, ptr_abs_y - ptr_y )
 
         # popup the menu
-        self.menu.move(base_x, base_y + alloc.height)
         self.menu.show_all()
+        bttn_alloc = self.bttn_matrix[0][-1].get_allocation()
+        self.menu.move(
+            min(base_x, root.get_size()[0] - bttn_alloc.x - bttn_alloc.width),
+            base_y + alloc.height
+            )
 
         for handler in self.top_id['as']:
             self.active_scope.handler_unblock(handler)
@@ -216,6 +232,73 @@ class zColorPicker(gtk.Button):
         self.menu.hide_all()
         self.is_shown = False
     ### end of overridden function definition
+
+
+    def build_menu(self, rebuild = True):
+        if rebuild:
+            # clean up
+            self.menu.remove(self.frame)
+            for line in self.bttn_matrix:
+                for bttn in line:
+                    bttn.disconnect(bttn.sig_id)
+
+        # fill the menu
+        n_row = len(zColorPicker.default_color_matrix)
+        n_col = len(zColorPicker.default_color_matrix[0])
+        self.frame = gtk.Table(n_row, n_col, True)
+        self.menu.add(self.frame)
+
+        self.bttn_matrix = []
+        for row in range(n_row):
+            self.bttn_matrix.append([])
+            for col in range(n_col):
+                bttn = gtk.Button('')
+                self.bttn_matrix[row].append(bttn)
+
+                bttn.color_code = zColorPicker.default_color_matrix[row][col]
+
+                bttn.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(bttn.color_code))
+                bttn.modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(bttn.color_code))
+
+                self.frame.attach(bttn, col, col + 1, row, row + 1)
+
+                bttn.sig_id = bttn.connect('clicked', self._sig_menu_bttn_clicked)
+
+
+    def get_size_button(self):
+        return self.__size_button
+
+    def set_size_button(self, w, h):
+        mod = False
+
+        if w != -1:
+            mod = True
+            self.__size_button[0] = w
+        if h != -1:
+            mod = True
+            self.__size_button[1] = h
+
+        if mod:
+            self.set_size_request(* self.__size_button)
+
+
+    def get_size_menu_button(self):
+        return self.__size_menu_button
+
+    def set_size_menu_button(self, w, h):
+        mod = False
+
+        if w != -1:
+            mod = True
+            self.__size_menu_button[0] = w
+        if h != -1:
+            mod = True
+            self.__size_menu_button[1] = h
+
+        if mod:
+            for line in self.bttn_matrix:
+                for bttn in line:
+                    bttn.set_size_request(* self.__size_menu_button)
 
 
 ######## ######## ######## ########
@@ -449,7 +532,7 @@ class zComboBox(z_ABC, gtk.ToolButton):
         ( ptr_abs_x, ptr_abs_y ) = root.get_pointer()[:2]
         ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x, ptr_abs_y - ptr_y )
 
-        return (base_x, base_y + alloc.height, False)
+        return [ base_x, base_y + alloc.height, False ]
     ### end of supporting function
 
 
@@ -875,7 +958,7 @@ class zEdit(z_ABC, gtk.VBox):
             return self.center.connect(sig, callback, *data)
 
         zEdit.register(sig, callback, self.center, *data)
-        return (sig, self.center)
+        return [ sig, self.center ]
 
     def disconnect(self, sig_id):
         if isinstance(sig_id, int):
@@ -933,7 +1016,7 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     def get_buffer(self):
-        return (self.active_buffer.path, self.active_buffer.type)
+        return [ self.active_buffer.path, self.active_buffer.type ]
 
     def set_buffer(self, buffer_path, buffer_type):
         try:

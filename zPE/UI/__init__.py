@@ -389,6 +389,7 @@ class ConfigWindow(gtk.Window):
             self.color_picker[key] = comp.zColorPicker(self.__ebox, self._sig_color_selected)
 
             self.color_entry[key].set_property('width-chars', 7)
+            self.color_picker[key].set_size_button(45, -1)
 
             col *= 3            # each column has 3 sub-column: label, entry, and picker
             ct_gui_theme.child.attach(self.color_label[key],  0 + col, 1 + col, row, 1 + row, xoptions=gtk.SHRINK)
@@ -506,7 +507,11 @@ class ConfigWindow(gtk.Window):
         comp.zTheme.set_color_map(self.config['COLOR_MAP'])
 
     def _sig_color_selected(self, widget, color_code):
-        print widget, color_code
+        for key in self.color_picker:
+            if widget == self.color_picker[key]:
+                break
+        self.set_color_modify(key, color_code)
+        comp.zTheme.set_color_map(self.config['COLOR_MAP'])
     ### signal for GUI
 
 
