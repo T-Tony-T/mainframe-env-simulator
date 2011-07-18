@@ -32,18 +32,8 @@ class BaseFrame(object):
 
         ### retrive GUI configuration
         conf.read_rc()
-        comp.zTheme.set_font(conf.Config['FONT'])
-        comp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
-
-        comp.zEdit.set_style(conf.Config['MISC']['key_binding'])
-        comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
-
-        comp.zEdit.set_tab_on(conf.Config['MISC']['tab_on'])
-        comp.zEdit.set_tab_grouped(conf.Config['MISC']['tab_grouped'])
-
-
-        ### create config window
         self.config_window = ConfigWindow()
+        self.config_window.load_rc()
 
         ### create top-level frame
         self.root = gtk.Window(gtk.WINDOW_TOPLEVEL)
@@ -125,6 +115,8 @@ class BaseFrame(object):
         self.lastline = comp.zLastLine('z# ')
         w_vbox.pack_end(self.lastline, False, False, 0)
 
+        # add the last-line to the editor
+        comp.zEdit.set_last_line(self.lastline)
 
         ### set accel
 
@@ -268,7 +260,7 @@ class ConfigWindow(gtk.Window):
 
 
         # layout of the frame:
-        # 
+        #
         #   +--+--+--+---+_
         #   +--+--+--+---+ \
         #   |            |  tab
@@ -285,8 +277,6 @@ class ConfigWindow(gtk.Window):
 
         layout = gtk.VBox()
         self.__ebox.add(layout)
-
-#        self.set_default_size(320, 400)
 
         ### create center
         center = gtk.Notebook()
@@ -403,6 +393,33 @@ class ConfigWindow(gtk.Window):
         self.__entry.extend(self.color_entry.values())
 
 
+        ## KeyBinding
+        ct_key = gtk.VBox()
+        self.__label['TAB'].append(gtk.Label('Key Binding'))
+        center.append_page(ct_key, self.__label['TAB'][-1])
+
+        # Style
+        self.__label['FRAME'].append(gtk.Label('Key Binding Sytle'))
+        ct_key_style = gtk.Frame()
+        ct_key_style.set_label_widget(self.__label['FRAME'][-1])
+        ct_key.pack_start(ct_key_style, False, False, 10)
+
+        ct_key_style.add(gtk.HBox())
+
+        self.key_style_key = [ 'emacs', 'vi', 'other' ]
+        self.key_style = {}
+        self.key_style['emacs'] = gtk.RadioButton(None,                    'Emacs Mode')
+        self.key_style['vi']    = gtk.RadioButton(self.key_style['emacs'], 'Vi(m) Mode')
+        self.key_style['other'] = gtk.RadioButton(self.key_style['emacs'], 'Other     ')
+
+        for key in self.key_style_key:
+            self.__label['LABEL'].append(self.get_label_widget(self.key_style[key]))
+
+            ct_key_style.child.pack_start(self.key_style[key], False, False, 15)
+
+            self.key_style[key].connect('toggled', self._sig_key_style_toggled, key)
+
+
         # separator
         layout.pack_start(gtk.HSeparator(), False, False, 2)
 
@@ -454,8 +471,8 @@ class ConfigWindow(gtk.Window):
 
     ### top-level signal definition
     def _sig_clear_rc(self, *arg):
-        conf.init_rc()
-        conf.write_rc()
+        conf.init_rc()          # re-initiate config
+        conf.write_rc()         # write changes
         self.load_rc()
 
     def _sig_open_console(self, *arg):
@@ -466,7 +483,6 @@ class ConfigWindow(gtk.Window):
         self.load_rc()
 
     def _sig_save_config(self, *arg):
-        conf.Config = copy.deepcopy(self.config)
         conf.write_rc()         # write changes
         conf.read_rc()          # validate new config
         self.close()
@@ -479,24 +495,24 @@ class ConfigWindow(gtk.Window):
 
     ### signal for GUI
     def _sig_tabbar_on(self, bttn):
-        self.config['MISC']['tab_on'] = bttn.get_active()
-        comp.zEdit.set_tab_on(self.config['MISC']['tab_on'])
-        self.tabbar_grouped.set_property('sensitive', self.config['MISC']['tab_on'])
+        conf.Config['MISC']['tab_on'] = bttn.get_active()
+        comp.zEdit.set_tab_on(conf.Config['MISC']['tab_on'])
+        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
 
     def _sig_tabbar_grouped(self, bttn):
-        self.config['MISC']['tab_grouped'] = bttn.get_active()
-        comp.zEdit.set_tab_grouped(self.config['MISC']['tab_grouped'])
+        conf.Config['MISC']['tab_grouped'] = bttn.get_active()
+        comp.zEdit.set_tab_grouped(conf.Config['MISC']['tab_grouped'])
 
     def _sig_font_changed(self, combo):
         new_font = {}
-        for key in self.config['FONT']:
+        for key in conf.Config['FONT']:
             font_iter = self.font_sw[key].get_active_iter()
             if not font_iter:
                 return          # early return
             new_font[key] = self.font_sw_tm[key].get_value(font_iter, 0)
 
-        self.config['FONT'] = new_font
-        comp.zTheme.set_font(self.config['FONT'])
+        conf.Config['FONT'] = new_font
+        comp.zTheme.set_font(conf.Config['FONT'])
 
     def _sig_color_entry_activate(self, entry, key):
         color_code = entry.get_text()
@@ -504,15 +520,25 @@ class ConfigWindow(gtk.Window):
             entry.set_text('')
             return
         self.set_color_modify(key, color_code)
-        comp.zTheme.set_color_map(self.config['COLOR_MAP'])
+        comp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
 
     def _sig_color_selected(self, widget, color_code):
         for key in self.color_picker:
             if widget == self.color_picker[key]:
                 break
         self.set_color_modify(key, color_code)
-        comp.zTheme.set_color_map(self.config['COLOR_MAP'])
-    ### signal for GUI
+        comp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+    ### end of signal for GUI
+
+
+    ### signal for KeyBinding
+    def _sig_key_style_toggled(self, radio, key):
+        if radio.get_active() and key in conf.DEFAULT_FUNC_KEY_BIND:
+            conf.Config['MISC']['key_binding'] = key
+            conf.init_key_binding()
+            comp.zEdit.set_style(conf.Config['MISC']['key_binding'])
+            comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+    ### end of signal for KeyBinding
 
 
     ### overloaded function definition
@@ -531,20 +557,29 @@ class ConfigWindow(gtk.Window):
 
     ### support function definition
     def load_rc(self):
-        self.config = copy.deepcopy(conf.Config)
+        conf.Config = copy.deepcopy(conf.Config)
 
         # GUI->Tabbar
-        self.tabbar_on.set_active(self.config['MISC']['tab_on'])
-        self.tabbar_grouped.set_active(self.config['MISC']['tab_grouped'])
-        self.tabbar_grouped.set_property('sensitive', self.config['MISC']['tab_on'])
+        self.tabbar_on.set_active(conf.Config['MISC']['tab_on'])
+        self.tabbar_grouped.set_active(conf.Config['MISC']['tab_grouped'])
+        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
 
         # GUI->Font
-        self.select_font(self.config['FONT'])
+        self.select_font(conf.Config['FONT'])
 
         # GUI->Theme
         for key in self.color_entry:
-            self.set_color_modify(key, self.config['COLOR_MAP'][key])
-        comp.zTheme.set_color_map(self.config['COLOR_MAP'])
+            self.set_color_modify(key, conf.Config['COLOR_MAP'][key])
+        comp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+
+        # KeyBinding->Style
+        for key in self.key_style_key:
+            if key not in conf.DEFAULT_FUNC_KEY_BIND:
+                self.key_style[key].set_property('sensitive', False)
+                self.key_style[key].set_active(True)
+            else:
+                self.key_style[key].set_property('sensitive', True)
+        self.key_style[conf.Config['MISC']['key_binding']].set_active(True)
 
 
     def select_font(self, font_dic):
@@ -565,7 +600,7 @@ class ConfigWindow(gtk.Window):
         self.color_picker[key].modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(color_code))
         self.color_picker[key].modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(color_code))
 
-        self.config['COLOR_MAP'][key] = color_code
+        conf.Config['COLOR_MAP'][key] = color_code
     ### end of support function definition
 
 

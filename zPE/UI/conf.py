@@ -143,7 +143,9 @@ def init_rc():
         'literal'       : DEFAULT['COLOR_MAP']['LITERAL'],
         'label'         : DEFAULT['COLOR_MAP']['LABEL'],
         }
+    init_key_binding()
 
+def init_key_binding():
     Config['FUNC_BINDING'] = copy.deepcopy(DEFAULT_FUNC_KEY_BIND[ Config['MISC']['key_binding'] ])
     Config['KEY_BINDING'] = dict((v, k) for (k, v) in Config['FUNC_BINDING'].iteritems())
     if '' in Config['KEY_BINDING']:
@@ -232,11 +234,7 @@ def read_rc():
             else:
                 sys.stderr.write('CONFIG WARNING: {0}: Invalid color mapping.\n'.format(k))
 
-    Config['FUNC_BINDING'] = copy.deepcopy(DEFAULT_FUNC_KEY_BIND[ Config['MISC']['key_binding'] ])
-    Config['KEY_BINDING'] = dict((v, k) for (k, v) in Config['FUNC_BINDING'].iteritems())
-    if '' in Config['KEY_BINDING']:
-        del Config['KEY_BINDING'][''] # remove empty binding
-
+    init_key_binding()
     for line in open(CONFIG_PATH[ 'key_{0}'.format(Config['MISC']['key_binding']) ], 'r'):
         line = line[:-1]        # get rid of the '\n'
 
@@ -279,7 +277,8 @@ def read_rc():
 
 
 __PATTERN = {
-    'terminal' : '''
+    'terminal' : r'''^\s*(              # anchor to the beginning
+[\x21-\x7e] |                           # all chars that are printed on the keyboard
 ( BACKSPACE | BackSpace | backspace ) |
 ( ESCAPE    | Eseape    | escape    ) |
 ( ENTER     | Enter     | enter     ) |
@@ -298,36 +297,47 @@ __PATTERN = {
 ( UP        | Up        | up        ) |
 ( DOWN      | Down      | down      ) |
 
-( [Ff] (1[0-2] | [2-9]) )       # F1 ~ F12
+( [Ff] (1[0-2] | [2-9]) )               # F1 ~ F12
+)\s*$                                   # anchor to the end
 ''',
 
-    'combo' : '''
-( C-M-. | [CM]-. )              # C-M-. / C-. / M-.
+    'combo' : r'''^\s*(                 # anchor to the beginning
+( C-M-. | [CM]-. )                      # C-M-. / C-. / M-.
+)\s*$                                   # anchor to the end
 ''',
 
-    'forbid_emacs' : '''M-x | C-g''',
+    'forbid_emacs' : r'''^\s*(          # anchor to the beginning
+C-g                                     # cancel
+)\s*$                                   # anchor to the end
+''',
+
+    'forbid_emacs_init' : r'''^\s*(     # anchor to the beginning
+M-x |                                   # run command
+C-g |                                   # cancel
+C-q                                     # escape next stroke
+)\s*$                                   # anchor to the end
+''',
     }
 
 def parse_key_binding(key_sequence):
     sequence = key_sequence.split()
 
-    if Config['MISC']['key_binding'] == 'other':
-        # style::other
-        if len(sequence) != 1:
-            # style::other must contain only 1 stroke
-            return None
-    else:
+    if Config['MISC']['key_binding'] == 'emacs':
         # style::emacs
-        if len(sequence) > 1:
+        if not len(sequence):
+            return None
+
+        if re.match(__PATTERN['forbid_emacs_init'], sequence[0], re.X):
+            # not allow for re-define as starting of a combo
             return None
 
         for indx in range(len(sequence)):
-            if re.match(__PATTERN['forbid_emacs'], sequence[indx], re.VERBOSE):
+            if re.match(__PATTERN['forbid_emacs'], sequence[indx], re.X):
                 # not allow for re-define
                 return None
 
-            m_terminal = re.match(__PATTERN['terminal'], sequence[indx], re.VERBOSE)
-            m_combo    = re.match(__PATTERN['combo'],    sequence[indx], re.VERBOSE)
+            m_terminal = re.match(__PATTERN['terminal'], sequence[indx], re.X)
+            m_combo    = re.match(__PATTERN['combo'],    sequence[indx], re.X)
 
             if not (m_terminal or m_combo):
                 # not a terminal stroke nor a combo
@@ -336,6 +346,16 @@ def parse_key_binding(key_sequence):
             if m_terminal and indx != len(sequence) - 1:
                 # terminal stroke is not the last stroke
                 return None
+
+    elif Config['MISC']['key_binding'] == 'vi':
+        # style::vi
+        return None             # not supported yet
+
+    else:
+        # style::other
+        if len(sequence) != 1:
+            # style::other must contain only 1 stroke
+            return None
 
     return sequence
 
@@ -379,7 +399,7 @@ def __TOUCH_RC():
         value = Config[label][key]
         if value in INVERSE_COLOR_LIST:
             value = INVERSE_COLOR_LIST[value]
-        fp.write('{0} = {1}\n'.format(key, value))    
+        fp.write('{0} = {1}\n'.format(key, value))
 
     fp.close()
 

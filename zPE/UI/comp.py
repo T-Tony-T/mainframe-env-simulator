@@ -10,9 +10,9 @@ import io_encap
 #
 #   fetch(buff):                read content from the corresponding file to the zEditBuffer
 #   flush(buff):                write content from the zEditBuffer to the corresponding file
-# 
+#
 
-import os, sys, stat, time, copy
+import os, sys, stat, time, copy, re
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -548,6 +548,19 @@ class zEdit(z_ABC, gtk.VBox):
     __tab_on = False            # see zEdit.set_tab_on()
     __tab_grouped = False       # see zEdit.set_tab_grouped()
 
+    __last_line = None          # see zEdit.set_last_line()
+
+    __escaping = False          # see zEdit._sig_key_pressed() => 'emacs' => 'C-q'
+    __ctrl_char_map = {
+        'C-I' : '\t',
+        'C-J' : '\n',
+        'C-M' : '\r',
+        }
+    __commanding = False        # see zEdit._sig_key_pressed() => 'emacs' => 'M-x'
+    __command_prefix = {
+        True  : 'M-x ',
+        False : '',
+        }
 
     _focus = None
 
@@ -595,6 +608,11 @@ class zEdit(z_ABC, gtk.VBox):
           - any system-opened "non-file" buffer should has "None" as the ".buffer" property.
         '''
         super(zEdit, self).__init__()
+
+
+        if not zEdit.__last_line:
+            zEdit.__last_line = zLastLine()
+            zEdit.__last_line_sig_id = zEdit.__last_line.connect('key-press-event', zEdit._sig_key_pressed)
 
         self.__on_init = True
 
@@ -815,7 +833,8 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     ### top-level signal
-    def _sig_key_pressed(self, widget, event, data = None):
+    @staticmethod
+    def _sig_key_pressed(widget, event, data = None):
         if event.type != gtk.gdk.KEY_PRESS:
             return False
 
@@ -836,22 +855,122 @@ class zEdit(z_ABC, gtk.VBox):
         else:
             stroke = gtk.gdk.keyval_name(event.keyval)
 
+        key_binding = zEdit.__key_binding
+        reg_func = zEdit._auto_update
+
         if zEdit.__style == 'emacs':
             # style::emacs
-            pass
+            if zEdit.__escaping:
+                try:
+                    if widget.get_editable():
+                        if re.match(r'^[\x20-\x7e]$', stroke):
+                            widget.insert_text(stroke)
+                        elif stroke.upper() in zEdit.__ctrl_char_map:
+                            widget.insert_text(zEdit.__ctrl_char_map[stroke.upper()])
+                except:
+                    pass
+                zEdit.__escaping = False
+                return True
+
+            if stroke == 'C-g': # at any time, this means 'cancel'
+                if widget in zEdit.__last_line.get_children():
+                    # reset lastline
+                    zEdit.__commanding = False
+                    zEdit.__last_line.set_editable(False)
+                    zEdit.__last_line.set_text('Quit') # print message
+                    zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
+                    if zEdit._focus:
+                        zEdit._focus.grab_focus()
+                else:
+                    zEdit.__last_line.blink('', 'Quit', 1)
+                return True
+
+            if zEdit.__commanding and widget in zEdit.__last_line.get_children():
+                if re.match(r'^[\x20-\x7e]$', stroke):
+                    widget.insert_text(stroke)
+                    return True
+                elif stroke.upper() == 'RETURN':
+                    cmd = zEdit.__last_line.get_text()
+                    if cmd in reg_func: # is a valid functionality
+                        if len(reg_func[cmd]): # has registered functions
+                            if zEdit._focus:
+                                zEdit._focus.grab_focus()
+                            zEdit.reg_emit(cmd)
+                            zEdit.__last_line.set_text('')
+                        else:
+                            zEdit.__last_line.set_text('(function not implemented)') # print message
+                    else:
+                        zEdit.__last_line.set_text('(no such function)') # print message
+                    zEdit.__commanding = False
+                    zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
+                    zEdit.__last_line.set_editable(False)
+                    if zEdit._focus:
+                        zEdit._focus.grab_focus()
+                    return True
+                else:
+                    return False
+
+            if zEdit.__last_line.get_command_prefix() in zEdit.__command_prefix.values():
+                # init stroke
+                if stroke == 'M-x':
+                    zEdit.__commanding = True
+                    zEdit.__last_line.set_text('')
+                    zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
+                    zEdit.__last_line.set_editable(True)
+                    return True
+                elif stroke == 'C-q':
+                    zEdit.__escaping = True
+                    return True
+
+            cmd_prefix = zEdit.__last_line.get_command_prefix()
+            if cmd_prefix not in zEdit.__command_prefix.values():
+                stroke = zEdit.__last_line.get_command_prefix() + stroke # appand previous combo to stroke
+
+            if ( stroke in key_binding  and       # is a binded key stroke
+                 key_binding[stroke] in reg_func  # is a valid functionality
+                 ):
+                if len(reg_func[key_binding[stroke]]): # has registered functions
+                    zEdit.reg_emit(key_binding[stroke])
+                else:
+                    if zEdit.__commanding:
+                        zEdit.__last_line.blink('', '(function not implemented)', 1)
+                    else:
+                        zEdit.__last_line.set_text('(function not implemented)')
+                zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
+                return True
+            else:
+                found = False
+                for key in key_binding:
+                    if key.startswith(stroke):
+                        found = True
+                        zEdit.__last_line.set_command_prefix(stroke + ' ') # append stroke to command buffer
+                        break
+
+                if found:
+                    return True
+                else:
+                    if cmd_prefix in zEdit.__command_prefix.values():
+                        # init combo, pass it on
+                        return False
+                    else:
+                        # has previous combo, eat the current combo
+                        zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
+                        return True
+
+        elif zEdit.__style == 'vi':
+            # style::vi
+            return False        # not implemetad yet
+
         else:
             # style::other
-            key_binding = zEdit.__key_binding
-            reg_func = zEdit._auto_update
             if ( stroke in key_binding            and # is a binded key stroke
                  key_binding[stroke] in reg_func  and # is a valid functionality
                  len(reg_func[key_binding[stroke]])   # has registered functions
                  ):
                 zEdit.reg_emit(key_binding[stroke])
+                return True
             else:
                 return False
-
-        return True
     ### end of top-level signal
 
 
@@ -1037,7 +1156,7 @@ class zEdit(z_ABC, gtk.VBox):
 
             # create widget
             if new_buff.type == 'file':
-                widget = gtk.TextView()
+                widget = zTextView()
             elif new_buff.type == 'dir':
                 widget = zFileManager()
                 self.sig_id['button_press'] = widget.connect('button-press-event', self._sig_button_press)
@@ -1063,7 +1182,7 @@ class zEdit(z_ABC, gtk.VBox):
             zTheme.register('update_font', zTheme._sig_update_font_modify, self.center)
             self.sig_id['focus_in'] = self.center.connect('focus-in-event', self._sig_focus_in)
             self.sig_id['focus_out'] = self.center.connect('focus-out-event', self._sig_focus_out)
-            self.sig_id['key_press'] = self.center.connect('key-press-event', self._sig_key_pressed)
+            self.sig_id['key_press'] = self.center.connect('key-press-event', zEdit._sig_key_pressed)
 
             zTheme._sig_update_font_modify(self.center)
             self._sig_update_color_map()
@@ -1091,6 +1210,18 @@ class zEdit(z_ABC, gtk.VBox):
     @staticmethod
     def set_key_binding(dic):
         zEdit.__key_binding = copy.deepcopy(dic)
+
+    @staticmethod
+    def get_last_line():
+        return zEdit.__last_line
+
+    @staticmethod
+    def set_last_line(lastline):
+        if zEdit.__last_line != lastline:
+            if zEdit.__last_line.handler_is_connected(zEdit.__last_line_sig_id):
+                zEdit.__last_line.disconnect(zEdit.__last_line_sig_id)
+            zEdit.__last_line = lastline
+            zEdit.__last_line_sig_id = zEdit.__last_line.connect('key-press-event', zEdit._sig_key_pressed)
 
     @staticmethod
     def get_style():
@@ -1335,7 +1466,7 @@ class zErrConsole(gtk.Window):
 
 
         # layout of the frame:
-        # 
+        #
         #   +------------+_
         #   |+----------+| \
         #   ||          ||  scrolled_window
@@ -1642,6 +1773,15 @@ class zFileManager(gtk.TreeView):
 
 class zLastLine(gtk.HBox):
     '''An Emacs Style Last-Line Statusbar'''
+    class zEntry(gtk.Entry):
+        def __init__(self):
+            super(zLastLine.zEntry, self).__init__()
+
+        def insert_text(self, text):
+            pos = self.get_position()
+            super(gtk.Entry, self).insert_text(text, pos)
+            self.set_position(pos + len(text))
+
     def __init__(self, label = ''):
         '''
         label
@@ -1656,7 +1796,7 @@ class zLastLine(gtk.HBox):
         self.__line_fix = gtk.Label()
         self.pack_start(self.__line_fix, False, False, 0)
 
-        self.__line_inter = gtk.Entry()
+        self.__line_inter = zLastLine.zEntry()
         self.pack_start(self.__line_inter, True, True, 0)
 
         self.__line_inter.set_has_frame(False)
@@ -1668,11 +1808,11 @@ class zLastLine(gtk.HBox):
         zTheme.register('update_font', zTheme._sig_update_font_modify, self.__label)
         zTheme._sig_update_font_modify(self.__label)
 
-        zTheme.register('update_font', zTheme._sig_update_font_modify, self.__line_fix)
-        zTheme._sig_update_font_modify(self.__line_fix)
+        zTheme.register('update_font', zTheme._sig_update_font_modify, self.__line_fix, 0.85)
+        zTheme._sig_update_font_modify(self.__line_fix, 0.85)
 
-        zTheme.register('update_font', zTheme._sig_update_font_modify, self.__line_inter)
-        zTheme._sig_update_font_modify(self.__line_inter)
+        zTheme.register('update_font', zTheme._sig_update_font_modify, self.__line_inter, 0.85)
+        zTheme._sig_update_font_modify(self.__line_inter, 0.85)
 
         zTheme.register('update_color_map', self._sig_update_color_map, self)
         self._sig_update_color_map()
@@ -1689,10 +1829,31 @@ class zLastLine(gtk.HBox):
         self.__line_inter.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
     ### end of signal-like auto-update function
 
+
     ### overridden function definition
     def connect(self, sig, *data):
         return self.__line_inter.connect(sig, *data)
     ### end of overridden function definition
+
+
+    def blink(self, cmd_text, entry_text, period = 1):
+        # backup old text
+        text_cmd = self.get_command_prefix()
+        text_inp = self.get_text()
+
+        # print new text
+        self.set_command_prefix(cmd_text)
+        self.set_text(entry_text)
+
+        # desplay new text for 1 sec
+        while gtk.events_pending():
+            gtk.main_iteration(False)
+        time.sleep(period)
+
+        # restore old text
+        self.set_command_prefix(text_cmd)
+        self.set_text(text_inp)
+
 
     def get_label(self):
         return self.__label.get_text()
@@ -1700,8 +1861,11 @@ class zLastLine(gtk.HBox):
     def set_label(self, string):
         self.__label.set_text(string)
 
-    def set_highlight_text(self, string):
-        self.__line_fix.set_markup('<b>{0}</b>'.format(string))
+    def get_command_prefix(self):
+        return self.__line_fix.get_text()
+
+    def set_command_prefix(self, string):
+        self.__line_fix.set_text(string)
 
     def get_text(self):
         return self.__line_inter.get_text()
@@ -1714,7 +1878,6 @@ class zLastLine(gtk.HBox):
         self.__line_inter.set_property('can-focus', setting)
         self.__line_inter.set_editable(setting)
         self.__line_inter.grab_focus()
-
 
 
 ######## ######## ######## ########
@@ -1786,7 +1949,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
         self.frame_sz_min = frame_sz_min
 
         # layout of the zSplitScreen:
-        # 
+        #
         #   0 1          2 3
         # 0 +-+----------+-+ 0
         #   | |    tp    | |
@@ -2057,9 +2220,9 @@ class zSplitScreen(z_ABC, gtk.Frame):
         # not the only frame, get parent and child info
         parent = widget.get_parent()
         if child_rm == widget.get_child1():
-            child_kp = widget.get_child2() 
+            child_kp = widget.get_child2()
         else:
-            child_kp = widget.get_child1() 
+            child_kp = widget.get_child1()
 
         # remove both child
         widget.remove(child_rm)
@@ -2309,6 +2472,26 @@ class zTabbar(z_ABC, gtk.EventBox):
 
 
 ######## ######## ######## ########
+########       zEdit       ########
+######## ######## ######## ########
+
+class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.TextView
+    '''The Customized TextView that Support zEdit'''
+    _auto_update = {
+        # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
+        }
+    def __init__(self):
+        super(zTextView, self).__init__()
+
+
+    ### overridden function definition
+    def insert_text(self, text):
+        buff = self.get_buffer()
+        buff.insert_at_cursor(text)
+    ### end of overridden function definition
+
+
+######## ######## ######## ########
 ########      zTheme       ########
 ######## ######## ######## ########
 
@@ -2385,9 +2568,9 @@ class zTheme(z_ABC):
             zTheme.reg_emit('update_color_map')
 
 
-######## ######## ######## ######## 
-########    MODULE INIT    ######## 
-######## ######## ######## ######## 
+######## ######## ######## ########
+########    MODULE INIT    ########
+######## ######## ######## ########
 
 # change gtk settings
 settings = gtk.settings_get_default()
