@@ -152,7 +152,7 @@ class BaseFrame(object):
         w_vbox.set_focus_chain((self.mw, self.lastline)) # prevent toolbar from getting focus
         self.root.show_all()
 
-        self.err_console.setup = False # signal the end of the setup phase; no more stderr
+#        self.err_console.setup = False # signal the end of the setup phase; no more stderr
         if self.err_console.get_text():
             self.err_console.open()
 

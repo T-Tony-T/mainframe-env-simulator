@@ -537,7 +537,7 @@ class zComboBox(z_ABC, gtk.ToolButton):
         ( ptr_abs_x, ptr_abs_y ) = root.get_pointer()[:2]
         ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x, ptr_abs_y - ptr_y )
 
-        return [ base_x, base_y + alloc.height, False ]
+        return base_x, base_y + alloc.height, False
     ### end of supporting function
 
 
@@ -1225,7 +1225,7 @@ class zEdit(z_ABC, gtk.VBox):
             return self.center.connect(sig, callback, *data)
 
         zEdit.register(sig, callback, self.center, *data)
-        return [ sig, self.center ]
+        return sig, self.center
 
     def disconnect(self, sig_id):
         if isinstance(sig_id, int):
@@ -1283,7 +1283,7 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     def get_buffer(self):
-        return [ self.active_buffer.path, self.active_buffer.type ]
+        return self.active_buffer.path, self.active_buffer.type
 
     def set_buffer(self, buffer_path, buffer_type):
         try:
@@ -1810,8 +1810,11 @@ class zFileManager(gtk.TreeView):
         self.__on_setting_folder = False
 
         # init widget reference relevant to editable column (file listing)
-        self.model = None       # will be set in self.set_folder()
+        self.model = gtk.ListStore(str, bool)
+        self.set_model(self.model)
+
         self.fn_cell_rdr = gtk.CellRendererText()
+
         self.fn_tree_col = gtk.TreeViewColumn(zFileManager.column_names[1], self.fn_cell_rdr, text=0, editable=1)
         self.fn_tree_col.set_cell_data_func(self.fn_cell_rdr, self.__cell_data_func)
 
@@ -1944,13 +1947,12 @@ class zFileManager(gtk.TreeView):
         dir_list.sort(key = str.lower)
         dir_list = ['..'] + dir_list
 
-        # create new model and fill it with the listing
-        self.model = gtk.ListStore(str, bool)
+        # update model with the listing
+        self.model.clear()
         for fn in dir_list:
             self.model.append([fn, False])
         for fn in file_list:
             self.model.append([fn, False])
-        self.set_model(self.model)
 
         self.grab_focus()
 
@@ -1958,6 +1960,7 @@ class zFileManager(gtk.TreeView):
         for key in self.__cell_data_func_skip:
             self.__cell_data_func_skip[key] = None
         self.__file_name_old = ''
+
         self.__on_setting_folder = False
 
 
@@ -1968,8 +1971,9 @@ class zFileManager(gtk.TreeView):
             self.__file_size(2, iterator)
             self.__file_last_changed(3, iterator)
         except:
-            self.set_folder(self.dirname)
-
+            self.cell_list[0].set_property('pixbuf', None)
+            self.cell_list[2].set_property('text', None)
+            self.cell_list[3].set_property('text', '<Changed on disk>')
 
     def __file_pixbuf(self, indx, iterator):
         if ( self.__cell_data_func_skip['type']  and
