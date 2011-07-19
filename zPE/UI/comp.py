@@ -882,7 +882,7 @@ class zEdit(z_ABC, gtk.VBox):
             else:
                 # no M-x commanding
                 # reset lastline
-                zEdit.__last_line.set_command_prefix('')
+                zEdit.__last_line.set_highlight_text('')
                 zEdit.__last_line.set_text('Quit')
 
 
@@ -948,7 +948,7 @@ class zEdit(z_ABC, gtk.VBox):
                     zEdit.__mx_command_content = ''
 
                     zEdit.__last_line.set_editable(False)
-                    zEdit.__last_line.set_command_prefix('')
+                    zEdit.__last_line.set_highlight_text('')
                     zEdit.__last_line.set_text('Quit')
                     if zEdit._focus:
                         zEdit._focus.grab_focus()
@@ -985,7 +985,7 @@ class zEdit(z_ABC, gtk.VBox):
                             )
                     zEdit.__mx_commanding = False
                     zEdit.__mx_command_content = ''
-                    zEdit.__last_line.set_command_prefix('')
+                    zEdit.__last_line.set_highlight_text('')
                     zEdit.__last_line.set_editable(False)
                     if zEdit._focus:
                         zEdit._focus.grab_focus()
@@ -1003,7 +1003,7 @@ class zEdit(z_ABC, gtk.VBox):
                         # initiate M-x Commanding
                         zEdit.__mx_commanding = True
                         zEdit.__last_line.set_text('')
-                        zEdit.__last_line.set_command_prefix(zEdit.__mx_command_prefix)
+                        zEdit.__last_line.set_highlight_text(zEdit.__mx_command_prefix)
                         zEdit.__last_line.set_editable(True)
                     return True
                 elif stroke == 'C-q':
@@ -1014,7 +1014,7 @@ class zEdit(z_ABC, gtk.VBox):
 
                 # initiate Commanding
                 if not zEdit.__mx_commanding:
-                    zEdit.__last_line.set_command_prefix('')
+                    zEdit.__last_line.set_highlight_text('')
                     zEdit.__last_line.set_text('')
                 zEdit.__commanding = True
                 zEdit.__command_widget_focus_id = widget.connect('focus-out-event', zEdit._sig_key_pressed_focus_out)
@@ -1045,7 +1045,7 @@ class zEdit(z_ABC, gtk.VBox):
                 else:
                     # no M-x commanding
                     # reset lastline
-                    zEdit.__last_line.set_command_prefix(info[0])
+                    zEdit.__last_line.set_highlight_text(info[0])
                     zEdit.__last_line.set_text(info[1])
 
                 zEdit.__commanding = False
@@ -1062,7 +1062,7 @@ class zEdit(z_ABC, gtk.VBox):
                         found = True
                         if not zEdit.__mx_commanding:
                             # display stroke if in echoing mode
-                            zEdit.__last_line.set_command_prefix(stroke + ' ')
+                            zEdit.__last_line.set_highlight_text(stroke + ' ')
                         break
 
                 if found:
@@ -1088,7 +1088,7 @@ class zEdit(z_ABC, gtk.VBox):
                         else:
                             # no M-x commanding
                             # reset lastline
-                            zEdit.__last_line.set_command_prefix('')
+                            zEdit.__last_line.set_highlight_text('')
                             zEdit.__last_line.set_text(stroke + ' is undefined')
                         zEdit.__command_content = ''
                         return True
@@ -2067,75 +2067,67 @@ class zLastLine(gtk.HBox):
         '''
         super(zLastLine, self).__init__()
 
-
+        # create widgets
         self.__label = gtk.Label(label)
         self.pack_start(self.__label, False, False, 0)
 
-        self.__line_fix = gtk.Label()
-        self.pack_start(self.__line_fix, False, False, 0)
+        self.__line_highlight = gtk.Label()
+        self.pack_start(self.__line_highlight, False, False, 0)
 
-        self.__line_inter = zLastLine.zEntry()
-        self.pack_start(self.__line_inter, True, True, 0)
+        self.__line_interactive = zLastLine.zEntry()
+        self.pack_start(self.__line_interactive, True, True, 0)
 
-        self.__line_inter.set_has_frame(False)
+        self.__line_interactive.set_has_frame(False)
 
-        self.set_editable(False)
-
+        # init flags
+        self.__editable = None
+        self.__force_focus = None
 
         # connect auto-update items
         zTheme.register('update_font', zTheme._sig_update_font_modify, self.__label)
         zTheme._sig_update_font_modify(self.__label)
 
-        zTheme.register('update_font', zTheme._sig_update_font_modify, self.__line_fix, 0.85)
-        zTheme._sig_update_font_modify(self.__line_fix, 0.85)
+        zTheme.register('update_font', zTheme._sig_update_font_modify, self.__line_highlight, 0.85)
+        zTheme._sig_update_font_modify(self.__line_highlight, 0.85)
 
-        zTheme.register('update_font', zTheme._sig_update_font_modify, self.__line_inter, 0.85)
-        zTheme._sig_update_font_modify(self.__line_inter, 0.85)
+        zTheme.register('update_font', zTheme._sig_update_font_modify, self.__line_interactive, 0.85)
+        zTheme._sig_update_font_modify(self.__line_interactive, 0.85)
 
         zTheme.register('update_color_map', self._sig_update_color_map, self)
         self._sig_update_color_map()
 
+        # connect signal
+        self.force_focus_id = self.__line_interactive.connect('focus-out-event', self._sig_focus_out)
+
+        self.set_editable(False)
+
 
     ### signal-like auto-update function
     def _sig_update_color_map(self, widget = None):
-        self.__line_fix.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['reserve']))
+        self.__line_highlight.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['reserve']))
 
-        self.__line_inter.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
-        self.__line_inter.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['base']))
+        self.__line_interactive.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.__line_interactive.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['base']))
 
-        self.__line_inter.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['text']))
-        self.__line_inter.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
+        self.__line_interactive.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.__line_interactive.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
     ### end of signal-like auto-update function
+
+
+    ### focus related signal
+    def _sig_focus_out(self, widget, event):
+        self.__line_interactive.handler_block(self.force_focus_id)
+            
+        self.blink_text()
+        self.__line_interactive.grab_focus()
+
+        self.__line_interactive.handler_unblock(self.force_focus_id)
+    ### end of focus related signal
 
 
     ### overridden function definition
     def connect(self, sig, *data):
-        return self.__line_inter.connect(sig, *data)
-    ### end of overridden function definition
-
-
-    def blink(self, cmd_text, entry_text, period = 1):
-        self.blink_set(cmd_text, entry_text, period, self.get_command_prefix(), self.get_text())
-
-
-    def blink_set(self,
-                  blk_cmd_text, blk_entry_text,
-                  period = 1,
-                  set_cmd_text = '', set_entry_text = ''
-                  ):
-        # print blink-text
-        self.set_command_prefix(blk_cmd_text)
-        self.set_text(blk_entry_text)
-
-        # desplay blink-text for `period` sec
-        while gtk.events_pending():
-            gtk.main_iteration(False)
-        time.sleep(period)
-
-        # set set-text
-        self.set_command_prefix(set_cmd_text)
-        self.set_text(set_entry_text)
-
+        return self.__line_interactive.connect(sig, *data)
 
     def get_label(self):
         return self.__label.get_text()
@@ -2143,23 +2135,80 @@ class zLastLine(gtk.HBox):
     def set_label(self, string):
         self.__label.set_text(string)
 
-    def get_command_prefix(self):
-        return self.__line_fix.get_text()
-
-    def set_command_prefix(self, string):
-        self.__line_fix.set_text(string)
-
     def get_text(self):
-        return self.__line_inter.get_text()
+        return self.get_interactive_text()
 
     def set_text(self, string):
-        self.__line_inter.set_text(string)
+        self.set_interactive_text(string)
+    ### end of overridden function definition
+
+
+    def blink(self, cmd_text, entry_text, period = 1):
+        self.blink_set(cmd_text, entry_text, period, self.get_highlight_text(), self.get_text())
+
+    def blink_text(self, period = 0.1):
+        self.blink_set('', '', period, self.get_highlight_text(), self.get_text())
+
+    def blink_set(self,
+                  blk_cmd_text, blk_entry_text,
+                  period = 1,
+                  set_cmd_text = '', set_entry_text = ''
+                  ):
+        # print blink-text
+        self.set_highlight_text(blk_cmd_text)
+        self.set_text(blk_entry_text)
+
+        # desplay blink-text for `period` sec
+        self.__sleep(period)
+
+        # set set-text
+        self.set_highlight_text(set_cmd_text)
+        self.set_text(set_entry_text)
+
+
+    def get_highlight_text(self):
+        return self.__line_highlight.get_text()
+
+    def set_highlight_text(self, string):
+        self.__line_highlight.set_text(string)
+
+    def get_interactive_text(self):
+        return self.__line_interactive.get_text()
+
+    def set_interactive_text(self, string):
+        self.__line_interactive.set_text(string)
+
+
+    def get_editable(self):
+        return self.__editable
 
     def set_editable(self, setting):
-        self.__line_inter.set_property('can-default', setting)
-        self.__line_inter.set_property('can-focus', setting)
-        self.__line_inter.set_editable(setting)
-        self.__line_inter.grab_focus()
+        self.__editable = setting
+        if not setting:
+            self.set_force_focus(False)
+        self.__line_interactive.set_property('can-default', setting)
+        self.__line_interactive.set_property('can-focus', setting)
+        self.__line_interactive.set_editable(setting)
+        if setting:
+            self.__line_interactive.grab_focus()
+
+    def get_force_focus(self):
+        return self.__force_focus
+
+    def set_force_focus(self, setting):
+        self.__force_focus = setting
+        if setting:
+            self.__line_interactive.handler_unblock(self.force_focus_id)
+        else:
+            self.__line_interactive.handler_block(self.force_focus_id)
+
+
+    ### supporting function
+    def __sleep(self, period):
+        while gtk.events_pending():
+            gtk.main_iteration()
+        time.sleep(period)
+    ### end of supporting function
 
 
 ######## ######## ######## ########
