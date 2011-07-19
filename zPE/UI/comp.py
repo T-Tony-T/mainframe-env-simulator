@@ -883,7 +883,7 @@ class zEdit(z_ABC, gtk.VBox):
                 # no M-x commanding
                 # reset lastline
                 zEdit.__last_line.set_highlight_text('')
-                zEdit.__last_line.set_text('Quit')
+                zEdit.__last_line.set_interactive_text('Quit')
 
 
     @staticmethod
@@ -949,7 +949,7 @@ class zEdit(z_ABC, gtk.VBox):
 
                     zEdit.__last_line.set_editable(False)
                     zEdit.__last_line.set_highlight_text('')
-                    zEdit.__last_line.set_text('Quit')
+                    zEdit.__last_line.set_interactive_text('Quit')
                     if zEdit._focus:
                         zEdit._focus.grab_focus()
                 return True
@@ -964,7 +964,7 @@ class zEdit(z_ABC, gtk.VBox):
                 if re.match(r'^[\x20-\x7e]$', stroke):
                     # regular keypress
                     widget.insert_text(stroke)
-                    zEdit.__mx_command_content = widget.get_text()
+                    zEdit.__mx_command_content = widget.get_interactive_text()
                     return True
                 elif stroke.upper() == 'RETURN':
                     # Enter key pressed
@@ -974,13 +974,13 @@ class zEdit(z_ABC, gtk.VBox):
                             # has registered functions
                             zEdit._focus.grab_focus() # retain focus before emit the function
                             zEdit.reg_emit(zEdit.__mx_command_content)
-                            zEdit.__last_line.set_text('') # clear last line
+                            zEdit.__last_line.set_interactive_text('') # clear last line
                         else:
-                            zEdit.__last_line.set_text(
+                            zEdit.__last_line.set_interactive_text(
                                 '(function `{0}` not implemented)'.format(zEdit.__mx_command_content)
                                 )
                     else:
-                        zEdit.__last_line.set_text(
+                        zEdit.__last_line.set_interactive_text(
                             '({0}: no such function)'.format(zEdit.__mx_command_content)
                             )
                     zEdit.__mx_commanding = False
@@ -1002,7 +1002,7 @@ class zEdit(z_ABC, gtk.VBox):
                     else:
                         # initiate M-x Commanding
                         zEdit.__mx_commanding = True
-                        zEdit.__last_line.set_text('')
+                        zEdit.__last_line.set_interactive_text('')
                         zEdit.__last_line.set_highlight_text(zEdit.__mx_command_prefix)
                         zEdit.__last_line.set_editable(True)
                     return True
@@ -1015,7 +1015,7 @@ class zEdit(z_ABC, gtk.VBox):
                 # initiate Commanding
                 if not zEdit.__mx_commanding:
                     zEdit.__last_line.set_highlight_text('')
-                    zEdit.__last_line.set_text('')
+                    zEdit.__last_line.set_interactive_text('')
                 zEdit.__commanding = True
                 zEdit.__command_widget_focus_id = widget.connect('focus-out-event', zEdit._sig_key_pressed_focus_out)
             # Commanding initiated
@@ -1046,7 +1046,7 @@ class zEdit(z_ABC, gtk.VBox):
                     # no M-x commanding
                     # reset lastline
                     zEdit.__last_line.set_highlight_text(info[0])
-                    zEdit.__last_line.set_text(info[1])
+                    zEdit.__last_line.set_interactive_text(info[1])
 
                 zEdit.__commanding = False
                 zEdit.__command_content = ''
@@ -1089,7 +1089,7 @@ class zEdit(z_ABC, gtk.VBox):
                             # no M-x commanding
                             # reset lastline
                             zEdit.__last_line.set_highlight_text('')
-                            zEdit.__last_line.set_text(stroke + ' is undefined')
+                            zEdit.__last_line.set_interactive_text(stroke + ' is undefined')
                         zEdit.__command_content = ''
                         return True
 
@@ -2144,10 +2144,10 @@ class zLastLine(gtk.HBox):
 
 
     def blink(self, cmd_text, entry_text, period = 1):
-        self.blink_set(cmd_text, entry_text, period, self.get_highlight_text(), self.get_text())
+        self.blink_set(cmd_text, entry_text, period, self.get_highlight_text(), self.get_interactive_text())
 
     def blink_text(self, period = 0.1):
-        self.blink_set('', '', period, self.get_highlight_text(), self.get_text())
+        self.blink_set('', '', period, self.get_highlight_text(), self.get_interactive_text())
 
     def blink_set(self,
                   blk_cmd_text, blk_entry_text,
@@ -2156,14 +2156,14 @@ class zLastLine(gtk.HBox):
                   ):
         # print blink-text
         self.set_highlight_text(blk_cmd_text)
-        self.set_text(blk_entry_text)
+        self.set_interactive_text(blk_entry_text)
 
         # desplay blink-text for `period` sec
         self.__sleep(period)
 
         # set set-text
         self.set_highlight_text(set_cmd_text)
-        self.set_text(set_entry_text)
+        self.set_interactive_text(set_entry_text)
 
 
     def get_highlight_text(self):
