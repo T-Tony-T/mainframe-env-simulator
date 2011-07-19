@@ -4,11 +4,25 @@ import zPE
 import os, sys
 
 
+def is_binary(dsn):
+    if is_file(dsn):
+        return __is_binary(os.path.join(*dsn))
+    else:
+        raise ValueError
+
 def is_file(dsn):
     return zPE.is_file(dsn)
 
 def is_dir(dsn):
     return zPE.is_dir(dsn)
+
+def new_file(dsn):
+    if not is_file(dsn):
+        open_file(dsn, 'w')
+
+def new_dir(dsn):
+    if not is_dir(dsn):
+        os.makedirs(os.path.join(* dsn))
 
 def open_file(dsn, mode):
     '''Open the target file in regardless of the existance'''
@@ -19,7 +33,7 @@ def fetch(buff):
     if buff.path == None:
         return False
 
-    if is_binary(os.path.join(*buff.path)):
+    if is_binary(buff.path):
         return False
 
     fp = open_file(buff.path, 'r')
@@ -39,7 +53,7 @@ def flush(buff):
 
 
 # supporting function
-def is_binary(filename):
+def __is_binary(filename):
     """Return true if the given filename is binary.
     @raise EnvironmentError: if the file does not exist or cannot be accessed.
     @attention: found @ http://bytes.com/topic/python/answers/21222-determine-file-type-binary-text on 6/08/2010

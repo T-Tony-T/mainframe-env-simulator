@@ -3,8 +3,13 @@
 import io_encap
 # this package should implement the following APIs:
 #
+#   is_binary(fn_list):         test if the fn_list corresponding to a binary file
+#
 #   is_file(fn_list):           test if the fn_list corresponding to a file
 #   is_dir(fn_list):            test if the fn_list corresponding to a directory
+#
+#   new_file(fn_list):          create the file unless the fn_list corresponding to a file
+#   new_dir(fn_list):           create the dir unless the fn_list corresponding to a directory
 #
 #   open_file(fn_list, mode):   open the file with the indicated mode
 #
@@ -550,17 +555,23 @@ class zEdit(z_ABC, gtk.VBox):
 
     __last_line = None          # see zEdit.set_last_line()
 
-    __escaping = False          # see zEdit._sig_key_pressed() => 'emacs' => 'C-q'
+    # see zEdit._sig_key_pressed() => 'emacs'
+    __escaping = False
     __ctrl_char_map = {
         'C-I' : '\t',
         'C-J' : '\n',
         'C-M' : '\r',
         }
-    __commanding = False        # see zEdit._sig_key_pressed() => 'emacs' => 'M-x'
-    __command_prefix = {
-        True  : 'M-x ',
-        False : '',
-        }
+
+    # see zEdit._sig_key_pressed() => 'emacs'
+    __commanding = False
+    __command_content = ''
+    __command_widget_focus_id = None
+
+    # see zEdit._sig_key_pressed() => 'emacs'
+    __mx_commanding = False
+    __mx_command_content = ''
+    __mx_command_prefix = 'M-x '
 
     _focus = None
 
@@ -834,6 +845,39 @@ class zEdit(z_ABC, gtk.VBox):
 
     ### top-level signal
     @staticmethod
+    def _sig_kp_fo_rm(widget):
+        '''see _sig_key_pressed() [below] for more information'''
+        if ( zEdit.__command_widget_focus_id  and
+             widget.handler_is_connected(zEdit.__command_widget_focus_id)
+             ):
+            widget.disconnect(zEdit.__command_widget_focus_id)
+            zEdit.__command_widget_focus_id = None
+
+    @staticmethod
+    def _sig_key_pressed_focus_out(widget, event):
+        '''see _sig_key_pressed() [below] for more information'''
+        if ( zEdit.__command_widget_focus_id  and
+             widget.handler_is_connected(zEdit.__command_widget_focus_id)
+             ):
+            # widget switched during Commanding
+            # cancel it
+            zEdit.__commanding = False
+            zEdit.__command_content = ''
+            widget.disconnect(zEdit.__command_widget_focus_id)
+            zEdit.__command_widget_focus_id = None
+
+            if zEdit.__mx_commanding:
+                # on M-x Commanding
+                # restore it
+                zEdit.__last_line.blink_set('', 'Quit', 1, zEdit.__mx_command_prefix, zEdit.__mx_command_content)
+            else:
+                # no M-x commanding
+                # reset lastline
+                zEdit.__last_line.set_command_prefix('')
+                zEdit.__last_line.set_text('Quit')
+
+
+    @staticmethod
     def _sig_key_pressed(widget, event, data = None):
         if event.type != gtk.gdk.KEY_PRESS:
             return False
@@ -860,7 +904,9 @@ class zEdit(z_ABC, gtk.VBox):
 
         if zEdit.__style == 'emacs':
             # style::emacs
-            if zEdit.__escaping:
+
+            # check C-q Escaping
+            if not zEdit.__commanding and zEdit.__escaping:
                 try:
                     if widget.get_editable():
                         if re.match(r'^[\x20-\x7e]$', stroke):
@@ -871,90 +917,171 @@ class zEdit(z_ABC, gtk.VBox):
                     pass
                 zEdit.__escaping = False
                 return True
+            # no C-q Escaping
 
+            # check C-g Cancelling
             if stroke == 'C-g': # at any time, this means 'cancel'
-                if widget in zEdit.__last_line.get_children():
+                zEdit.__commanding = False
+                zEdit.__command_content = ''
+                zEdit._sig_kp_fo_rm(widget)
+
+                if ( zEdit.__mx_commanding  and                     # has M-x commanding, and
+                     widget not in zEdit.__last_line.get_children() # focus not in lastline
+                     ):
+                    # must be commanding over M-x commanding
+                    # restore M-x commanding
+                    zEdit.__last_line.set_editable(True)
+                    zEdit.__last_line.blink_set('', 'Quit', 1, zEdit.__mx_command_prefix, zEdit.__mx_command_content)
+                else:
+                    # no M-x commanding, or focus in lastline
                     # reset lastline
-                    zEdit.__commanding = False
+                    zEdit.__mx_commanding = False
+                    zEdit.__mx_command_content = ''
+
                     zEdit.__last_line.set_editable(False)
-                    zEdit.__last_line.set_text('Quit') # print message
-                    zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
+                    zEdit.__last_line.set_command_prefix('')
+                    zEdit.__last_line.set_text('Quit')
                     if zEdit._focus:
                         zEdit._focus.grab_focus()
-                else:
-                    zEdit.__last_line.blink('', 'Quit', 1)
                 return True
+            # no C-g Cancelling
 
-            if zEdit.__commanding and widget in zEdit.__last_line.get_children():
+            # check M-x Commanding input
+            if ( not zEdit.__commanding  and
+                 zEdit.__mx_commanding   and
+                 widget in zEdit.__last_line.get_children()
+                 ):
+                # on M-x Commanding, Commanding *MUST NOT* be initiated
                 if re.match(r'^[\x20-\x7e]$', stroke):
+                    # regular keypress
                     widget.insert_text(stroke)
+                    zEdit.__mx_command_content = widget.get_text()
                     return True
                 elif stroke.upper() == 'RETURN':
-                    cmd = zEdit.__last_line.get_text()
-                    if cmd in reg_func: # is a valid functionality
-                        if len(reg_func[cmd]): # has registered functions
-                            if zEdit._focus:
-                                zEdit._focus.grab_focus()
-                            zEdit.reg_emit(cmd)
-                            zEdit.__last_line.set_text('')
+                    # Enter key pressed
+                    if zEdit.__mx_command_content in reg_func:
+                        # is a valid functionality
+                        if len(reg_func[zEdit.__mx_command_content]):
+                            # has registered functions
+                            zEdit._focus.grab_focus() # retain focus before emit the function
+                            zEdit.reg_emit(zEdit.__mx_command_content)
+                            zEdit.__last_line.set_text('') # clear last line
                         else:
-                            zEdit.__last_line.set_text('(function not implemented)') # print message
+                            zEdit.__last_line.set_text(
+                                '(function `{0}` not implemented)'.format(zEdit.__mx_command_content)
+                                )
                     else:
-                        zEdit.__last_line.set_text('(no such function)') # print message
-                    zEdit.__commanding = False
-                    zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
+                        zEdit.__last_line.set_text(
+                            '({0}: no such function)'.format(zEdit.__mx_command_content)
+                            )
+                    zEdit.__mx_commanding = False
+                    zEdit.__mx_command_content = ''
+                    zEdit.__last_line.set_command_prefix('')
                     zEdit.__last_line.set_editable(False)
                     if zEdit._focus:
                         zEdit._focus.grab_focus()
                     return True
-                else:
-                    return False
+            # no active M-x Commanding
 
-            if zEdit.__last_line.get_command_prefix() in zEdit.__command_prefix.values():
-                # init stroke
+            # check initiated Commanding
+            if not zEdit.__commanding:
+                # initiating stroke, check reserved bindings (M-x and C-q)
                 if stroke == 'M-x':
-                    zEdit.__commanding = True
-                    zEdit.__last_line.set_text('')
-                    zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
-                    zEdit.__last_line.set_editable(True)
+                    if zEdit.__mx_commanding:
+                        # already in M-x Commanding, warn it
+                        zEdit.__last_line.blink('Warn: ', 'invalid key press!', 1)
+                    else:
+                        # initiate M-x Commanding
+                        zEdit.__mx_commanding = True
+                        zEdit.__last_line.set_text('')
+                        zEdit.__last_line.set_command_prefix(zEdit.__mx_command_prefix)
+                        zEdit.__last_line.set_editable(True)
                     return True
                 elif stroke == 'C-q':
+                    # start C-q Escaping
                     zEdit.__escaping = True
                     return True
+                # not reserved bindings
 
-            cmd_prefix = zEdit.__last_line.get_command_prefix()
-            if cmd_prefix not in zEdit.__command_prefix.values():
-                stroke = zEdit.__last_line.get_command_prefix() + stroke # appand previous combo to stroke
+                # initiate Commanding
+                if not zEdit.__mx_commanding:
+                    zEdit.__last_line.set_command_prefix('')
+                    zEdit.__last_line.set_text('')
+                zEdit.__commanding = True
+                zEdit.__command_widget_focus_id = widget.connect('focus-out-event', zEdit._sig_key_pressed_focus_out)
+            # Commanding initiated
 
+            # retrive previous combo, if there is any
+            if zEdit.__command_content:
+                # appand previous combo to stroke
+                stroke = '{0} {1}'.format(zEdit.__command_content, stroke)
+
+            # validate stroke sequence
             if ( stroke in key_binding  and       # is a binded key stroke
                  key_binding[stroke] in reg_func  # is a valid functionality
                  ):
-                if len(reg_func[key_binding[stroke]]): # has registered functions
+                if len(reg_func[key_binding[stroke]]):
+                    # has registered functions
                     zEdit.reg_emit(key_binding[stroke])
+                    info = [ '', '' ]
                 else:
-                    if zEdit.__commanding:
-                        zEdit.__last_line.blink('', '(function not implemented)', 1)
-                    else:
-                        zEdit.__last_line.set_text('(function not implemented)')
-                zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
+                    info = [ '', '(function `{0}` not implemented)'.format(key_binding[stroke]) ]
+                if zEdit.__mx_commanding:
+                    # on M-x Commanding
+                    # restore it
+                    zEdit.__last_line.blink_set(
+                        info[0], info[1], 1,
+                        zEdit.__mx_command_prefix, zEdit.__mx_command_content
+                        )
+                else:
+                    # no M-x commanding
+                    # reset lastline
+                    zEdit.__last_line.set_command_prefix(info[0])
+                    zEdit.__last_line.set_text(info[1])
+
+                zEdit.__commanding = False
+                zEdit.__command_content = ''
+                zEdit._sig_kp_fo_rm(widget)
+
                 return True
             else:
+                # not a valid stroke sequence so far
                 found = False
                 for key in key_binding:
                     if key.startswith(stroke):
+                        # part of a valid stroke sequence
                         found = True
-                        zEdit.__last_line.set_command_prefix(stroke + ' ') # append stroke to command buffer
+                        if not zEdit.__mx_commanding:
+                            # display stroke if in echoing mode
+                            zEdit.__last_line.set_command_prefix(stroke + ' ')
                         break
 
                 if found:
+                    zEdit.__command_content = stroke
                     return True
                 else:
-                    if cmd_prefix in zEdit.__command_prefix.values():
-                        # init combo, pass it on
+                    # not a valid stroke sequence *AT ALL*
+                    zEdit.__commanding = False
+                    zEdit._sig_kp_fo_rm(widget)
+
+                    if not zEdit.__command_content:
+                        # initiate stroke, pass it on
                         return False
                     else:
                         # has previous combo, eat the current combo
-                        zEdit.__last_line.set_command_prefix(zEdit.__command_prefix[zEdit.__commanding])
+                        if zEdit.__mx_commanding:
+                            # on M-x Commanding
+                            # restore it
+                            zEdit.__last_line.blink_set(
+                                '', stroke + ' is undefined', 1,
+                                zEdit.__mx_command_prefix, zEdit.__mx_command_content
+                                )
+                        else:
+                            # no M-x commanding
+                            # reset lastline
+                            zEdit.__last_line.set_command_prefix('')
+                            zEdit.__last_line.set_text(stroke + ' is undefined')
+                        zEdit.__command_content = ''
                         return True
 
         elif zEdit.__style == 'vi':
@@ -971,6 +1098,8 @@ class zEdit(z_ABC, gtk.VBox):
                 return True
             else:
                 return False
+
+        return False            # pass on any left-over (should not exist)
     ### end of top-level signal
 
 
@@ -983,20 +1112,39 @@ class zEdit(z_ABC, gtk.VBox):
         menu = gtk.Menu()
 
         # fill the menu
-        ( tree_path, tree_col, tree_x, tree_y ) = widget.get_path_at_pos(int(event.x), int(event.y))
-        model = widget.get_model()
+        try:
+            ( tree_path, tree_col, dummy_x, dummy_y ) = widget.get_path_at_pos(int(event.x), int(event.y))
+        except:
+            # not on a row; select the last row
+            iterator = widget.model.get_iter_first()
+            while widget.model.iter_next(iterator):
+                iterator = widget.model.iter_next(iterator)
+            tree_path = widget.model.get_path(iterator)
+            tree_col = widget.fn_tree_col
+            widget.set_cursor(tree_path)
 
         if tree_path is None:
             raise LookupError
         elif len(tree_path) > 0:
-            iterator = model.get_iter(tree_path)
-            obj = model[iterator][0]
+            iterator = widget.model.get_iter(tree_path)
+            obj = widget.model[iterator][0]
         else:
             raise ValueError
 
         mi_open = gtk.MenuItem('_Open')
+        mi_new_file = gtk.MenuItem('_New File')
+        mi_new_folder = gtk.MenuItem('New _Folder')
+        mi_rename = gtk.MenuItem('_Rename')
+
         menu.append(mi_open)
-        mi_open.connect_object("activate", widget._sig_open_file, widget, tree_path, tree_col)
+        menu.append(mi_new_file)
+        menu.append(mi_new_folder)
+        menu.append(mi_rename)
+
+        mi_open.connect_object("activate", widget._sig_open_file, widget, tree_path)
+        mi_new_file.connect_object("activate", widget._sig_new_file, widget, tree_path, 'file')
+        mi_new_folder.connect_object("activate", widget._sig_new_file, widget, tree_path, 'dir')
+        mi_rename.connect_object("activate", widget._sig_rename_file, widget, tree_path)
 
         # callback
         zEdit.reg_emit_from('populate_popup', self.center, menu)
@@ -1402,8 +1550,10 @@ class zEditBuffer(z_ABC):
 )
             elif io_encap.is_file(self.path):
                 # existing file
+                if io_encap.is_binary(self.path):
+                    raise TypeError('Cannot open a binary file.')
                 if not io_encap.fetch(self):
-                    raise BufferError
+                    raise BufferError('Failed to fetch the content.')
             else:
                 # new file
                 pass
@@ -1645,55 +1795,115 @@ class zFileManager(gtk.TreeView):
         ]
     filepb = gtk.gdk.pixbuf_new_from_xpm_data(filexpm)
 
-    column_names = ['Name', 'Size', 'Last Changed']
+    column_names =  [ '', 'Name', 'Size', 'Last Changed' ]
+    column_xalign = [  1,  0,         1,   0 ]
 
     def __init__(self, dname = None):
         super(zFileManager, self).__init__()
 
+        # init flags
+        self.__cell_data_func_skip = { # if set, no auto testing
+            'path' : None,             # path of the skipping item
+            'type' : None,             # type of the skipping
+            }
+        self.__file_name_old = ''
+        self.__on_setting_folder = False
+
+        # init widget reference relevant to editable column (file listing)
+        self.model = None       # will be set in self.set_folder()
+        self.fn_cell_rdr = gtk.CellRendererText()
+        self.fn_tree_col = gtk.TreeViewColumn(zFileManager.column_names[1], self.fn_cell_rdr, text=0, editable=1)
+        self.fn_tree_col.set_cell_data_func(self.fn_cell_rdr, self.__cell_data_func)
 
         # create the TreeViewColumns to display the data
-        cell_data_funcs = (None, self.__file_size, self.__file_last_changed)
+        self.cell_list   = [None] * len(zFileManager.column_names)
+        self.column_list = [None] * len(zFileManager.column_names)
 
-        self.fm_column = [None] * len(zFileManager.column_names)
+        # create column 0 (icon)
+        self.cell_list[0] = gtk.CellRendererPixbuf()
+        self.column_list[0] = gtk.TreeViewColumn(zFileManager.column_names[0], self.cell_list[0])
 
-        cellpb = gtk.CellRendererPixbuf()
-        self.fm_column[0] = gtk.TreeViewColumn(self.column_names[0], cellpb)
-        self.fm_column[0].set_cell_data_func(cellpb, self.__file_pixbuf)
+        # create column 1 (file name)
+        self.cell_list[1] = self.fn_cell_rdr
+        self.column_list[1] = self.fn_tree_col
 
-        cell = gtk.CellRendererText()
-        self.fm_column[0].pack_start(cell, False)
-        self.fm_column[0].set_cell_data_func(cell, self.__file_name)
+        # create the rest of columns
+        for n in range(2, len(zFileManager.column_names)):
+            self.cell_list[n] = gtk.CellRendererText()
+            self.column_list[n] = gtk.TreeViewColumn(zFileManager.column_names[n], self.cell_list[n])
 
-        self.append_column(self.fm_column[0])
-
-        for n in range(1, len(self.column_names)):
-            cell = gtk.CellRendererText()
-            self.fm_column[n] = gtk.TreeViewColumn(self.column_names[n], cell)
-            if n == 1:
-                cell.set_property('xalign', 1.0)
-            self.fm_column[n].set_cell_data_func(cell, cell_data_funcs[n])
-            self.append_column(self.fm_column[n])
+        # add all columns
+        for n in range(len(zFileManager.column_names)):
+            self.cell_list[n].set_property('xalign', zFileManager.column_xalign[n])
+            self.append_column(self.column_list[n])
 
         # connect signal
         self.connect('row-activated', self._sig_open_file)
+        self.fn_cell_rdr.connect('edited', self._sig_entry_edited)
 
         # set cwd
         self.set_folder(dname)
 
 
     ### signal definition
-    def _sig_open_file(self, treeview, tree_path, column):
-        model = self.get_model()
-        iterator = model.get_iter(tree_path)
+    def _sig_entry_edited(self, tree_cell, tree_path, file_name):
+        if self.__cell_data_func_skip['type']:
+            # new
+            if file_name:
+                # allocate the file/dir
+                if self.__cell_data_func_skip['type'] == 'file':
+                    io_encap.new_file([self.dirname, file_name])
+                elif self.__cell_data_func_skip['type'] == 'dir':
+                    io_encap.new_dir([self.dirname, file_name])
+            else:
+                # self.set_folder() will remove the empty line
+                pass
+        elif self.__file_name_old:
+            # rename
+            if file_name:
+                # rename the file/dir
+                os.renames(os.path.join(self.dirname, self.__file_name_old), os.path.join(self.dirname, file_name))
+            else:
+                # retain the old name
+                self.model.set_value(iterator, 0, self.__file_name_old)
 
-        file_name = model.get_value(iterator, 0)
-        file_path = os.path.join(self.dirname, file_name)
+        # update info
+        self.set_folder(self.dirname)
 
-        file_stat = os.stat(file_path)
-        if stat.S_ISDIR(file_stat.st_mode):
-            self.set_folder(file_path)
-        elif stat.S_ISREG(file_stat.st_mode):
-            self.open_file([self.dirname, file_name])
+
+    def _sig_new_file(self, treeview, tree_path, new_type):
+        iterator = self.model.get_iter(tree_path)
+        tree_path_next = tree_path[:-1] + ( tree_path[-1] + 1, )
+
+        # add new row in the fm
+        self.__cell_data_func_skip['path'] = tree_path_next
+        self.__cell_data_func_skip['type'] = new_type
+        self.model.insert_after(iterator)
+
+        # make it editable
+        self.model.set_value(self.model.iter_next(iterator), 1, True)
+        self.set_cursor(self.__cell_data_func_skip['path'], self.fn_tree_col, True)
+
+
+    def _sig_open_file(self, treeview, tree_path, tree_col = None):
+        iterator = self.model.get_iter(tree_path)
+        fn_list = [ self.dirname, self.model.get_value(iterator, 0) ]
+
+        if io_encap.is_dir(fn_list):
+            self.set_folder(os.path.join(*fn_list))
+        elif io_encap.is_file(fn_list):
+            self.open_file(fn_list)
+
+
+    def _sig_rename_file(self, treeview, tree_path):
+        iterator = self.model.get_iter(tree_path)
+
+        # record the old name
+        self.__file_name_old = self.model.get_value(iterator, 0)
+
+        # make it editable
+        self.model.set_value(iterator, 1, True)
+        self.set_cursor(tree_path, self.fn_tree_col, True)
     ### end of signal definition
 
 
@@ -1708,40 +1918,88 @@ class zFileManager(gtk.TreeView):
         self.parent.parent.set_buffer(fn_list, 'file')
 
 
-    def set_folder(self, dname=None):
-        if not dname:
+    def set_folder(self, fullpath = None):
+        if self.__on_setting_folder:
+            return              # early return
+        else:
+            self.__on_setting_folder = True
+
+        # get real path
+        if not fullpath:
             self.dirname = os.path.expanduser('~')
         else:
-            self.dirname = os.path.abspath(dname)
+            self.dirname = os.path.abspath(fullpath)
 
-        files = [f for f in os.listdir(self.dirname) if f[0] <> '.']
-        files.sort()
-        files = ['..'] + files
-        listmodel = gtk.ListStore(object)
-        for f in files:
-            listmodel.append([f])
-        self.set_model(listmodel)
+        # fetch file listing
+        file_list = []
+        dir_list = []
+        for non_hidden in [ fn for fn in os.listdir(self.dirname) if fn[0] <> '.' ]:
+            fn_list = [ self.dirname, non_hidden ]
+            if io_encap.is_dir(fn_list):
+                dir_list.append(non_hidden)
+            else:
+                file_list.append(non_hidden)
+
+        file_list.sort(key = str.lower)
+        dir_list.sort(key = str.lower)
+        dir_list = ['..'] + dir_list
+
+        # create new model and fill it with the listing
+        self.model = gtk.ListStore(str, bool)
+        for fn in dir_list:
+            self.model.append([fn, False])
+        for fn in file_list:
+            self.model.append([fn, False])
+        self.set_model(self.model)
+
         self.grab_focus()
 
+        # clear flags
+        for key in self.__cell_data_func_skip:
+            self.__cell_data_func_skip[key] = None
+        self.__file_name_old = ''
+        self.__on_setting_folder = False
 
-    ### supporting function
-    def __file_pixbuf(self, column, cell, model, iterator):
-        filename = os.path.join(self.dirname, model.get_value(iterator, 0))
-        filestat = os.stat(filename)
-        if stat.S_ISDIR(filestat.st_mode):
-            pb = zFileManager.folderpb
+
+    ### cell data function
+    def __cell_data_func(self, column, cell, model, iterator):
+        try:
+            self.__file_pixbuf(0, iterator)
+            self.__file_size(2, iterator)
+            self.__file_last_changed(3, iterator)
+        except:
+            self.set_folder(self.dirname)
+
+
+    def __file_pixbuf(self, indx, iterator):
+        if ( self.__cell_data_func_skip['type']  and
+             self.__cell_data_func_skip['path'] == self.model.get_path(iterator)
+             ):
+            if self.__cell_data_func_skip['type'] == 'file':
+                pb = zFileManager.filepb
+            else:
+                pb = zFileManager.folderpb
         else:
-            pb = zFileManager.filepb
-        cell.set_property('pixbuf', pb)
+            filename = os.path.join(self.dirname, self.model.get_value(iterator, 0))
+            filestat = os.stat(filename)
+
+            if stat.S_ISDIR(filestat.st_mode):
+                pb = zFileManager.folderpb
+            else:
+                pb = zFileManager.filepb
+        self.cell_list[indx].set_property('pixbuf', pb)
 
 
-    def __file_name(self, column, cell, model, iterator):
-        cell.set_property('text', model.get_value(iterator, 0))
-
-
-    def __file_size(self, column, cell, model, iterator):
-        filename = os.path.join(self.dirname, model.get_value(iterator, 0))
+    def __file_size(self, indx, iterator):
+        if ( self.__cell_data_func_skip['type']  and
+             self.__cell_data_func_skip['path'] == self.model.get_path(iterator)
+             ):
+            self.cell_list[indx].set_property('text', '')
+            return
+            
+        filename = os.path.join(self.dirname, self.model.get_value(iterator, 0))
         filestat = os.stat(filename)
+
         size = filestat.st_size
         if size < 1024:
             size = '{0}.0'.format(size) # the extra '.0' is required to pass the parser
@@ -1757,14 +2015,21 @@ class zFileManager(gtk.TreeView):
             unit = 'G'
         if size[-2:] == '.0':
             size = size[:-2]
-        cell.set_property('text', size + unit)
+        self.cell_list[indx].set_property('text', size + unit)
 
 
-    def __file_last_changed(self, column, cell, model, iterator):
-        filename = os.path.join(self.dirname, model.get_value(iterator, 0))
+    def __file_last_changed(self, indx, iterator):
+        if ( self.__cell_data_func_skip['type']  and
+             self.__cell_data_func_skip['path'] == self.model.get_path(iterator)
+             ):
+            self.cell_list[indx].set_property('text', '')
+            return
+
+        filename = os.path.join(self.dirname, self.model.get_value(iterator, 0))
         filestat = os.stat(filename)
-        cell.set_property('text', time.ctime(filestat.st_mtime))
-    ### end of supporting function
+
+        self.cell_list[indx].set_property('text', time.ctime(filestat.st_mtime))
+    ### end of cell data function
 
 
 ######## ######## ######## ########
@@ -1837,22 +2102,26 @@ class zLastLine(gtk.HBox):
 
 
     def blink(self, cmd_text, entry_text, period = 1):
-        # backup old text
-        text_cmd = self.get_command_prefix()
-        text_inp = self.get_text()
+        self.blink_set(cmd_text, entry_text, period, self.get_command_prefix(), self.get_text())
 
-        # print new text
-        self.set_command_prefix(cmd_text)
-        self.set_text(entry_text)
 
-        # desplay new text for 1 sec
+    def blink_set(self,
+                  blk_cmd_text, blk_entry_text,
+                  period = 1,
+                  set_cmd_text = '', set_entry_text = ''
+                  ):
+        # print blink-text
+        self.set_command_prefix(blk_cmd_text)
+        self.set_text(blk_entry_text)
+
+        # desplay blink-text for `period` sec
         while gtk.events_pending():
             gtk.main_iteration(False)
         time.sleep(period)
 
-        # restore old text
-        self.set_command_prefix(text_cmd)
-        self.set_text(text_inp)
+        # set set-text
+        self.set_command_prefix(set_cmd_text)
+        self.set_text(set_entry_text)
 
 
     def get_label(self):
