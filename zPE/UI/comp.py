@@ -236,6 +236,12 @@ class zColorPicker(gtk.Button):
 
         self.menu.hide_all()
         self.is_shown = False
+
+    def modify_bg(self, state, color):
+        color = self.get_colormap().alloc_color(color)
+        style = self.get_style().copy()
+        style.bg[state] = color
+        self.set_style(style)
     ### end of overridden function definition
 
 
@@ -262,8 +268,11 @@ class zColorPicker(gtk.Button):
 
                 bttn.color_code = zColorPicker.default_color_matrix[row][col]
 
-                bttn.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(bttn.color_code))
-                bttn.modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(bttn.color_code))
+                color = bttn.get_colormap().alloc_color(bttn.color_code)
+                style = bttn.get_style().copy()
+                style.bg[gtk.STATE_NORMAL] = color
+                style.bg[gtk.STATE_PRELIGHT] = color
+                bttn.set_style(style)
 
                 self.frame.attach(bttn, col, col + 1, row, row + 1)
 
