@@ -1,20 +1,18 @@
 # this is the zPE IO encapsulation for UI
-
-import zPE
 import os, sys
 
 
 def is_binary(dsn):
     if is_file(dsn):
-        return __is_binary(os.path.join(*dsn))
+        return __IS_BINARY(os.path.join(*dsn))
     else:
         raise ValueError
 
 def is_file(dsn):
-    return zPE.is_file(dsn)
+    return os.path.isfile(os.path.join(* dsn))
 
 def is_dir(dsn):
-    return zPE.is_dir(dsn)
+    return os.path.isdir(os.path.join(* dsn))
 
 def new_file(dsn):
     if not is_file(dsn):
@@ -26,7 +24,10 @@ def new_dir(dsn):
 
 def open_file(dsn, mode):
     '''Open the target file in regardless of the existance'''
-    return zPE.open_file(dsn, mode, 'file')
+    path = os.path.join(* dsn)
+    __CREATE_DIR(os.path.dirname(path))
+
+    return open(path, mode)
 
 def fetch(buff):
     '''Fetch the corresponding file to the indicated MainWindowBuffer'''
@@ -53,7 +54,16 @@ def flush(buff):
 
 
 # supporting function
-def __is_binary(filename):
+
+def __CREATE_DIR(path):
+    '''creates (recursively) the target directory if not exists'''
+    if os.path.isdir(path):
+        return None
+    else:
+        os.makedirs(path)
+
+
+def __IS_BINARY(filename):
     """Return true if the given filename is binary.
     @raise EnvironmentError: if the file does not exist or cannot be accessed.
     @attention: found @ http://bytes.com/topic/python/answers/21222-determine-file-type-binary-text on 6/08/2010

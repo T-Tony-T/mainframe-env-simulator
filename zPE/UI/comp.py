@@ -1804,8 +1804,9 @@ class zFileManager(gtk.TreeView):
         ]
     filepb = gtk.gdk.pixbuf_new_from_xpm_data(filexpm)
 
-    column_names =  [ '', 'Name', 'Size', 'Last Changed' ]
-    column_xalign = [  1,  0,         1,   0 ]
+    column_names =     [ '', 'Name', 'Size', 'Last Changed' ]
+    column_xalign =    [  1,  0,         1,   0 ]
+    column_resizable = [ False,  True, True, True ]
 
     def __init__(self, dname = None):
         super(zFileManager, self).__init__()
@@ -1847,6 +1848,7 @@ class zFileManager(gtk.TreeView):
         # add all columns
         for n in range(len(zFileManager.column_names)):
             self.cell_list[n].set_property('xalign', zFileManager.column_xalign[n])
+            self.column_list[n].set_resizable(zFileManager.column_resizable[n])
             self.append_column(self.column_list[n])
 
         # connect signal
