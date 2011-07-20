@@ -366,7 +366,6 @@ class ConfigWindow(gtk.Window):
             }
         label_len = [ 6, 13 ]   # [ max_len[col_0], max_len[col_1] ]
 
-        self.color_label = {}
         self.color_entry = {}
         self.color_picker = {}
 
@@ -374,23 +373,22 @@ class ConfigWindow(gtk.Window):
             row = abs(color_pos[key])
             col = (row + color_pos[key]) / (row + row)
 
-            self.color_label[key] = gtk.Label('{0:<{1}}'.format(key.replace('_', ' ').title(), label_len[col]))
+            self.__label['LABEL'].append(gtk.Label('{0:<{1}}'.format(key.replace('_', ' ').title(), label_len[col])))
+
             self.color_entry[key] = gtk.Entry(7)
             self.color_picker[key] = comp.zColorPicker(self.__ebox, self._sig_color_selected)
 
             self.color_entry[key].set_property('width-chars', 7)
             self.color_picker[key].set_size_button(45, -1)
 
+            self.__entry.append(self.color_entry[key])
+
             col *= 3            # each column has 3 sub-column: label, entry, and picker
-            ct_gui_theme.child.attach(self.color_label[key],  0 + col, 1 + col, row, 1 + row, xoptions=gtk.SHRINK)
-            ct_gui_theme.child.attach(self.color_entry[key],  1 + col, 2 + col, row, 1 + row, xoptions=gtk.SHRINK)
-            ct_gui_theme.child.attach(self.color_picker[key], 2 + col, 3 + col, row, 1 + row, xoptions=gtk.SHRINK)
+            ct_gui_theme.child.attach(self.__label['LABEL'][-1], 0 + col, 1 + col, row, 1 + row, xoptions=gtk.SHRINK)
+            ct_gui_theme.child.attach(self.color_entry[key],     1 + col, 2 + col, row, 1 + row, xoptions=gtk.SHRINK)
+            ct_gui_theme.child.attach(self.color_picker[key],    2 + col, 3 + col, row, 1 + row, xoptions=gtk.SHRINK)
 
             self.color_entry[key].connect('activate', self._sig_color_entry_activate, key)
-
-
-        self.__label['LABEL'].extend(self.color_label.values())
-        self.__entry.extend(self.color_entry.values())
 
 
         ## KeyBinding
@@ -419,8 +417,91 @@ class ConfigWindow(gtk.Window):
 
             self.key_style[key].connect('toggled', self._sig_key_style_toggled, key)
 
+        # Binding
+        self.__label['FRAME'].append(gtk.Label('Key Bindings'))
+        ct_key_binding = gtk.Frame()
+        ct_key_binding.set_label_widget(self.__label['FRAME'][-1])
+        ct_key.pack_start(ct_key_binding, False, False, 10)
 
-        # separator
+        ct_key_binding.add(gtk.VBox())
+
+        # +---------------+
+        # |  key binding  |
+        # |     rules     |
+        # +---------------+
+        # |+-------+-----+|
+        # ||| func | key ||
+        # |||      |     ||
+        # |+-------+-----+|
+        # +---------------+
+        self.key_binding_rule = {
+            'emacs' :
+'''Meaning of the 'Stroke' name:
+  - 'C-x'   : press 'x' while holding Ctrl
+  - 'C-M-x' : press 'x' while holding both Ctrl and Alt
+  - 'C-x X' : first press 'x' while holding Ctrl, then press 'x' while holding Shift
+
+Limitation:
+  - Key sequence cannot start with M-x (run command), C-q (escape next key stroke), or any character you can find on the keyboard
+  - Key sequence cannot contain C-g (cancel current action)
+  - Key sequence cannot contain more than one stand-alone (without prefix 'C-' or 'M-') function keys (listed below)
+
+'Stroke' name of Function Keys:
+  - BackSpace, Enter, Escape, Space, Tab
+  - Insert, Delete, Home, End, Page_Up, Page_Down
+  - Left, Right, Up, Down
+  - F1 ~ F12
+''',
+            'vi'    : '''Not Implemented Yet''',
+            'other' :
+'''Meaning of the 'Stroke' name:
+  - 'C-x'   : press 'x' while holding Ctrl
+  - 'C-M-x' : press 'x' while holding both Ctrl and Alt
+  - 'X'     : press 'x' while holding Shift
+
+Limitation:
+  - No space allowed in the 'Stroke' definition. Use 'Space' to bind the Space key on your keyboard
+
+'Stroke' name of Function Keys:
+  - BackSpace, Enter, Escape, Space, Tab
+  - Insert, Delete, Home, End, Page_Up, Page_Down
+  - Left, Right, Up, Down
+  - F1 ~ F12
+''',
+            }
+        self.key_binding_help = gtk.Label()
+        self.key_binding_help.set_line_wrap(True)
+        self.__label['LABEL'].append(self.key_binding_help)
+
+        ct_key_binding_scroll = gtk.ScrolledWindow()
+        ct_key_binding_scroll.set_policy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
+        ct_key_binding_scroll.set_placement(gtk.CORNER_TOP_RIGHT)
+        ct_key_binding_scroll.set_size_request(-1, 128)
+
+        ct_key_binding.child.pack_start(self.key_binding_help, False, False, 2)
+        ct_key_binding.child.pack_start(ct_key_binding_scroll, True, True, 2)
+
+        n_func = len(conf.DEFAULT_FUNC_KEY_BIND)
+        ct_key_binding_table = gtk.Table(n_func, 2, False)
+        ct_key_binding_scroll.add_with_viewport(ct_key_binding_table)
+
+        self.key_stroke_entry = {}
+        row = 0
+        for func in sorted(conf.DEFAULT_FUNC_KEY_BIND.keys()):
+            self.__label['LABEL'].append(gtk.Label(func))
+
+            self.key_stroke_entry[func] = gtk.Entry()
+
+            self.__entry.append(self.key_stroke_entry[func])
+
+            ct_key_binding_table.attach(self.__label['LABEL'][-1],   0, 1, row, row + 1, xoptions=gtk.SHRINK)
+            ct_key_binding_table.attach(self.key_stroke_entry[func], 1, 2, row, row + 1, xoptions=gtk.SHRINK)
+            row += 1
+
+            self.key_stroke_entry[func].connect('activate', self._sig_key_stroke_changed, func)
+
+
+        ### separator
         layout.pack_start(gtk.HSeparator(), False, False, 2)
 
 
@@ -533,11 +614,18 @@ class ConfigWindow(gtk.Window):
 
     ### signal for KeyBinding
     def _sig_key_style_toggled(self, radio, key):
-        if radio.get_active() and key in conf.DEFAULT_FUNC_KEY_BIND:
+        if radio.get_active() and key in conf.DEFAULT_FUNC_KEY_BIND_KEY:
             conf.Config['MISC']['key_binding'] = key
             conf.init_key_binding()
             comp.zEdit.set_style(conf.Config['MISC']['key_binding'])
             comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+
+    def _sig_key_stroke_changed(self, entry, func):
+        stroke = entry.get_text()
+        seq = conf.parse_key_binding(stroke)
+        if not seq:
+            entry.set_text('')
+
     ### end of signal for KeyBinding
 
 
@@ -574,7 +662,7 @@ class ConfigWindow(gtk.Window):
 
         # KeyBinding->Style
         for key in self.key_style_key:
-            if key not in conf.DEFAULT_FUNC_KEY_BIND:
+            if key not in conf.DEFAULT_FUNC_KEY_BIND_KEY:
                 self.key_style[key].set_property('sensitive', False)
                 self.key_style[key].set_active(True)
             else:

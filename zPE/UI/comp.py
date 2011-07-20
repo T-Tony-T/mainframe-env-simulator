@@ -669,13 +669,11 @@ class zEdit(z_ABC, gtk.VBox):
         #                   tabbar (can be turn off)
         #   +--+--+------+_/
         #   +--+--+------+_
-        #   |+----------+| \
-        #   ||          ||  center_shell
-        #   ||          ||
-        #   ||  center  ||
-        #   ||          ||
-        #   ||          ||
-        #   |+----------+|
+        #   ||           | \
+        #   ||           |  scrolled_window
+        #   ||  center   |
+        #   ||           |
+        #   |+-----------|
         #   +--+---------+
         #   |sw| bottom  |
         #   +--+---------+
@@ -1648,17 +1646,15 @@ class zErrConsole(gtk.Window):
 
         # layout of the frame:
         #
-        #   +------------+_
-        #   |+----------+| \
-        #   ||          ||  scrolled_window
-        #   ||          ||
-        #   ||  center  ||
-        #   ||          ||
-        #   ||          ||
-        #   |+----------+|
-        #   +------+--+--+-- separator
-        #   |      |bt|bt|
-        #   +------+--+--+
+        #   +-----------+_
+        #   ||          | \
+        #   ||          |  scrolled_window
+        #   ||  center  |
+        #   ||          |
+        #   ||          |
+        #   +-----+--+--+-- separator
+        #   |     |bt|bt|
+        #   +-----+--+--+
 
         layout = gtk.VBox()
         self.add(layout)
@@ -2327,7 +2323,6 @@ class zSplitScreen(z_ABC, gtk.Frame):
         #   |l|    mw    |r|
         #   |t|          |t|
         #   | |          | |
-        #   | |----------| |
         # 2 +-+----------+-+ 2
         #   | |    bm    | |
         # 3 +-+----------+-+ 3

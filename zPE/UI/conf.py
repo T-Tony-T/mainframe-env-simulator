@@ -83,33 +83,47 @@ DEFAULT = {
     }
 
 
+DEFAULT_FUNC_KEY_BIND_KEY = [
+    'emacs',
+#    'vi',                       # not implenemted yet
+    'other'
+    ]
 DEFAULT_FUNC_KEY_BIND = {
-    'emacs' : {
-        'buffer_open'           : 'C-x C-f',
-        'buffer_save'           : 'C-x C-s',
-        'buffer_save_as'        : 'C-x C-w',
-        'buffer_close'          : 'C-x k',
-
-        'prog_show_config'      : 'C-c c',
-        'prog_show_error'       : 'C-c e',
-        'prog_quit'             : 'C-x C-c',
+    'buffer_open'           : {
+        'emacs' : 'C-x C-f',
+        'vi'    : '',
+        'other' : 'C-o',
+        },
+    'buffer_save'           : {
+        'emacs' : 'C-x C-s',
+        'vi'    : '',
+        'other' : 'C-s',
+        },
+    'buffer_save_as'        : {
+        'emacs' : 'C-x C-w',
+        'vi'    : '',
+        'other' : 'C-S',
+        },
+    'buffer_close'          : {
+        'emacs' : 'C-x k',
+        'vi'    : '',
+        'other' : 'F4',
         },
 
-#    'vi' : {
-#        'prog_quit'             : ':q',
-#        'prog_force_quit'       : ':q!',
-#        'prog_save_quit'        : ':qw',
-#        },
-
-    'other' : {
-        'buffer_open'           : 'C-o',
-        'buffer_save'           : 'C-s',
-        'buffer_save_as'        : 'C-S',
-        'buffer_close'          : 'F4',
-
-        'prog_show_config'      : 'C-p',
-        'prog_show_error'       : 'C-J',
-        'prog_quit'             : 'C-q',
+    'prog_show_config'      : {
+        'emacs' : 'C-c c',
+        'vi'    : '',
+        'other' : 'C-p',
+        },
+    'prog_show_error'       : {
+        'emacs' : 'C-c e',
+        'vi'    : '',
+        'other' : 'C-J',
+        },
+    'prog_quit'             : {
+        'emacs' : 'C-x C-c',
+        'vi'    : '',
+        'other' : 'C-q',
         },
     }
 
@@ -146,7 +160,12 @@ def init_rc():
     init_key_binding()
 
 def init_key_binding():
-    Config['FUNC_BINDING'] = copy.deepcopy(DEFAULT_FUNC_KEY_BIND[ Config['MISC']['key_binding'] ])
+    kb_style = Config['MISC']['key_binding']
+    Config['FUNC_BINDING'] = dict(
+        zip( DEFAULT_FUNC_KEY_BIND.keys(),
+             [ v[kb_style] for v in DEFAULT_FUNC_KEY_BIND.values() ]
+             )
+        )
     Config['KEY_BINDING'] = dict((v, k) for (k, v) in Config['FUNC_BINDING'].iteritems())
     if '' in Config['KEY_BINDING']:
         del Config['KEY_BINDING'][''] # remove empty binding
@@ -179,7 +198,7 @@ def read_rc():
 
         if label == 'MISC':
             if k == 'key_binding':
-                if v in DEFAULT_FUNC_KEY_BIND:
+                if v in DEFAULT_FUNC_KEY_BIND_KEY:
                     Config[label][k] = v
                 else:
                     Config[label][k] = DEFAULT['MISC']['KEY_BINDING']
@@ -276,12 +295,11 @@ def read_rc():
     write_rc()
 
 
-__PATTERN = {
-    'terminal' : r'''^\s*(              # anchor to the beginning
-[\x21-\x7e] |                           # all chars that are printed on the keyboard
+__BASE_PATTERN = {
+    'func_key' : r'''
 ( BACKSPACE | BackSpace | backspace ) |
-( ESCAPE    | Eseape    | escape    ) |
 ( ENTER     | Enter     | enter     ) |
+( ESCAPE    | Escape    | escape    ) |
 ( SPACE     | Space     | space     ) |
 ( TAB       | Tab       | tab       ) |
 
@@ -298,25 +316,44 @@ __PATTERN = {
 ( DOWN      | Down      | down      ) |
 
 ( [Ff] (1[0-2] | [2-9]) )               # F1 ~ F12
-)\s*$                                   # anchor to the end
 ''',
 
-    'combo' : r'''^\s*(                 # anchor to the beginning
-( C-M-. | [CM]-. )                      # C-M-. / C-. / M-.
-)\s*$                                   # anchor to the end
+    'printable' : r'''
+[\x21-\x7e]                             # all chars that are printed on the keyboard
+''',
+    }
+
+__PATTERN = {
+    # comment '# 1' and '# 2' means '1' or '2'
+    # comment '# 1' and '#   2' means '12' (1 followed by 2)
+    'func_key' : r'''^(                 # anchor to the beginning
+{0}                                     #   function key
+)$                                      #     anchor to the end
+'''.format(__BASE_PATTERN['func_key']),
+
+    'printable' : r'''^(                # anchor to the beginning
+{0}                                     #   printable char
+)$                                      #     anchor to the end
+'''.format(__BASE_PATTERN['printable']),
+
+    'combo' : r'''^(                    # anchor to the beginning
+( C-M- | [CM]- )                        #   C-M- / C- / M- followed by
+( {0} | {1} )                           #     function key or printable char
+)$                                      #       anchor to the end
+'''.format(__BASE_PATTERN['func_key'], __BASE_PATTERN['printable']),
+
+    'forbid_emacs' : r'''^(             # anchor to the beginning
+C-g                                     #   cancel
+)$                                      #     anchor to the end
 ''',
 
-    'forbid_emacs' : r'''^\s*(          # anchor to the beginning
-C-g                                     # cancel
-)\s*$                                   # anchor to the end
-''',
-
-    'forbid_emacs_init' : r'''^\s*(     # anchor to the beginning
-M-x |                                   # run command
-C-g |                                   # cancel
-C-q                                     # escape next stroke
-)\s*$                                   # anchor to the end
-''',
+    'forbid_emacs_init' : r'''^(        # anchor to the beginning
+{0} |                                   #   printable char
+M-x |                                   #   run command
+C-g |                                   #   cancel
+C-q                                     #   escape next stroke
+)$                                      #     anchor to the end
+'''.format(__BASE_PATTERN['printable']),
     }
 
 def parse_key_binding(key_sequence):
@@ -336,15 +373,16 @@ def parse_key_binding(key_sequence):
                 # not allow for re-define
                 return None
 
-            m_terminal = re.match(__PATTERN['terminal'], sequence[indx], re.X)
-            m_combo    = re.match(__PATTERN['combo'],    sequence[indx], re.X)
+            m_func_key  = re.match(__PATTERN['func_key'],  sequence[indx], re.X)
+            m_printable = re.match(__PATTERN['printable'], sequence[indx], re.X)
+            m_combo     = re.match(__PATTERN['combo'],     sequence[indx], re.X)
 
-            if not (m_terminal or m_combo):
-                # not a terminal stroke nor a combo
+            if not (m_func_key or m_printable or m_combo):
+                # not a func_key stroke, printable, nor a combo
                 return None
 
-            if m_terminal and indx != len(sequence) - 1:
-                # terminal stroke is not the last stroke
+            if m_func_key and indx != len(sequence) - 1:
+                # func_key stroke is not the last stroke
                 return None
 
     elif Config['MISC']['key_binding'] == 'vi':
