@@ -8,19 +8,21 @@ def is_binary(dsn):
     else:
         raise ValueError
 
+
 def is_file(dsn):
     return os.path.isfile(os.path.join(* dsn))
 
 def is_dir(dsn):
     return os.path.isdir(os.path.join(* dsn))
 
+
 def new_file(dsn):
     if not is_file(dsn):
         open_file(dsn, 'w')
 
 def new_dir(dsn):
-    if not is_dir(dsn):
-        os.makedirs(os.path.join(* dsn))
+    __CREATE_DIR(os.path.join(* dsn))
+
 
 def open_file(dsn, mode):
     '''Open the target file in regardless of the existance'''
@@ -28,6 +30,7 @@ def open_file(dsn, mode):
     __CREATE_DIR(os.path.dirname(path))
 
     return open(path, mode)
+
 
 def fetch(buff):
     '''Fetch the corresponding file to the indicated MainWindowBuffer'''
@@ -57,9 +60,7 @@ def flush(buff):
 
 def __CREATE_DIR(path):
     '''creates (recursively) the target directory if not exists'''
-    if os.path.isdir(path):
-        return None
-    else:
+    if not os.path.isdir(path):
         os.makedirs(path)
 
 

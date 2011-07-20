@@ -1249,7 +1249,7 @@ class zEdit(z_ABC, gtk.VBox):
         self.center.grab_focus()
 
     def resize(self):
-        self.buffer_sw.set_width_chars(16)
+        self.buffer_sw.set_width_chars(zTheme.DISC['fn_len'])
     ### end of overridden function definition
 
 
@@ -1804,9 +1804,15 @@ class zFileManager(gtk.TreeView):
         ]
     filepb = gtk.gdk.pixbuf_new_from_xpm_data(filexpm)
 
-    column_names =     [ '', 'Name', 'Size', 'Last Changed' ]
-    column_xalign =    [  1,  0,         1,   0 ]
+    column_names     = [ '', 'Name', 'Size', 'Last Changed' ]
+    column_xalign    = [  1,  0,         1,   0 ]
     column_resizable = [ False,  True, True, True ]
+    column_sizing    = [
+        gtk.TREE_VIEW_COLUMN_AUTOSIZE,
+        gtk.TREE_VIEW_COLUMN_FIXED,
+        gtk.TREE_VIEW_COLUMN_AUTOSIZE,
+        gtk.TREE_VIEW_COLUMN_AUTOSIZE
+        ]
 
     def __init__(self, dname = None):
         super(zFileManager, self).__init__()
@@ -1849,6 +1855,7 @@ class zFileManager(gtk.TreeView):
         for n in range(len(zFileManager.column_names)):
             self.cell_list[n].set_property('xalign', zFileManager.column_xalign[n])
             self.column_list[n].set_resizable(zFileManager.column_resizable[n])
+            self.column_list[n].set_sizing(zFileManager.column_sizing[n])
             self.append_column(self.column_list[n])
 
         # connect signal
@@ -1925,6 +1932,12 @@ class zFileManager(gtk.TreeView):
     def grab_focus(self):
         super(zFileManager, self).grab_focus()
         self.set_cursor((0,))
+
+    def modify_font(self, font_desc):
+        super(zFileManager, self).modify_font(font_desc)
+        # resize the Name field
+        (w, h) = self.create_pango_layout('w').get_pixel_size()
+        self.fn_tree_col.set_fixed_width(w * zTheme.DISC['fn_len'])
     ### end of overridden function definition
 
 
@@ -2830,6 +2843,10 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
 class zTheme(z_ABC):
     '''The Theme Control Class Used by z* Classes'''
+    DISC = {
+        # no corresponding config for items in this dictionary
+        'fn_len' : 16,
+        }
     font = {
         'name' : 'Monospace',
         'size' : 12,
