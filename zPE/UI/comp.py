@@ -122,7 +122,7 @@ class z_ABC(object):
 ########    zColorPicker   ########
 ######## ######## ######## ########
 
-class zColorPicker(gtk.Button):
+class zColorPicker(gtk.Frame):
     '''A Firefox Style Color Picker'''
     default_color_matrix = [    # The one that FireFox is using
         [ '#FFFFFF', '#FFCCCC', '#FFCC99', '#FFFF99', '#FFFFCC', '#99FF99', '#99FFFF', '#CCFFFF', '#CCCCFF', '#FFCCFF', ],
@@ -149,6 +149,10 @@ class zColorPicker(gtk.Button):
         '''
         super(zColorPicker, self).__init__()
 
+
+        self.bttn = gtk.Button('')
+        self.bttn.frame = self
+        self.add(self.bttn)
 
         self.active_scope = active_scope
         self.callback = callback
@@ -178,7 +182,10 @@ class zColorPicker(gtk.Button):
                 self.toplevel.connect('window-state-event', self._sig_popdown),
                 ],
             }
-        self.connect('clicked', self._sig_popup)
+        self.bttn.connect('clicked', self._sig_popup)
+        self.bttn.connect('enter', self._sig_bttn_enter)
+        self.bttn.connect('leave', self._sig_bttn_leave)
+        self._sig_bttn_leave(self.bttn)
 
         self.popdown()
         self.set_size_button(* self.__size_button)
@@ -196,9 +203,16 @@ class zColorPicker(gtk.Button):
         self.popdown()
         return True
 
-    def _sig_menu_bttn_clicked(self, widget):
-        self.callback(self, widget.color_code)
+
+    def _sig_menu_bttn_clicked(self, bttn):
+        self.callback(self, bttn.color_code)
         self.popdown()
+
+    def _sig_bttn_enter(self, bttn):
+        bttn.frame.set_shadow_type(gtk.SHADOW_OUT)
+
+    def _sig_bttn_leave(self, bttn):
+        bttn.frame.set_shadow_type(gtk.SHADOW_NONE)
     ### end of signal definition
 
 
@@ -238,20 +252,23 @@ class zColorPicker(gtk.Button):
         self.is_shown = False
 
     def modify_bg(self, state, color):
-        color = self.get_colormap().alloc_color(color)
-        style = self.get_style().copy()
+        color = self.bttn.get_colormap().alloc_color(color)
+        style = self.bttn.get_style().copy()
         style.bg[state] = color
-        self.set_style(style)
+        self.bttn.set_style(style)
     ### end of overridden function definition
 
 
     def build_menu(self, rebuild = True):
         if rebuild:
             # clean up
-            self.menu.remove(self.frame)
             for line in self.bttn_matrix:
-                for bttn in line:
-                    bttn.disconnect(bttn.sig_id)
+                for bttn_frame in line:
+                    bttn = bttn_frame.child
+                    bttn.disconnect(bttn.sig_id_click)
+                    bttn.disconnect(bttn.sig_id_enter)
+                    bttn.disconnect(bttn.sig_id_leave)
+            self.menu.remove(self.frame)
 
         # fill the menu
         n_row = len(zColorPicker.default_color_matrix)
@@ -266,6 +283,7 @@ class zColorPicker(gtk.Button):
                 bttn = gtk.Button('')
                 self.bttn_matrix[row].append(bttn)
 
+                bttn.frame = gtk.Frame()
                 bttn.color_code = zColorPicker.default_color_matrix[row][col]
 
                 color = bttn.get_colormap().alloc_color(bttn.color_code)
@@ -274,9 +292,13 @@ class zColorPicker(gtk.Button):
                 style.bg[gtk.STATE_PRELIGHT] = color
                 bttn.set_style(style)
 
-                self.frame.attach(bttn, col, col + 1, row, row + 1)
+                bttn.frame.add(bttn)
+                self.frame.attach(bttn.frame, col, col + 1, row, row + 1)
 
-                bttn.sig_id = bttn.connect('clicked', self._sig_menu_bttn_clicked)
+                bttn.sig_id_click = bttn.connect('clicked', self._sig_menu_bttn_clicked)
+                bttn.sig_id_enter = bttn.connect('enter', self._sig_bttn_enter)
+                bttn.sig_id_leave = bttn.connect('leave', self._sig_bttn_leave)
+                self._sig_bttn_leave(bttn)
 
 
     def get_size_button(self):
@@ -293,7 +315,7 @@ class zColorPicker(gtk.Button):
             self.__size_button[1] = h
 
         if mod:
-            self.set_size_request(* self.__size_button)
+            self.bttn.set_size_request(* self.__size_button)
 
 
     def get_size_menu_button(self):
