@@ -454,7 +454,7 @@ class ConfigWindow(gtk.Window):
         self.kb_function = {}
         self.kb_stroke = {}
         row = 0
-        for func in sorted(conf.DEFAULT_FUNC_KEY_BIND.keys()):
+        for func in sorted(conf.DEFAULT_FUNC_KEY_BIND.iterkeys()):
             self.kb_function[func] = gtk.ToggleButton('  ' + func, False)
             self.kb_stroke[func] = gtk.Label('')
 
