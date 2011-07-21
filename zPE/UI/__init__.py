@@ -31,7 +31,8 @@ class BaseFrame(object):
         sys.stderr = self.err_console
 
         ### retrive GUI configuration
-        conf.read_rc()
+        conf.read_rc_all()
+
         self.config_window = ConfigWindow()
         self.config_window.load_rc()
 
@@ -132,7 +133,7 @@ class BaseFrame(object):
             gtk.keysyms.Escape,
             0,
             gtk.ACCEL_VISIBLE,
-            lambda *s: self.config_window.close()
+            lambda *s: self.config_window._sig_cancel_mod()
             )
 
         ## for error console
@@ -226,7 +227,7 @@ class BaseFrame(object):
 
     ### key binding
     def set_accel(self):
-        for (k, v) in conf.Config['FUNC_BINDING'].items():
+        for (k, v) in conf.Config['FUNC_BINDING'].iteritems():
             if k in self.__key_binding_func:
                 comp.zEdit.register(k, self.__key_binding_func[k], self)
     ### end of key binding
@@ -252,9 +253,9 @@ class ConfigWindow(gtk.Window):
 
         # lists for managing font
         self.__label = {
-            'TAB' : [],         # weight = 1.2
-            'FRAME' : [],       # weight = 1
-            'LABEL' : [],       # weight = 0.8
+            'TAB' : [],
+            'FRAME' : [],
+            'LABEL' : [],
             }
         self.__entry = []
 
@@ -425,80 +426,81 @@ class ConfigWindow(gtk.Window):
 
         ct_key_binding.add(gtk.VBox())
 
-        # +---------------+
-        # |  key binding  |
-        # |     rules     |
-        # +---------------+
-        # |+-------+-----+|
-        # ||| func | key ||
-        # |||      |     ||
-        # |+-------+-----+|
-        # +---------------+
-        self.key_binding_rule = {
-            'emacs' :
-'''Meaning of the 'Stroke' name:
-  - 'C-x'   : press 'x' while holding Ctrl
-  - 'C-M-x' : press 'x' while holding both Ctrl and Alt
-  - 'C-x X' : first press 'x' while holding Ctrl, then press 'x' while holding Shift
-
-Limitation:
-  - Key sequence cannot start with M-x (run command), C-q (escape next key stroke), or any character you can find on the keyboard
-  - Key sequence cannot contain C-g (cancel current action)
-  - Key sequence cannot contain more than one stand-alone (without prefix 'C-' or 'M-') function keys (listed below)
-
-'Stroke' name of Function Keys:
-  - BackSpace, Enter, Escape, Space, Tab
-  - Insert, Delete, Home, End, Page_Up, Page_Down
-  - Left, Right, Up, Down
-  - F1 ~ F12
-''',
-            'vi'    : '''Not Implemented Yet''',
-            'other' :
-'''Meaning of the 'Stroke' name:
-  - 'C-x'   : press 'x' while holding Ctrl
-  - 'C-M-x' : press 'x' while holding both Ctrl and Alt
-  - 'X'     : press 'x' while holding Shift
-
-Limitation:
-  - No space allowed in the 'Stroke' definition. Use 'Space' to bind the Space key on your keyboard
-
-'Stroke' name of Function Keys:
-  - BackSpace, Enter, Escape, Space, Tab
-  - Insert, Delete, Home, End, Page_Up, Page_Down
-  - Left, Right, Up, Down
-  - F1 ~ F12
-''',
-            }
-        self.key_binding_help = gtk.Label()
-        self.key_binding_help.set_line_wrap(True)
-        self.__label['LABEL'].append(self.key_binding_help)
+        # +-----------------+
+        # || +------+-----+ |
+        # || |      |     | |
+        # || | func | key | |
+        # || |      |     | |
+        # || +------+-----+ |
+        # +------+----------+
+        # | help |    entry |
+        # +------+----------+
 
         ct_key_binding_scroll = gtk.ScrolledWindow()
         ct_key_binding_scroll.set_policy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
         ct_key_binding_scroll.set_placement(gtk.CORNER_TOP_RIGHT)
         ct_key_binding_scroll.set_size_request(-1, 128)
 
-        ct_key_binding.child.pack_start(self.key_binding_help, False, False, 2)
-        ct_key_binding.child.pack_start(ct_key_binding_scroll, True, True, 2)
+        ct_key_binding_entry = gtk.HBox()
+
+        ct_key_binding.child.pack_start(ct_key_binding_scroll, True, True, 0)
+        ct_key_binding.child.pack_start(ct_key_binding_entry, True, True, 0)
 
         n_func = len(conf.DEFAULT_FUNC_KEY_BIND)
-        ct_key_binding_table = gtk.Table(n_func, 2, False)
+        ct_key_binding_table = gtk.Table(n_func, 2, True)
+        ct_key_binding_table.set_col_spacings(15)
         ct_key_binding_scroll.add_with_viewport(ct_key_binding_table)
 
-        self.key_stroke_entry = {}
+        self.kb_function = {}
+        self.kb_stroke = {}
         row = 0
         for func in sorted(conf.DEFAULT_FUNC_KEY_BIND.keys()):
-            self.__label['LABEL'].append(gtk.Label(func))
+            self.kb_function[func] = gtk.ToggleButton('  ' + func, False)
+            self.kb_stroke[func] = gtk.Label('')
 
-            self.key_stroke_entry[func] = gtk.Entry()
+            bttn = self.kb_function[func]
+            style = bttn.get_style().copy()
+            style.bg[gtk.STATE_PRELIGHT] = style.bg[gtk.STATE_ACTIVE]
+            bttn.set_style(style)
 
-            self.__entry.append(self.key_stroke_entry[func])
+            self.__label['LABEL'].append(self.get_label_widget(self.kb_function[func]))
+            self.__label['LABEL'][-1].set_alignment(0, 0.5)
+            self.__label['LABEL'].append(self.kb_stroke[func])
+            self.__label['LABEL'][-1].set_alignment(0, 0.5)
 
-            ct_key_binding_table.attach(self.__label['LABEL'][-1],   0, 1, row, row + 1, xoptions=gtk.SHRINK)
-            ct_key_binding_table.attach(self.key_stroke_entry[func], 1, 2, row, row + 1, xoptions=gtk.SHRINK)
+            kb_stroke_frame = gtk.Frame()
+            kb_stroke_frame.add(self.kb_stroke[func])
+
+            ct_key_binding_table.attach(self.kb_function[func], 0, 1, row, row + 1, xoptions=gtk.FILL)
+            ct_key_binding_table.attach(kb_stroke_frame,        1, 2, row, row + 1, xoptions=gtk.FILL)
             row += 1
 
-            self.key_stroke_entry[func].connect('activate', self._sig_key_stroke_changed, func)
+            self.kb_function[func].connect('toggled', self._sig_key_stroke_change_request, func)
+
+        self.kb_rules = gtk.Button('Rules')
+        ct_key_binding_entry.pack_start(self.kb_rules, False, False, 10)
+
+        self.kb_rules_dialog = gtk.Dialog('', None, 0, (gtk.STOCK_CLOSE, gtk.RESPONSE_CLOSE))
+        self.kb_rules_dialog_content = gtk.Label('')
+        self.kb_rules_dialog_content.hbox = gtk.HBox()
+        self.kb_rules_dialog_content.hbox.pack_start(self.kb_rules_dialog_content, False, False, 0)
+        self.kb_rules_dialog.vbox.pack_start(self.kb_rules_dialog_content.hbox, False, False, 0)
+        self.kb_rules_dialog.vbox.show_all()
+        self.kb_rules_dialog.set_has_separator(True)
+        self.kb_rules_dialog.connect('response', lambda *arg: self.kb_rules_dialog.hide())
+        self.kb_rules_dialog.connect('delete_event', lambda *arg: self.kb_rules_dialog.hide() or True)
+
+        self.__label['LABEL'].append(gtk.Label('Stroke:'))
+        ct_key_binding_entry.pack_start(self.__label['LABEL'][-1], False, False, 5)
+
+        self.kb_stroke_entry = gtk.Entry()
+        self.kb_stroke_entry.set_property('sensitive', False)
+        self.kb_stroke_entry.modify_text(gtk.STATE_INSENSITIVE, gtk.gdk.color_parse('#000000'))
+        self.__entry.append(self.kb_stroke_entry)
+        ct_key_binding_entry.pack_start(self.kb_stroke_entry, False, False, 0)
+
+        self.kb_rules.connect('clicked', self._sig_key_stroke_help)
+        self.kb_stroke_entry.connect('activate', self._sig_key_stroke_entered)
 
 
         ### separator
@@ -546,14 +548,15 @@ Limitation:
         for entry in self.__entry:
             self.set_font_modify(entry, 'Monospace')
 
+        self.set_font_modify(self.kb_rules_dialog_content, 'Monospace')
+
         ### show
         self.__ebox.show_all()
 
 
     ### top-level signal definition
     def _sig_clear_rc(self, *arg):
-        conf.init_rc()          # re-initiate config
-        conf.write_rc()         # write changes
+        conf.init_rc_all()      # re-initiate config
         self.load_rc()
 
     def _sig_open_console(self, *arg):
@@ -564,8 +567,8 @@ Limitation:
         self.load_rc()
 
     def _sig_save_config(self, *arg):
-        conf.write_rc()         # write changes
-        conf.read_rc()          # validate new config
+        conf.write_rc_all()     # write changes
+        conf.read_rc_all()      # validate new config
         self.close()
 
     def _sig_cancel_mod(self, *arg):
@@ -616,16 +619,121 @@ Limitation:
     def _sig_key_style_toggled(self, radio, key):
         if radio.get_active() and key in conf.DEFAULT_FUNC_KEY_BIND_KEY:
             conf.Config['MISC']['key_binding'] = key
-            conf.init_key_binding()
+
+            conf.read_key_binding()
+
             comp.zEdit.set_style(conf.Config['MISC']['key_binding'])
             comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
 
-    def _sig_key_stroke_changed(self, entry, func):
-        stroke = entry.get_text()
-        seq = conf.parse_key_binding(stroke)
-        if not seq:
-            entry.set_text('')
+            self.load_binding()
 
+
+    def _sig_key_stroke_change_request(self, tggl_bttn, func):
+        active = tggl_bttn.get_active()
+        if active:
+            # self push down
+            if self.kb_stroke_entry.get_property('sensitive'):
+                # entry already sensitive; register self to replace the first button
+                old_func = self.kb_stroke_entry.func_editing
+                self.kb_stroke_entry.func_editing = func
+                self.kb_function[old_func].set_active(False)
+            else:
+                # entry not sensitive, register self
+                self.kb_stroke_entry.func_editing = func
+
+            # prepare the entry
+            self.kb_stroke_entry.set_text('')
+            self.kb_stroke_entry.editing_done = False
+        else:
+            # self pop up
+            if self.kb_stroke_entry.func_editing == func:
+                if self.kb_stroke_entry.editing_done:
+                    # editing done
+                    self.kb_stroke_entry.func_editing = None
+                else:
+                    # editing cancelled
+                    self.kb_stroke_entry.func_editing = None
+                    self.kb_stroke_entry.set_text('< cancelled >')
+            else:
+                # being cancelled by another button
+                return          # no change need to make, early return
+
+        # clean up
+        self.kb_stroke_entry.set_property('sensitive', active)
+        self.kb_stroke_entry.grab_focus()
+
+    def _sig_key_stroke_entered(self, entry):
+        stroke = entry.get_text()
+        if not stroke:
+            # clear binding
+            conf.func_binding_rm(entry.func_editing)
+            self.kb_stroke[entry.func_editing].set_text('')
+            entry.set_text('< removed >')
+        else:
+            # validate stroke
+            seq = conf.parse_key_binding(stroke)
+            if not seq:
+                binding_is_valid = False
+
+            try:
+                if conf.key_sequence_add(
+                    entry.func_editing, seq,
+                    force_override = False,
+                    force_rebind = True,
+                    warning = False
+                    ):
+                    # key sequence added
+                    comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+                    binding_is_valid = True
+                else:
+                    binding_is_valid = None
+            except ValueError as (err_type, err_msg, err_func, err_stroke):
+                if err_type == 'override':
+                    md = gtk.MessageDialog(
+                        self, 
+                        gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_QUESTION, 
+                        gtk.BUTTONS_NONE,
+                        'Conflicted key binding!'
+                        )
+                    md.format_secondary_text('Override the old one ({0})?'.format(err_func))
+                    md.add_buttons('_Override', gtk.RESPONSE_ACCEPT, '_Cancel', gtk.RESPONSE_CANCEL)
+                    md_id = md.run()
+                    if md_id == gtk.RESPONSE_ACCEPT:
+                        if conf.key_sequence_add(
+                            entry.func_editing, seq,
+                            force_override = True,
+                            force_rebind = True,
+                            warning = False
+                            ):
+                            # key sequence added
+                            comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+                            self.kb_stroke[err_func].set_text('') # clear conflict binding text
+                            binding_is_valid = True
+                        else:
+                            sys.stderr.write('Warning: Fail to override the binding!\n')
+                            binding_is_valid = None
+                    else:
+                        binding_is_valid = False
+                    md.destroy()
+
+            # process stroke
+            if binding_is_valid:
+                # accept the normalized stroke
+                self.kb_stroke[entry.func_editing].set_text(' '.join(seq))
+                entry.set_text('< accepted >')
+            elif binding_is_valid == False:
+                # cancel
+                entry.set_text('< invalid >')
+            else:
+                entry.set_text('< no change >')
+
+        # pop up the registered button
+        entry.editing_done = True
+        self.kb_function[entry.func_editing].set_active(False)
+
+
+    def _sig_key_stroke_help(self, bttn):
+        self.kb_rules_dialog.show()
     ### end of signal for KeyBinding
 
 
@@ -639,6 +747,7 @@ Limitation:
             self.show()
 
     def close(self):
+        self.kb_rules_dialog.hide()
         self.hide()
     ### end of overloaded function definition
 
@@ -668,6 +777,17 @@ Limitation:
             else:
                 self.key_style[key].set_property('sensitive', True)
         self.key_style[conf.Config['MISC']['key_binding']].set_active(True)
+
+        # KeyBinding->Binding
+        self.load_binding()
+
+
+    def load_binding(self):
+        style = conf.Config['MISC']['key_binding']
+        self.kb_rules_dialog.set_title('Style::{0}'.format(style.title()))
+        self.kb_rules_dialog_content.set_markup(conf.KEY_BINDING_RULE_MKUP[style])
+        for (k, v) in self.kb_stroke.iteritems():
+            v.set_text(conf.Config['FUNC_BINDING'][k])
 
 
     def select_font(self, font_dic):

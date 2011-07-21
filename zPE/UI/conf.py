@@ -7,6 +7,9 @@ import copy                     # for deep copy
 import pango                    # for parsing the font
 import re                       # for parsing the string
 
+# debug flags
+__TRACE_KEY_SCAN = False
+
 
 # constant that will be treated as false
 STR_FALSE = [ '0', 'nil', 'false', 'False' ]
@@ -88,6 +91,50 @@ DEFAULT_FUNC_KEY_BIND_KEY = [
 #    'vi',                       # not implenemted yet
     'other'
     ]
+
+KEY_BINDING_RULE_MKUP = {
+    'emacs' :
+'''<b>Meaning of the 'Stroke':</b>
+  - 'C-x'   : press 'x' while holding Ctrl
+  - 'C-M-x' : press 'x' while holding both Ctrl and Alt
+  - 'C-x X' : first press 'x' while holding Ctrl, then
+              press 'x' while holding Shift
+
+<b>Limitation:</b>
+  - Key sequence cannot start with M-x (run command),
+    C-q (escape next key stroke), or any character you can
+    find on the keyboard
+  - Key sequence cannot contain C-g (cancel current action)
+  - Key sequence cannot contain more than one stand-alone
+    (i.e. without prefix such as 'C-' or 'M-') function keys
+
+<b>'Stroke' of Function Keys:</b>
+  - BackSpace, Enter, Escape, Space, Tab
+  - Insert, Delete, Home, End, Page_Up, Page_Down
+  - Left, Right, Up, Down
+  - F1 ~ F12
+''',
+
+    'vi'    : '''Not Implemented Yet''',
+
+    'other' :
+'''<b>Meaning of the 'Stroke':</b>
+  - 'C-x'   : press 'x' while holding Ctrl
+  - 'C-M-x' : press 'x' while holding both Ctrl and Alt
+  - 'X'     : press 'x' while holding Shift
+
+<b>Limitation:</b>
+  - No space allowed in the 'Stroke' definition. Use the
+    word 'Space' to bind the Space key on your keyboard
+
+<b>'Stroke' of Function Keys:</b>
+  - BackSpace, Enter, Escape, Space, Tab
+  - Insert, Delete, Home, End, Page_Up, Page_Down
+  - Left, Right, Up, Down
+  - F1 ~ F12
+''',
+    }
+
 DEFAULT_FUNC_KEY_BIND = {
     'buffer_open'           : {
         'emacs' : 'C-x C-f',
@@ -129,6 +176,10 @@ DEFAULT_FUNC_KEY_BIND = {
 
 Config = {}
 
+def init_rc_all():
+    init_rc()
+    init_key_binding()
+
 def init_rc():
     Config['MISC'] = {
         'key_binding'   : DEFAULT['MISC']['KEY_BINDING'],
@@ -157,7 +208,6 @@ def init_rc():
         'literal'       : DEFAULT['COLOR_MAP']['LITERAL'],
         'label'         : DEFAULT['COLOR_MAP']['LABEL'],
         }
-    init_key_binding()
 
 def init_key_binding():
     kb_style = Config['MISC']['key_binding']
@@ -178,6 +228,11 @@ CONFIG_PATH = {
 #    'key_vi'    : os.path.join(os.environ['HOME'], '.zPE', 'key.vi'),
     'key_other' : os.path.join(os.environ['HOME'], '.zPE', 'key.other'),
     }
+
+def read_rc_all():
+    read_rc()
+    read_key_binding()
+
 
 def read_rc():
     __CK_CONFIG()
@@ -253,47 +308,126 @@ def read_rc():
             else:
                 sys.stderr.write('CONFIG WARNING: {0}: Invalid color mapping.\n'.format(k))
 
-    init_key_binding()
+    write_rc()
+
+
+def read_key_binding():
+    __CK_KEY()
+
+    # retrive all valid functions
+    Config['FUNC_BINDING'] = dict(zip(DEFAULT_FUNC_KEY_BIND.keys(), [''] * len(DEFAULT_FUNC_KEY_BIND)))
+    Config['KEY_BINDING'] = {}
+
+    # parse key binding file
     for line in open(CONFIG_PATH[ 'key_{0}'.format(Config['MISC']['key_binding']) ], 'r'):
         line = line[:-1]        # get rid of the '\n'
 
         (k, v) = re.split('[ \t]*=[ \t]*', line, maxsplit=1)
+
+        if __TRACE_KEY_SCAN:
+            sys.stderr.write('\n== Style::{0} => {1}:\n'.format(Config['MISC']['key_binding'], line))
+
+        if not v:
+            continue
 
         seq = parse_key_binding(v)
         if not seq:
             sys.stderr.write('CONFIG WARNING: {0}: Invalid key sequence.\n'.format(v))
             continue
 
-        v = ' '.join(seq)       # normalize the key sequence
+        key_sequence_add(k, seq, force_override = True, force_rebind = True, warning = True)
 
-        if k not in Config['FUNC_BINDING']:
-            sys.stderr.write('CONFIG WARNING: {0}: Invalid key binding.\n'.format(k))
+        if __TRACE_KEY_SCAN:
+            sys.stderr.write('   Func => Key:\n')
+            for k,v in Config['FUNC_BINDING'].iteritems():
+                sys.stderr.write('       {0} : {1}\n'.format(k, v))
+            sys.stderr.write('   Key => Func:\n')
+            for k,v in Config['KEY_BINDING'].iteritems():
+                sys.stderr.write('       {0} : {1}\n'.format(k, v))
+
+    write_key_binding()
+
+
+def key_sequence_add(func, seq,
+                     force_override = False, # redefine function with different stroke
+                     force_rebind = False,   # rebind stroke with different function
+                     warning = True          # print warning msg to stderr
+                     ):
+    stroke = ' '.join(seq)      # normalize the key sequence
+
+    if func not in Config['FUNC_BINDING']:
+        # undefined function
+        if warning:
+            sys.stderr.write('CONFIG WARNING: {0}: Invalid key binding.\n'.format(func))
+        return None
+    else:
+        if Config['FUNC_BINDING'][func] == stroke:
+            # same binding as before
+            return False
+
+        # remove conflict stroke
+        if stroke in Config['KEY_BINDING']:
+            # key sequence defined for another function
+            msg = 'CONFIG WARNING: {0}: Key sequence already binded.\n'.format(stroke)
+            if not force_override:
+                raise ValueError('override', msg, Config['KEY_BINDING'][stroke], stroke)
+            if warning:
+                sys.stderr.write(msg)
+            old_func = Config['KEY_BINDING'][stroke] # will never be empty, unless in 'else' part
+            del Config['KEY_BINDING'][stroke]        # remove stroke
         else:
-            if Config['FUNC_BINDING'][k] == v:
-                continue        # alread in, skip
+            old_func = ''       # old_func not found
 
-            # remove conflict v
-            if v in Config['KEY_BINDING']:
-                old_k = Config['KEY_BINDING'][v] # could be empty
-                del Config['KEY_BINDING'][v]     # remove v
-            else:
-                old_k = ''      # old_k not found
+        old_stroke = Config['FUNC_BINDING'][func] # could be empty
+        if old_stroke:
+            # has previously defined stroke
+            msg = 'CONFIG WARNING: {0}: Redifing key binding for the function.\n'.format(func)
+            if not force_rebind:
+                raise ValueError('rebind', msg, func, old_stroke)
+            if warning:
+                sys.stderr.write(msg)
+            del Config['KEY_BINDING'][old_stroke] # remove old_stroke
 
-            old_v = Config['FUNC_BINDING'][k] # will never be empty
-            if old_v in Config['KEY_BINDING']:
-                del Config['KEY_BINDING'][old_v] # remove old_v
+        # reset conflict func
+        Config['FUNC_BINDING'][func] = ''
+        if old_func:
+            Config['FUNC_BINDING'][old_func] = ''
 
-            # reset conflict k
-            Config['FUNC_BINDING'][k] = ''
-            if old_k:
-                Config['FUNC_BINDING'][old_k] = ''
+        # add new func and stroke
+        Config['FUNC_BINDING'][func] = stroke
+        Config['KEY_BINDING'][stroke] = func
 
-            # add new k and v
-            Config['FUNC_BINDING'][k] = v
-            Config['KEY_BINDING'][v] = k
+        return True
 
-    write_rc()
+def func_binding_rm(func):
+    if func not in Config['FUNC_BINDING']:
+        raise KeyError('CONFIG WARNING: {0}: Not a valid function.\n'.format(func))
+    old_strock = Config['FUNC_BINDING'][func]
 
+    Config['FUNC_BINDING'][func] = ''
+    if old_strock:
+        del Config['KEY_BINDING'][old_strock]
+
+
+__FUNC_KEY_MAP = {
+    'BACKSPACE' : 'BackSpace',
+    'ENTER'     : 'Enter',
+    'ESCAPE'    : 'Escape',
+    'SPACE'     : 'space',
+    'TAB'       : 'Tab',
+
+    'INSERT'    : 'Insert',
+    'DELETE'    : 'Delete',
+    'HOME'      : 'Home',
+    'END'       : 'End',
+    'PAGE_UP'   : 'Page_Up',
+    'PAGE_DOWN' : 'Page_Down',
+
+    'LEFT'      : 'Left',
+    'RIGHT'     : 'Rignt',
+    'UP'        : 'Up',
+    'DOWN'      : 'Down',
+    }
 
 __BASE_PATTERN = {
     'func_key' : r'''
@@ -381,9 +515,14 @@ def parse_key_binding(key_sequence):
                 # not a func_key stroke, printable, nor a combo
                 return None
 
-            if m_func_key and indx != len(sequence) - 1:
-                # func_key stroke is not the last stroke
-                return None
+            if m_func_key:
+                if indx != len(sequence) - 1:
+                    # func_key stroke is not the last stroke
+                    return None
+                else:
+                    sequence[indx] = sequence[indx].upper()
+                    if sequence[indx] in __FUNC_KEY_MAP:
+                        sequence[indx] = __FUNC_KEY_MAP[sequence[indx]]
 
     elif Config['MISC']['key_binding'] == 'vi':
         # style::vi
@@ -398,10 +537,14 @@ def parse_key_binding(key_sequence):
     return sequence
 
 
-def write_rc():
-    __CK_CONFIG()
+def write_rc_all():
+    write_rc()
+    write_key_binding()
 
+def write_rc():
     __TOUCH_RC()
+
+def write_key_binding():
     __TOUCH_KEY()
 
 
@@ -410,12 +553,16 @@ def write_rc():
 def __CK_CONFIG():
     if not os.path.isfile(CONFIG_PATH['gui_rc']):
         __TOUCH_RC()
-#    if not os.path.isfile(CONFIG_PATH['key_emacs']):
-#        __TOUCH_KEY('emacs')
-#    if not os.path.isfile(CONFIG_PATH['key_vi']):
-#        __TOUCH_KEY('vi')
-    if not os.path.isfile(CONFIG_PATH['key_other']):
-        __TOUCH_KEY('other')
+
+
+def __CK_KEY():
+    style = Config['MISC']['key_binding']
+    style_path = 'key_{0}'.format(style)
+
+    if not os.path.isfile(CONFIG_PATH[style_path]):
+        init_key_binding()
+        __TOUCH_KEY()
+
 
 
 def __TOUCH_RC():
@@ -442,10 +589,11 @@ def __TOUCH_RC():
     fp.close()
 
 
-def __TOUCH_KEY(style = None):
-    if not style:
-        style = Config['MISC']['key_binding']
-    fp = open(CONFIG_PATH[ 'key_{0}'.format(style) ], 'w')
+def __TOUCH_KEY():
+    style = Config['MISC']['key_binding']
+    style_path = 'key_{0}'.format(style)
+
+    fp = open(CONFIG_PATH[style_path], 'w')
     for func in sorted(Config['FUNC_BINDING'].iterkeys()):
         fp.write('{0} = {1}\n'.format(func, Config['FUNC_BINDING'][func]))
     fp.close()

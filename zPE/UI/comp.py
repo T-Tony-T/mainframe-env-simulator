@@ -252,7 +252,6 @@ class zColorPicker(gtk.Frame):
         self.is_shown = False
 
     def modify_bg(self, state, color):
-        color = self.bttn.get_colormap().alloc_color(color)
         style = self.bttn.get_style().copy()
         style.bg[state] = color
         self.bttn.set_style(style)
@@ -286,7 +285,7 @@ class zColorPicker(gtk.Frame):
                 bttn.frame = gtk.Frame()
                 bttn.color_code = zColorPicker.default_color_matrix[row][col]
 
-                color = bttn.get_colormap().alloc_color(bttn.color_code)
+                color = gtk.gdk.color_parse(bttn.color_code)
                 style = bttn.get_style().copy()
                 style.bg[gtk.STATE_NORMAL] = color
                 style.bg[gtk.STATE_PRELIGHT] = color
@@ -470,10 +469,10 @@ class zComboBox(z_ABC, gtk.ToolButton):
                 self.menu.append(mi)
                 mi.connect("activate", self._sig_item_selected, indx)
 
-                for (k, v) in self.color_fg.items():
+                for (k, v) in self.color_fg.iteritems():
                     mi.child.modify_fg(k, v)
 
-        for (k, v) in self.color_bg.items():
+        for (k, v) in self.color_bg.iteritems():
             self.menu.modify_bg(k, v)
 
         self.menu.show_all()
@@ -2913,7 +2912,7 @@ class zTheme(z_ABC):
     @staticmethod
     def set_font(dic):
         modified = False
-        for (k, v) in dic.items():
+        for (k, v) in dic.iteritems():
             if k in zTheme.font and v != zTheme.font[k]:
                 modified = True
                 zTheme.font[k] = v
@@ -2927,7 +2926,7 @@ class zTheme(z_ABC):
     @staticmethod
     def set_color_map(dic):
         modified = False
-        for (k, v) in dic.items():
+        for (k, v) in dic.iteritems():
             if k in zTheme.color_map and v != zTheme.color_map[k]:
                 modified = True
                 zTheme.color_map[k] = v
@@ -2956,5 +2955,5 @@ widget '*' style 'zTheme'
 ''')
 
 # open default buffers
-for buff_name, buff_type in zEditBuffer.SYSTEM_BUFFER.items():
+for buff_name, buff_type in zEditBuffer.SYSTEM_BUFFER.iteritems():
     zEditBuffer(buff_name, buff_type)
