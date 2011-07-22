@@ -385,9 +385,9 @@ class ConfigWindow(gtk.Window):
             self.__entry.append(self.color_entry[key])
 
             col *= 3            # each column has 3 sub-column: label, entry, and picker
-            ct_gui_theme.child.attach(self.__label['LABEL'][-1], 0 + col, 1 + col, row, 1 + row, xoptions=gtk.SHRINK)
-            ct_gui_theme.child.attach(self.color_entry[key],     1 + col, 2 + col, row, 1 + row, xoptions=gtk.SHRINK)
-            ct_gui_theme.child.attach(self.color_picker[key],    2 + col, 3 + col, row, 1 + row, xoptions=gtk.SHRINK)
+            ct_gui_theme.child.attach(self.__label['LABEL'][-1], 0 + col, 1 + col, row, 1 + row, xoptions = gtk.SHRINK)
+            ct_gui_theme.child.attach(self.color_entry[key],     1 + col, 2 + col, row, 1 + row, xoptions = gtk.SHRINK)
+            ct_gui_theme.child.attach(self.color_picker[key],    2 + col, 3 + col, row, 1 + row, xoptions = gtk.SHRINK)
 
             self.color_entry[key].connect('activate', self._sig_color_entry_activate, key)
 
@@ -471,8 +471,8 @@ class ConfigWindow(gtk.Window):
             kb_stroke_frame = gtk.Frame()
             kb_stroke_frame.add(self.kb_stroke[func])
 
-            ct_key_binding_table.attach(self.kb_function[func], 0, 1, row, row + 1, xoptions=gtk.FILL)
-            ct_key_binding_table.attach(kb_stroke_frame,        1, 2, row, row + 1, xoptions=gtk.FILL)
+            ct_key_binding_table.attach(self.kb_function[func], 0, 1, row, row + 1, xoptions = gtk.FILL)
+            ct_key_binding_table.attach(kb_stroke_frame,        1, 2, row, row + 1, xoptions = gtk.FILL)
             row += 1
 
             self.kb_function[func].connect('toggled', self._sig_key_stroke_change_request, func)

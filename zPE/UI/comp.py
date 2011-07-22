@@ -2347,16 +2347,24 @@ class zSplitScreen(z_ABC, gtk.Frame):
         self.mw_center = gtk.Frame()
         frame = self.new_frame(self.frame_alist) # keep track of the focus
         self.mw_center.add(frame)
+        self.mw_new_child_frame = None
 
         # remove shadow
         self.set_shadow_type(gtk.SHADOW_NONE)
         self.mw_center.set_shadow_type(gtk.SHADOW_NONE)
 
-        root_frame.attach(self.ctrl_bar['lt'], 0, 1, 1, 2, xoptions=gtk.SHRINK)
-        root_frame.attach(self.ctrl_bar['rt'], 2, 3, 1, 2, xoptions=gtk.SHRINK)
-        root_frame.attach(self.ctrl_bar['tp'], 1, 2, 0, 1, yoptions=gtk.SHRINK)
-        root_frame.attach(self.ctrl_bar['bm'], 1, 2, 2, 3, yoptions=gtk.SHRINK)
+        root_frame.attach(self.ctrl_bar['lt'], 0, 1, 1, 2, xoptions = gtk.SHRINK)
+        root_frame.attach(self.ctrl_bar['rt'], 2, 3, 1, 2, xoptions = gtk.SHRINK)
+        root_frame.attach(self.ctrl_bar['tp'], 1, 2, 0, 1, yoptions = gtk.SHRINK)
+        root_frame.attach(self.ctrl_bar['bm'], 1, 2, 2, 3, yoptions = gtk.SHRINK)
         root_frame.attach(self.mw_center,      1, 2, 1, 2)
+
+        # connect signals for center frame
+        self.__alloc = None
+        self.mw_center.__alloc = None
+
+        self.connect('size-allocate', self._sig_realloc)
+        self.mw_center.connect('size-allocate', self._sig_check_realloc)
 
         # connect signals for control-bars
         drag_icon = gtk.gdk.pixbuf_new_from_file(
@@ -2369,6 +2377,32 @@ class zSplitScreen(z_ABC, gtk.Frame):
             self.ctrl_bar[pos].drag_source_set(gtk.gdk.BUTTON1_MASK, [], 0)
             self.ctrl_bar[pos].connect('drag_begin', self._sig_ctrl_drag, drag_icon, pos)
             self.ctrl_bar[pos].connect('button-release-event', self._sig_ctrl_drop, pos)
+
+
+    ### signal for resizing
+    def _sig_realloc(self, widget, alloc):
+        if self.__alloc != alloc:
+            # allocation changed
+            self.__alloc = alloc
+            self.mw_center.__alloc = self.mw_center.get_allocation()
+
+    def _sig_check_realloc(self, widget, alloc):
+        ( req_w, req_h ) =  self.mw_center.size_request()
+        alloc = self.mw_center.__alloc
+        if not alloc:
+            return              # not allocated, early return
+
+        if alloc.height < req_h:
+            # must be caused by adding frame
+            self.rm_frame(self.mw_new_child_frame.parent, self.mw_new_child_frame)
+            if self.__prev_active_frame:
+                self.__prev_active_frame.grab_focus()
+                sys.stderr.write('Warning: No room for new screens vertically!\n')
+
+        if alloc.width < req_w:
+            # no way to determine the cause, force resizing child
+            self.mw_center.child.set_size_request(alloc.width - 4, -1)
+    ### end of signal for resizing
 
 
     ### signal for DnD
@@ -2518,6 +2552,9 @@ class zSplitScreen(z_ABC, gtk.Frame):
         return self.__active_frame(self.mw_center)
 
     def add_paned(self, parent, pos):
+        # setup backup point
+        self.__prev_active_frame = self.active_frame() # only used in resuming focus on removing newly added frame
+
         child = parent.child
 
         # create new paned
@@ -2528,18 +2565,18 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
         # create new frame
         if self.frame_split_dup:
-            new_child = self.new_frame_on_dup()
+            self.mw_new_child_frame = self.new_frame_on_dup()
         else:
-            new_child = self.new_frame(self.frame_alist)
+            self.mw_new_child_frame = self.new_frame(self.frame_alist)
 
         # re-parent the widgets
         parent.remove(child)
         if pos in self.__ctrl_pos['b']:
-            paned.pack1(new_child, True, True)
+            paned.pack1(self.mw_new_child_frame, True, True)
             paned.pack2(child, True, True)
         else:
             paned.pack1(child, True, True)
-            paned.pack2(new_child, True, True)
+            paned.pack2(self.mw_new_child_frame, True, True)
         parent.add(paned)
 
         # connect signals
@@ -2547,7 +2584,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
         # show widgets
         parent.show_all()
-        new_child.grab_focus()
+        self.mw_new_child_frame.grab_focus()
 
         return paned
 
@@ -2693,9 +2730,9 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
 class zTabbar(z_ABC, gtk.EventBox):
     '''A Flat (Inline) Tabbar'''
-    class zTab(gtk.ToggleButton):
-        def __init__(self):
-            super(zTabbar.zTab, self).__init__()
+    class zButton(gtk.Button):
+        def __init__(self, *arg):
+            super(zTabbar.zButton, self).__init__(*arg)
 
         def get_label_widget(self, current = None):
             if current == None:
@@ -2716,6 +2753,9 @@ class zTabbar(z_ABC, gtk.EventBox):
                     return found    # found in previous search
             return None             # not found at all
 
+    class zTab(zButton, gtk.ToggleButton):
+        def __init__(self, *arg):
+            super(zTabbar.zTab, self).__init__(*arg)
 
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
@@ -2728,44 +2768,140 @@ class zTabbar(z_ABC, gtk.EventBox):
         self.active_tab = None
         self.tab_fg = {}        # state : color
         self.tab_bg = {}        # state : color
+        self.tab_font = None
 
 
-        self.hbox = gtk.HBox()
-        self.add(self.hbox)
+        # layout of the frame:
+        #
+        #   +--+-------------------+--+
+        #   |lt| scrollable tabbar |rt|
+        #   +--+-------------------+--+
+
+        # create frame
+        frame = gtk.HBox()
+        self.scroll_left = zTabbar.zButton('<')
+        self.viewport = gtk.Viewport()
+        self.scroll_right = zTabbar.zButton('>')
+
+        self.viewport.set_shadow_type(gtk.SHADOW_NONE)
+        self.viewport.hadj = self.viewport.get_hadjustment()
+        self.viewport.hadj_preserve = None
+        self.viewport.scrolling = False
+        self.viewport.start_scrolling = False
+
+        self.scroll_left.label = self.scroll_left.get_label_widget()
+        self.scroll_right.label = self.scroll_right.get_label_widget()
+
+        self.scroll_left.set_property('can_focus', False)
+        self.scroll_right.set_property('can_focus', False)
+        self.scroll_left.set_property('can_default', False)
+        self.scroll_right.set_property('can_default', False)
+
+        self.add(frame)
+        frame.pack_start(self.scroll_left, False, False, 0)
+        frame.pack_start(self.viewport, True, True, 0)
+        frame.pack_end(self.scroll_right, False, False, 0)
+
+
+        # create tabbar
+        self.tab_box = gtk.HBox()
+        self.viewport.add(self.tab_box)
+
+
+        # connect scroll buttons with viewport
+        self.viewport.connect('size-allocate', self._sig_size_changed)
+
+        self.viewport.hadj_sig_id = self.viewport.hadj.connect('value-changed', self._sig_hadj_modified)
+
+        self.scroll_left.click_id  = self.scroll_left.connect('clicked', self._sig_scroll_viewport_once, -25)
+        self.scroll_right.click_id = self.scroll_right.connect('clicked', self._sig_scroll_viewport_once, 25)
+
+        self.scroll_left.connect('pressed', self._sig_scroll_viewport, -10)
+        self.scroll_left.connect('released', self._sig_stop_scroll_viewport)
+        self.scroll_right.connect('pressed', self._sig_scroll_viewport, 10)
+        self.scroll_right.connect('released', self._sig_stop_scroll_viewport)
 
 
     ### signal definition
+    def _sig_hadj_modified(self, adjustment):
+        if self.viewport.hadj_preserve != None:
+            self.viewport.hadj.handler_block(self.viewport.hadj_sig_id)
+            self.viewport.hadj.set_value(self.viewport.hadj_preserve)
+            self.viewport.hadj.handler_unblock(self.viewport.hadj_sig_id)
+        else:
+            self.viewport.hadj_preserve = self.viewport.hadj.get_value() # save preservation
+
+
+    def _sig_size_changed(self, container, alloc):
+        pos = self.viewport.hadj.get_value()
+        ( pos_valid, new_pos ) = self.validate_tabbar_pos()
+
+        if pos > 0 and not pos_valid:
+            # left not fully shown *but* right edge not attached
+            self.scroll_viewport_by(new_pos - pos)
+
+        self.scroll_to_active_tab()
+
+
+    def _sig_scroll_viewport_once(self, bttn, increment):
+        if not self.viewport.start_scrolling:
+            self.scroll_viewport_by(increment)
+
+    def _sig_scroll_viewport(self, bttn, increment):
+        # start the timer
+        self.viewport.scrolling = True
+        gobject.timeout_add(41, self.loop_scroll_viewport_by, increment)
+        # 1 s / 41 ms = 24.39 fps
+
+    def _sig_stop_scroll_viewport(self, bttn):
+        # stop the timer
+        self.viewport.scrolling = False
+        # unblock 'clicked'
+        self.viewport.start_scrolling = False
+
+
     def _sig_toggled(self, tab):
         if self.active_tab == tab:
             tab.handler_block(tab.sig_id)       # block signal until active statue modified
             tab.set_active(True)
             tab.handler_unblock(tab.sig_id)     # unblock signal
-            return              # no need to change, early return
+        else:
+            self.set_active(tab)
 
-        self.set_active(tab)
+        # scroll to the active tab, if not fully shown
+        self.scroll_to_active_tab()
     ### end of signal definition
 
 
     ### overridden function definition
     def append(self, tab):
-        self.hbox.pack_start(tab, False, False, 0)
+        self.tab_box.pack_start(tab, False, False, 0)
+        self.validate_tabbar_pos()
 
     def remove(self, tab):
-        self.hbox.remove(tab)
+        self.tab_box.remove(tab)
         tab.disconnect(tab.sig_id)
+        self.validate_tabbar_pos()
 
 
     def modify_font(self, font_desc):
         for tab in self.get_tab_list():
             tab.label.modify_font(font_desc)
+        self.tab_font = font_desc
+
+        self.scroll_left.label.modify_font(font_desc)
+        self.scroll_right.label.modify_font(font_desc)
 
     def modify_fg(self, state, color):
         for tab in self.get_tab_list():
             tab.label.modify_fg(state, color)
         self.tab_fg[state] = color
 
+
     def modify_bg(self, state, color):
         super(zTabbar, self).modify_bg(state, color)
+        self.viewport.modify_bg(state, color)
+
         for tab in self.get_tab_list():
             tab.modify_bg(state, color)
         self.tab_bg[state] = color
@@ -2809,6 +2945,7 @@ class zTabbar(z_ABC, gtk.EventBox):
         tab.set_property('can-default', False)
         tab.set_property('can-focus', False)
 
+        tab.label.modify_font(self.tab_font)
         for state in self.tab_fg:
             tab.label.modify_fg(state, self.tab_fg[state])
         for state in self.tab_bg:
@@ -2820,7 +2957,36 @@ class zTabbar(z_ABC, gtk.EventBox):
 
 
     def get_tab_list(self):
-        return self.hbox.get_children()
+        return self.tab_box.get_children()
+
+    def get_tabbar_len(self):
+        ( last_pos, last_len ) = self.get_tab_alloc(-1)
+        return last_pos + last_len
+
+    def get_tab_alloc(self, tab_or_indx):
+        '''return (x, width) of the given tab/index, or (-1, -1) if tab/index is invalid.'''
+        tab_list = self.get_tab_list()
+
+        if isinstance(tab_or_indx, zTabbar.zTab):
+            # is a zTab, check if it is in the list
+            if tab_or_indx in tab_list:
+                target_tab = tab_or_indx
+            else:
+                return -1, -1   # not a valid tab, early return
+        else:
+            # treated as index, try to fetch the corresponding zTab
+            try:
+                target_tab = tab_list[tab_or_indx]
+            except:
+                return -1, -1   # not a valid tab, early return
+
+        tab_pos = 0
+        for tab in tab_list:
+            if tab == target_tab:
+                return tab_pos, tab.size_request()[0]
+            else:
+                tab_pos += tab.size_request()[0]
+
 
     def get_label_of(self, tab):
         return tab.label.get_text()
@@ -2831,6 +2997,76 @@ class zTabbar(z_ABC, gtk.EventBox):
     def get_tab_label_list(self):
         return [ self.get_label_of(tab) for tab in self.get_tab_list() ]
 
+
+    def validate_tabbar_pos(self, pos = None):
+        if pos == None:
+            pos = self.viewport.hadj.get_value()
+
+        valid = True
+
+        alloc = self.viewport.get_allocation()
+        if alloc.x == -1:
+            # not allocated
+            self.scroll_left.set_property('sensitive', False)
+            self.scroll_right.set_property('sensitive', False)
+            return False, 0
+        tab_len = self.get_tabbar_len()
+
+        # validate lower bound
+        if pos <= 0:
+            pos = 0
+            valid = False
+            self.scroll_left.set_property('sensitive', False)
+        else:
+            self.scroll_left.set_property('sensitive', True)
+
+        # validate upper bound
+        if pos >= tab_len - alloc.width:
+            pos = max(0, tab_len - alloc.width)
+            valid = False
+            self.scroll_right.set_property('sensitive', False)
+        else:
+            self.scroll_right.set_property('sensitive', True)
+        
+        return valid, pos
+
+
+    ### viewport scrolling function
+    def loop_scroll_viewport_by(self, increment):
+        if not self.viewport.scrolling:
+            return False
+
+        # start scrolling, block 'clicked'
+        self.viewport.start_scrolling = True
+        return self.scroll_viewport_by(increment)
+
+    def scroll_to_active_tab(self):
+        alloc = self.viewport.get_allocation()
+        ( tab_pos, tab_len ) = self.get_tab_alloc(self.active_tab)
+        current_pos = self.viewport.hadj.get_value()
+
+        if tab_pos < current_pos:
+            # left not shown
+            increment = tab_pos - current_pos
+        elif tab_pos + tab_len > current_pos + alloc.width:
+            # right not shown
+            increment = (tab_pos + tab_len) - (current_pos + alloc.width)
+        else:
+            # fully shown
+            increment = 0
+        self.scroll_viewport_by(increment)
+
+    def scroll_viewport_by(self, increment):
+        if not increment:
+            return False        # no increment, early return
+
+        pos = self.viewport.hadj.get_value()
+        ( pos_valid, new_pos ) = self.validate_tabbar_pos(pos + increment)
+
+        self.viewport.hadj_preserve = None # clear preservation
+        self.viewport.hadj.set_value(new_pos)
+        return pos_valid
+    ### end of viewport scrolling function
 
 
 ######## ######## ######## ########
