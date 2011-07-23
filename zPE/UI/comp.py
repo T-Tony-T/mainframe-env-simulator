@@ -1134,7 +1134,7 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     ### signal for center
-    def _sig_button_press(self, widget, event, data = None):
+    def _sig_button_press(self, treeview, event, data = None):
         if event.button != 3:
             return
 
@@ -1143,21 +1143,21 @@ class zEdit(z_ABC, gtk.VBox):
 
         # fill the menu
         try:
-            ( tree_path, tree_col, dummy_x, dummy_y ) = widget.get_path_at_pos(int(event.x), int(event.y))
+            ( tree_path, tree_col, dummy_x, dummy_y ) = treeview.get_path_at_pos(int(event.x), int(event.y))
         except:
             # not on a row; select the last row
-            iterator = widget.model.get_iter_first()
-            while widget.model.iter_next(iterator):
-                iterator = widget.model.iter_next(iterator)
-            tree_path = widget.model.get_path(iterator)
-            tree_col = widget.fn_tree_col
-            widget.set_cursor(tree_path)
+            iterator = treeview.model.get_iter_first()
+            while treeview.model.iter_next(iterator):
+                iterator = treeview.model.iter_next(iterator)
+            tree_path = treeview.model.get_path(iterator)
+            tree_col = treeview.fn_tree_col
+            treeview.set_cursor(tree_path)
 
         if tree_path is None:
             raise LookupError
         elif len(tree_path) > 0:
-            iterator = widget.model.get_iter(tree_path)
-            obj = widget.model[iterator][0]
+            iterator = treeview.model.get_iter(tree_path)
+            obj = treeview.model[iterator][0]
         else:
             raise ValueError
 
@@ -1171,10 +1171,10 @@ class zEdit(z_ABC, gtk.VBox):
         menu.append(mi_new_folder)
         menu.append(mi_rename)
 
-        mi_open.connect_object("activate", widget._sig_open_file_from_tree, widget, tree_path)
-        mi_new_file.connect_object("activate", widget._sig_new_file, widget, tree_path, 'file')
-        mi_new_folder.connect_object("activate", widget._sig_new_file, widget, tree_path, 'dir')
-        mi_rename.connect_object("activate", widget._sig_rename_file, widget, tree_path)
+        mi_open.connect_object("activate", self.center._sig_open_file_from_tree, treeview, tree_path)
+        mi_new_file.connect_object("activate", self.center._sig_new_file, treeview, tree_path, 'file')
+        mi_new_folder.connect_object("activate", self.center._sig_new_file, treeview, tree_path, 'dir')
+        mi_rename.connect_object("activate", self.center._sig_rename_file, treeview, tree_path)
 
         # callback
         zEdit.reg_emit_from('populate_popup', self.center, menu)
@@ -1363,7 +1363,7 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
                 widget = zFileManager()
-                self.sig_id['button_press'] = widget.connect('button-press-event', self._sig_button_press)
+                self.sig_id['button_press'] = widget.treeview.connect('button-press-event', self._sig_button_press)
             else:
                 raise KeyError
 
@@ -1371,7 +1371,7 @@ class zEdit(z_ABC, gtk.VBox):
             if self.center:
                 zTheme.unregister('update_font', self.center)
                 if self.active_buffer.type == 'dir':
-                    self.center.disconnect(self.sig_id['button_press'])
+                    self.center.treeview.disconnect(self.sig_id['button_press'])
                     zEdit.unregister('populate_popup', self.center)
 
                 zTheme.unregister('update_font', self.center)
@@ -1891,8 +1891,8 @@ class zFileManager(gtk.VBox):
         self.__on_setting_folder = False
 
         # init widget reference relevant to editable column (file listing)
-        self.model = gtk.ListStore(str, bool)
-        self.treeview.set_model(self.model)
+        self.treeview.model = gtk.ListStore(str, bool)
+        self.treeview.set_model(self.treeview.model)
 
         self.fn_cell_rdr = gtk.CellRendererText()
 
@@ -1937,11 +1937,15 @@ class zFileManager(gtk.VBox):
         if self.__cell_data_func_skip['type']:
             # new
             if file_name:
-                # allocate the file/dir
-                if self.__cell_data_func_skip['type'] == 'file':
-                    io_encap.new_file([self.dirname, file_name])
-                elif self.__cell_data_func_skip['type'] == 'dir':
-                    io_encap.new_dir([self.dirname, file_name])
+                try:
+                    # allocate the file/dir
+                    if self.__cell_data_func_skip['type'] == 'file':
+                        io_encap.new_file([self.dirname, file_name])
+                    elif self.__cell_data_func_skip['type'] == 'dir':
+                        io_encap.new_dir([self.dirname, file_name])
+                except:
+                    self.refresh_folder() # reset the current folder
+                    raise
             else:
                 # self.set_folder() will remove the empty line
                 pass
@@ -1952,23 +1956,23 @@ class zFileManager(gtk.VBox):
                 os.renames(os.path.join(self.dirname, self.__file_name_old), os.path.join(self.dirname, file_name))
             else:
                 # retain the old name
-                self.model.set_value(iterator, 0, self.__file_name_old)
+                self.treeview.model.set_value(iterator, 0, self.__file_name_old)
 
         # update info
-        self.set_folder(self.dirname)
+        self.refresh_folder()
 
 
     def _sig_new_file(self, treeview, tree_path, new_type):
-        iterator = self.model.get_iter(tree_path)
+        iterator = self.treeview.model.get_iter(tree_path)
         tree_path_next = tree_path[:-1] + ( tree_path[-1] + 1, )
 
         # add new row in the fm
         self.__cell_data_func_skip['path'] = tree_path_next
         self.__cell_data_func_skip['type'] = new_type
-        self.model.insert_after(iterator)
+        self.treeview.model.insert_after(iterator)
 
         # make it editable
-        self.model.set_value(self.model.iter_next(iterator), 1, True)
+        self.treeview.model.set_value(self.treeview.model.iter_next(iterator), 1, True)
         self.treeview.set_cursor(self.__cell_data_func_skip['path'], self.fn_tree_col, True)
 
 
@@ -1983,10 +1987,11 @@ class zFileManager(gtk.VBox):
         else:
             self.path_entry.set_text(self.dirname + os.path.sep)
             self.path_entry.grab_focus()
+            raise ValueError('Cannot open "{0}".\n    Make sure the path is spelled correctly.'.format(fullpath))
 
     def _sig_open_file_from_tree(self, treeview, tree_path, tree_col = None):
-        iterator = self.model.get_iter(tree_path)
-        fn_list = [ self.dirname, self.model.get_value(iterator, 0) ]
+        iterator = self.treeview.model.get_iter(tree_path)
+        fn_list = [ self.dirname, self.treeview.model.get_value(iterator, 0) ]
 
         if io_encap.is_dir(fn_list):
             self.set_folder(os.path.join(*fn_list))
@@ -1995,18 +2000,21 @@ class zFileManager(gtk.VBox):
 
 
     def _sig_rename_file(self, treeview, tree_path):
-        iterator = self.model.get_iter(tree_path)
+        iterator = self.treeview.model.get_iter(tree_path)
 
         # record the old name
-        self.__file_name_old = self.model.get_value(iterator, 0)
+        self.__file_name_old = self.treeview.model.get_value(iterator, 0)
 
         # make it editable
-        self.model.set_value(iterator, 1, True)
+        self.treeview.model.set_value(iterator, 1, True)
         self.treeview.set_cursor(tree_path, self.fn_tree_col, True)
     ### end of signal definition
 
 
     ### overridden function definition
+    def is_focus(self):
+        return self.path_entry.is_focus() or self.treeview.is_focus()
+
     def grab_focus(self):
         self.treeview.grab_focus()
         self.treeview.set_cursor((0,))
@@ -2060,11 +2068,11 @@ class zFileManager(gtk.VBox):
         dir_list = ['..'] + dir_list
 
         # update model with the listing
-        self.model.clear()
+        self.treeview.model.clear()
         for fn in dir_list:
-            self.model.append([fn, False])
+            self.treeview.model.append([fn, False])
         for fn in file_list:
-            self.model.append([fn, False])
+            self.treeview.model.append([fn, False])
         self.path_entry.set_text(self.dirname + os.path.sep)
 
         self.grab_focus()
@@ -2075,6 +2083,10 @@ class zFileManager(gtk.VBox):
         self.__file_name_old = ''
 
         self.__on_setting_folder = False
+
+
+    def refresh_folder(self):
+        self.set_folder(self.dirname)
 
 
     ### cell data function
@@ -2090,14 +2102,14 @@ class zFileManager(gtk.VBox):
 
     def __file_pixbuf(self, indx, iterator):
         if ( self.__cell_data_func_skip['type']  and
-             self.__cell_data_func_skip['path'] == self.model.get_path(iterator)
+             self.__cell_data_func_skip['path'] == self.treeview.model.get_path(iterator)
              ):
             if self.__cell_data_func_skip['type'] == 'file':
                 pb = zFileManager.filepb
             else:
                 pb = zFileManager.folderpb
         else:
-            filename = os.path.join(self.dirname, self.model.get_value(iterator, 0))
+            filename = os.path.join(self.dirname, self.treeview.model.get_value(iterator, 0))
             filestat = os.stat(filename)
 
             if stat.S_ISDIR(filestat.st_mode):
@@ -2109,12 +2121,12 @@ class zFileManager(gtk.VBox):
 
     def __file_size(self, indx, iterator):
         if ( self.__cell_data_func_skip['type']  and
-             self.__cell_data_func_skip['path'] == self.model.get_path(iterator)
+             self.__cell_data_func_skip['path'] == self.treeview.model.get_path(iterator)
              ):
             self.cell_list[indx].set_property('text', '')
             return
             
-        filename = os.path.join(self.dirname, self.model.get_value(iterator, 0))
+        filename = os.path.join(self.dirname, self.treeview.model.get_value(iterator, 0))
         filestat = os.stat(filename)
 
         size = filestat.st_size
@@ -2137,12 +2149,12 @@ class zFileManager(gtk.VBox):
 
     def __file_last_changed(self, indx, iterator):
         if ( self.__cell_data_func_skip['type']  and
-             self.__cell_data_func_skip['path'] == self.model.get_path(iterator)
+             self.__cell_data_func_skip['path'] == self.treeview.model.get_path(iterator)
              ):
             self.cell_list[indx].set_property('text', '')
             return
 
-        filename = os.path.join(self.dirname, self.model.get_value(iterator, 0))
+        filename = os.path.join(self.dirname, self.treeview.model.get_value(iterator, 0))
         filestat = os.stat(filename)
 
         self.cell_list[indx].set_property('text', time.ctime(filestat.st_mtime))

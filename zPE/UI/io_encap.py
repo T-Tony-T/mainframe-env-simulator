@@ -17,10 +17,20 @@ def is_dir(dsn):
 
 
 def new_file(dsn):
-    if not is_file(dsn):
-        open_file(dsn, 'w')
+    if is_file(dsn):
+        raise IOError('File already exists.')
+    elif is_dir(dsn):
+        raise IOError('File name conflict with a folder.')
+
+    open_file(dsn, 'w')
+        
 
 def new_dir(dsn):
+    if is_file(dsn):
+        raise IOError('Folder name conflict with a file.')
+    elif is_dir(dsn):
+        raise IOError('Folder already exists.')
+
     __CREATE_DIR(os.path.join(* dsn))
 
 
@@ -38,11 +48,14 @@ def fetch(buff):
         return False
 
     if is_binary(buff.path):
-        return False
+        raise TypeError('Cannot fetch content out of a binary file.')
 
     fp = open_file(buff.path, 'r')
     tb = buff.buffer
-    tb.set_text(fp.read())
+    try:
+        tb.set_text(fp.read().decode('utf8'))
+    except:
+        raise UnicodeError('File is not in UTF-8 encoding! Convert it to UTF-8 first.')
     return True
 
 def flush(buff):
