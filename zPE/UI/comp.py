@@ -63,6 +63,12 @@ class z_ABC(object):
         cls._auto_update[sig] = reserve
 
     @classmethod
+    def reg_is_registered(cls, sig, widget):
+        return ( sig    in  cls._auto_update  and
+                 widget in [ item[0] for item in cls._auto_update[sig] ]
+                 )
+
+    @classmethod
     def reg_block(cls, sig):
         '''This function block the signal to disable its emission'''
         if sig not in cls._auto_update_blocked:
@@ -669,7 +675,7 @@ class zEdit(z_ABC, gtk.VBox):
         #   +--+--+------+_/
         #   +--+--+------+_
         #   ||           | \
-        #   ||           |  scrolled_window
+        #   ||           |  center_shell
         #   ||  center   |
         #   ||           |
         #   |+-----------|
@@ -695,11 +701,7 @@ class zEdit(z_ABC, gtk.VBox):
         self.buffer_sw.set_row_separator_func(self.__separator)
 
         # create the main window frame
-        self.scrolled = gtk.ScrolledWindow()
-        self.pack_start(self.scrolled, True, True, 0)
-        self.scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
-        self.scrolled.set_placement(gtk.CORNER_TOP_RIGHT)
-
+        self.center_shell = None
         self.center = None
         self.set_buffer(buffer_path, buffer_type)
 
@@ -728,10 +730,10 @@ class zEdit(z_ABC, gtk.VBox):
                 # tabbar off
                 self.tabbar = zTabbar()
                 if not self.__on_init:
-                    self.remove(self.scrolled)
+                    self.remove(self.center_shell)
                 self.pack_start(self.tabbar, False, False, 0)
                 if not self.__on_init:
-                    self.pack_start(self.scrolled, True, True, 0)
+                    self.pack_start(self.center_shell, True, True, 0)
 
                 if self.__on_init:
                     self.tab_on_current = True
@@ -1169,7 +1171,7 @@ class zEdit(z_ABC, gtk.VBox):
         menu.append(mi_new_folder)
         menu.append(mi_rename)
 
-        mi_open.connect_object("activate", widget._sig_open_file, widget, tree_path)
+        mi_open.connect_object("activate", widget._sig_open_file_from_tree, widget, tree_path)
         mi_new_file.connect_object("activate", widget._sig_new_file, widget, tree_path, 'file')
         mi_new_folder.connect_object("activate", widget._sig_new_file, widget, tree_path, 'dir')
         mi_rename.connect_object("activate", widget._sig_rename_file, widget, tree_path)
@@ -1255,11 +1257,30 @@ class zEdit(z_ABC, gtk.VBox):
         zEdit.register(sig, callback, self.center, *data)
         return sig, self.center
 
-    def disconnect(self, sig_id):
-        if isinstance(sig_id, int):
-            self.center.disconnect(sig_id)
+    def disconnect(self, handler):
+        if isinstance(handler, int):
+            self.center.disconnect(handler)
         else:
-            zEdit.unregister(sig, self.center)
+            zEdit.unregister(handler, self.center)
+
+    def handler_is_connected(self, handler):
+        if isinstance(handler, int):
+            return self.center.handler_is_connected(handler)
+        else:
+            return zEdit.reg_is_registered(sig, self.center)
+
+    def handler_block(self, handler):
+        if isinstance(handler, int):
+            self.center.handler_block(handler)
+        else:
+            zEdit.reg_block(handler)
+
+    def handler_unblock(self, handler):
+        if isinstance(handler, int):
+            self.center.handler_unblock(handler)
+        else:
+            zEdit.reg_unblock(handler)
+
 
     def is_focus(self):
         return self.center.is_focus()
@@ -1332,8 +1353,15 @@ class zEdit(z_ABC, gtk.VBox):
 
             # create widget
             if new_buff.type == 'file':
+                widget_shell = gtk.ScrolledWindow()
+                widget_shell.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
+                widget_shell.set_placement(gtk.CORNER_TOP_RIGHT)
+
                 widget = zTextView()
             elif new_buff.type == 'dir':
+                widget_shell = gtk.Frame()
+                widget_shell.set_shadow_type(gtk.SHADOW_NONE)
+
                 widget = zFileManager()
                 self.sig_id['button_press'] = widget.connect('button-press-event', self._sig_button_press)
             else:
@@ -1351,9 +1379,12 @@ class zEdit(z_ABC, gtk.VBox):
                 self.center.disconnect(self.sig_id['focus_out'])
                 self.center.disconnect(self.sig_id['key_press'])
 
-                self.scrolled.remove(self.center)
+                self.center_shell.remove(self.center)
+                self.remove(self.center_shell)
+            self.center_shell = widget_shell
             self.center = widget
-            self.scrolled.add(self.center)
+            self.center_shell.add(self.center)
+            self.pack_start(self.center_shell, True, True, 0)
 
             zTheme.register('update_font', zTheme._sig_update_font_modify, self.center)
             self.sig_id['focus_in'] = self.center.connect('focus-in-event', self._sig_focus_in)
@@ -1771,7 +1802,7 @@ class zErrConsole(gtk.Window):
 ########   zFileManager    ########
 ######## ######## ######## ########
 
-class zFileManager(gtk.TreeView):
+class zFileManager(gtk.VBox):
     '''A Light-Weighted File Manager Used by zEdit Class'''
     folderxpm = [
         "17 16 7 1",
@@ -1834,6 +1865,23 @@ class zFileManager(gtk.TreeView):
     def __init__(self, dname = None):
         super(zFileManager, self).__init__()
 
+
+        path_box = gtk.HBox()
+        self.path_entry_label = gtk.Label('Path: ')
+        self.path_entry = gtk.Entry()
+        path_box.pack_start(self.path_entry_label, False, False, 0)
+        path_box.pack_start(self.path_entry, True, True, 0)
+
+        scrolled = gtk.ScrolledWindow()
+        scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
+        scrolled.set_placement(gtk.CORNER_TOP_RIGHT)
+        self.treeview = gtk.TreeView()
+        scrolled.add(self.treeview)
+
+        self.pack_start(path_box, False, False, 0)
+        self.pack_start(scrolled, True, True, 0)
+
+
         # init flags
         self.__cell_data_func_skip = { # if set, no auto testing
             'path' : None,             # path of the skipping item
@@ -1844,7 +1892,7 @@ class zFileManager(gtk.TreeView):
 
         # init widget reference relevant to editable column (file listing)
         self.model = gtk.ListStore(str, bool)
-        self.set_model(self.model)
+        self.treeview.set_model(self.model)
 
         self.fn_cell_rdr = gtk.CellRendererText()
 
@@ -1873,10 +1921,11 @@ class zFileManager(gtk.TreeView):
             self.cell_list[n].set_property('xalign', zFileManager.column_xalign[n])
             self.column_list[n].set_resizable(zFileManager.column_resizable[n])
             self.column_list[n].set_sizing(zFileManager.column_sizing[n])
-            self.append_column(self.column_list[n])
+            self.treeview.append_column(self.column_list[n])
 
         # connect signal
-        self.connect('row-activated', self._sig_open_file)
+        self.path_entry.connect('activate', self._sig_open_file_from_entry)
+        self.treeview.connect('row-activated', self._sig_open_file_from_tree)
         self.fn_cell_rdr.connect('edited', self._sig_entry_edited)
 
         # set cwd
@@ -1920,10 +1969,22 @@ class zFileManager(gtk.TreeView):
 
         # make it editable
         self.model.set_value(self.model.iter_next(iterator), 1, True)
-        self.set_cursor(self.__cell_data_func_skip['path'], self.fn_tree_col, True)
+        self.treeview.set_cursor(self.__cell_data_func_skip['path'], self.fn_tree_col, True)
 
 
-    def _sig_open_file(self, treeview, tree_path, tree_col = None):
+    def _sig_open_file_from_entry(self, entry):
+        fullpath = os.path.abspath(os.path.expanduser(self.path_entry.get_text()))
+        fn_list = os.path.split(fullpath)
+
+        if io_encap.is_dir(fn_list):
+            self.set_folder(os.path.join(*fn_list))
+        elif io_encap.is_file(fn_list):
+            self.open_file(fn_list)
+        else:
+            self.path_entry.set_text(self.dirname + os.path.sep)
+            self.path_entry.grab_focus()
+
+    def _sig_open_file_from_tree(self, treeview, tree_path, tree_col = None):
         iterator = self.model.get_iter(tree_path)
         fn_list = [ self.dirname, self.model.get_value(iterator, 0) ]
 
@@ -1941,20 +2002,30 @@ class zFileManager(gtk.TreeView):
 
         # make it editable
         self.model.set_value(iterator, 1, True)
-        self.set_cursor(tree_path, self.fn_tree_col, True)
+        self.treeview.set_cursor(tree_path, self.fn_tree_col, True)
     ### end of signal definition
 
 
     ### overridden function definition
     def grab_focus(self):
-        super(zFileManager, self).grab_focus()
-        self.set_cursor((0,))
+        self.treeview.grab_focus()
+        self.treeview.set_cursor((0,))
 
     def modify_font(self, font_desc):
-        super(zFileManager, self).modify_font(font_desc)
+        self.path_entry_label.modify_font(font_desc)
+        self.path_entry.modify_font(font_desc)
+        self.treeview.modify_font(font_desc)
         # resize the Name field
         (w, h) = self.create_pango_layout('w').get_pixel_size()
         self.fn_tree_col.set_fixed_width(w * zTheme.DISC['fn_len'])
+
+    def modify_base(self, state, color):
+        self.path_entry.modify_base(state, color)
+        self.treeview.modify_base(state, color)
+
+    def modify_text(self, state, color):
+        self.path_entry.modify_text(state, color)
+        self.treeview.modify_text(state, color)
     ### end of overridden function definition
 
 
@@ -1994,6 +2065,7 @@ class zFileManager(gtk.TreeView):
             self.model.append([fn, False])
         for fn in file_list:
             self.model.append([fn, False])
+        self.path_entry.set_text(self.dirname + os.path.sep)
 
         self.grab_focus()
 
@@ -2158,8 +2230,8 @@ class zLastLine(gtk.HBox):
 
 
     ### overridden function definition
-    def connect(self, sig, *data):
-        return self.__line_interactive.connect(sig, *data)
+    def connect(self, sig, callback, *data):
+        return self.__line_interactive.connect(sig, callback, *data)
 
     def get_label(self):
         return self.__label.get_text()
