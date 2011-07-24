@@ -27,7 +27,7 @@ setup(
         ],
     },
     package_data = {
-        'UI': [ '*.svg', '*.png' ]
+        'UI': [ '*.svg', '*.png', '*.gif' ]
     },
     long_description=read('README'),
 )

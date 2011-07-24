@@ -22,6 +22,11 @@ class BaseFrame(object):
             'prog_show_config'          : lambda *arg: self.config_window.open(),
             'prog_show_error'           : lambda *arg: self.err_console.open(),
             'prog_quit'                 : lambda *arg: self._sig_quit(None),
+
+            'window_split_horz'         : lambda *arg: self._sig_sw_manip(None, 'split_horz'),
+            'window_split_vert'         : lambda *arg: self._sig_sw_manip(None, 'split_vert'),
+            'window_delete'             : lambda *arg: self._sig_sw_manip(None, 'delete'),
+            'window_delete_other'       : lambda *arg: self._sig_sw_manip(None, 'delete_other'),
             }
 
 
@@ -39,12 +44,12 @@ class BaseFrame(object):
         ### create top-level frame
         self.root = gtk.Window(gtk.WINDOW_TOPLEVEL)
 
-        self.root.connect("delete_event", self.delete_event)
-        self.root.connect("destroy", self._sig_quit)
+        self.root.connect('delete_event', self.delete_event)
+        self.root.connect('destroy', self._sig_quit)
 
-        self.root.set_title("zPE - Mainframe Programming Environment Simulator")
+        self.root.set_title('zPE - Mainframe Programming Environment Simulator')
         self.root.set_icon_from_file( os.path.join(
-                os.path.dirname(__file__), "image", "icon_zPE.gif"
+                os.path.dirname(__file__), 'image', 'icon_zPE.gif'
                 ) )
         self.root.set_size_request(800, 560)
 
@@ -60,6 +65,7 @@ class BaseFrame(object):
 
         self.toolbar.set_orientation(gtk.ORIENTATION_HORIZONTAL)
         self.toolbar.set_style(gtk.TOOLBAR_ICONS)
+        self.toolbar.set_icon_size(gtk.ICON_SIZE_LARGE_TOOLBAR)
         self.toolbar.set_tooltips(True)
 
         ## create toolbar buttons
@@ -71,6 +77,27 @@ class BaseFrame(object):
         self.tool_buff_save_as.set_tooltip_text('Save Current Buffer As ...')
         self.tool_buff_close = gtk.ToolButton(gtk.STOCK_CLOSE)
         self.tool_buff_close.set_tooltip_text('Close Current Buffer')
+
+        bttn_icon = gtk.image_new_from_file(
+            os.path.join(os.path.dirname(__file__), 'image', 'view-split-left-right.png')
+            )
+        self.tool_win_split_horz = gtk.ToolButton(bttn_icon)
+        self.tool_win_split_horz.set_tooltip_text('Split Current Focused Window Horizontally')
+        bttn_icon = gtk.image_new_from_file(
+            os.path.join(os.path.dirname(__file__), 'image', 'view-split-top-bottom.png')
+            )
+        self.tool_win_split_vert = gtk.ToolButton(bttn_icon)
+        self.tool_win_split_vert.set_tooltip_text('Split Current Focused Window Vertically')
+        bttn_icon = gtk.image_new_from_file(
+            os.path.join(os.path.dirname(__file__), 'image', 'view-left-close.png')
+            )
+        self.tool_win_delete = gtk.ToolButton(bttn_icon)
+        self.tool_win_delete.set_tooltip_text('Close Current Focused Frame')
+        bttn_icon = gtk.image_new_from_file(
+            os.path.join(os.path.dirname(__file__), 'image', 'view-close.png')
+            )
+        self.tool_win_delete_other = gtk.ToolButton(bttn_icon)
+        self.tool_win_delete_other.set_tooltip_text('Close All Frames but the Current One')
 
         self.tool_config = gtk.ToolButton(gtk.STOCK_PREFERENCES)
         self.tool_config.set_tooltip_text('Show the Config Window')
@@ -87,20 +114,32 @@ class BaseFrame(object):
 
         self.toolbar.insert(gtk.SeparatorToolItem(), 4)
 
-        self.toolbar.insert(self.tool_config, 5)
-        self.toolbar.insert(self.tool_err_console, 6)
-        self.toolbar.insert(self.tool_quit, 7)
+        self.toolbar.insert(self.tool_win_split_horz, 5)
+        self.toolbar.insert(self.tool_win_split_vert, 6)
+        self.toolbar.insert(self.tool_win_delete, 7)
+        self.toolbar.insert(self.tool_win_delete_other, 8)
+
+        self.toolbar.insert(gtk.SeparatorToolItem(), 9)
+
+        self.toolbar.insert(self.tool_config, 10)
+        self.toolbar.insert(self.tool_err_console, 11)
+        self.toolbar.insert(self.tool_quit, 12)
 
         ## connect auto-update items
         comp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
 
-        comp.zSplitScreen.register('frame_removed', comp.zEdit.reg_clean_up)
-        comp.zSplitScreen.register('frame_removed', comp.zEditBuffer.reg_clean_up)
-        comp.zSplitScreen.register('frame_removed', comp.zTheme.reg_clean_up)
+        comp.zSplitWindow.register('frame_removed', comp.zEdit.reg_clean_up)
+        comp.zSplitWindow.register('frame_removed', comp.zEditBuffer.reg_clean_up)
+        comp.zSplitWindow.register('frame_removed', comp.zTheme.reg_clean_up)
 
 
         ## connect signals
         self.tool_buff_open.connect('clicked', self._sig_buff_manip, 'open')
+
+        self.tool_win_split_horz.connect('clicked', self._sig_sw_manip, 'split_horz')
+        self.tool_win_split_vert.connect('clicked', self._sig_sw_manip, 'split_vert')
+        self.tool_win_delete.connect('clicked', self._sig_sw_manip, 'delete')
+        self.tool_win_delete_other.connect('clicked', self._sig_sw_manip, 'delete_other')
 
         self.tool_config.connect('clicked', self.__key_binding_func['prog_show_config'])
         self.tool_err_console.connect('clicked', self.__key_binding_func['prog_show_error'])
@@ -108,7 +147,7 @@ class BaseFrame(object):
 
 
         ### create main window
-        self.mw = comp.zSplitScreen(comp.zEdit, [], self.frame_init, self.frame_split_dup)
+        self.mw = comp.zSplitWindow(comp.zEdit, [], self.frame_init, self.frame_split_dup)
         w_vbox.pack_start(self.mw, True, True, 0)
 
 
@@ -200,18 +239,51 @@ class BaseFrame(object):
         # check save here       #
         #########################
         gtk.main_quit()
+
+
+    def _sig_sw_manip(self, widget, task):
+        frame = self.mw.active_frame()
+
+        if not frame.is_focus():
+            raise AssertionError('The main window is not focused!')
+        elif task == 'split_horz':
+            self.mw.window_split_horz(frame)
+        elif task == 'split_vert':
+            self.mw.window_split_vert(frame)
+        elif task == 'delete':
+            self.mw.window_delete(frame)
+            self.mw.grab_focus() # focus will be lost for sure
+        elif task == 'delete_other':
+            self.mw.window_delete_other(frame)
+        else:
+            raise KeyError
     ### end of top level signals
 
 
-    ### signals for SplitScreen
+    ### signals for SplitWindow
     def _sig_popup_manip(self, widget, menu, data = None):
         menu.append(gtk.SeparatorMenuItem())
-        menu.append(gtk.MenuItem("test"))
+
+        mi_split_horz = gtk.MenuItem('Split Horizontally <_3>')
+        mi_split_vert = gtk.MenuItem('Split Vertically <_2>')
+        mi_delete = gtk.MenuItem('Close Current Frame <_0>')
+        mi_delete_other = gtk.MenuItem('Close Other Frames <_1>')
+
+        menu.append(mi_split_horz)
+        menu.append(mi_split_vert)
+        menu.append(mi_delete)
+        menu.append(mi_delete_other)
+
+        mi_split_horz.connect('activate', self._sig_sw_manip, 'split_horz')
+        mi_split_vert.connect('activate', self._sig_sw_manip, 'split_vert')
+        mi_delete.connect('activate', self._sig_sw_manip, 'delete')
+        mi_delete_other.connect('activate', self._sig_sw_manip, 'delete_other')
+
         menu.show_all()
-    ### end of signals for SplitScreen
+    ### end of signals for SplitWindow
 
 
-    ### callback functions for SplitScreen
+    ### callback functions for SplitWindow
     def frame_init(self, frame):
         frame.connect('populate_popup', self._sig_popup_manip)
 
@@ -222,7 +294,7 @@ class BaseFrame(object):
             new_frame = comp.zEdit()
 
         return new_frame
-    ### end of callback functions for SplitScreen
+    ### end of callback functions for SplitWindow
 
 
     ### key binding
@@ -247,7 +319,7 @@ class ConfigWindow(gtk.Window):
         super(ConfigWindow, self).__init__()
 
         self.set_destroy_with_parent(True)
-        self.connect("delete_event", self._sig_cancel_mod)
+        self.connect('delete_event', self._sig_cancel_mod)
 
         self.set_title('zPE Config')
 
@@ -274,6 +346,7 @@ class ConfigWindow(gtk.Window):
         #   +------+--+--+
 
         self.__ebox = gtk.EventBox()
+        self.__ebox.set_visible_window(False)
         self.add(self.__ebox)
 
         layout = gtk.VBox()
@@ -326,7 +399,7 @@ class ConfigWindow(gtk.Window):
             font_sw_cell[key] = gtk.CellRendererText()
 
             self.font_sw[key].pack_start(font_sw_cell[key], True)
-            self.font_sw[key].add_attribute(font_sw_cell[key], "text", 0)
+            self.font_sw[key].add_attribute(font_sw_cell[key], 'text', 0)
 
             self.__label['LABEL'].append(gtk.Label('{0}:'.format(key.title())))
             ct_gui_font.child.pack_start(self.__label['LABEL'][-1], False, False, 5)
@@ -556,7 +629,8 @@ class ConfigWindow(gtk.Window):
 
     ### top-level signal definition
     def _sig_clear_rc(self, *arg):
-        conf.init_rc_all()      # re-initiate config
+        conf.reset_key_binding() # reset all key bindings
+        conf.init_rc_all()       # re-initiate config
         self.load_rc()
 
     def _sig_open_console(self, *arg):

@@ -473,7 +473,7 @@ class zComboBox(z_ABC, gtk.ToolButton):
             else:
                 mi = gtk.MenuItem(item[self.effective_column], False)
                 self.menu.append(mi)
-                mi.connect("activate", self._sig_item_selected, indx)
+                mi.connect('activate', self._sig_item_selected, indx)
 
                 for (k, v) in self.color_fg.iteritems():
                     mi.child.modify_fg(k, v)
@@ -631,6 +631,11 @@ class zEdit(z_ABC, gtk.VBox):
         'prog_show_help'        : [  ],
         'prog_show_about'       : [  ],
         'prog_quit'             : [  ],
+
+        'window_split_horz'     : [  ],
+        'window_split_vert'     : [  ],
+        'window_delete'         : [  ],
+        'window_delete_other'   : [  ],
         }
 
     def __init__(self, buffer_path = None, buffer_type = None):
@@ -658,8 +663,7 @@ class zEdit(z_ABC, gtk.VBox):
 
 
         if not zEdit.__last_line:
-            zEdit.__last_line = zLastLine()
-            zEdit.__last_line_sig_id = zEdit.__last_line.connect('key-press-event', zEdit._sig_key_pressed)
+            zEdit.set_last_line(zLastLine())
 
         self.__on_init = True
 
@@ -716,8 +720,8 @@ class zEdit(z_ABC, gtk.VBox):
 
         zTheme.register('update_color_map', self._sig_update_color_map, self)
 
-        # connect signal
         zComboBox.register('changed', self._sig_combo_changed, self.buffer_sw)
+
 
         self.__on_init = False
 
@@ -1171,10 +1175,10 @@ class zEdit(z_ABC, gtk.VBox):
         menu.append(mi_new_folder)
         menu.append(mi_rename)
 
-        mi_open.connect_object("activate", self.center._sig_open_file_from_tree, treeview, tree_path)
-        mi_new_file.connect_object("activate", self.center._sig_new_file, treeview, tree_path, 'file')
-        mi_new_folder.connect_object("activate", self.center._sig_new_file, treeview, tree_path, 'dir')
-        mi_rename.connect_object("activate", self.center._sig_rename_file, treeview, tree_path)
+        mi_open.connect_object('activate', self.center._sig_open_file_from_tree, treeview, tree_path)
+        mi_new_file.connect_object('activate', self.center._sig_new_file, treeview, tree_path, 'file')
+        mi_new_folder.connect_object('activate', self.center._sig_new_file, treeview, tree_path, 'dir')
+        mi_rename.connect_object('activate', self.center._sig_rename_file, treeview, tree_path)
 
         # callback
         zEdit.reg_emit_from('populate_popup', self.center, menu)
@@ -1358,12 +1362,19 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell.set_placement(gtk.CORNER_TOP_RIGHT)
 
                 widget = zTextView()
+                widget_key_press_id = {
+                    widget : widget.connect('key-press-event', zEdit._sig_key_pressed),
+                    }
             elif new_buff.type == 'dir':
                 widget_shell = gtk.Frame()
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
-                widget = zFileManager()
+                widget = zFileManager(self)
                 self.sig_id['button_press'] = widget.treeview.connect('button-press-event', self._sig_button_press)
+                widget_key_press_id = {
+                    widget.path_entry : widget.path_entry.connect('key-press-event', zEdit._sig_key_pressed),
+                    widget.treeview   : widget.treeview.connect('key-press-event', zEdit._sig_key_pressed),
+                    }
             else:
                 raise KeyError
 
@@ -1377,7 +1388,8 @@ class zEdit(z_ABC, gtk.VBox):
                 zTheme.unregister('update_font', self.center)
                 self.center.disconnect(self.sig_id['focus_in'])
                 self.center.disconnect(self.sig_id['focus_out'])
-                self.center.disconnect(self.sig_id['key_press'])
+                for (k, v) in self.sig_id['key_press'].iteritems():
+                    k.disconnect(v)
 
                 self.center_shell.remove(self.center)
                 self.remove(self.center_shell)
@@ -1389,7 +1401,7 @@ class zEdit(z_ABC, gtk.VBox):
             zTheme.register('update_font', zTheme._sig_update_font_modify, self.center)
             self.sig_id['focus_in'] = self.center.connect('focus-in-event', self._sig_focus_in)
             self.sig_id['focus_out'] = self.center.connect('focus-out-event', self._sig_focus_out)
-            self.sig_id['key_press'] = self.center.connect('key-press-event', zEdit._sig_key_pressed)
+            self.sig_id['key_press'] = widget_key_press_id
 
             zTheme._sig_update_font_modify(self.center)
             self._sig_update_color_map()
@@ -1425,7 +1437,7 @@ class zEdit(z_ABC, gtk.VBox):
     @staticmethod
     def set_last_line(lastline):
         if zEdit.__last_line != lastline:
-            if zEdit.__last_line.handler_is_connected(zEdit.__last_line_sig_id):
+            if zEdit.__last_line and zEdit.__last_line.handler_is_connected(zEdit.__last_line_sig_id):
                 zEdit.__last_line.disconnect(zEdit.__last_line_sig_id)
             zEdit.__last_line = lastline
             zEdit.__last_line_sig_id = zEdit.__last_line.connect('key-press-event', zEdit._sig_key_pressed)
@@ -1568,7 +1580,7 @@ class zEditBuffer(z_ABC):
                             break
                 if no_rec:
                     # no duplication, generate new name of the new file
-                    self.name += "(" + str(len(zEditBuffer.buff_rec[self.name])) + ")"
+                    self.name += '(' + str(len(zEditBuffer.buff_rec[self.name])) + ')'
 
             if no_rec:
                 # name not in record, add it
@@ -1669,7 +1681,7 @@ class zErrConsole(gtk.Window):
         self.setup = True       # in setup phase, write to stderr as well
 
         self.set_destroy_with_parent(True)
-        self.connect("delete_event", self._sig_close_console)
+        self.connect('delete_event', self._sig_close_console)
 
         self.set_title(title)
 
@@ -1862,9 +1874,16 @@ class zFileManager(gtk.VBox):
         gtk.TREE_VIEW_COLUMN_AUTOSIZE
         ]
 
-    def __init__(self, dname = None):
+    def __init__(self, z_editor):
+        '''
+        z_editor
+            the zEdit (or equivalent object) that can open the file with
+            set_buffer(fn_list, tpye) method call.
+        '''
         super(zFileManager, self).__init__()
 
+
+        self.z_editor = z_editor
 
         path_box = gtk.HBox()
         self.path_entry_label = gtk.Label('Path: ')
@@ -1923,13 +1942,29 @@ class zFileManager(gtk.VBox):
             self.column_list[n].set_sizing(zFileManager.column_sizing[n])
             self.treeview.append_column(self.column_list[n])
 
-        # connect signal
+        # connect signal for redirection
+        self.path_entry.connect('focus-in-event',  self._focus_evnt_redirect, 'focus-in-event')
+        self.treeview.connect(  'focus-in-event',  self._focus_evnt_redirect, 'focus-in-event')
+        self.path_entry.connect('focus-out-event', self._focus_evnt_redirect, 'focus-out-event')
+        self.treeview.connect(  'focus-out-event', self._focus_evnt_redirect, 'focus-out-event')
+
+        # connect signal for internal usage
         self.path_entry.connect('activate', self._sig_open_file_from_entry)
         self.treeview.connect('row-activated', self._sig_open_file_from_tree)
         self.fn_cell_rdr.connect('edited', self._sig_entry_edited)
 
         # set cwd
-        self.set_folder(dname)
+        self.set_folder()
+
+
+    ### signal redirection definition
+    def _focus_evnt_redirect(self, widget, event, sig):
+        if self.is_focus():
+            sig = 'focus-in-event'
+        else:
+            sig = 'focus-out-event'
+        self.emit(sig, event)
+    ### end of signal redirection definition
 
 
     ### signal definition
@@ -2038,7 +2073,7 @@ class zFileManager(gtk.VBox):
 
 
     def open_file(self, fn_list):
-        self.parent.parent.set_buffer(fn_list, 'file')
+        self.z_editor.set_buffer(fn_list, 'file')
 
 
     def set_folder(self, fullpath = None):
@@ -2245,6 +2280,19 @@ class zLastLine(gtk.HBox):
     def connect(self, sig, callback, *data):
         return self.__line_interactive.connect(sig, callback, *data)
 
+    def disconnect(self, handler):
+        self.__line_interactive.disconnect(handler)
+
+    def handler_is_connected(self, handler):
+        return self.__line_interactive.handler_is_connected(handler)
+
+    def handler_block(self, handler):
+        self.__line_interactive.handler_block(handler)
+
+    def handler_unblock(self, handler):
+        self.__line_interactive.handler_unblock(handler)
+
+
     def get_label(self):
         return self.__label.get_text()
 
@@ -2328,11 +2376,11 @@ class zLastLine(gtk.HBox):
 
 
 ######## ######## ######## ########
-########   zSplitScreen    ########
+########   zSplitWindow    ########
 ######## ######## ######## ########
 
-class zSplitScreen(z_ABC, gtk.Frame):
-    '''A Split-Screen Frame with DnD Splitting Supported'''
+class zSplitWindow(z_ABC, gtk.Frame):
+    '''A Split-Window Frame with DnD Splitting Supported'''
     _auto_update = {
         # 'signal_like_string'  : [ callback, ... ]
         'frame_removed'         : [  ],
@@ -2354,12 +2402,12 @@ class zSplitScreen(z_ABC, gtk.Frame):
             a construction function of a GtkWidget which will be
             the frame of the inner window.
 
-            e.g. comp.zSplitScreen(gtk.Label)
+            e.g. comp.zSplitWindow(gtk.Label)
 
         frame_alist = []
             the argument list of the "frame".
 
-            e.g. comp.zSplitScreen(gtk.Label, ['Test Label'])
+            e.g. comp.zSplitWindow(gtk.Label, ['Test Label'])
 
         frame_init = None
             a callback function that will be called after every
@@ -2386,7 +2434,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
         frame_sz_min
             the minimum size required for each "frame"
         '''
-        super(zSplitScreen, self).__init__()
+        super(zSplitWindow, self).__init__()
 
 
         self.frame = frame
@@ -2395,7 +2443,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
         self.frame_split_dup = frame_split_dup
         self.frame_sz_min = frame_sz_min
 
-        # layout of the zSplitScreen:
+        # layout of the zSplitWindow:
         #
         #   0 1          2 3
         # 0 +-+----------+-+ 0
@@ -2452,12 +2500,12 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
         # connect signals for control-bars
         drag_icon = gtk.gdk.pixbuf_new_from_file(
-            os.path.join(os.path.dirname(__file__), "image", "min_empty.gif")
+            os.path.join(os.path.dirname(__file__), 'image', 'min_empty.gif')
             )
         for pos in self.__ctrl_pos['a']:
             self.ctrl_bar[pos].set_property('can-default', False)
             self.ctrl_bar[pos].set_property('can-focus', False)
-            self.ctrl_bar[pos].connect_object('clicked', self.add_paned, self.mw_center, pos)
+            self.ctrl_bar[pos].connect_object('clicked', self.window_split, self.mw_center, pos)
             self.ctrl_bar[pos].drag_source_set(gtk.gdk.BUTTON1_MASK, [], 0)
             self.ctrl_bar[pos].connect('drag_begin', self._sig_ctrl_drag, drag_icon, pos)
             self.ctrl_bar[pos].connect('button-release-event', self._sig_ctrl_drop, pos)
@@ -2478,7 +2526,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
         if alloc.height < req_h:
             # must be caused by adding frame
-            self.rm_frame(self.mw_new_child_frame.parent, self.mw_new_child_frame)
+            self.window_delete(self.mw_new_child_frame)
             if self.__prev_active_frame:
                 self.__prev_active_frame.grab_focus()
                 sys.stderr.write('Warning: No room for new screens vertically!\n')
@@ -2542,7 +2590,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
         # start the timer
         self.mw_center.timer = True
-        gobject.timeout_add(20, self.update_sd, pos)
+        gobject.timeout_add(20, self.__update_sd, pos)
 
     def _sig_ctrl_drop(self, widget, event, pos):
         # remove the shading-layer
@@ -2566,7 +2614,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
         # add paned if in center
         if correct_pos:
-            paned = self.add_paned(self.mw_center, pos)
+            paned = self.window_split(self.mw_center, pos)
 
             # re-position the newly added frame
             if pos in self.__ctrl_pos['h']:
@@ -2589,7 +2637,7 @@ class zSplitScreen(z_ABC, gtk.Frame):
                     focus = None # focus in child_rm, delete it
 
                 # remove the child
-                self.rm_frame(widget, child)
+                self.window_delete(child)
 
                 # adjust focus
                 if not focus:
@@ -2632,14 +2680,20 @@ class zSplitScreen(z_ABC, gtk.Frame):
     ### end of overridden function definition
 
 
-    def active_frame(self):
-        return self.__active_frame(self.mw_center)
-
-    def add_paned(self, parent, pos):
+    ### split window manipulation
+    def window_split(self, widget, pos):
         # setup backup point
         self.__prev_active_frame = self.active_frame() # only used in resuming focus on removing newly added frame
 
-        child = parent.child
+        if isinstance(widget, self.frame):
+            # widget is a frame
+            parent = widget.parent
+            child = widget
+        else:
+            # widget is a container
+            # for now, should always be self.mw_center
+            parent = widget
+            child = widget.child
 
         # create new paned
         if pos in self.__ctrl_pos['h']:
@@ -2661,7 +2715,16 @@ class zSplitScreen(z_ABC, gtk.Frame):
         else:
             paned.pack1(child, True, True)
             paned.pack2(self.mw_new_child_frame, True, True)
-        parent.add(paned)
+
+        if isinstance(parent, gtk.Paned):
+            # parent is a paned
+            if not parent.get_child1():
+                parent.pack1(paned, True, True)
+            else:
+                parent.pack2(paned, True, True)
+        else:
+            # parent is not a paned
+            parent.add(paned)
 
         # connect signals
         paned.connect('button-release-event', self._sig_div_drop)
@@ -2671,6 +2734,72 @@ class zSplitScreen(z_ABC, gtk.Frame):
         self.mw_new_child_frame.grab_focus()
 
         return paned
+
+
+    def window_split_horz(self, frame):
+        self.window_split(frame, 'rt')
+
+    def window_split_vert(self, frame):
+        self.window_split(frame, 'bm')
+
+    def window_delete(self, child_rm):
+        widget = child_rm.parent
+
+        if widget == self.mw_center:    # the only frame
+            widget.remove(child_rm)
+            widget.add(self.new_frame(self.frame_alist))
+
+        else:
+            # not the only frame, get parent and child info
+            parent = widget.get_parent()
+            if child_rm == widget.get_child1():
+                child_kp = widget.get_child2()
+            else:
+                child_kp = widget.get_child1()
+
+            # remove both child
+            widget.remove(child_rm)
+            widget.remove(child_kp)
+
+            if parent == self.mw_center:    # parent is mw_center
+                parent.remove(widget)
+                parent.add(child_kp)
+            else:                           # parent is paned
+                parent.remove(widget)
+                if not parent.get_child1():
+                    parent.pack1(child_kp, True, True)
+                else:
+                    parent.pack2(child_kp, True, True)
+
+        # clean up
+        child_rm.hide_all()
+        zSplitWindow.reg_emit('frame_removed')
+
+    def window_delete_other(self, frame):
+        widget = frame.parent
+
+        if widget == self.mw_center:    # the only frame
+            return
+
+        # get the frame off
+        widget.remove(frame)
+
+        # remove all other frames but the frame
+        child_rm = self.mw_center.child
+        self.mw_center.remove(child_rm)
+        self.mw_center.add(frame)
+
+        # clean up
+        child_rm.hide_all()
+        zSplitWindow.reg_emit('frame_removed')
+
+        self.grab_focus()
+    ### end of split window manipulation
+
+
+    def active_frame(self):
+        return self.__active_frame(self.mw_center)
+
 
     def new_frame(self, alist):
         # prepare frame info
@@ -2690,44 +2819,41 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
         return frame
 
-    def rm_frame(self, widget, child_rm):
-        if widget == self.mw_center:    # the only frame
-            widget.remove(child_rm)
-            widget.add(self.new_frame())
 
-            # clean up
-            child_rm.hide_all()
-            zSplitScreen.reg_emit('frame_removed')
-            return              # early return
-
-        # not the only frame, get parent and child info
-        parent = widget.get_parent()
-        if child_rm == widget.get_child1():
-            child_kp = widget.get_child2()
-        else:
-            child_kp = widget.get_child1()
-
-        # remove both child
-        widget.remove(child_rm)
-        widget.remove(child_kp)
-
-        if parent == self.mw_center:    # parent is mw_center
-            parent.remove(widget)
-            parent.add(child_kp)
-        else:                           # parent is paned
-            if widget == parent.get_child1():
-                add_cmd = 'parent.pack1(child_kp, True, True)'
+    ### supporting function
+    def __active_frame(self, current):
+        '''recursive function, should start with zSplitWindow.mw_center'''
+        if isinstance(current, self.frame):
+            if current.is_focus():
+                return current  # found the frame
             else:
-                add_cmd = 'parent.pack2(child_kp, True, True)'
-            parent.remove(widget)
-            eval(add_cmd)
+                return None     # end of the path
 
-        # clean up
-        child_rm.hide_all()
-        zSplitScreen.reg_emit('frame_removed')
+        for child in current.get_children():
+            found = self.__active_frame(child)
+            if found:
+                return found    # found in previous search
+        return None             # not found at all
 
 
-    def update_sd(self, pos):
+    def __correct_pos(self, pos, limit_low, limit_high, spacing):
+        '''all three args should all be tuples/lists with the same length'''
+        ct_pos = [None] * len(pos)
+        for i in range(len(pos)):
+            if pos[i] < limit_low[i] or pos[i] > limit_high[i]:
+                return None
+
+            if pos[i] < limit_low[i] + spacing[i]:
+                ct_pos[i] = limit_low[i] + spacing[i]
+            elif pos[i] > limit_high[i] - spacing[i]:
+                ct_pos[i] = limit_high[i] - spacing[i]
+            else:
+                ct_pos[i] = pos[i]
+        return ct_pos
+
+
+    def __update_sd(self, pos):
+        '''used with `timer`'''
         if not self.mw_center.timer:
             return False
 
@@ -2774,37 +2900,6 @@ class zSplitScreen(z_ABC, gtk.Frame):
 
 
         return True
-
-
-    ### supporting function
-    def __active_frame(self, current):
-        '''recursive function, should start with zSplitScreen.mw_center'''
-        if isinstance(current, self.frame):
-            if current.is_focus():
-                return current  # found the frame
-            else:
-                return None     # end of the path
-
-        for child in current.get_children():
-            found = self.__active_frame(child)
-            if found:
-                return found    # found in previous search
-        return None             # not found at all
-
-    def __correct_pos(self, pos, limit_low, limit_high, spacing):
-        '''all three args should all be tuples/lists with the same length'''
-        ct_pos = [None] * len(pos)
-        for i in range(len(pos)):
-            if pos[i] < limit_low[i] or pos[i] > limit_high[i]:
-                return None
-
-            if pos[i] < limit_low[i] + spacing[i]:
-                ct_pos[i] = limit_low[i] + spacing[i]
-            elif pos[i] > limit_high[i] - spacing[i]:
-                ct_pos[i] = limit_high[i] - spacing[i]
-            else:
-                ct_pos[i] = pos[i]
-        return ct_pos
     ### end of supporting function
 
 

@@ -136,6 +136,7 @@ KEY_BINDING_RULE_MKUP = {
     }
 
 DEFAULT_FUNC_KEY_BIND = {
+    # buffer manipulation
     'buffer_open'           : {
         'emacs' : 'C-x C-f',
         'vi'    : '',
@@ -157,6 +158,7 @@ DEFAULT_FUNC_KEY_BIND = {
         'other' : 'F4',
         },
 
+    # top-level functions
     'prog_show_config'      : {
         'emacs' : 'C-c c',
         'vi'    : '',
@@ -167,10 +169,37 @@ DEFAULT_FUNC_KEY_BIND = {
         'vi'    : '',
         'other' : 'C-J',
         },
+    'prog_show_about'       : {
+        'emacs' : '',
+        'vi'    : '',
+        'other' : '',
+        },
     'prog_quit'             : {
         'emacs' : 'C-x C-c',
         'vi'    : '',
         'other' : 'C-q',
+        },
+
+    # split window manipulation
+    'window_split_horz'     : {
+        'emacs' : 'C-x 3',
+        'vi'    : '',
+        'other' : '',
+        },
+    'window_split_vert'     : {
+        'emacs' : 'C-x 2',
+        'vi'    : '',
+        'other' : '',
+        },
+    'window_delete'         : {
+        'emacs' : 'C-x 0',
+        'vi'    : '',
+        'other' : '',
+        },
+    'window_delete_other'   : {
+        'emacs' : 'C-x 1',
+        'vi'    : '',
+        'other' : '',
         },
     }
 
@@ -537,6 +566,16 @@ def parse_key_binding(key_sequence):
     return sequence
 
 
+def reset_key_binding():
+    for style in DEFAULT_FUNC_KEY_BIND_KEY:
+        func_binding = dict(
+            zip( DEFAULT_FUNC_KEY_BIND.keys(),
+                 [ v[style] for v in DEFAULT_FUNC_KEY_BIND.values() ]
+                 )
+            )
+        __TOUCH_KEY(style, func_binding)
+
+
 def write_rc_all():
     write_rc()
     write_key_binding()
@@ -589,11 +628,13 @@ def __TOUCH_RC():
     fp.close()
 
 
-def __TOUCH_KEY():
-    style = Config['MISC']['key_binding']
+def __TOUCH_KEY(style = None, func_binding = None):
+    if not style or not func_binding:
+        style = Config['MISC']['key_binding']
+        func_binding = copy.copy(Config['FUNC_BINDING'])
     style_path = 'key_{0}'.format(style)
 
     fp = open(CONFIG_PATH[style_path], 'w')
-    for func in sorted(Config['FUNC_BINDING'].iterkeys()):
-        fp.write('{0} = {1}\n'.format(func, Config['FUNC_BINDING'][func]))
+    for func in sorted(func_binding.iterkeys()):
+        fp.write('{0} = {1}\n'.format(func, func_binding[func]))
     fp.close()
