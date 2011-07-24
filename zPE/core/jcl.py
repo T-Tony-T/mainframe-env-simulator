@@ -48,7 +48,7 @@ def parse(job):
     zPE.JCL['jobname'] = field[0][2:]
     zPE.JCL['owner'] = zPE.JCL['jobname'][:7]
     zPE.JCL['class'] = zPE.JCL['jobname'][-1]
-    zPE.JCL['jobid'] = 'JOB' + str(zPE.Config['job_id'])
+    zPE.JCL['jobid'] = 'JOB' + str(zPE.conf.Config['job_id'])
 
     # args_0,args_1,args_2
     # AccInfo,'pgmer'[,parameters]
@@ -68,7 +68,7 @@ def parse(job):
                   ':\n       The programmer\'s name cannot be exceed ' +
                   '20 characters.\n')
     # parse parameters
-    zPE.JCL['region'] = zPE.Config['memory_sz']
+    zPE.JCL['region'] = zPE.conf.Config['memory_sz']
     if len(args) == 3:
         for part in re.split(',', args[2]):
             if part[:7] == 'REGION=':
@@ -83,7 +83,7 @@ def parse(job):
         #   elif part[:9] == 'MSGCLASS=':
 
 
-    zPE.Config['spool_path'] = '{0}.{1}.{2}'.format(
+    zPE.conf.Config['spool_path'] = '{0}.{1}.{2}'.format(
         zPE.JCL['owner'],
         zPE.JCL['jobname'],
         zPE.JCL['jobid']
@@ -235,13 +235,13 @@ def init_job():
     sp3.append('c', '\n')
     ctrl = ' '
 
-    conf = zPE.load_ICH70001I()
+    conf = zPE.conf.load_ICH70001I()
     line = 'ICH70001I {0:<8} LAST ACCESS AT {1}\n'.format(zPE.JCL['owner'],
                                                           conf['atime'])
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'], '  ', line)
     sp3.append(ctrl, line)
     conf['atime'] = strftime('%H:%M:%S ON %A, %B %d, %Y').upper()
-    zPE.dump_ICH70001I(conf)
+    zPE.conf.dump_ICH70001I(conf)
 
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  $HASP373 {0:<8} STARTED'.format(zPE.JCL['jobname']),

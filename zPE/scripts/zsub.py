@@ -5,7 +5,7 @@ from optparse import OptionParser
 
 
 def main():
-    zPE.read_rc()
+    zPE.conf.read_rc()
 
     parser = prepare_option(OptionParser())
     (options, args) = parser.parse_args()

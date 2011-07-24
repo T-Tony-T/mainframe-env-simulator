@@ -9,7 +9,7 @@ import re
 
 # open the target file in regardless of the existance
 def open_file(dsn, mode):
-    path = os.path.join(zPE.Config['spool_dir'], zPE.Config['spool_path'])
+    path = os.path.join(zPE.conf.Config['spool_dir'], zPE.conf.Config['spool_path'])
     if not os.path.isdir(path):
         os.makedirs(path)
 

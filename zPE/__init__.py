@@ -2,9 +2,9 @@
 # any Subsystem will not effect the behaviour of functions in this file
 
 # modules that will be auto imported
-import core, pgm
+import core, pgm, conf
 
-import os, sys, pickle
+import os, sys
 import re
 
 ### Diagnostic Function Definition
@@ -79,10 +79,6 @@ def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
 
 ### Architectural Definition
 
-JOB_ID_MIN = 10000              # the smallest job ID
-JOB_ID_MAX = 65535              # the largest job ID
-TMP_FILE_ID = 101               # the smallest tmp file identifier
-
 def bad_label(label):
     '''
     Return:
@@ -124,108 +120,6 @@ SYSTEM = {
     'NODE'      : 'ZPE@NIU',
     'NODET'     : 'Z P E @ N I U',
     }
-
-## Configurable Definition
-DEFAULT = {
-    'ADDR_MODE' : 31,           # hardware addressing mode: 31 bit
-
-    'MEMORY_SZ' : '1024K',      # memory size: 1024 KB
-
-    'LN_P_PAGE' : 60,           # line per page for output
-
-    'SPOOL_DIR' : '',           # SPOOL positon: current directory
-
-    'ICH70001I' : {             # config list for ICH70001I
-        'atime' : '00:00:00 ON THURSDAY, JANUARY 18, 2011',
-                                # the start time of this project
-        },
-    }
-
-Config = {
-    'job_id'    : JOB_ID_MIN,
-    'tmp_id'    : TMP_FILE_ID,  # next available tmp file identifier
-
-    'addr_mode' : DEFAULT['ADDR_MODE'],
-    'addr_max'  : 0,            # calculate on loading
-
-    'memory_sz' : DEFAULT['MEMORY_SZ'],
-                                # can be altered by "// JOB ,*,REGION=*"
-                                # can be overridden by "// EXEC *,REGION=*"
-
-    'spool_dir' : DEFAULT['SPOOL_DIR'],
-    'spool_path': None,         # will be set after JOB card is read
-    }
-
-CONFIG_PATH = {
-    'dir'       : os.path.join(os.environ['HOME'], '.zPE'),
-    'rc'        : os.path.join(os.environ['HOME'], '.zPE', 'config'),
-    'data'      : os.path.join(os.environ['HOME'], '.zPE', 'data'),
-    'ICH70001I' : os.path.join(os.environ['HOME'], '.zPE', 'data', 'ICH70001I'),
-    }
-
-def dump_ICH70001I(conf):
-    __CK_CONFIG()
-    __TOUCH_ICH70001I(conf)
-    
-def load_ICH70001I():
-    __CK_CONFIG()
-    return pickle.load(open(CONFIG_PATH['ICH70001I'], 'rb'))
-    
-
-def read_rc():
-    __CK_CONFIG()
-
-    for line in open(CONFIG_PATH['rc'], 'r'):
-        (k, v) = re.split('[ \t]*=[ \t]*', line, maxsplit=1)
-        ok = False
-
-        if k == 'job_id':
-            try:
-                Config[k] = int(v) + 1
-                if JOB_ID_MIN < Config[k] and Config[k] < JOB_ID_MAX:
-                    ok = True
-            except ValueError:
-                pass
-
-            if not ok:
-                Config[k] = JOB_ID_MIN
-                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
-                                 ': Invalid job ID.\n')
-        elif k == 'addr_mode':
-            try:
-                Config[k] = int(v)
-                if Config[k] in [16, 31, 64]:
-                    ok = True
-            except ValueError:
-                pass
-
-            if not ok:
-                Config[k] = DEFAULT['ADDR_MODE']
-                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
-                                 ': Invalid address mode.\n')
-        elif k == 'memory_sz':
-            try:
-                Config[k] = core.mem.parse_region(v)
-                ok = True
-            except SyntaxError:
-                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
-                                 ': Invalid region size.\n')
-            except ValueError:
-                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
-                                 ': Region must be divisible by 4K.\n')
-
-            if not ok:
-                Config[k] = DEFAULT['MEMORY_SZ']
-        elif k == 'spool_dir':
-            if os.path.isdir(v[:-1]):
-                Config['spool_dir'] = v[:-1]
-            else:
-                sys.stderr.write('Warning: ' + v[:-1] +
-                                 ': Invalid SPOOL dir path.\n')
-                Config[k] = DEFAULT['SPOOL_DIR']
-
-    Config['addr_max'] = 2 ** Config['addr_mode']
-    __TOUCH_RC()
 
 
 ## JCL Definition
@@ -269,9 +163,12 @@ DD_MODE = {                     # DD mode : SPOOL mode
 
 class Step(object):             # for JCL['step'][*]
     def __init__(self, name, pgm, proc,
-                 region = Config['memory_sz'],
+                 region = None,
                  parm = ''
                  ):
+        if region == None:
+            region = conf.Config['memory_sz']
+
         # begining of inner class definition
         class DDlist(object):   # inner class for JCL['step'][*].dd
             def __init__(self):
@@ -440,27 +337,6 @@ def LIST_PGM():
 
 
 ### Supporting Function
-
-def __CK_CONFIG():
-    if not os.path.isdir(CONFIG_PATH['data']):
-        os.makedirs(CONFIG_PATH['data'])
-    if not os.path.isfile(CONFIG_PATH['rc']):
-        __TOUCH_RC()
-    if not os.path.isfile(CONFIG_PATH['ICH70001I']):
-        __TOUCH_ICH70001I()
-
-def __TOUCH_ICH70001I(conf = DEFAULT['ICH70001I']):
-    pickle.dump(conf, open(CONFIG_PATH['ICH70001I'], 'wb'))
-
-def __TOUCH_RC():
-    fp = open(CONFIG_PATH['rc'], 'w')
-    fp.write('job_id = ' + str(Config['job_id']) + '\n')
-    fp.write('addr_mode = ' + str(Config['addr_mode']) + '\n')
-    fp.write('memory_sz = ' + Config['memory_sz'] + '\n')
-    if Config['spool_dir'] != '':
-        fp.write('spool_dir = ' + Config['spool_dir'] + '\n')
-    fp.close()
-
 
 def __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit):
     true_pttn = '^[^{0}{1}]*?(?:(?:'.format(

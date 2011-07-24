@@ -187,7 +187,7 @@ class Page(Structure):
 # MemoryError:   addressing exception
 class Memory(object):
     def __init__(self, pos, sz):
-        if pos < 0 or pos + sz >= zPE.Config['addr_max']:
+        if pos < 0 or pos + sz >= zPE.conf.Config['addr_max']:
             raise MemoryError   # addressing exception
         self.pos = pos
         self.memory = ( Page * (sz % 4096 + 1) )()

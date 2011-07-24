@@ -149,7 +149,7 @@ def __PARSE_OUT():
     eojob = False               # end of job indicater
     for line in spi:
         cnt += 1                # start at line No. 1
-        if pln_cnt >= zPE.DEFAULT['LN_P_PAGE']:
+        if pln_cnt >= zPE.conf.DEFAULT['LN_P_PAGE']:
             page_cnt += 1
             spo.append('1', '{0:>111}PAGE {1:>4}\n'.format(' ', page_cnt))
             spo.append(ctrl, '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')

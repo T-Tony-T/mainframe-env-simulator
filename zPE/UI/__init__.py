@@ -1,5 +1,6 @@
 # modules that will be auto imported
 import comp, conf
+import zPE.conf
 
 import os, sys, copy, re
 import pygtk
@@ -41,9 +42,7 @@ class BaseFrame(object):
         sys.stdout = self.err_console
         sys.stderr = self.err_console
 
-        ### retrive GUI configuration
-        conf.read_rc_all()
-
+        ### retrive configuration
         self.config_window = ConfigWindow()
         self.config_window.load_rc()
 
@@ -339,6 +338,10 @@ class ConfigWindow(gtk.Window):
         self.connect('delete_event', self._sig_cancel_mod)
 
         self.set_title('zPE Config')
+
+        # retrive configs
+        conf.read_rc_all()
+        zPE.conf.read_rc(dry_run = True)
 
         # lists for managing font
         self.__label = {
@@ -858,8 +861,6 @@ class ConfigWindow(gtk.Window):
 
     ### support function definition
     def load_rc(self):
-        conf.Config = copy.deepcopy(conf.Config)
-
         # GUI->Tabbar
         self.tabbar_on.set_active(conf.Config['MISC']['tab_on'])
         self.tabbar_grouped.set_active(conf.Config['MISC']['tab_grouped'])

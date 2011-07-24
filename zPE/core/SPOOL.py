@@ -131,10 +131,10 @@ def new(key, mode, f_type, path = [], real_path = []):
     if len(path) == 0:
         while True:
             conflict = False
-            path = [ zPE.Config['spool_dir'],
-                     zPE.Config['spool_path'],
-                     'D{0:0>7}.?'.format(zPE.Config['tmp_id']) ]
-            zPE.Config['tmp_id'] += 1
+            path = [ zPE.conf.Config['spool_dir'],
+                     zPE.conf.Config['spool_path'],
+                     'D{0:0>7}.?'.format(zPE.conf.Config['tmp_id']) ]
+            zPE.conf.Config['tmp_id'] += 1
             # check for file conflict
             for k,v in dict():
                 if v.virtual_path == path:
