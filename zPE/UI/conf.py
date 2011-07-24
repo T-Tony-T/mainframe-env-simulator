@@ -201,6 +201,18 @@ DEFAULT_FUNC_KEY_BIND = {
         'vi'    : '',
         'other' : '',
         },
+
+    # zPE related functions
+    'zPE_submit'            : {
+        'emacs' : 'F9',
+        'vi'    : '',
+        'other' : 'F9',
+        },
+    'zPE_submit_with_JCL'   : {
+        'emacs' : 'F8',
+        'vi'    : '',
+        'other' : 'F8',
+        },
     }
 
 Config = {}

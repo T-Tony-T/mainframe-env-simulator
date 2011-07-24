@@ -18,6 +18,7 @@ class BaseFrame(object):
     def __init__(self):
         self.__key_binding_func = {
             'buffer_open'               : lambda *arg: self._sig_buff_manip(None, 'open'),
+            'buffer_close'              : lambda *arg: self._sig_buff_manip(None, 'close'),
 
             'prog_show_config'          : lambda *arg: self.config_window.open(),
             'prog_show_error'           : lambda *arg: self.err_console.open(),
@@ -27,7 +28,12 @@ class BaseFrame(object):
             'window_split_vert'         : lambda *arg: self._sig_sw_manip(None, 'split_vert'),
             'window_delete'             : lambda *arg: self._sig_sw_manip(None, 'delete'),
             'window_delete_other'       : lambda *arg: self._sig_sw_manip(None, 'delete_other'),
+
+#            'zPE_submit'                : ,
+#            'zPE_submit_with_JCL'       : ,
             }
+        for key in conf.DEFAULT_FUNC_KEY_BIND:
+            comp.zEdit.reg_add_registry(key)
 
 
         ### redirect STDOUT and STDERR to the error console
@@ -135,6 +141,7 @@ class BaseFrame(object):
 
         ## connect signals
         self.tool_buff_open.connect('clicked', self._sig_buff_manip, 'open')
+        self.tool_buff_close.connect('clicked', self._sig_buff_manip, 'close')
 
         self.tool_win_split_horz.connect('clicked', self._sig_sw_manip, 'split_horz')
         self.tool_win_split_vert.connect('clicked', self._sig_sw_manip, 'split_vert')
@@ -229,7 +236,17 @@ class BaseFrame(object):
         elif task == 'save-as':
             pass
         elif task == 'close':
-            pass
+            if buff.modified:
+                need_save = False # ask for saving here
+            else:
+                need_save = False
+
+            if need_save:
+                # save here
+                frame.rm_buffer(buff)
+            else:
+                # force quit (without saving)
+                frame.rm_buffer(buff, force = True)
         else:
             raise KeyError
 
@@ -550,7 +567,7 @@ class ConfigWindow(gtk.Window):
 
             self.kb_function[func].connect('toggled', self._sig_key_stroke_change_request, func)
 
-        self.kb_rules = gtk.Button('Rules')
+        self.kb_rules = gtk.Button('Rules <_h>')
         ct_key_binding_entry.pack_start(self.kb_rules, False, False, 10)
 
         self.kb_rules_dialog = gtk.Dialog('', None, 0, (gtk.STOCK_CLOSE, gtk.RESPONSE_CLOSE))
@@ -563,6 +580,10 @@ class ConfigWindow(gtk.Window):
         self.kb_rules_dialog.connect('response', lambda *arg: self.kb_rules_dialog.hide())
         self.kb_rules_dialog.connect('delete_event', lambda *arg: self.kb_rules_dialog.hide() or True)
 
+        self.kb_default = gtk.Button('_Default')
+        self.kb_default.set_tooltip_text('Reset the Key Binding for the Current Style (Revertible)')
+        ct_key_binding_entry.pack_start(self.kb_default, False, False, 10)
+
         self.__label['LABEL'].append(gtk.Label('Stroke:'))
         ct_key_binding_entry.pack_start(self.__label['LABEL'][-1], False, False, 5)
 
@@ -573,6 +594,7 @@ class ConfigWindow(gtk.Window):
         ct_key_binding_entry.pack_start(self.kb_stroke_entry, False, False, 0)
 
         self.kb_rules.connect('clicked', self._sig_key_stroke_help)
+        self.kb_default.connect('clicked', self._sig_key_stroke_clear)
         self.kb_stroke_entry.connect('activate', self._sig_key_stroke_entered)
 
 
@@ -586,9 +608,13 @@ class ConfigWindow(gtk.Window):
 
         ## create buttons
         self.bttn_default = gtk.Button(stock = gtk.STOCK_CLEAR)
-        self.bttn_default.set_label('_Default')
+        self.bttn_default.set_use_underline(False) # no accel for this button
+        self.bttn_default.set_label('Default')
+        self.bttn_default.set_tooltip_text('Reset *ALL* Configurations to Default Values\n' +
+                                           'Note: This Can Cause Un-Revertible Key Binding Reset!')
         self.bttn_revert = gtk.Button(stock = gtk.STOCK_REVERT_TO_SAVED)
         self.bttn_revert.set_label('_Revert')
+        self.bttn_revert.set_tooltip_text('Revert All Changes Made in the Current Session')
 
         self.bttn_cancel = gtk.Button(stock = gtk.STOCK_CANCEL)
         self.bttn_cancel.set_label('_Cancel')
@@ -808,6 +834,10 @@ class ConfigWindow(gtk.Window):
 
     def _sig_key_stroke_help(self, bttn):
         self.kb_rules_dialog.show()
+
+    def _sig_key_stroke_clear(self, bttn):
+        conf.init_key_binding()
+        self.load_binding()
     ### end of signal for KeyBinding
 
 

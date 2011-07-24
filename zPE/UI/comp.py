@@ -63,6 +63,10 @@ class z_ABC(object):
         cls._auto_update[sig] = reserve
 
     @classmethod
+    def reg_add_registry(cls, sig):
+        cls._auto_update[sig] = [  ]
+
+    @classmethod
     def reg_is_registered(cls, sig, widget):
         return ( sig    in  cls._auto_update  and
                  widget in [ item[0] for item in cls._auto_update[sig] ]
@@ -621,21 +625,7 @@ class zEdit(z_ABC, gtk.VBox):
         'update_tabbar'         : [  ],
 
         # for key binding
-        'buffer_open'           : [  ],
-        'buffer_save'           : [  ],
-        'buffer_save_as'        : [  ],
-        'buffer_close'          : [  ],
-
-        'prog_show_config'      : [  ],
-        'prog_show_error'       : [  ],
-        'prog_show_help'        : [  ],
-        'prog_show_about'       : [  ],
-        'prog_quit'             : [  ],
-
-        'window_split_horz'     : [  ],
-        'window_split_vert'     : [  ],
-        'window_delete'         : [  ],
-        'window_delete_other'   : [  ],
+        # use zEdit.reg_add_registry(reg)
         }
 
     def __init__(self, buffer_path = None, buffer_type = None):
@@ -712,6 +702,7 @@ class zEdit(z_ABC, gtk.VBox):
         # connect auto-update items
         zEdit.register('update_tabbar', self._sig_update_tabbar, self)
 
+        zEditBuffer.register('buffer_removed', zEdit._sig_buffer_removed, self)
         zEditBuffer.register('buffer_list_modified', zEdit._sig_buffer_list_modified, self)
         zEdit._sig_buffer_list_modified(self)
 
@@ -778,6 +769,32 @@ class zEdit(z_ABC, gtk.VBox):
                     self.grab_focus()
 
                 self.tab_on_current = False
+
+
+    @staticmethod
+    def _sig_buffer_removed(z_editor, removed_buff_name):
+        if z_editor.active_buffer.name == removed_buff_name:
+            # the removed buffer is the current active one
+            # find a substitude
+            new_active_indx = z_editor.buffer_sw.index([removed_buff_name, False]) - 1
+            if z_editor.buffer_sw.get_value(new_active_indx, 1) == True:
+                # separator, search the other direction
+                if len(zEditBuffer.buff_group['user']):
+                    # has at least one other user buffer
+                    new_active_indx += 2 # separater => +1 => current => +1 => next buffer
+                else:
+                    # no other user buffer
+                    new_active_indx -= 1 # system buffer <= -1 <= separater
+
+            # retrive the buffer info of the new active buffer
+            new_active_name = z_editor.buffer_sw.get_value(new_active_indx, 0)
+            new_active = zEditBuffer.buff_list[new_active_name]
+
+            # switch to that buffer
+            z_editor.set_buffer(new_active.path, new_active.type)
+
+        # update the buffer list
+        zEdit._sig_buffer_list_modified(z_editor)
 
 
     @staticmethod
@@ -1422,6 +1439,10 @@ class zEdit(z_ABC, gtk.VBox):
         self.show_all()
 
 
+    def rm_buffer(self, buff, force = False):
+        zEditBuffer.rm_buffer(buff, force)
+
+
     @staticmethod
     def get_key_binding():
         return zEdit.__key_binding
@@ -1519,6 +1540,7 @@ class zEditBuffer(z_ABC):
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'buffer_list_modified'    : [  ],
+        'buffer_removed'          : [  ],
         }
 
     _on_restore = False
@@ -1564,9 +1586,10 @@ class zEditBuffer(z_ABC):
         if self.type == 'file':
             # only record type::file for user-opened buffer
             no_rec = True           # assume first encounter of the name
+            rec_name = self.name    # this is used as the key of zEditBuffer.buff_rec
             if self.name in zEditBuffer.buff_rec:
                 # name is recorded, check for duplication
-                for [name, path, opened] in zEditBuffer.buff_rec[self.name]:
+                for (name, path, opened) in zEditBuffer.buff_rec[self.name]:
                     if path == self.path:
                         # same path ==> has record
                         no_rec = False
@@ -1577,6 +1600,12 @@ class zEditBuffer(z_ABC):
                         else:
                             # re-open it
                             self.name = name
+                            # mark the buffer "opened"
+                            rec_list = zEditBuffer.buff_rec[rec_name]
+                            for indx in range(len(rec_list)):
+                                if rec_list[indx][0] == self.name:
+                                    rec_list[indx] = rec_list[indx][:-1] + (True,)
+                                    break
                             break
                 if no_rec:
                     # no duplication, generate new name of the new file
@@ -1584,7 +1613,9 @@ class zEditBuffer(z_ABC):
 
             if no_rec:
                 # name not in record, add it
-                zEditBuffer.buff_rec[self.name] = [ (self.name, self.path, True) ]
+                if rec_name not in zEditBuffer.buff_rec:
+                    zEditBuffer.buff_rec[rec_name] = [  ]
+                zEditBuffer.buff_rec[rec_name].append( (self.name, self.path, True) )
             zEditBuffer.buff_list[self.name] = self
 
             zEditBuffer.buff_group[buff_group].append(self.name)
@@ -1611,14 +1642,7 @@ class zEditBuffer(z_ABC):
 
             if self.name == '*scratch*':
                 # tmp buffer
-                self.buffer.set_text(
-'''//*
-//* This buffer is for notes you don't want to save.
-//* If you want to create a file, use {0}
-//* or save this buffer explicitly.
-//*
-'''.format('"Open a New Buffer"')
-)
+                zEditBuffer._reset_scratch()
             elif io_encap.is_file(self.path):
                 # existing file
                 if io_encap.is_binary(self.path):
@@ -1659,6 +1683,45 @@ class zEditBuffer(z_ABC):
         zEditBuffer.reg_emit('buffer_list_modified')
 
         zEditBuffer._on_restore = False
+
+
+    @staticmethod
+    def rm_buffer(buff, force):
+        if buff.name in zEditBuffer.buff_group['system']:
+            # system-opened buffer, cannot be closed
+            if buff.name == '*scratch*':
+                # close the scratch means to reset its content
+                zEditBuffer._reset_scratch()
+        elif buff.modified and not force:
+            # buffer content modified but not a force removal
+            raise ValueError('Buffer content has been modified!')
+        else:
+            # remove the buffer from all records
+            del zEditBuffer.buff_list[buff.name]
+            zEditBuffer.buff_group['user'].remove(buff.name)
+
+            # mark the buffer "closed"
+            rec_list = zEditBuffer.buff_rec[buff.path[-1]]
+            for indx in range(len(rec_list)):
+                if rec_list[indx][0] == buff.name:
+                    rec_list[indx] = rec_list[indx][:-1] + (False,)
+                    break
+
+            # notify all registered editors
+            zEditBuffer.reg_emit('buffer_removed', buff.name)
+
+
+    @staticmethod
+    def _reset_scratch():
+        zEditBuffer.buff_list['*scratch*'].buffer.set_text(
+'''//*
+//* This buffer is for notes you don't want to save.
+//* If you want to create a file, do that with
+//*   {0}
+//* or save this buffer explicitly.
+//*
+'''.format('"Open a New Buffer" -> Right Click -> "New File"')
+)
 
 
 ######## ######## ######## ########
