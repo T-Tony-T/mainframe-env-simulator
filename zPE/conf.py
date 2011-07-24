@@ -13,6 +13,7 @@ TMP_FILE_ID = 101               # the smallest tmp file identifier
 
 
 ### Configurable Definition
+POSSIBLE_ADDR_MODE = [ 16, 31, 64, ]
 
 DEFAULT = {
     'ADDR_MODE' : 31,           # hardware addressing mode: 31 bit
@@ -21,7 +22,7 @@ DEFAULT = {
 
     'LN_P_PAGE' : 60,           # line per page for output
 
-    'SPOOL_DIR' : '',           # SPOOL positon: current directory
+    'SPOOL_DIR' : '.',          # SPOOL positon: current directory
 
     'ICH70001I' : {             # config list for ICH70001I
         'atime' : '00:00:00 ON THURSDAY, JANUARY 18, 2011',
@@ -43,7 +44,9 @@ def init_rc():
                                 # can be overridden by "// EXEC *,REGION=*"
 
     Config['spool_dir']  = DEFAULT['SPOOL_DIR']
-    Config['spool_path'] = None         # will be set after JOB card is read
+    Config['spool_path'] = None # the folder that contains all SPOOL output
+                                # for a specific JOB;
+                                # will be set after JOB card is read
 
 
 CONFIG_PATH = {
@@ -88,7 +91,7 @@ def read_rc(dry_run = False):
         elif k == 'addr_mode':
             try:
                 Config[k] = int(v)
-                if Config[k] in [16, 31, 64]:
+                if Config[k] in POSSIBLE_ADDR_MODE:
                     ok = True
             except ValueError:
                 pass
@@ -101,18 +104,17 @@ def read_rc(dry_run = False):
             try:
                 Config[k] = parse_region(v)
                 ok = True
-            except SyntaxError:
-                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
-                                 ': Invalid region size.\n')
-            except ValueError:
-                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
-                                 ': Region must be divisible by 4K.\n')
+            except SyntaxError as e_msg:
+                sys.stderr.write('CONFIG WARNING: {0}: \n  {1}\n'.format(v[:-1], e_msg))
+            except ValueError as e_msg:
+                sys.stderr.write('CONFIG WARNING: {0}: \n  {1}\n'.format(v[:-1], e_msg))
 
             if not ok:
                 Config[k] = DEFAULT['MEMORY_SZ']
         elif k == 'spool_dir':
-            if os.path.isdir(v[:-1]):
-                Config['spool_dir'] = v[:-1]
+            path = os.path.normpath(os.path.normcase(v[:-1]))
+            if os.path.isdir(os.path.abspath(os.path.expanduser(path))):
+                Config['spool_dir'] = path
             else:
                 sys.stderr.write('Warning: ' + v[:-1] +
                                  ': Invalid SPOOL dir path.\n')

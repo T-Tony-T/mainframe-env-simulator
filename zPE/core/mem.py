@@ -212,14 +212,24 @@ def __PARSE_REGION(region):
     region = re.split('(\d+)', region)
     if len(region) == 2:
         region = int(region[1])
-    elif (len(region) == 3) and ('K' in re.split('\s+', region[2].upper())):
-        region = int(region[1]) * 1024
-    elif (len(region) == 3) and ('M' in re.split('\s+', region[2].upper())):
-        region = int(region[1]) * 1024 * 1024
+    elif len(region) == 3:
+        unit = region[2].upper().split()
+        if len(unit) != 1:
+            raise SyntaxError('Invalid region size unit. Use "B", "K" or "M" as unit.')
+
+        unit = unit[0]
+        if unit in [ 'B', 'BYTE' ]:
+            region = int(region[1])
+        elif unit in [ 'K', 'KB' ]:
+            region = int(region[1]) * 1024
+        elif unit in [ 'M', 'MB' ]:
+            region = int(region[1]) * 1024 * 1024
+        else:
+            raise SyntaxError('Invalid region size unit. Use "B[yte]", "K[B]" or "M[B]" as unit.')
     else:
-        raise SyntaxError
+        raise SyntaxError('Invalid region size format. Should be similar to "512K" or "4096 Byte".')
 
     if region % 4096 != 0:
-        raise ValueError
+        raise ValueError('Region must be divisible by 4K.')
 
     return (region, '{0}K'.format(region / 1024))

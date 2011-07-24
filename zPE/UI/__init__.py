@@ -395,8 +395,8 @@ class ConfigWindow(gtk.Window):
         self.__label['LABEL'].append(self.get_label_widget(self.tabbar_on))
         self.__label['LABEL'].append(self.get_label_widget(self.tabbar_grouped))
 
-        ct_gui_tab.child.pack_start(self.tabbar_on, False, False, 5)
-        ct_gui_tab.child.pack_start(self.tabbar_grouped, False, False, 5)
+        ct_gui_tab.child.pack_start(self.tabbar_on, False, False, 10)
+        ct_gui_tab.child.pack_start(self.tabbar_grouped, False, False, 10)
 
         self.tabbar_on.connect('toggled', self._sig_tabbar_on)
         self.tabbar_grouped.connect('toggled', self._sig_tabbar_grouped)
@@ -410,27 +410,19 @@ class ConfigWindow(gtk.Window):
         ct_gui_font.add(gtk.HBox())
 
         self.font_sw = {}
-        self.font_sw_tm = {}
-        font_sw_cell = {}
-
         for key in conf.Config['FONT']:
-            self.font_sw_tm[key] = gtk.ListStore(type(conf.Config['FONT'][key]))
-            self.font_sw[key] = gtk.ComboBox(self.font_sw_tm[key])
-            font_sw_cell[key] = gtk.CellRendererText()
-
-            self.font_sw[key].pack_start(font_sw_cell[key], True)
-            self.font_sw[key].add_attribute(font_sw_cell[key], 'text', 0)
+            self.font_sw[key] = gtk.combo_box_new_text()
 
             self.__label['LABEL'].append(gtk.Label('{0}:'.format(key.title())))
-            ct_gui_font.child.pack_start(self.__label['LABEL'][-1], False, False, 5)
-            ct_gui_font.child.pack_start(self.font_sw[key], False, False, 5)
+            ct_gui_font.child.pack_start(self.__label['LABEL'][-1], False, False, 10)
+            ct_gui_font.child.pack_start(self.font_sw[key], False, False, 10)
 
             self.font_sw[key].connect('changed', self._sig_font_changed)
 
         for font in conf.MONO_FONT:
-            self.font_sw_tm['name'].append([font])
+            self.font_sw['name'].append_text(font)
         for size in range(6, 73):
-            self.font_sw_tm['size'].append([size])
+            self.font_sw['size'].append_text(str(size))
 
         # Theme
         self.__label['FRAME'].append(gtk.Label('Theme'))
@@ -467,13 +459,13 @@ class ConfigWindow(gtk.Window):
             row = abs(color_pos[key])
             col = (row + color_pos[key]) / (row + row)
 
-            self.__label['LABEL'].append(gtk.Label('{0:<{1}}'.format(key.replace('_', ' ').title(), label_len[col])))
+            self.__label['LABEL'].append(gtk.Label(' {0:<{1}}'.format(key.replace('_', ' ').title(), label_len[col])))
 
             self.color_entry[key] = gtk.Entry(7)
             self.color_picker[key] = comp.zColorPicker(self.__ebox, self._sig_color_selected)
 
             self.color_entry[key].set_property('width-chars', 7)
-            self.color_picker[key].set_size_button(45, -1)
+            self.color_picker[key].set_size_button(35, -1)
 
             self.__entry.append(self.color_entry[key])
 
@@ -588,7 +580,7 @@ class ConfigWindow(gtk.Window):
         ct_key_binding_entry.pack_start(self.kb_default, False, False, 10)
 
         self.__label['LABEL'].append(gtk.Label('Stroke:'))
-        ct_key_binding_entry.pack_start(self.__label['LABEL'][-1], False, False, 5)
+        ct_key_binding_entry.pack_start(self.__label['LABEL'][-1], False, False, 10)
 
         self.kb_stroke_entry = gtk.Entry()
         self.kb_stroke_entry.set_property('sensitive', False)
@@ -599,6 +591,73 @@ class ConfigWindow(gtk.Window):
         self.kb_rules.connect('clicked', self._sig_key_stroke_help)
         self.kb_default.connect('clicked', self._sig_key_stroke_clear)
         self.kb_stroke_entry.connect('activate', self._sig_key_stroke_entered)
+
+
+        ## Editor
+        ct_editor = gtk.VBox()
+        self.__label['TAB'].append(gtk.Label('Editor'))
+        center.append_page(ct_editor, self.__label['TAB'][-1])
+
+        # append this tab later
+
+
+        ## System
+        ct_system = gtk.VBox()
+        self.__label['TAB'].append(gtk.Label('System'))
+        center.append_page(ct_system, self.__label['TAB'][-1])
+
+        # Architecture
+        self.__label['FRAME'].append(gtk.Label('Architecture'))
+        ct_system_arch = gtk.Frame()
+        ct_system_arch.set_label_widget(self.__label['FRAME'][-1])
+        ct_system.pack_start(ct_system_arch, False, False, 10)
+
+        ct_system_arch.add(gtk.Table(2, 2, False))
+        ct_system_arch.child.set_col_spacings(10)
+
+        self.addr_mode_sw = gtk.combo_box_new_text()
+        self.memory_sz_entry = gtk.Entry()
+
+        for mode in zPE.conf.POSSIBLE_ADDR_MODE:
+            self.addr_mode_sw.append_text(str(mode))
+        self.memory_sz_entry.set_property('width-chars', 10)
+
+        self.__label['LABEL'].append(gtk.Label(' Simulator Address Mode:           '))
+        ct_system_arch.child.attach(self.__label['LABEL'][-1], 0, 1, 0, 1, xoptions = gtk.SHRINK)
+        ct_system_arch.child.attach(self.addr_mode_sw,         1, 2, 0, 1, xoptions = gtk.FILL)
+
+        self.__label['LABEL'].append(gtk.Label(' Default Allocation of Memory Size:'))
+        ct_system_arch.child.attach(self.__label['LABEL'][-1], 0, 1, 1, 2, xoptions = gtk.SHRINK)
+        ct_system_arch.child.attach(self.memory_sz_entry,      1, 2, 1, 2, xoptions = gtk.FILL)
+
+        self.addr_mode_sw.connect('changed', self._sig_addr_mode_changed)
+        self.memory_sz_entry.connect('activate', self._sig_memory_sz_entered)
+
+
+        # Path
+        self.__label['FRAME'].append(gtk.Label('Path'))
+        ct_system_path = gtk.Frame()
+        ct_system_path.set_label_widget(self.__label['FRAME'][-1])
+        ct_system.pack_start(ct_system_path, False, False, 10)
+
+        ct_system_path.add(gtk.Table(2, 2, False))
+        ct_system_path.child.set_col_spacings(10)
+
+        self.__label['LABEL'].append(gtk.Label(' Note:         '))
+        ct_system_path.child.attach(self.__label['LABEL'][-1], 0, 1, 0, 1, xoptions = gtk.SHRINK)
+        self.__label['LABEL'].append(gtk.Label('any relevent path defined here\n' +
+                                               'is relative to the directory of\n' +
+                                               'the current submission.'
+                                               ))
+        ct_system_path.child.attach(self.__label['LABEL'][-1], 1, 2, 0, 1, xoptions = gtk.SHRINK)
+
+        self.spool_dir_entry = gtk.Entry()
+
+        self.__label['LABEL'].append(gtk.Label(' SDSF Location:'))
+        ct_system_path.child.attach(self.__label['LABEL'][-1], 0, 1, 1, 2, xoptions = gtk.SHRINK)
+        ct_system_path.child.attach(self.spool_dir_entry,      1, 2, 1, 2, xoptions = gtk.FILL)
+
+        self.spool_dir_entry.connect('activate', self._sig_spool_dir_entered)
 
 
         ### separator
@@ -659,19 +718,23 @@ class ConfigWindow(gtk.Window):
     ### top-level signal definition
     def _sig_clear_rc(self, *arg):
         conf.reset_key_binding() # reset all key bindings
-        conf.init_rc_all()       # re-initiate config
+        conf.init_rc_all()       # re-initiate GUI config
+        zPE.conf.init_rc()       # re-initiate zsub config
         self.load_rc()
 
     def _sig_open_console(self, *arg):
         self.open()
 
     def _sig_reload_rc(self, *arg):
-        conf.Config = copy.deepcopy(self.config_bkup) # restore the backup setting
+        conf.Config = copy.deepcopy(self.config_bkup)          # restore the GUI backup setting
+        zPE.conf.Config = copy.deepcopy(self.zsub_config_bkup) # restore the zsub backup setting
         self.load_rc()
 
     def _sig_save_config(self, *arg):
-        conf.write_rc_all()     # write changes
-        conf.read_rc_all()      # validate new config
+        conf.write_rc_all()              # write changes for GUI
+        conf.read_rc_all()               # validate new GUI config
+        zPE.conf.write_rc()              # write changes for zsub
+        zPE.conf.read_rc(dry_run = True) # validate new zsub config
         self.close()
 
     def _sig_cancel_mod(self, *arg):
@@ -693,10 +756,11 @@ class ConfigWindow(gtk.Window):
     def _sig_font_changed(self, combo):
         new_font = {}
         for key in conf.Config['FONT']:
-            font_iter = self.font_sw[key].get_active_iter()
-            if not font_iter:
+            font_val = self.font_sw[key].get_active_text()
+            if not font_val:
                 return          # early return
-            new_font[key] = self.font_sw_tm[key].get_value(font_iter, 0)
+            new_font[key] = font_val
+        new_font['size'] = int(new_font['size'])
 
         conf.Config['FONT'] = new_font
         comp.zTheme.set_font(conf.Config['FONT'])
@@ -844,12 +908,50 @@ class ConfigWindow(gtk.Window):
     ### end of signal for KeyBinding
 
 
+    ### signal for System
+    def _sig_addr_mode_changed(self, combo):
+        addr_val = combo.get_active_text()
+        if not addr_val:
+            return          # early return
+
+        zPE.conf.Config['addr_mode'] = int(addr_val)
+        zPE.conf.Config['addr_max'] = 2 ** zPE.conf.Config['addr_mode']
+
+    def _sig_memory_sz_entered(self, entry):
+        try:
+            sz = zPE.conf.parse_region(entry.get_text())
+        except:
+            entry.set_text(zPE.conf.Config['memory_sz'])
+            raise
+
+        zPE.conf.Config['memory_sz'] = sz
+        entry.set_property('sensitive', False) # remove focus
+        entry.set_text(zPE.conf.Config['memory_sz'])
+        entry.set_property('sensitive', True)  # retain edibility
+
+
+    def _sig_spool_dir_entered(self, entry):
+        path = os.path.normpath(os.path.normcase(entry.get_text()))
+
+        if os.path.isdir(os.path.abspath(os.path.expanduser(path))):
+            zPE.conf.Config['spool_dir'] = path
+        else:
+            entry.set_text(zPE.conf.Config['spool_dir'])
+            raise SyntaxError('Invalid SPOOL directory path.')
+
+        entry.set_property('sensitive', False) # remove focus
+        entry.set_text(zPE.conf.Config['spool_dir'])
+        entry.set_property('sensitive', True)  # retain edibility
+    ### end of signal for System
+
+
     ### overloaded function definition
     def open(self):
         if self.get_property('visible'):
             self.window.show()
         else:
-            self.config_bkup = copy.deepcopy(conf.Config) # backup settings
+            self.config_bkup = copy.deepcopy(conf.Config)          # backup GUI settings
+            self.zsub_config_bkup = copy.deepcopy(zPE.conf.Config) # backup zsub settings
             self.load_rc()
             self.show()
 
@@ -867,7 +969,8 @@ class ConfigWindow(gtk.Window):
         self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
 
         # GUI->Font
-        self.select_font(conf.Config['FONT'])
+        for key in conf.Config['FONT']:
+            self.select_combo_item(self.font_sw[key], conf.Config['FONT'][key])
 
         # GUI->Theme
         for key in self.color_entry:
@@ -886,6 +989,11 @@ class ConfigWindow(gtk.Window):
         # KeyBinding->Binding
         self.load_binding()
 
+        # System->Architecture
+        self.select_combo_item(self.addr_mode_sw, zPE.conf.Config['addr_mode'])
+        self.memory_sz_entry.set_text(zPE.conf.Config['memory_sz'])
+        self.spool_dir_entry.set_text(zPE.conf.Config['spool_dir'])
+
 
     def load_binding(self):
         style = conf.Config['MISC']['key_binding']
@@ -893,19 +1001,6 @@ class ConfigWindow(gtk.Window):
         self.kb_rules_dialog_content.set_markup(conf.KEY_BINDING_RULE_MKUP[style])
         for (k, v) in self.kb_stroke.iteritems():
             v.set_text(conf.Config['FUNC_BINDING'][k])
-
-
-    def select_font(self, font_dic):
-        for key in font_dic:
-            font_iter = self.font_sw_tm[key].get_iter_first()
-            if not font_iter:
-                return          # early return
-
-            while self.font_sw_tm[key].get_value(font_iter, 0) != font_dic[key]:
-                if not font_iter:
-                    return      # early return
-                font_iter = self.font_sw_tm[key].iter_next(font_iter)
-            self.font_sw[key].set_active_iter(font_iter)
 
 
     def set_color_modify(self, key, color_code):
@@ -933,6 +1028,20 @@ class ConfigWindow(gtk.Window):
             if found:
                 return found    # found in previous search
         return None             # not found at all
+
+
+    def select_combo_item(self, combo, item):
+        tm = combo.get_model()
+
+        tm_iter = tm.get_iter_first()
+        if not tm_iter:
+            return          # early return
+
+        while tm.get_value(tm_iter, 0) != str(item):
+            if not tm_iter:
+                return      # early return
+            tm_iter = tm.iter_next(tm_iter)
+        combo.set_active_iter(tm_iter)
 
 
     def set_font_modify(self, widget, font, size = None):
