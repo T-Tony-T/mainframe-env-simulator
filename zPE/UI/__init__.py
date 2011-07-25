@@ -2,7 +2,7 @@
 import comp, conf
 import zPE.conf
 
-import os, sys, copy, re
+import os, sys, copy, re, subprocess
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -30,8 +30,8 @@ class BaseFrame(object):
             'window_delete'             : lambda *arg: self._sig_sw_manip(None, 'delete'),
             'window_delete_other'       : lambda *arg: self._sig_sw_manip(None, 'delete_other'),
 
-#            'zPE_submit'                : ,
-#            'zPE_submit_with_JCL'       : ,
+            'zPE_submit'                : lambda *arg: self._sig_submit(None, 'direct'),
+#            'zPE_submit_with_JCL'       : lambda *arg: self._sig_submit(None, 'wrap'),
             }
         for key in conf.DEFAULT_FUNC_KEY_BIND:
             comp.zEdit.reg_add_registry(key)
@@ -82,28 +82,39 @@ class BaseFrame(object):
         self.tool_buff_save_as.set_tooltip_text('Save Current Buffer As ...')
         self.tool_buff_close = gtk.ToolButton(gtk.STOCK_CLOSE)
         self.tool_buff_close.set_tooltip_text('Close Current Buffer')
-
+        # ------------------------
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'view-split-left-right.png')
+            os.path.join(os.path.dirname(__file__), 'image', 'window_split_horz.png')
             )
         self.tool_win_split_horz = gtk.ToolButton(bttn_icon)
         self.tool_win_split_horz.set_tooltip_text('Split Current Focused Window Horizontally')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'view-split-top-bottom.png')
+            os.path.join(os.path.dirname(__file__), 'image', 'window_split_vert.png')
             )
         self.tool_win_split_vert = gtk.ToolButton(bttn_icon)
         self.tool_win_split_vert.set_tooltip_text('Split Current Focused Window Vertically')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'view-left-close.png')
+            os.path.join(os.path.dirname(__file__), 'image', 'window_delete.png')
             )
         self.tool_win_delete = gtk.ToolButton(bttn_icon)
         self.tool_win_delete.set_tooltip_text('Close Current Focused Frame')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'view-close.png')
+            os.path.join(os.path.dirname(__file__), 'image', 'window_delete_other.png')
             )
         self.tool_win_delete_other = gtk.ToolButton(bttn_icon)
         self.tool_win_delete_other.set_tooltip_text('Close All Frames but the Current One')
-
+        # ------------------------
+        bttn_icon = gtk.image_new_from_file(
+            os.path.join(os.path.dirname(__file__), 'image', 'submit.png')
+            )
+        self.tool_submit = gtk.ToolButton(bttn_icon)
+        self.tool_submit.set_tooltip_text('Submit the Job File')
+        bttn_icon = gtk.image_new_from_file(
+            os.path.join(os.path.dirname(__file__), 'image', 'submit_test.png')
+            )
+        self.tool_submit_wrap = gtk.ToolButton(bttn_icon)
+        self.tool_submit_wrap.set_tooltip_text('Test Run the Job File With Default JCL')
+        # ------------------------
         self.tool_config = gtk.ToolButton(gtk.STOCK_PREFERENCES)
         self.tool_config.set_tooltip_text('Show the Config Window')
         self.tool_err_console = gtk.ToolButton(gtk.STOCK_DIALOG_WARNING)
@@ -126,9 +137,14 @@ class BaseFrame(object):
 
         self.toolbar.insert(gtk.SeparatorToolItem(), 9)
 
-        self.toolbar.insert(self.tool_config, 10)
-        self.toolbar.insert(self.tool_err_console, 11)
-        self.toolbar.insert(self.tool_quit, 12)
+        self.toolbar.insert(self.tool_submit, 10)
+        self.toolbar.insert(self.tool_submit_wrap, 11)
+
+        self.toolbar.insert(gtk.SeparatorToolItem(), 12)
+
+        self.toolbar.insert(self.tool_config, 13)
+        self.toolbar.insert(self.tool_err_console, 14)
+        self.toolbar.insert(self.tool_quit, 15)
 
         ## connect auto-update items
         comp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
@@ -146,6 +162,9 @@ class BaseFrame(object):
         self.tool_win_split_vert.connect('clicked', self._sig_sw_manip, 'split_vert')
         self.tool_win_delete.connect('clicked', self._sig_sw_manip, 'delete')
         self.tool_win_delete_other.connect('clicked', self._sig_sw_manip, 'delete_other')
+
+        self.tool_submit.connect('clicked', self._sig_submit, 'direct')
+#        self.tool_submit_wrap.connect('clicked', self._sig_submit, 'wrap')
 
         self.tool_config.connect('clicked', self.__key_binding_func['prog_show_config'])
         self.tool_err_console.connect('clicked', self.__key_binding_func['prog_show_error'])
@@ -215,6 +234,9 @@ class BaseFrame(object):
         self.tool_buff_save.set_property('sensitive', is_file and buff.modified)
         self.tool_buff_save_as.set_property('sensitive', is_file and buff.modified)
         self.tool_buff_close.set_property('sensitive', is_file)
+
+        self.tool_submit.set_property('sensitive', buff.path)
+        self.tool_submit_wrap.set_property('sensitive', buff.path)
     ### end of signal-like auto-update function
 
 
@@ -222,6 +244,8 @@ class BaseFrame(object):
     def _sig_buff_manip(self, widget, task):
         # get current buffer
         frame = self.mw.active_frame()
+        if not frame:
+            raise AssertionError('The main window is not focused!')
         buff = frame.active_buffer
 
         if task == 'open':
@@ -259,10 +283,10 @@ class BaseFrame(object):
 
     def _sig_sw_manip(self, widget, task):
         frame = self.mw.active_frame()
-
-        if not frame.is_focus():
+        if not frame:
             raise AssertionError('The main window is not focused!')
-        elif task == 'split_horz':
+
+        if task == 'split_horz':
             self.mw.window_split_horz(frame)
         elif task == 'split_vert':
             self.mw.window_split_vert(frame)
@@ -273,22 +297,91 @@ class BaseFrame(object):
             self.mw.window_delete_other(frame)
         else:
             raise KeyError
+
+
+    def _sig_submit(self, widget, task):
+        frame = self.mw.active_frame()
+        if not frame:
+            raise AssertionError('The main window is not focused!')
+        buff = frame.active_buffer
+
+        if buff.type == 'file' and buff.path:
+            pathname = os.path.abspath(os.path.expanduser(os.path.join(* buff.path[:-1])))
+            basename = buff.path[-1]
+        elif buff.type == 'dir':
+            try:
+                (pathname, basename) = frame.center.get_active_item()
+            except:
+                raise AssertionError('Cannot fetch the submission information.')
+
+            if not os.path.isfile(os.path.join(pathname, basename)):
+                return          # dir selection is not a file, early return
+        else:
+            return              # not a file nor an dir, early return
+
+        if task == 'wrap':
+            pass                # wrap the file here
+
+        zsub = subprocess.Popen(['zsub', basename], cwd = pathname,
+                                stdout = subprocess.PIPE, stderr = subprocess.PIPE
+                                )
+        rc = zsub.wait()
+        sys.stderr.write(zsub.stderr.read())
+
+        self.lastline.set_highlight_text(basename + ': ')
+        if rc not in zPE.conf.RC.itervalues():
+            # something weird happened
+            sys.stderr.write(zsub.stdout.read())
+
+            self.lastline.set_text('JOB submitted but aborted with {0}.'.format(rc))
+        else:
+            self.lastline.set_text('JOB submitted with ID={0}, return value is {1}.'.format(
+                    zPE.conf.fetch_job_id(), rc
+                    ))
     ### end of top level signals
 
 
     ### signals for SplitWindow
-    def _sig_popup_manip(self, widget, menu, data = None):
-        menu.append(gtk.SeparatorMenuItem())
+    def _sig_popup_manip(self, widget, menu):
+        buff_type = widget.z_editor.active_buffer.type
+        if buff_type == 'file':
+            if widget.z_editor.active_buffer.path:
+                is_file = True
+            else:
+                is_file = False
+        elif buff_type == 'dir':
+            fullpath = widget.get_active_item()
+            if fullpath and os.path.isfile(os.path.join(* fullpath)):
+                is_file = True
+            else:
+                is_file = False
+        else:
+            is_file = False
+
+        mi_submit = gtk.MenuItem('_Submit the Job File')
+        mi_submit.set_property('sensitive', is_file)
+        mi_submit_wrap = gtk.MenuItem('_Test Run the Job File')
+        mi_submit_wrap.set_property('sensitive', is_file)
 
         mi_split_horz = gtk.MenuItem('Split Horizontally <_3>')
         mi_split_vert = gtk.MenuItem('Split Vertically <_2>')
         mi_delete = gtk.MenuItem('Close Current Frame <_0>')
         mi_delete_other = gtk.MenuItem('Close Other Frames <_1>')
 
+        menu.append(gtk.SeparatorMenuItem())
+
+        menu.append(mi_submit)
+        menu.append(mi_submit_wrap)
+
+        menu.append(gtk.SeparatorMenuItem())
+
         menu.append(mi_split_horz)
         menu.append(mi_split_vert)
         menu.append(mi_delete)
         menu.append(mi_delete_other)
+
+        mi_submit.connect('activate', self._sig_submit, 'direct')
+#        mi_submit_wrap.connect('activate', self._sig_submit, 'wrap')
 
         mi_split_horz.connect('activate', self._sig_sw_manip, 'split_horz')
         mi_split_vert.connect('activate', self._sig_sw_manip, 'split_vert')

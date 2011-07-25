@@ -18,12 +18,14 @@ def main():
         parser.print_help()
         return 0
 
-    submit(args[0])
+    return submit(args[0])
 
 
 def submit(job):
     rv = zPE.core.jcl.parse(job)
     flush_all = False
+    overall_rc = 0
+
     if rv == 'ok':
         zPE.core.jcl.init_job()
         for step in zPE.JCL['step']:
@@ -34,6 +36,7 @@ def submit(job):
                 rv = zPE.core.jcl.init_step(step)
                 if rv == 'ok':
                     step.rc = eval(zPE.PGM_SUPPORTED[step.pgm])(step)
+                    overall_rc = max(overall_rc, step.rc)
                     if step.rc != 0:
                         rv = 'steprun'
                 else:
@@ -45,6 +48,7 @@ def submit(job):
                     rv = zPE.core.jcl.init_step(step)
                     if rv == 'ok':
                         step.rc = zPE.core.asm.run(step)
+                        overall_rc = max(overall_rc, step.rc)
                         if step.rc != 0:
                             rv = 'steprun'
                     else:
@@ -57,7 +61,11 @@ def submit(job):
                                'For more information, see \'' +
                                sys.argv[0] + ' -l\' for help.\n')
         # end of all steps
+    else:
+        overall_rc = 9       # JCL error; see zPE.__init__.py for help
+
     zPE.core.jcl.finish_job(rv)
+    return overall_rc
 
 
 def prepare_option(parser):

@@ -11,6 +11,15 @@ JOB_ID_MIN = 10000              # the smallest job ID
 JOB_ID_MAX = 65535              # the largest job ID
 TMP_FILE_ID = 101               # the smallest tmp file identifier
 
+## Return Code
+RC = {
+    'NORMAL'    : 0,
+    'WARNING'   : 4,
+    'ERROR'     : 8,
+    'SERIOUS'   : 12,
+    'SEVERE'    : 16,
+    }
+
 
 ### Configurable Definition
 POSSIBLE_ADDR_MODE = [ 16, 31, 64, ]
@@ -64,6 +73,23 @@ def load_ICH70001I():
     __CK_CONFIG()
     return pickle.load(open(CONFIG_PATH['ICH70001I'], 'rb'))
     
+
+def fetch_job_id():
+    for line in open(CONFIG_PATH['rc'], 'r'):
+        (k, v) = re.split('[ \t]*=[ \t]*', line, maxsplit=1)
+
+        if k != 'job_id':
+            continue
+
+        try:
+            job_id = int(v)
+
+            if JOB_ID_MIN < job_id and job_id < JOB_ID_MAX:
+                return job_id   # found
+        except:
+            pass
+        return None             # not found
+
 
 def read_rc(dry_run = False):
     __CK_CONFIG()

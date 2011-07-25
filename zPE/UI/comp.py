@@ -1006,7 +1006,7 @@ class zEdit(z_ABC, gtk.VBox):
                 if re.match(r'^[\x20-\x7e]$', stroke):
                     # regular keypress
                     widget.insert_text(stroke)
-                    zEdit.__mx_command_content = widget.get_interactive_text()
+                    zEdit.__mx_command_content = widget.get_text()
                     return True
                 elif stroke.upper() == 'RETURN':
                     # Enter key pressed
@@ -1086,9 +1086,8 @@ class zEdit(z_ABC, gtk.VBox):
                         )
                 else:
                     # no M-x commanding
-                    # reset lastline
-                    zEdit.__last_line.set_highlight_text(info[0])
-                    zEdit.__last_line.set_interactive_text(info[1])
+                    # leave it alone
+                    pass
 
                 zEdit.__commanding = False
                 zEdit.__command_content = ''
@@ -1172,13 +1171,13 @@ class zEdit(z_ABC, gtk.VBox):
                 iterator = treeview.model.iter_next(iterator)
             tree_path = treeview.model.get_path(iterator)
             tree_col = treeview.fn_tree_col
-            treeview.set_cursor(tree_path)
+        treeview.set_cursor(tree_path)
 
         if tree_path is None:
             raise LookupError
         elif len(tree_path) > 0:
             iterator = treeview.model.get_iter(tree_path)
-            obj = treeview.model[iterator][0]
+            filename = treeview.model.get_value(iterator, 0)
         else:
             raise ValueError
 
@@ -1412,6 +1411,7 @@ class zEdit(z_ABC, gtk.VBox):
                 self.remove(self.center_shell)
             self.center_shell = widget_shell
             self.center = widget
+            self.center.z_editor = self
             self.center_shell.add(self.center)
             self.pack_start(self.center_shell, True, True, 0)
 
@@ -1976,34 +1976,36 @@ class zFileManager(gtk.VBox):
         self.treeview.model = gtk.ListStore(str, bool)
         self.treeview.set_model(self.treeview.model)
 
-        self.fn_cell_rdr = gtk.CellRendererText()
+        self.treeview.fn_cell_rdr = gtk.CellRendererText()
 
-        self.fn_tree_col = gtk.TreeViewColumn(zFileManager.column_names[1], self.fn_cell_rdr, text=0, editable=1)
-        self.fn_tree_col.set_cell_data_func(self.fn_cell_rdr, self.__cell_data_func)
+        self.treeview.fn_tree_col = gtk.TreeViewColumn(
+            zFileManager.column_names[1], self.treeview.fn_cell_rdr, text = 0, editable = 1
+            )
+        self.treeview.fn_tree_col.set_cell_data_func(self.treeview.fn_cell_rdr, self.__cell_data_func)
 
         # create the TreeViewColumns to display the data
-        self.cell_list   = [None] * len(zFileManager.column_names)
-        self.column_list = [None] * len(zFileManager.column_names)
+        self.treeview.cell_list   = [None] * len(zFileManager.column_names)
+        self.treeview.column_list = [None] * len(zFileManager.column_names)
 
         # create column 0 (icon)
-        self.cell_list[0] = gtk.CellRendererPixbuf()
-        self.column_list[0] = gtk.TreeViewColumn(zFileManager.column_names[0], self.cell_list[0])
+        self.treeview.cell_list[0] = gtk.CellRendererPixbuf()
+        self.treeview.column_list[0] = gtk.TreeViewColumn(zFileManager.column_names[0], self.treeview.cell_list[0])
 
         # create column 1 (file name)
-        self.cell_list[1] = self.fn_cell_rdr
-        self.column_list[1] = self.fn_tree_col
+        self.treeview.cell_list[1] = self.treeview.fn_cell_rdr
+        self.treeview.column_list[1] = self.treeview.fn_tree_col
 
         # create the rest of columns
         for n in range(2, len(zFileManager.column_names)):
-            self.cell_list[n] = gtk.CellRendererText()
-            self.column_list[n] = gtk.TreeViewColumn(zFileManager.column_names[n], self.cell_list[n])
+            self.treeview.cell_list[n] = gtk.CellRendererText()
+            self.treeview.column_list[n] = gtk.TreeViewColumn(zFileManager.column_names[n], self.treeview.cell_list[n])
 
         # add all columns
         for n in range(len(zFileManager.column_names)):
-            self.cell_list[n].set_property('xalign', zFileManager.column_xalign[n])
-            self.column_list[n].set_resizable(zFileManager.column_resizable[n])
-            self.column_list[n].set_sizing(zFileManager.column_sizing[n])
-            self.treeview.append_column(self.column_list[n])
+            self.treeview.cell_list[n].set_property('xalign', zFileManager.column_xalign[n])
+            self.treeview.column_list[n].set_resizable(zFileManager.column_resizable[n])
+            self.treeview.column_list[n].set_sizing(zFileManager.column_sizing[n])
+            self.treeview.append_column(self.treeview.column_list[n])
 
         # connect signal for redirection
         self.path_entry.connect('focus-in-event',  self._focus_evnt_redirect, 'focus-in-event')
@@ -2014,7 +2016,7 @@ class zFileManager(gtk.VBox):
         # connect signal for internal usage
         self.path_entry.connect('activate', self._sig_open_file_from_entry)
         self.treeview.connect('row-activated', self._sig_open_file_from_tree)
-        self.fn_cell_rdr.connect('edited', self._sig_entry_edited)
+        self.treeview.fn_cell_rdr.connect('edited', self._sig_entry_edited)
 
         # set cwd
         self.set_folder()
@@ -2071,7 +2073,7 @@ class zFileManager(gtk.VBox):
 
         # make it editable
         self.treeview.model.set_value(self.treeview.model.iter_next(iterator), 1, True)
-        self.treeview.set_cursor(self.__cell_data_func_skip['path'], self.fn_tree_col, True)
+        self.treeview.set_cursor(self.__cell_data_func_skip['path'], self.treeview.fn_tree_col, True)
 
 
     def _sig_open_file_from_entry(self, entry):
@@ -2079,7 +2081,7 @@ class zFileManager(gtk.VBox):
         fn_list = os.path.split(fullpath)
 
         if io_encap.is_dir(fn_list):
-            self.set_folder(os.path.join(*fn_list))
+            self.set_folder(os.path.join(* fn_list))
         elif io_encap.is_file(fn_list):
             self.open_file(fn_list)
         else:
@@ -2092,7 +2094,7 @@ class zFileManager(gtk.VBox):
         fn_list = [ self.dirname, self.treeview.model.get_value(iterator, 0) ]
 
         if io_encap.is_dir(fn_list):
-            self.set_folder(os.path.join(*fn_list))
+            self.set_folder(os.path.join(* fn_list))
         elif io_encap.is_file(fn_list):
             self.open_file(fn_list)
 
@@ -2105,7 +2107,7 @@ class zFileManager(gtk.VBox):
 
         # make it editable
         self.treeview.model.set_value(iterator, 1, True)
-        self.treeview.set_cursor(tree_path, self.fn_tree_col, True)
+        self.treeview.set_cursor(tree_path, self.treeview.fn_tree_col, True)
     ### end of signal definition
 
 
@@ -2117,13 +2119,23 @@ class zFileManager(gtk.VBox):
         self.treeview.grab_focus()
         self.treeview.set_cursor((0,))
 
+
+    def get_active_item(self):
+        try:
+            (tree_path, tree_col) = self.treeview.get_cursor()
+        except:
+            return None
+        basename = self.treeview.model.get_value(self.treeview.model.get_iter(tree_path), 0)
+        return (self.dirname, basename)
+
+
     def modify_font(self, font_desc):
         self.path_entry_label.modify_font(font_desc)
         self.path_entry.modify_font(font_desc)
         self.treeview.modify_font(font_desc)
         # resize the Name field
         (w, h) = self.create_pango_layout('w').get_pixel_size()
-        self.fn_tree_col.set_fixed_width(w * zTheme.DISC['fn_len'])
+        self.treeview.fn_tree_col.set_fixed_width(w * zTheme.DISC['fn_len'])
 
     def modify_base(self, state, color):
         self.path_entry.modify_base(state, color)
@@ -2150,6 +2162,7 @@ class zFileManager(gtk.VBox):
             self.dirname = os.path.expanduser('~')
         else:
             self.dirname = os.path.abspath(fullpath)
+        self.treeview.dirname = self.dirname
 
         # fetch file listing
         file_list = []
@@ -2194,9 +2207,9 @@ class zFileManager(gtk.VBox):
             self.__file_size(2, iterator)
             self.__file_last_changed(3, iterator)
         except:
-            self.cell_list[0].set_property('pixbuf', None)
-            self.cell_list[2].set_property('text', None)
-            self.cell_list[3].set_property('text', '<Changed on disk>')
+            self.treeview.cell_list[0].set_property('pixbuf', None)
+            self.treeview.cell_list[2].set_property('text', None)
+            self.treeview.cell_list[3].set_property('text', '<Changed on disk>')
 
     def __file_pixbuf(self, indx, iterator):
         if ( self.__cell_data_func_skip['type']  and
@@ -2214,14 +2227,14 @@ class zFileManager(gtk.VBox):
                 pb = zFileManager.folderpb
             else:
                 pb = zFileManager.filepb
-        self.cell_list[indx].set_property('pixbuf', pb)
+        self.treeview.cell_list[indx].set_property('pixbuf', pb)
 
 
     def __file_size(self, indx, iterator):
         if ( self.__cell_data_func_skip['type']  and
              self.__cell_data_func_skip['path'] == self.treeview.model.get_path(iterator)
              ):
-            self.cell_list[indx].set_property('text', '')
+            self.treeview.cell_list[indx].set_property('text', '')
             return
             
         filename = os.path.join(self.dirname, self.treeview.model.get_value(iterator, 0))
@@ -2242,20 +2255,20 @@ class zFileManager(gtk.VBox):
             unit = 'G'
         if size[-2:] == '.0':
             size = size[:-2]
-        self.cell_list[indx].set_property('text', size + unit)
+        self.treeview.cell_list[indx].set_property('text', size + unit)
 
 
     def __file_last_changed(self, indx, iterator):
         if ( self.__cell_data_func_skip['type']  and
              self.__cell_data_func_skip['path'] == self.treeview.model.get_path(iterator)
              ):
-            self.cell_list[indx].set_property('text', '')
+            self.treeview.cell_list[indx].set_property('text', '')
             return
 
         filename = os.path.join(self.dirname, self.treeview.model.get_value(iterator, 0))
         filestat = os.stat(filename)
 
-        self.cell_list[indx].set_property('text', time.ctime(filestat.st_mtime))
+        self.treeview.cell_list[indx].set_property('text', time.ctime(filestat.st_mtime))
     ### end of cell data function
 
 
