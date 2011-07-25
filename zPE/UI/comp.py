@@ -1385,7 +1385,7 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell = gtk.Frame()
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
-                widget = zFileManager(self)
+                widget = zFileManager()
                 self.sig_id['button_press'] = widget.treeview.connect('button-press-event', self._sig_button_press)
                 widget_key_press_id = {
                     widget.path_entry : widget.path_entry.connect('key-press-event', zEdit._sig_key_pressed),
@@ -1411,7 +1411,7 @@ class zEdit(z_ABC, gtk.VBox):
                 self.remove(self.center_shell)
             self.center_shell = widget_shell
             self.center = widget
-            self.center.z_editor = self
+            self.center.set_editor(self)
             self.center_shell.add(self.center)
             self.pack_start(self.center_shell, True, True, 0)
 
@@ -1937,16 +1937,16 @@ class zFileManager(gtk.VBox):
         gtk.TREE_VIEW_COLUMN_AUTOSIZE
         ]
 
-    def __init__(self, z_editor):
+    def __init__(self, editor = None):
         '''
-        z_editor
-            the zEdit (or equivalent object) that can open the file with
-            set_buffer(fn_list, tpye) method call.
+        editor = None
+            any editor that can open an indicated file with:
+              editor.set_buffer(fn_list, tpye)
+            method call.
         '''
         super(zFileManager, self).__init__()
 
-
-        self.z_editor = z_editor
+        self.set_editor(editor)
 
         path_box = gtk.HBox()
         self.path_entry_label = gtk.Label('Path: ')
@@ -2148,8 +2148,20 @@ class zFileManager(gtk.VBox):
 
 
     def open_file(self, fn_list):
-        self.z_editor.set_buffer(fn_list, 'file')
+        if not self.get_editor():
+            raise ReferenceError('No editor set! Use `set_editor(editor)` first.')
+        self.get_editor().set_buffer(fn_list, 'file')
 
+
+    def get_editor(self):
+        return self.__editor_frame
+
+    def set_editor(self, editor):
+        self.__editor_frame = editor
+
+
+    def get_folder(self):
+        return self.dirname
 
     def set_folder(self, fullpath = None):
         # get real path
@@ -3344,8 +3356,14 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         }
-    def __init__(self):
+    def __init__(self, editor = None):
+        '''
+        editor = None
+            the editor frame that contains this textview
+        '''
         super(zTextView, self).__init__()
+
+        self.set_editor(editor)
 
 
     ### overridden function definition
@@ -3353,6 +3371,13 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         buff = self.get_buffer()
         buff.insert_at_cursor(text)
     ### end of overridden function definition
+
+
+    def get_editor(self):
+        return self.__editor_frame
+
+    def set_editor(self, editor):
+        self.__editor_frame = editor
 
 
 ######## ######## ######## ########

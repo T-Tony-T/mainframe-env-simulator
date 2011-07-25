@@ -343,9 +343,9 @@ class BaseFrame(object):
 
     ### signals for SplitWindow
     def _sig_popup_manip(self, widget, menu):
-        buff_type = widget.z_editor.active_buffer.type
+        buff_type = widget.get_editor().active_buffer.type
         if buff_type == 'file':
-            if widget.z_editor.active_buffer.path:
+            if widget.get_editor().active_buffer.path:
                 is_file = True
             else:
                 is_file = False
