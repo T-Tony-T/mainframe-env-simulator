@@ -2152,16 +2152,27 @@ class zFileManager(gtk.VBox):
 
 
     def set_folder(self, fullpath = None):
+        # get real path
+        if not fullpath:
+            new_dirname = os.path.expanduser('~')
+        else:
+            new_dirname = os.path.abspath(fullpath)
+
+        # test permission
+        if not os.access(new_dirname, os.F_OK):
+            raise AssertionError('Fatal Error: directory does not exist!')
+        if not os.access(new_dirname, os.R_OK):
+            raise AssertionError('Permission Denied: directory not readable!')
+        if not os.access(new_dirname, os.X_OK):
+            raise AssertionError('Permission Denied: directory not navigable!')
+
+        # begin to changing folder
         if self.__on_setting_folder:
             return              # early return
         else:
             self.__on_setting_folder = True
 
-        # get real path
-        if not fullpath:
-            self.dirname = os.path.expanduser('~')
-        else:
-            self.dirname = os.path.abspath(fullpath)
+        self.dirname = new_dirname
         self.treeview.dirname = self.dirname
 
         # fetch file listing
