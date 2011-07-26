@@ -924,8 +924,7 @@ class zEdit(z_ABC, gtk.VBox):
             else:
                 # no M-x commanding
                 # reset lastline
-                zEdit.__last_line.set_highlight_text('')
-                zEdit.__last_line.set_interactive_text('Quit')
+                zEdit.__last_line.set_text('', 'Quit')
 
 
     @staticmethod
@@ -989,9 +988,9 @@ class zEdit(z_ABC, gtk.VBox):
                     zEdit.__mx_commanding = False
                     zEdit.__mx_command_content = ''
 
+                    zEdit.__last_line.unlock()
                     zEdit.__last_line.set_editable(False)
-                    zEdit.__last_line.set_highlight_text('')
-                    zEdit.__last_line.set_interactive_text('Quit')
+                    zEdit.__last_line.set_text('', 'Quit')
                     if zEdit._focus:
                         zEdit._focus.grab_focus()
                 return True
@@ -1010,25 +1009,30 @@ class zEdit(z_ABC, gtk.VBox):
                     return True
                 elif stroke.upper() == 'RETURN':
                     # Enter key pressed
+
+                    # reset last line
+                    zEdit.__last_line.unlock()
+                    zEdit.__last_line.set_editable(False)
+                    zEdit.__last_line.clear()
+
                     if zEdit.__mx_command_content in reg_func:
                         # is a valid functionality
                         if len(reg_func[zEdit.__mx_command_content]):
                             # has registered functions
                             zEdit._focus.grab_focus() # retain focus before emit the function
                             zEdit.reg_emit(zEdit.__mx_command_content)
-                            zEdit.__last_line.set_interactive_text('') # clear last line
                         else:
-                            zEdit.__last_line.set_interactive_text(
+                            zEdit.__last_line.set_text(
+                                '',
                                 '(function `{0}` not implemented)'.format(zEdit.__mx_command_content)
                                 )
                     else:
-                        zEdit.__last_line.set_interactive_text(
+                        zEdit.__last_line.set_text(
+                            '',
                             '({0}: no such function)'.format(zEdit.__mx_command_content)
                             )
                     zEdit.__mx_commanding = False
                     zEdit.__mx_command_content = ''
-                    zEdit.__last_line.set_highlight_text('')
-                    zEdit.__last_line.set_editable(False)
                     if zEdit._focus:
                         zEdit._focus.grab_focus()
                     return True
@@ -1044,8 +1048,8 @@ class zEdit(z_ABC, gtk.VBox):
                     else:
                         # initiate M-x Commanding
                         zEdit.__mx_commanding = True
-                        zEdit.__last_line.set_interactive_text('')
-                        zEdit.__last_line.set_highlight_text(zEdit.__mx_command_prefix)
+                        zEdit.__last_line.set_text(zEdit.__mx_command_prefix, '')
+                        zEdit.__last_line.lock()
                         zEdit.__last_line.set_editable(True)
                     return True
                 elif stroke == 'C-q':
@@ -1056,8 +1060,7 @@ class zEdit(z_ABC, gtk.VBox):
 
                 # initiate Commanding
                 if not zEdit.__mx_commanding:
-                    zEdit.__last_line.set_highlight_text('')
-                    zEdit.__last_line.set_interactive_text('')
+                    zEdit.__last_line.clear()
                 zEdit.__commanding = True
                 zEdit.__command_widget_focus_id = widget.connect('focus-out-event', zEdit._sig_key_pressed_focus_out)
             # Commanding initiated
@@ -1071,27 +1074,28 @@ class zEdit(z_ABC, gtk.VBox):
             if ( stroke in key_binding  and       # is a binded key stroke
                  key_binding[stroke] in reg_func  # is a valid functionality
                  ):
-                if len(reg_func[key_binding[stroke]]):
-                    # has registered functions
-                    zEdit.reg_emit(key_binding[stroke])
-                    info = [ '', '' ]
-                else:
-                    info = [ '', '(function `{0}` not implemented)'.format(key_binding[stroke]) ]
-                if zEdit.__mx_commanding:
-                    # on M-x Commanding
-                    # restore it
-                    zEdit.__last_line.blink_set(
-                        info[0], info[1], 1,
-                        zEdit.__mx_command_prefix, zEdit.__mx_command_content
-                        )
-                else:
-                    # no M-x commanding
-                    # leave it alone
-                    pass
-
                 zEdit.__commanding = False
                 zEdit.__command_content = ''
                 zEdit._sig_kp_fo_rm(widget)
+                zEdit.__last_line.clear()
+
+                if len(reg_func[key_binding[stroke]]):
+                    # has registered functions
+                    zEdit.reg_emit(key_binding[stroke])
+                else:
+                    info = [ '', '(function `{0}` not implemented)'.format(key_binding[stroke]) ]
+
+                    if zEdit.__mx_commanding:
+                        # on M-x Commanding
+                        # restore it after blink the msg
+                        zEdit.__last_line.blink_set(
+                            info[0], info[1], 1,
+                            zEdit.__mx_command_prefix, zEdit.__mx_command_content
+                            )
+                    else:
+                        # no M-x commanding
+                        # print the msg
+                        zEdit.__last_line.set_text(info[0], info[1])
 
                 return True
             else:
@@ -1103,7 +1107,7 @@ class zEdit(z_ABC, gtk.VBox):
                         found = True
                         if not zEdit.__mx_commanding:
                             # display stroke if in echoing mode
-                            zEdit.__last_line.set_highlight_text(stroke + ' ')
+                            zEdit.__last_line.set_text(stroke + ' ', None)
                         break
 
                 if found:
@@ -1129,8 +1133,7 @@ class zEdit(z_ABC, gtk.VBox):
                         else:
                             # no M-x commanding
                             # reset lastline
-                            zEdit.__last_line.set_highlight_text('')
-                            zEdit.__last_line.set_interactive_text(stroke + ' is undefined')
+                            zEdit.__last_line.set_text('', stroke + ' is undefined')
                         zEdit.__command_content = ''
                         return True
 
@@ -1664,8 +1667,8 @@ class zEditBuffer(z_ABC):
 
     @staticmethod
     def backup():
-        if zEditBuffer._on_restore:
-            gtk.main_iteration()
+        while zEditBuffer._on_restore:
+            gtk.main_iteration(False)
 
         zEditBuffer.__buff_list  = copy.copy(zEditBuffer.buff_list) # never deepcopy this
         zEditBuffer.__buff_group = copy.deepcopy(zEditBuffer.buff_group)
@@ -1948,6 +1951,18 @@ class zFileManager(gtk.VBox):
 
         self.set_editor(editor)
 
+        # layout of the frame:
+        #
+        #   +------------+
+        #   | path entry |
+        #   +------------+_
+        #   ||           | \
+        #   ||           |  scrolled_window
+        #   || treeview  |
+        #   ||           |
+        #   ||           |
+        #   +------------+
+
         path_box = gtk.HBox()
         self.path_entry_label = gtk.Label('Path: ')
         self.path_entry = gtk.Entry()
@@ -1962,7 +1977,6 @@ class zFileManager(gtk.VBox):
 
         self.pack_start(path_box, False, False, 0)
         self.pack_start(scrolled, True, True, 0)
-
 
         # init flags
         self.__cell_data_func_skip = { # if set, no auto testing
@@ -2332,6 +2346,7 @@ class zLastLine(gtk.HBox):
         # init flags
         self.__editable = None
         self.__force_focus = None
+        self.__locked = False   # if locked, all `set_*()` refer to `blink()`
 
         # connect auto-update items
         zTheme.register('update_font', zTheme._sig_update_font_modify, self.__label)
@@ -2366,12 +2381,7 @@ class zLastLine(gtk.HBox):
 
     ### focus related signal
     def _sig_focus_out(self, widget, event):
-        self.__line_interactive.handler_block(self.force_focus_id)
-            
         self.blink_text()
-        self.__line_interactive.grab_focus()
-
-        self.__line_interactive.handler_unblock(self.force_focus_id)
     ### end of focus related signal
 
 
@@ -2392,6 +2402,28 @@ class zLastLine(gtk.HBox):
         self.__line_interactive.handler_unblock(handler)
 
 
+    def is_focus(self):
+        return self.__line_interactive.is_focus()
+
+    def grab_focus(self):
+        self.__line_interactive.grab_focus()
+
+
+    def is_locked(self):
+        return self.__locked
+
+    def lock(self):
+        self.__locked = True
+
+    def unlock(self):
+        self.__locked = False
+
+
+    def clear(self):
+        if self.is_locked():
+            return
+        self.set_text('', '')
+
     def get_label(self):
         return self.__label.get_text()
 
@@ -2399,61 +2431,80 @@ class zLastLine(gtk.HBox):
         self.__label.set_text(string)
 
     def get_text(self):
-        return self.get_interactive_text()
+        return self.__line_highlight.get_text(), self.__line_interactive.get_text()
 
-    def set_text(self, string):
-        self.set_interactive_text(string)
+    def set_text(self, hlt_text, entry_text):
+        if hlt_text == None:
+            hlt_text = self.__line_highlight.get_text()
+        if entry_text == None:
+            entry_text = self.__line_interactive.get_text()
+
+        if self.is_locked():
+            self.blink(hlt_text, entry_text)
+        else:
+            self.__line_highlight.set_text(hlt_text)
+            self.__line_interactive.set_text(entry_text)
     ### end of overridden function definition
 
 
-    def blink(self, cmd_text, entry_text, period = 1):
-        self.blink_set(cmd_text, entry_text, period, self.get_highlight_text(), self.get_interactive_text())
+    def blink(self, hlt_text, entry_text, period = 1):
+        self.blink_set(
+            hlt_text, entry_text, period,
+            self.__line_highlight.get_text(), self.__line_interactive.get_text()
+            )
 
-    def blink_text(self, period = 0.1):
-        self.blink_set('', '', period, self.get_highlight_text(), self.get_interactive_text())
+    def blink_text(self, period = 0.09):
+        hlt_text = self.__line_highlight.get_text()
+        entry_text = self.__line_interactive.get_text()
+
+        # initial set
+        self.__line_highlight.set_text('')
+        self.__line_interactive.set_text(hlt_text)
+
+        # register the timer to alter the texts three times
+        self.__set_alternation(2)
+        gobject.timeout_add(
+            int(period * 1000), self.__alternate_text,
+            [ '',       hlt_text   ],
+            [ hlt_text, entry_text ]
+            )
+
+        self.set_editable(True, ignore_focus = True)
 
     def blink_set(self,
-                  blk_cmd_text, blk_entry_text,
+                  blk_hlt_text, blk_entry_text,
                   period = 1,
-                  set_cmd_text = '', set_entry_text = ''
+                  set_hlt_text = '', set_entry_text = ''
                   ):
-        # print blink-text
-        self.set_highlight_text(blk_cmd_text)
-        self.set_interactive_text(blk_entry_text)
+        # initial set
+        self.__line_highlight.set_text(blk_hlt_text)
+        self.__line_interactive.set_text(blk_entry_text)
 
-        # desplay blink-text for `period` sec
-        self.__sleep(period)
-
-        # set set-text
-        self.set_highlight_text(set_cmd_text)
-        self.set_interactive_text(set_entry_text)
-
-
-    def get_highlight_text(self):
-        return self.__line_highlight.get_text()
-
-    def set_highlight_text(self, string):
-        self.__line_highlight.set_text(string)
-
-    def get_interactive_text(self):
-        return self.__line_interactive.get_text()
-
-    def set_interactive_text(self, string):
-        self.__line_interactive.set_text(string)
+        # register the timer to alter the texts exactly once
+        self.__set_alternation(1)
+        gobject.timeout_add(
+            int(period * 1000), self.__alternate_text,
+            [ blk_hlt_text,   set_hlt_text   ],
+            [ blk_entry_text, set_entry_text ]
+            )
 
 
     def get_editable(self):
         return self.__editable
 
-    def set_editable(self, setting):
+    def set_editable(self, setting, ignore_focus = False):
+        if self.__editable == setting:
+            return              # no need to change, early return
+
         self.__editable = setting
-        if not setting:
+        if not setting and not ignore_focus:
             self.set_force_focus(False)
         self.__line_interactive.set_property('can-default', setting)
         self.__line_interactive.set_property('can-focus', setting)
         self.__line_interactive.set_editable(setting)
-        if setting:
-            self.__line_interactive.grab_focus()
+        if setting and not ignore_focus:
+            self.grab_focus()
+            self.__line_interactive.set_position(-1)
 
     def get_force_focus(self):
         return self.__force_focus
@@ -2467,10 +2518,29 @@ class zLastLine(gtk.HBox):
 
 
     ### supporting function
-    def __sleep(self, period):
+    def __set_alternation(self, n_blink):
+        self.__set_timer(n_blink * 2 - 1)
+
+    def __set_timer(self, n_alternation = None):
+        if n_alternation:
+            self.__n_alternation = n_alternation
+        else:
+            self.__n_alternation -= 1
+        self.set_editable(not self.__n_alternation, ignore_focus = self.__n_alternation)
+
+
+    def __alternate_text(self, hlt_text, entry_text):
         while gtk.events_pending():
-            gtk.main_iteration()
-        time.sleep(period)
+            gtk.main_iteration(False)
+
+        indx = self.__n_alternation % 2
+
+        self.__line_highlight.set_text(hlt_text[indx])
+        self.__line_interactive.set_text(entry_text[indx])
+
+        self.__set_timer()
+
+        return self.__n_alternation
     ### end of supporting function
 
 

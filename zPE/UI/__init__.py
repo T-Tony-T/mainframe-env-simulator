@@ -21,8 +21,8 @@ class BaseFrame(object):
             'buffer_open'               : lambda *arg: self._sig_buff_manip(None, 'open'),
             'buffer_close'              : lambda *arg: self._sig_buff_manip(None, 'close'),
 
-            'prog_show_config'          : lambda *arg: self.config_window.open(),
-            'prog_show_error'           : lambda *arg: self.err_console.open(),
+            'prog_show_config'          : lambda *arg: ( self.config_window.open(), self.lastline.clear(), ),
+            'prog_show_error'           : lambda *arg: ( self.err_console.open(),   self.lastline.clear(), ),
             'prog_quit'                 : lambda *arg: self._sig_quit(None),
 
             'window_split_horz'         : lambda *arg: self._sig_sw_manip(None, 'split_horz'),
@@ -242,6 +242,8 @@ class BaseFrame(object):
 
     ### top level signals
     def _sig_buff_manip(self, widget, task):
+        self.lastline.clear()
+
         # get current buffer
         frame = self.mw.active_frame()
         if not frame:
@@ -270,6 +272,8 @@ class BaseFrame(object):
             else:
                 # force quit (without saving)
                 frame.rm_buffer(buff, force = True)
+
+            self.lastline.set_text('', 'buffer closed')
         else:
             raise KeyError
 
@@ -282,6 +286,8 @@ class BaseFrame(object):
 
 
     def _sig_sw_manip(self, widget, task):
+        self.lastline.clear()
+
         frame = self.mw.active_frame()
         if not frame:
             raise AssertionError('The main window is not focused!')
@@ -300,6 +306,8 @@ class BaseFrame(object):
 
 
     def _sig_submit(self, widget, task):
+        self.lastline.clear()
+
         frame = self.mw.active_frame()
         if not frame:
             raise AssertionError('The main window is not focused!')
@@ -328,16 +336,19 @@ class BaseFrame(object):
         rc = zsub.wait()
         sys.stderr.write(zsub.stderr.read())
 
-        self.lastline.set_highlight_text(basename + ': ')
         if rc not in zPE.conf.RC.itervalues():
             # something weird happened
             sys.stderr.write(zsub.stdout.read())
 
-            self.lastline.set_text('JOB submitted but aborted with {0}.'.format(rc))
+            self.lastline.set_text(
+                basename + ': ',
+                'JOB submitted but aborted with {0}.'.format(rc)
+                )
         else:
-            self.lastline.set_text('JOB submitted with ID={0}, return value is {1}.'.format(
-                    zPE.conf.fetch_job_id(), rc
-                    ))
+            self.lastline.set_text(
+                basename + ': ',
+                'JOB submitted with ID={0}, return value is {1}.'.format(zPE.conf.fetch_job_id(), rc)
+                )
     ### end of top level signals
 
 
@@ -1048,13 +1059,14 @@ class ConfigWindow(gtk.Window):
             self.load_rc()
             self.show()
 
+
     def close(self):
         self.kb_rules_dialog.hide()
         self.hide()
     ### end of overloaded function definition
 
 
-    ### support function definition
+    ### public API definition
     def load_rc(self):
         # GUI->Tabbar
         self.tabbar_on.set_active(conf.Config['MISC']['tab_on'])
@@ -1094,8 +1106,10 @@ class ConfigWindow(gtk.Window):
         self.kb_rules_dialog_content.set_markup(conf.KEY_BINDING_RULE_MKUP[style])
         for (k, v) in self.kb_stroke.iteritems():
             v.set_text(conf.Config['FUNC_BINDING'][k])
+    ### end of public API definition
 
 
+    ### support function definition
     def set_color_modify(self, key, color_code):
         self.color_entry[key].set_text(color_code.upper())
         self.color_picker[key].modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(color_code))
