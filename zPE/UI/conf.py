@@ -276,8 +276,8 @@ def read_rc_all():
 
 
 def read_rc():
-    __CK_CONFIG()
     init_rc()
+    __CK_CONFIG()
 
     label = None
     for line in open(CONFIG_PATH['gui_rc'], 'r'):

@@ -82,13 +82,6 @@ def parse(job):
                               ': Region must be divisible by 4K.\n')
         #   elif part[:9] == 'MSGCLASS=':
 
-
-    zPE.conf.Config['spool_path'] = '{0}.{1}.{2}'.format(
-        zPE.JCL['owner'],
-        zPE.JCL['jobname'],
-        zPE.JCL['jobid']
-        )
-
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '{0:<16}'.format(strftime(' ---- %A,').upper()),
                strftime(' %d %b %Y ----').upper(), '\n')
@@ -309,22 +302,16 @@ def init_step(step):
                 # outstream
                 mode = 'o'
                 f_type = 'outstream'
-                r_path = [
-                    '{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)
-                    ]
+                r_path = [ ddname ]
             else:
                 if step.dd[ddname]['DSN'] != '':
                     # file
                     f_type = 'file'
-                    v_path = [
-                        '{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)
-                        ]
+                    v_path = [ ddname ]
                 else:
                     # tmp
                     f_type = 'tmp'
-                    r_path = [
-                        '{0:0>2}_{1}'.format(zPE.core.SPOOL.sz(), ddname)
-                        ]
+                    r_path = [ ddname ]
                 mode = step.dd.mode(ddname)
             zPE.core.SPOOL.new(ddname, mode, f_type, v_path, r_path)
 
@@ -385,17 +372,18 @@ def finish_step(step):
                        ' {0}\n'.format(action))
 
             f_type = zPE.core.SPOOL.type_of(ddname)
-            if f_type == 'outstream':                   # write outstream
-                __WRITE_OUT([ddname])
-            elif f_type == 'instream':                  # remove instream
-                pass
-            elif f_type == 'tmp':                       # remove tmp
-                pass
-            else:                                       # sync file if needed
-                if step.dd.nmend(ddname) in [ 'KEEP', 'PASS', 'CATLG' ]:
-                    __WRITE_OUT([ddname])
+            if f_type == 'outstream':                   # register outstream for writting out
+                zPE.core.SPOOL.register_write(ddname)
+            else:
+                if f_type == 'instream':                # remove instream
+                    pass
+                elif f_type == 'tmp':                   # remove tmp
+                    pass
+                else:                                   # sync file if needed
+                    if step.dd.nmend(ddname) in [ 'KEEP', 'PASS', 'CATLG' ]:
+                        __WRITE_OUT([ddname])
 
-            zPE.core.SPOOL.remove(ddname) # remove SPOOLs of the step
+                zPE.core.SPOOL.remove(ddname) # remove SPOOLs of the step
 
     sp3.append(' ', 'IEF373I STEP/{0:<8}/START '.format(step.name),
                strftime('%Y%j.%H%M\n', step.start))
@@ -453,7 +441,7 @@ def finish_job(msg):
             sp.rmline(0)
 
     __JES2_STAT(msg)
-    __WRITE_OUT(zPE.core.SPOOL.DEFAULT)
+    __WRITE_OUT(zPE.core.SPOOL.DEFAULT_OUT) # write out all registered SPOOLs
 
 
 ### Supporting functions

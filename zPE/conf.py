@@ -5,6 +5,8 @@ from core.mem import parse_region
 import os, sys, pickle
 import re
 
+import sqlite3
+
 
 ### Architectural Definition
 JOB_ID_MIN = 10000              # the smallest job ID
@@ -31,15 +33,13 @@ DEFAULT = {
 
     'LN_P_PAGE' : 60,           # line per page for output
 
-    'SPOOL_DIR' : '.',          # SPOOL positon: current directory
-
     'ICH70001I' : {             # config list for ICH70001I
         'atime' : '00:00:00 ON THURSDAY, JANUARY 18, 2011',
                                 # the start time of this project
         },
     }
 
-Config = { }
+Config = { }       # 'job_id' and 'tmp_id' should not be modified manually
 
 def init_rc():
     Config['job_id']     = JOB_ID_MIN
@@ -52,17 +52,13 @@ def init_rc():
                                 # can be altered by "// JOB ,*,REGION=*"
                                 # can be overridden by "// EXEC *,REGION=*"
 
-    Config['spool_dir']  = DEFAULT['SPOOL_DIR']
-    Config['spool_path'] = None # the folder that contains all SPOOL output
-                                # for a specific JOB;
-                                # will be set after JOB card is read
-
 
 CONFIG_PATH = {
     'dir'       : os.path.join(os.environ['HOME'], '.zPE'),
     'rc'        : os.path.join(os.environ['HOME'], '.zPE', 'config'),
     'data'      : os.path.join(os.environ['HOME'], '.zPE', 'data'),
     'ICH70001I' : os.path.join(os.environ['HOME'], '.zPE', 'data', 'ICH70001I'),
+    'SPOOL'     : os.path.join(os.environ['HOME'], '.zPE', 'data', 'SPOOL.sqlite')
     }
 
 def dump_ICH70001I(conf):
@@ -92,8 +88,8 @@ def fetch_job_id():
 
 
 def read_rc(dry_run = False):
-    __CK_CONFIG()
     init_rc()
+    __CK_CONFIG()
 
     for line in open(CONFIG_PATH['rc'], 'r'):
         (k, v) = re.split('[ \t]*=[ \t]*', line, maxsplit=1)
@@ -105,7 +101,7 @@ def read_rc(dry_run = False):
                 if not dry_run:
                     Config[k] += 1 # increment the ID number
 
-                if JOB_ID_MIN < Config[k] and Config[k] < JOB_ID_MAX:
+                if JOB_ID_MIN <= Config[k] and Config[k] < JOB_ID_MAX:
                     ok = True
             except ValueError:
                 pass
@@ -137,16 +133,17 @@ def read_rc(dry_run = False):
 
             if not ok:
                 Config[k] = DEFAULT['MEMORY_SZ']
-        elif k == 'spool_dir':
-            path = os.path.normpath(os.path.normcase(v[:-1]))
-            if os.path.isdir(os.path.abspath(os.path.expanduser(path))):
-                Config['spool_dir'] = path
-            else:
-                sys.stderr.write('Warning: ' + v[:-1] +
-                                 ': Invalid SPOOL dir path.\n')
-                Config[k] = DEFAULT['SPOOL_DIR']
 
     Config['addr_max'] = 2 ** Config['addr_mode']
+
+    if JOB_ID_MAX - Config['job_id'] <= 3:
+        sys.stderr.write('\n  JOB queue will be cleared in {0} submit(s)!\n\n'.format(
+                JOB_ID_MAX - Config['job_id']
+                ))
+    elif Config['job_id'] == JOB_ID_MIN:
+        open(CONFIG_PATH['SPOOL'], 'w').close()
+        __TOUCH_SPOOL()
+        sys.stderr.write('\n  JOB queue cleared!\n\n')
     write_rc()
 
 def write_rc():
@@ -158,19 +155,47 @@ def write_rc():
 def __CK_CONFIG():
     if not os.path.isdir(CONFIG_PATH['data']):
         os.makedirs(CONFIG_PATH['data'])
+    if ( not os.path.isfile(CONFIG_PATH['rc']) or
+         not os.path.isfile(CONFIG_PATH['SPOOL'])
+         ):
+        __TOUCH_SPOOL()
+
     if not os.path.isfile(CONFIG_PATH['rc']):
         __TOUCH_RC()
     if not os.path.isfile(CONFIG_PATH['ICH70001I']):
         __TOUCH_ICH70001I()
 
+
 def __TOUCH_ICH70001I(conf = DEFAULT['ICH70001I']):
     pickle.dump(conf, open(CONFIG_PATH['ICH70001I'], 'wb'))
+
+def __TOUCH_SPOOL():
+    conn = sqlite3.connect(CONFIG_PATH['SPOOL'])
+    conn.executescript(
+'''
+CREATE TABLE IF NOT EXISTS JOB (
+        Job_ID          TEXT    PRIMARY KEY,
+        Job_Name        TEXT    NOT NULL,
+        Job_OWNER       TEXT    NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS SPOOL (
+        row_id          INTEGER PRIMARY KEY,
+        Job_ID          TEXT    NOT NULL,
+        Spool_Key       TEXT    NOT NULL,
+        Content         TEXT    NOT NULL,
+
+        FOREIGN KEY (Job_ID)    REFERENCES JOB (Job_ID)
+        ON DELETE CASCADE
+);
+''')
+    conn.commit()
+    conn.close()
+
 
 def __TOUCH_RC():
     fp = open(CONFIG_PATH['rc'], 'w')
     fp.write('job_id = ' + str(Config['job_id']) + '\n')
     fp.write('addr_mode = ' + str(Config['addr_mode']) + '\n')
     fp.write('memory_sz = ' + Config['memory_sz'] + '\n')
-    if Config['spool_dir'] != '':
-        fp.write('spool_dir = ' + Config['spool_dir'] + '\n')
     fp.close()

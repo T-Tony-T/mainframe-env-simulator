@@ -738,32 +738,6 @@ class ConfigWindow(gtk.Window):
         self.memory_sz_entry.connect('activate', self._sig_memory_sz_entered)
 
 
-        # Path
-        self.__label['FRAME'].append(gtk.Label('Path'))
-        ct_system_path = gtk.Frame()
-        ct_system_path.set_label_widget(self.__label['FRAME'][-1])
-        ct_system.pack_start(ct_system_path, False, False, 10)
-
-        ct_system_path.add(gtk.Table(2, 2, False))
-        ct_system_path.child.set_col_spacings(10)
-
-        self.__label['LABEL'].append(gtk.Label(' Note:         '))
-        ct_system_path.child.attach(self.__label['LABEL'][-1], 0, 1, 0, 1, xoptions = gtk.SHRINK)
-        self.__label['LABEL'].append(gtk.Label('any relevent path defined here\n' +
-                                               'is relative to the directory of\n' +
-                                               'the current submission.'
-                                               ))
-        ct_system_path.child.attach(self.__label['LABEL'][-1], 1, 2, 0, 1, xoptions = gtk.SHRINK)
-
-        self.spool_dir_entry = gtk.Entry()
-
-        self.__label['LABEL'].append(gtk.Label(' SDSF Location:'))
-        ct_system_path.child.attach(self.__label['LABEL'][-1], 0, 1, 1, 2, xoptions = gtk.SHRINK)
-        ct_system_path.child.attach(self.spool_dir_entry,      1, 2, 1, 2, xoptions = gtk.FILL)
-
-        self.spool_dir_entry.connect('activate', self._sig_spool_dir_entered)
-
-
         ### separator
         layout.pack_start(gtk.HSeparator(), False, False, 2)
 
@@ -1032,20 +1006,6 @@ class ConfigWindow(gtk.Window):
         entry.set_property('sensitive', False) # remove focus
         entry.set_text(zPE.conf.Config['memory_sz'])
         entry.set_property('sensitive', True)  # retain edibility
-
-
-    def _sig_spool_dir_entered(self, entry):
-        path = os.path.normpath(os.path.normcase(entry.get_text()))
-
-        if os.path.isdir(os.path.abspath(os.path.expanduser(path))):
-            zPE.conf.Config['spool_dir'] = path
-        else:
-            entry.set_text(zPE.conf.Config['spool_dir'])
-            raise SyntaxError('Invalid SPOOL directory path.')
-
-        entry.set_property('sensitive', False) # remove focus
-        entry.set_text(zPE.conf.Config['spool_dir'])
-        entry.set_property('sensitive', True)  # retain edibility
     ### end of signal for System
 
 
@@ -1097,7 +1057,6 @@ class ConfigWindow(gtk.Window):
         # System->Architecture
         self.select_combo_item(self.addr_mode_sw, zPE.conf.Config['addr_mode'])
         self.memory_sz_entry.set_text(zPE.conf.Config['memory_sz'])
-        self.spool_dir_entry.set_text(zPE.conf.Config['spool_dir'])
 
 
     def load_binding(self):

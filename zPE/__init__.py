@@ -305,6 +305,7 @@ def flush(sp):
     for line in sp.spool:
         fp.write(line)
         cnt += 1
+    fp.close()
     return cnt
 
 

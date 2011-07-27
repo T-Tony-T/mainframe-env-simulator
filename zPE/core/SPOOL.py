@@ -88,12 +88,13 @@ class Spool(object):
 
 
 ## SPOOL Pool
-DEFAULT = [ 'JESMSGLG', 'JESJCL', 'JESYSMSG' ]
+DEFAULT     = [ 'JESMSGLG', 'JESJCL', 'JESYSMSG' ] # System Managed SPOOL
+DEFAULT_OUT = [ 'JESMSGLG', 'JESJCL', 'JESYSMSG' ] # SPOOLs that will be write out at the end
 
 SPOOL = {
-    'JESMSGLG' : Spool([], 'o', 'outstream', None, ['01_JESMSGLG']),
-    'JESJCL'   : Spool([], 'o', 'outstream', None, ['02_JESJCL']),
-    'JESYSMSG' : Spool([], 'o', 'outstream', None, ['03_JESYSMSG']),
+    'JESMSGLG' : Spool([], 'o', 'outstream', None, ['JESMSGLG']),
+    'JESJCL'   : Spool([], 'o', 'outstream', None, ['JESJCL']),
+    'JESYSMSG' : Spool([], 'o', 'outstream', None, ['JESYSMSG']),
     }
 
 
@@ -131,9 +132,7 @@ def new(key, mode, f_type, path = [], real_path = []):
     if len(path) == 0:
         while True:
             conflict = False
-            path = [ zPE.conf.Config['spool_dir'],
-                     zPE.conf.Config['spool_path'],
-                     'D{0:0>7}.?'.format(zPE.conf.Config['tmp_id']) ]
+            path = [ 'D{0:0>7}.?'.format(zPE.conf.Config['tmp_id']) ]
             zPE.conf.Config['tmp_id'] += 1
             # check for file conflict
             for k,v in dict():
@@ -163,6 +162,13 @@ def retrive(key):
         return SPOOL[key]
     else:
         return None
+
+def register_write(key):
+    if key not in DEFAULT_OUT:
+        DEFAULT_OUT.append(key)
+        return True
+    else:
+        return False
 
 def mode_of(key):
     if key in SPOOL:

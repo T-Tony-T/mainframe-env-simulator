@@ -1,24 +1,29 @@
 import zPE
+import zfetch
 
 import os, sys
-from optparse import OptionParser
+import argparse
 
 
-def main():
-    zPE.conf.read_rc()
+def main(argv = sys.argv):
+    parser = prepare_option(os.path.basename(argv[0]))
+    args = parser.parse_args(argv[1:])
 
-    parser = prepare_option(OptionParser())
-    (options, args) = parser.parse_args()
-
-    if options.list:
+    if args.list:
         zPE.LIST_PGM()
         return 0
 
-    if len(args) == 0:
+    if not args.job_file:
         parser.print_help()
         return 0
 
-    return submit(args[0])
+    zPE.conf.read_rc()
+    rc = submit(args.job_file)
+
+    if args.output:
+        zfetch.main(['zfetch', '-o', args.output[0], 'last'])
+
+    return rc
 
 
 def submit(job):
@@ -68,12 +73,45 @@ def submit(job):
     return overall_rc
 
 
-def prepare_option(parser):
-    parser = OptionParser(usage="Usage: %prog [options] SOURCE_FILE(s)")
+def prepare_option(prog):
+    parser = argparse.ArgumentParser(
+        prog = prog, usage = '',
+        formatter_class = argparse.RawDescriptionHelpFormatter,
+        description =
+'''
+    %(prog)s  -h | -l
+    %(prog)s  [-o OUTPUT_FILE]  JOB_FILE
+'''
+        )
 
-    parser.add_option("-l", "--list", action="store_true", dest="list",
-                      default=False,
-                      help="list all supported programs (PGM)")
+    # positional arguments
+    parser.add_argument(
+        action = 'store',
+        nargs = '?',
+        default = '',
+        help = 'the JOB file containing the JCL to be submitted',
+        metavar = 'JOB_FILE',
+        dest = 'job_file'
+        )
+
+    # optional arguments
+    parser.add_argument(
+        '-l', '--list',
+        action = 'store_true',
+        default = False,
+        help = 'list all supported programs (PGM)',
+        dest = 'list'
+        )
+    parser.add_argument(
+        '-o', '--fetch-current',
+        action = 'store',
+        nargs = 1,
+        default = [],
+        help = "fetch the current job's output to the indicated file after the submission",
+        metavar='OUTPUT_FILE',
+        dest = 'output'
+        )
+
     return parser
 
 

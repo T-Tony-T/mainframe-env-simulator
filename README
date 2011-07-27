@@ -31,6 +31,10 @@ Under Windows, please make sure the Environment Variable "HOME"
 and "Path" are set correctly.
 
 
+To make the GUI work, you also need to install GTK+ and PyGTK.
+This requirement will be removed later.
+
+
 INSTALLATION
 -------------------------
 Under Linux:
@@ -45,8 +49,12 @@ Under Windows: (cmd)
 
 USAGE
 -------------------------
-Use 'zsub' to submit an JCL job. The job output will be generated
-at the same folder of the submitted job.
+CLI:
+  Use `zsub JCL_FILE` to submit an JCL job
+  The job output can be obtained by `zfetch [-o FILE] last`
+
+GUI:
+  Run `zPE` to open the GUI.
 
 
 UNINSTALLATION
