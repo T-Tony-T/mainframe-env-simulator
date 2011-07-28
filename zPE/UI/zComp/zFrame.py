@@ -30,7 +30,7 @@ class zSplitWindow(z_ABC, gtk.Frame):
 
     def __init__(self,
                  frame = zEdit, frame_alist = [],
-                 frame_init = None,
+                 frame_init = (None, None),
                  frame_split_dup = None,
                  frame_sz_min = (50, 50)
                  ):
@@ -46,10 +46,11 @@ class zSplitWindow(z_ABC, gtk.Frame):
 
             e.g. zComp.zSplitWindow(gtk.Label, ['Test Label'])
 
-        frame_init = None
-            a callback function that will be called after every
-            creation of the "frame" to initialize it
-            (connect signals, for example)
+        frame_init = (None, None)
+            a tuple containing two callback functions that will be
+            called after every creation/destruction of the "frame"
+            to initialize/un-initialize it
+            (connect/disconnect signals, for example)
 
             if set to None, no action will applied
 

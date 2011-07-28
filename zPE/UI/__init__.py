@@ -172,7 +172,7 @@ class BaseFrame(object):
 
 
         ### create main window
-        self.mw = zComp.zSplitWindow(zComp.zEdit, [], self.frame_init, self.frame_split_dup)
+        self.mw = zComp.zSplitWindow(zComp.zEdit, [], (self.frame_init, self.frame_uninit), self.frame_split_dup)
         w_vbox.pack_start(self.mw, True, True, 0)
 
 
@@ -268,12 +268,12 @@ class BaseFrame(object):
 
             if need_save:
                 # save here
-                frame.rm_buffer(buff)
+                msg = frame.rm_buffer(buff)
             else:
                 # force quit (without saving)
-                frame.rm_buffer(buff, force = True)
+                msg = frame.rm_buffer(buff, force = True)
 
-            self.lastline.set_text('', 'buffer closed')
+            self.lastline.set_text('', '{0}: {1}'.format(* msg))
         else:
             raise KeyError
 
@@ -405,7 +405,13 @@ class BaseFrame(object):
 
     ### callback functions for SplitWindow
     def frame_init(self, frame):
-        frame.connect('populate_popup', self._sig_popup_manip)
+        frame.init_sig = {
+            'populate_popup' : frame.connect('populate_popup', self._sig_popup_manip),
+            }
+
+    def frame_uninit(self, frame):
+        for init_sig in frame.init_sig:
+            frame.disconnect(init_sig)
 
     def frame_split_dup(self, frame):
         if frame:

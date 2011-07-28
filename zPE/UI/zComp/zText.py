@@ -16,6 +16,7 @@ class zEntry(gtk.Entry):
     def __init__(self):
         super(zEntry, self).__init__()
 
+
     def insert_text(self, text):
         pos = self.get_position()
         super(gtk.Entry, self).insert_text(text, pos)
@@ -265,6 +266,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         super(zTextView, self).__init__()
 
         self.set_editor(editor)
+        self.center = self
 
 
     ### overridden function definition

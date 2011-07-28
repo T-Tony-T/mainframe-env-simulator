@@ -28,19 +28,254 @@ import gtk
 
 
 ######## ######## ######## ######## ########
+########       zDisplayPanel        ########
+######## ######## ######## ######## ########
+
+class zDisplayPanel(gtk.VBox):
+    '''A Read-Only Display Panel Used by zEdit Class'''
+    def __init__(self, editor = None):
+        '''
+        editor = None
+            any editor that can open an indicated file with:
+              editor.set_buffer(fn_list, tpye)
+            method call.
+        '''
+        super(zDisplayPanel, self).__init__()
+
+        self.set_editor(editor)
+
+        # layout of the frame:
+        #
+        #          scrolled_window
+        #         /
+        #   +-------+---------------+
+        #   || job  ||              |_
+        #   |+------||    center    | \
+        #   +-------+|              |  scrolled_window
+        #   || step ||              |
+        #   |+------|+--------------|
+        #   +-------+---------------+
+        #     \
+        #      scrolled_window
+
+        major_paned = gtk.HPaned()
+        minor_paned = gtk.VPaned()
+        self.add(major_paned)
+
+        self.job_panel = zListing(gtk.ListStore(str))
+        self.step_panel = zListing(gtk.ListStore(str))
+
+        scrolled_job = gtk.ScrolledWindow()
+        scrolled_step = gtk.ScrolledWindow()
+
+        scrolled_job.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
+        scrolled_job.set_placement(gtk.CORNER_TOP_RIGHT)
+        scrolled_job.add(self.job_panel)
+
+        scrolled_step.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
+        scrolled_step.set_placement(gtk.CORNER_TOP_RIGHT)
+        scrolled_step.add(self.step_panel)
+
+        minor_paned.pack1(scrolled_job, True, True)
+        minor_paned.pack2(scrolled_step, True, True)
+
+        self.center = gtk.TextView()
+        self.center.set_editable(False)
+        self.center.set_cursor_visible(False)
+
+        scrolled_center = gtk.ScrolledWindow()
+        scrolled_center.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
+        scrolled_center.set_placement(gtk.CORNER_TOP_RIGHT)
+        scrolled_center.add(self.center)
+
+        major_paned.pack1(minor_paned, False, True)
+        major_paned.pack2(scrolled_center, True, True)
+
+        # connect signal for redirection
+        self.job_panel.connect( 'focus-in-event',  self._focus_evnt_redirect, 'focus-in-event')
+        self.step_panel.connect('focus-in-event',  self._focus_evnt_redirect, 'focus-in-event')
+        self.center.connect(    'focus-in-event',  self._focus_evnt_redirect, 'focus-in-event')
+        self.job_panel.connect( 'focus-out-event',  self._focus_evnt_redirect, 'focus-out-event')
+        self.step_panel.connect('focus-out-event',  self._focus_evnt_redirect, 'focus-out-event')
+        self.center.connect(    'focus-out-event',  self._focus_evnt_redirect, 'focus-out-event')
+
+        # connect signal for internal usage
+#        self.job_panel.connect( 'row-activated', self._sig_)
+#        self.step_panel.connect('row-activated', self._sig_)
+
+
+    ### signal redirection definition
+    def _focus_evnt_redirect(self, widget, event, sig):
+        if self.is_focus():
+            sig = 'focus-in-event'
+        else:
+            sig = 'focus-out-event'
+        self.emit(sig, event)
+    ### end of signal redirection definition
+
+
+    ### signal definition
+    ### end of signal definition
+
+
+    ### overridden function definition
+    def is_focus(self):
+        return self.job_panel.is_focus() or self.step_panel.is_focus() or self.center.is_focus()
+
+    def grab_focus(self):
+        self.job_panel.grab_focus()
+
+
+    def modify_font(self, font_desc):
+        self.job_panel.modify_font(font_desc)
+        self.step_panel.modify_font(font_desc)
+        self.center.modify_font(font_desc)
+
+    def modify_base(self, state, color):
+        self.job_panel.modify_base(state, color)
+        self.step_panel.modify_base(state, color)
+        self.center.modify_base(state, color)
+
+    def modify_text(self, state, color):
+        self.job_panel.modify_text(state, color)
+        self.step_panel.modify_text(state, color)
+        self.center.modify_text(state, color)
+    ### end of overridden function definition
+
+
+    def get_editor(self):
+        return self.__editor_frame
+
+    def set_editor(self, editor):
+        self.__editor_frame = editor
+
+
+    ### cell data function
+    def __cell_data_func(self, column, cell, model, iterator):
+        pass
+    ### end of cell data function
+
+
+######## ######## ######## ######## ########
+########          zListing          ########
+######## ######## ######## ######## ########
+
+class zListing(gtk.TreeView):
+    '''An intergraded gtk.TreeView Used for File Listing'''
+    def __init__(self, model = None):
+        super(zListing, self).__init__(model)
+        self.model = self.get_model()
+
+        self.cell_list = []
+        self.column_list = []
+
+
+    ### overridden function definition
+    def append_column(self, column_name, cell,
+                      column_xalign = None,
+                      column_resizable = None, column_sizing = None
+                      ):
+        return self.insert_column(
+            column_name, cell, -1,
+            column_xalign,
+            column_resizable, column_sizing
+            )
+
+    def extend_columns(self, column_name_list, cell_list, attr_list_list = None,
+                       column_xalign_list = None,
+                       column_resizable_list = None, column_sizing_list = None
+                       ):
+        n_cols = len(column_name_list)
+
+        if not column_xalign_list:
+            column_xalign_list = [None] * n_cols
+        if not column_resizable_list:
+            column_resizable_list = [None] * n_cols
+        if not column_sizing_list:
+            column_sizing_list = [None] * n_cols
+
+        rv = None
+        for indx in range(n_cols):
+            rv = self.append_column(
+                column_name_list[indx], cell_list[indx],
+                column_xalign    = column_xalign_list[indx],
+                column_resizable = column_resizable_list[indx],
+                column_sizing    = column_sizing_list[indx]
+                )
+        return rv
+
+    def insert_column(self, column_name, cell, position,
+                      column_xalign = None,
+                      column_resizable = None, column_sizing = None):
+        if position < 0:
+            position = len(self.column_list)
+        column = gtk.TreeViewColumn(column_name, cell)
+
+        if column_xalign != None:
+            cell.set_property('xalign', column_xalign)
+
+        if column_resizable != None:
+            column.set_resizable(column_resizable)
+
+        if column_sizing != None:
+            column.set_sizing(column_sizing)
+
+        self.cell_list.insert(position, cell)
+        self.column_list.insert(position, column)
+
+        return super(zListing, self).insert_column(column, position)
+
+    def remove_column(self, column):
+        indx = self.column_list.index(column)
+
+        self.cell_list.pop(indx)
+        self.column_list.pop(indx)
+
+        return super(zListing, self).remove_column(column)
+
+    def insert_column_with_attributes(self, *arg):
+        raise NotImplementedError('method not implemented. use insert_column() followed by set_attributes() instead.')
+    def insert_column_with_data_func(self, *arg):
+        raise NotImplementedError('method not implemented. use insert_column() followed by set_cell_data_func() instead.')
+    def set_reorderable(self, setting):
+        raise NotImplementedError('method not implemented. try to handle drag and drop manually.')
+
+
+    def move_column_after(column, base_column):
+        cell = self.cell_list.pop(self.column_list.index(column))
+        self.column_list.remove(column)
+        if not base_column:
+            self.cell_list.insert(0, cell)
+            self.column_list.insert(0, column)
+        else:
+            indx = self.column_list.index(base_column) + 1
+            self.cell_list.insert(indx, cell)
+            self.column_list.insert(indx, column)
+            
+        super(zListing, self).move_column_after(column, base_column)
+
+
+    def set_model(self, model):
+        super(zListing, self).set_model(model)
+        self.model = model
+    ### end of overridden function definition
+
+
+
+######## ######## ######## ######## ########
 ########        zFileManager        ########
 ######## ######## ######## ######## ########
 
 class zFileManager(gtk.VBox):
     '''A Light-Weighted File Manager Used by zEdit Class'''
-    column_names     = [ '', 'Name', 'Size', 'Last Changed' ]
+    column_names     = [ '', 'Name', 'Size', 'Last Changed', ]
     column_xalign    = [  1,  0,         1,   0 ]
     column_resizable = [ False,  True, True, True ]
     column_sizing    = [
         gtk.TREE_VIEW_COLUMN_AUTOSIZE,
         gtk.TREE_VIEW_COLUMN_FIXED,
         gtk.TREE_VIEW_COLUMN_AUTOSIZE,
-        gtk.TREE_VIEW_COLUMN_AUTOSIZE
+        gtk.TREE_VIEW_COLUMN_AUTOSIZE,
         ]
 
     def __init__(self, editor = None):
@@ -75,7 +310,8 @@ class zFileManager(gtk.VBox):
         scrolled = gtk.ScrolledWindow()
         scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
         scrolled.set_placement(gtk.CORNER_TOP_RIGHT)
-        self.treeview = gtk.TreeView()
+        self.treeview = zListing(gtk.ListStore(str, bool))
+        self.center = self.treeview
         scrolled.add(self.treeview)
 
         self.pack_start(path_box, False, False, 0)
@@ -89,40 +325,29 @@ class zFileManager(gtk.VBox):
         self.__file_name_old = ''
         self.__on_setting_folder = False
 
-        # init widget reference relevant to editable column (file listing)
-        self.treeview.model = gtk.ListStore(str, bool)
-        self.treeview.set_model(self.treeview.model)
 
-        self.treeview.fn_cell_rdr = gtk.CellRendererText()
+        # create columns
+        cell_list = [
+            gtk.CellRendererPixbuf(),
+            gtk.CellRendererText(),
+            gtk.CellRendererText(),
+            gtk.CellRendererText(),
+            ]
 
-        self.treeview.fn_tree_col = gtk.TreeViewColumn(
-            zFileManager.column_names[1], self.treeview.fn_cell_rdr, text = 0, editable = 1
+        self.treeview.extend_columns(
+            zFileManager.column_names, cell_list,
+            column_xalign_list    = zFileManager.column_xalign,
+            column_resizable_list = zFileManager.column_resizable,
+            column_sizing_list    = zFileManager.column_sizing
             )
+
+        # init widget reference relevant to editable column (file listing)
+        self.treeview.fn_cell_rdr = self.treeview.cell_list[1]
+        self.treeview.fn_tree_col = self.treeview.column_list[1]
+
+        self.treeview.fn_tree_col.set_attributes(self.treeview.fn_cell_rdr, text = 0, editable = 1)
         self.treeview.fn_tree_col.set_cell_data_func(self.treeview.fn_cell_rdr, self.__cell_data_func)
 
-        # create the TreeViewColumns to display the data
-        self.treeview.cell_list   = [None] * len(zFileManager.column_names)
-        self.treeview.column_list = [None] * len(zFileManager.column_names)
-
-        # create column 0 (icon)
-        self.treeview.cell_list[0] = gtk.CellRendererPixbuf()
-        self.treeview.column_list[0] = gtk.TreeViewColumn(zFileManager.column_names[0], self.treeview.cell_list[0])
-
-        # create column 1 (file name)
-        self.treeview.cell_list[1] = self.treeview.fn_cell_rdr
-        self.treeview.column_list[1] = self.treeview.fn_tree_col
-
-        # create the rest of columns
-        for n in range(2, len(zFileManager.column_names)):
-            self.treeview.cell_list[n] = gtk.CellRendererText()
-            self.treeview.column_list[n] = gtk.TreeViewColumn(zFileManager.column_names[n], self.treeview.cell_list[n])
-
-        # add all columns
-        for n in range(len(zFileManager.column_names)):
-            self.treeview.cell_list[n].set_property('xalign', zFileManager.column_xalign[n])
-            self.treeview.column_list[n].set_resizable(zFileManager.column_resizable[n])
-            self.treeview.column_list[n].set_sizing(zFileManager.column_sizing[n])
-            self.treeview.append_column(self.treeview.column_list[n])
 
         # connect signal for redirection
         self.path_entry.connect('focus-in-event',  self._focus_evnt_redirect, 'focus-in-event')

@@ -18,7 +18,7 @@ import io_encap
 #
 
 from zBase import z_ABC, zTheme
-from zFileManager import zFileManager
+from zFileManager import zDisplayPanel, zFileManager
 from zText import zLastLine, zTextView
 from zWidget import zComboBox, zTabbar
 
@@ -604,7 +604,7 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     ### signal for center
-    def _sig_button_press(self, treeview, event, data = None):
+    def _sig_button_press_browser(self, treeview, event, data = None):
         if event.button != 3:
             return
 
@@ -651,6 +651,9 @@ class zEdit(z_ABC, gtk.VBox):
 
         # popup the menu
         menu.popup(None, None, None, event.button, event.time)
+
+    def _sig_button_press_textview(self, textview, menu):
+        zEdit.reg_emit_from('populate_popup', self.center, menu)
 
 
     def _sig_focus_in(self, widget, event):
@@ -719,9 +722,6 @@ class zEdit(z_ABC, gtk.VBox):
 
     def connect(self, sig, callback, *data):
         if sig not in zEdit._auto_update:
-            return self.center.connect(sig, callback, *data)
-
-        if self.active_buffer.type == 'file': # after re-write TextView, this should not be tested
             return self.center.connect(sig, callback, *data)
 
         zEdit.register(sig, callback, self.center, *data)
@@ -796,9 +796,15 @@ class zEdit(z_ABC, gtk.VBox):
         if self.need_init:
             self.ui_init_func(self)
 
+    def exec_uninit_func(self):
+        if self.ui_uninit_func:
+            self.ui_uninit_func(self)
+
     def set_init_func(self, ui_init_func):
-        self.ui_init_func = ui_init_func
-        self.need_init = True
+        self.ui_init_func = ui_init_func[0]
+        self.ui_uninit_func = ui_init_func[1]
+        if self.ui_init_func:
+            self.need_init = True
 
 
     def get_buffer(self):
@@ -828,6 +834,7 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell.set_placement(gtk.CORNER_TOP_RIGHT)
 
                 widget = zTextView()
+                widget_button_press_id = widget.center.connect('populate-popup', self._sig_button_press_textview)
                 widget_key_press_id = {
                     widget : widget.connect('key-press-event', zEdit._sig_key_pressed),
                     }
@@ -836,20 +843,29 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
                 widget = zFileManager()
-                self.sig_id['button_press'] = widget.treeview.connect('button-press-event', self._sig_button_press)
+                widget_button_press_id = widget.center.connect('button-press-event', self._sig_button_press_browser)
                 widget_key_press_id = {
                     widget.path_entry : widget.path_entry.connect('key-press-event', zEdit._sig_key_pressed),
                     widget.treeview   : widget.treeview.connect('key-press-event', zEdit._sig_key_pressed),
+                    }
+            elif new_buff.type == 'disp':
+                widget_shell = gtk.Frame()
+                widget_shell.set_shadow_type(gtk.SHADOW_NONE)
+
+                widget = zDisplayPanel()
+                widget_button_press_id = widget.center.connect('populate-popup', self._sig_button_press_textview)
+                widget_key_press_id = {
+                    widget.job_panel  : widget.job_panel.connect('key-press-event', zEdit._sig_key_pressed),
+                    widget.step_panel : widget.step_panel.connect('key-press-event', zEdit._sig_key_pressed),
+                    widget.center     : widget.center.connect('key-press-event', zEdit._sig_key_pressed),
                     }
             else:
                 raise KeyError
 
             # switch widget
             if self.center:
-                zTheme.unregister('update_font', self.center)
-                if self.active_buffer.type == 'dir':
-                    self.center.treeview.disconnect(self.sig_id['button_press'])
-                    zEdit.unregister('populate_popup', self.center)
+                self.center.center.disconnect(self.sig_id['button_press'])
+                self.exec_uninit_func()                
 
                 zTheme.unregister('update_font', self.center)
                 self.center.disconnect(self.sig_id['focus_in'])
@@ -869,6 +885,7 @@ class zEdit(z_ABC, gtk.VBox):
             self.sig_id['focus_in'] = self.center.connect('focus-in-event', self._sig_focus_in)
             self.sig_id['focus_out'] = self.center.connect('focus-out-event', self._sig_focus_out)
             self.sig_id['key_press'] = widget_key_press_id
+            self.sig_id['button_press'] = widget_button_press_id
 
             zTheme._sig_update_font_modify(self.center)
             self._sig_update_color_map()
@@ -890,7 +907,7 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     def rm_buffer(self, buff, force = False):
-        zEditBuffer.rm_buffer(buff, force)
+        return zEditBuffer.rm_buffer(buff, force)
 
 
     @staticmethod
@@ -958,10 +975,12 @@ class zEditBuffer(z_ABC):
         None   : '*scratch*',
         'file' : '*scratch*',
         'dir'  : '*browser*',
+        'disp' : '*S D S F*',
         }
     SYSTEM_BUFFER = {
         '*scratch*' : 'file',
         '*browser*' : 'dir',
+        '*S D S F*' : 'disp',
         }
     buff_list = {
         # 'buff_user'    : zEditBuffer()
@@ -1103,7 +1122,7 @@ class zEditBuffer(z_ABC):
                 # new file
                 pass
             self.modified = False
-        elif buffer_type == 'dir':
+        elif buffer_type in [ 'dir', 'disp' ]:
             self.buffer = None
             self.modified = None
         else:
@@ -1142,6 +1161,8 @@ class zEditBuffer(z_ABC):
             if buff.name == '*scratch*':
                 # close the scratch means to reset its content
                 zEditBuffer._reset_scratch()
+                return buff.name, 'buffer cleared'
+            return buff.name, 'cannot close system buffer'
         elif buff.modified and not force:
             # buffer content modified but not a force removal
             raise ValueError('Buffer content has been modified!')
@@ -1159,7 +1180,7 @@ class zEditBuffer(z_ABC):
 
             # notify all registered editors
             zEditBuffer.reg_emit('buffer_removed', buff.name)
-
+            return os.path.join(* buff.path), 'buffer closed'
 
     @staticmethod
     def _reset_scratch():
