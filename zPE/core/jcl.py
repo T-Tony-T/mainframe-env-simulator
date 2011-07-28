@@ -46,6 +46,8 @@ def parse(job):
     if field[1] != 'JOB':
         zPE.abort(9, 'Error: No JOB card found.\n')
     zPE.JCL['jobname'] = field[0][2:]
+    if len(zPE.JCL['jobname']) != 8:
+        zPE.abort(9, 'Error: JOB name is not 8 charactors long.\n')
     zPE.JCL['owner'] = zPE.JCL['jobname'][:7]
     zPE.JCL['class'] = zPE.JCL['jobname'][-1]
     zPE.JCL['jobid'] = 'JOB' + str(zPE.conf.Config['job_id'])
@@ -373,7 +375,7 @@ def finish_step(step):
 
             f_type = zPE.core.SPOOL.type_of(ddname)
             if f_type == 'outstream':                   # register outstream for writting out
-                zPE.core.SPOOL.register_write(ddname)
+                zPE.core.SPOOL.register_write(ddname, step.name)
             else:
                 if f_type == 'instream':                # remove instream
                     pass

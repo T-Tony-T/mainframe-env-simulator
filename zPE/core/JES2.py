@@ -2,6 +2,7 @@
 # it is used to manage the SPOOL files
 
 import zPE
+from SPOOL import DEFAULT_OUT_STEP as step_lookup
 
 import os, sys
 import re
@@ -40,8 +41,8 @@ class JES_DB(object):
 
         # initiate SPOOL information
         self.__c.execute(
-            '''INSERT INTO SPOOL VALUES (NULL, ?, ?, ?)''',
-            ( self.__job_id, self.__spool_key, '', )
+            '''INSERT INTO SPOOL VALUES (NULL, ?, ?, ?, ?)''',
+            ( self.__job_id, self.__spool_key, step_lookup[self.__spool_key], '', )
             )
 
         self.__db.commit()

@@ -158,7 +158,8 @@ def __CK_CONFIG():
     if ( not os.path.isfile(CONFIG_PATH['rc']) or
          not os.path.isfile(CONFIG_PATH['SPOOL'])
          ):
-        __TOUCH_SPOOL()
+        open(CONFIG_PATH['SPOOL'], 'w').close()
+    __TOUCH_SPOOL()
 
     if not os.path.isfile(CONFIG_PATH['rc']):
         __TOUCH_RC()
@@ -183,6 +184,7 @@ CREATE TABLE IF NOT EXISTS SPOOL (
         row_id          INTEGER PRIMARY KEY,
         Job_ID          TEXT    NOT NULL,
         Spool_Key       TEXT    NOT NULL,
+        Step_Name       TEXT    NOT NULL,
         Content         TEXT    NOT NULL,
 
         FOREIGN KEY (Job_ID)    REFERENCES JOB (Job_ID)

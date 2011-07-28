@@ -90,6 +90,11 @@ class Spool(object):
 ## SPOOL Pool
 DEFAULT     = [ 'JESMSGLG', 'JESJCL', 'JESYSMSG' ] # System Managed SPOOL
 DEFAULT_OUT = [ 'JESMSGLG', 'JESJCL', 'JESYSMSG' ] # SPOOLs that will be write out at the end
+DEFAULT_OUT_STEP = { # step name corresponding to the above list
+    'JESMSGLG' : 'JES',
+    'JESJCL'   : 'JES',
+    'JESYSMSG' : 'JES',
+    }
 
 SPOOL = {
     'JESMSGLG' : Spool([], 'o', 'outstream', None, ['JESMSGLG']),
@@ -163,9 +168,10 @@ def retrive(key):
     else:
         return None
 
-def register_write(key):
+def register_write(key, step):
     if key not in DEFAULT_OUT:
         DEFAULT_OUT.append(key)
+        DEFAULT_OUT_STEP[key] = step
         return True
     else:
         return False

@@ -148,7 +148,7 @@ def fetch_content(conn, job_id, dd_pttn = '%'):
     return conn.execute(stmt, (job_id, dd_pttn))
 
 def fetch_dd_list(conn, job_id):
-    stmt = '''SELECT  Spool_key
+    stmt = '''SELECT  Spool_key, Step_Name
                 FROM  SPOOL
                WHERE  Job_ID LIKE ?
             ORDER BY  row_id
@@ -167,9 +167,9 @@ def fetch_job_list_by(conn, job_pttn):
 
 
 def print_dd_list(out, job_id, dd_list):
-    out.write('\n  DD Names of all outputs in ' + job_id + ':\n')
+    out.write('\n  DD Names (and the step they belong to) in ' + job_id + ':\n')
     for r in dd_list:
-        out.write('    ' + r[0] + '\n')
+        out.write('    {0:<8}    {1}\n'.format(r[0], r[1]))
 
 def print_job_list(out, job_listing):
     out.write('\n')
