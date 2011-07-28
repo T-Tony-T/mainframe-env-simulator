@@ -22,9 +22,12 @@ from z_support import XPM, PIXBUF
 from zBase import zTheme
 
 import os, stat, time
+import sqlite3
+
 import pygtk
 pygtk.require('2.0')
 import gtk
+import gobject
 
 
 ######## ######## ######## ######## ########
@@ -33,8 +36,15 @@ import gtk
 
 class zDisplayPanel(gtk.VBox):
     '''A Read-Only Display Panel Used by zEdit Class'''
-    def __init__(self, editor = None):
+    _DB_FILE = None # overall db setting; this *will* take precedence if set
+
+    def __init__(self, db_file = None, editor = None):
         '''
+        db_file = None
+            the database file name (full path prefered) that
+            the display panel is to be connected to.
+            Unless set, no information will be displayed.
+
         editor = None
             any editor that can open an indicated file with:
               editor.set_buffer(fn_list, tpye)
@@ -42,6 +52,23 @@ class zDisplayPanel(gtk.VBox):
         '''
         super(zDisplayPanel, self).__init__()
 
+        self.__on_init = True
+
+        self.__db_file = None
+        self.__conn = None
+        self.__c = None
+
+        self.__active_job = None
+        self.__active_step = None
+
+        self.__job_list = [
+            # (id, name), (id, name), ...
+            ]
+        self.__step_list = [
+            # (dd, step), (dd, step), ...
+            ]
+
+        self.set_db(db_file)
         self.set_editor(editor)
 
         # layout of the frame:
@@ -58,12 +85,24 @@ class zDisplayPanel(gtk.VBox):
         #     \
         #      scrolled_window
 
-        major_paned = gtk.HPaned()
-        minor_paned = gtk.VPaned()
-        self.add(major_paned)
+        self.minor_paned = gtk.VPaned()
+        self.major_paned = gtk.HPaned()
+        self.add(self.major_paned)
 
         self.job_panel = zListing(gtk.ListStore(str))
         self.step_panel = zListing(gtk.ListStore(str))
+
+        self.job_panel.extend_columns(
+            [ 'Job Name', 'Job ID' ], [ gtk.CellRendererText(), gtk.CellRendererText() ]
+            )
+        self.step_panel.extend_columns(
+            [ 'DD Name', 'Step Name' ], [ gtk.CellRendererText(), gtk.CellRendererText() ]
+            )
+
+        self.job_panel.column_list[0].set_cell_data_func( self.job_panel.cell_list[0],  self.__cell_data_job_name)
+        self.job_panel.column_list[1].set_attributes(     self.job_panel.cell_list[1],  text = 0)
+        self.step_panel.column_list[0].set_attributes(    self.step_panel.cell_list[0], text = 0)
+        self.step_panel.column_list[1].set_cell_data_func(self.step_panel.cell_list[1], self.__cell_data_step_name)
 
         scrolled_job = gtk.ScrolledWindow()
         scrolled_step = gtk.ScrolledWindow()
@@ -76,8 +115,8 @@ class zDisplayPanel(gtk.VBox):
         scrolled_step.set_placement(gtk.CORNER_TOP_RIGHT)
         scrolled_step.add(self.step_panel)
 
-        minor_paned.pack1(scrolled_job, True, True)
-        minor_paned.pack2(scrolled_step, True, True)
+        self.minor_paned.pack1(scrolled_job, True, True)
+        self.minor_paned.pack2(scrolled_step, True, True)
 
         self.center = gtk.TextView()
         self.center.set_editable(False)
@@ -88,8 +127,8 @@ class zDisplayPanel(gtk.VBox):
         scrolled_center.set_placement(gtk.CORNER_TOP_RIGHT)
         scrolled_center.add(self.center)
 
-        major_paned.pack1(minor_paned, False, True)
-        major_paned.pack2(scrolled_center, True, True)
+        self.major_paned.pack1(self.minor_paned, False, True)
+        self.major_paned.pack2(scrolled_center, True, True)
 
         # connect signal for redirection
         self.job_panel.connect( 'focus-in-event',  self._focus_evnt_redirect, 'focus-in-event')
@@ -100,8 +139,13 @@ class zDisplayPanel(gtk.VBox):
         self.center.connect(    'focus-out-event',  self._focus_evnt_redirect, 'focus-out-event')
 
         # connect signal for internal usage
-#        self.job_panel.connect( 'row-activated', self._sig_)
-#        self.step_panel.connect('row-activated', self._sig_)
+        self.job_panel.connect( 'cursor-changed', self._sig_job_selected)
+        self.step_panel.connect('cursor-changed', self._sig_step_selected)
+
+        # initiate the timer to watch the overall settings
+        gobject.timeout_add(20, self.__watch_overall_settings)
+
+        self.__on_init = False
 
 
     ### signal redirection definition
@@ -115,6 +159,23 @@ class zDisplayPanel(gtk.VBox):
 
 
     ### signal definition
+    def _sig_job_selected(self, treeview):
+        tree_path = treeview.get_cursor()[0][-1]
+        job_id = self.__job_list[tree_path][0]
+
+        self.__active_step = None # reset active step since job panel is clicked
+        self.__active_job = job_id
+
+        self.update_step_list()
+        self.update_content()
+
+    def _sig_step_selected(self, treeview):
+        tree_path = treeview.get_cursor()[0][-1]
+        dd_name = self.__step_list[tree_path][0]
+
+        self.__active_step = dd_name
+
+        self.update_content()
     ### end of signal definition
 
 
@@ -127,9 +188,13 @@ class zDisplayPanel(gtk.VBox):
 
 
     def modify_font(self, font_desc):
+        font_desc.set_size(int(font_desc.get_size() * 0.85))
         self.job_panel.modify_font(font_desc)
         self.step_panel.modify_font(font_desc)
         self.center.modify_font(font_desc)
+        # resize the major paned
+        (w, h) = self.center.create_pango_layout('w').get_pixel_size()
+        self.major_paned.set_position(max(w * 16, 160)) # 160 is the default header width
 
     def modify_base(self, state, color):
         self.job_panel.modify_base(state, color)
@@ -143,6 +208,102 @@ class zDisplayPanel(gtk.VBox):
     ### end of overridden function definition
 
 
+    ### database manipulation
+    def connect_db(self):
+        if not self.__db_file:
+            raise ReferenceError('No DB file set. Set the DB using obj.set_db(db_file) or\n' +
+                                 '\tzDisplayPanel.set_db_all(db_file) first.'
+                                 )
+
+        self.__conn = sqlite3.connect(self.__db_file)
+        self.__conn.text_factory = str # map TEXT to str instead of unicode
+
+        self.__c  = self.__conn.cursor()
+        self.__c.execute('''PRAGMA foreign_keys = ON''')
+
+        # initiate the listing
+        self.update_job_list()
+
+        return self.__conn
+
+    def disconnect_db(self):
+        self.__conn.commit()
+        self.__c.close()
+        self.__conn.close()
+        self.__c = None
+        self.__conn = None
+
+        # initiate the listing
+        self.clear_job_list()
+
+    def is_connected_db(self):
+        return self.__conn != None
+
+
+    def delete_job(self, job_id):
+        stmt = '''DELETE
+                    FROM  JOB
+                   WHERE  Job_ID = ?
+               '''
+        self.__c.execute(stmt, (job_id,))
+        self.__conn.commit()
+
+
+    def fetch_content(self, job_id, dd_pttn = '%'):
+        stmt = '''SELECT  Content
+                    FROM  SPOOL
+                   WHERE  Job_ID = ?
+                     AND  Spool_key LIKE ?
+                ORDER BY  row_id
+               '''
+        return ''.join([ row[0] for row in self.__c.execute(stmt, (job_id, dd_pttn)) ])
+
+    def fetch_dd_list(self, job_id):
+        stmt = '''SELECT  Spool_key, Step_Name
+                    FROM  SPOOL
+                   WHERE  Job_ID LIKE ?
+                ORDER BY  row_id
+               '''
+        return [ row for row in self.__c.execute(stmt, (job_id,)) ]
+
+    def fetch_job_list(self):
+        stmt = '''SELECT  Job_ID, Job_Name
+                    FROM  JOB
+               '''
+        return [ row for row in self.__c.execute(stmt) ]
+
+
+    def get_db(self):
+        return self.__db_file
+
+    def set_db(self, db_file):
+        if self.__on_init:
+            return              # on initializing, early return
+
+        if zDisplayPanel._DB_FILE:
+            db_file = zDisplayPanel._DB_FILE # force switch to overall setting
+
+        if self.__db_file:
+            if os.path.samefile(self.__db_file, db_file):
+                return          # no need to change, early return
+            else:
+                self.disconnect_db()
+
+        if db_file:
+            self.__db_file = os.path.abspath(os.path.expanduser(db_file))
+            self.connect_db()
+        else:
+            self.__db_file = None
+
+    @staticmethod
+    def set_db_all(db_file):
+        if db_file:
+            zDisplayPanel._DB_FILE = os.path.abspath(os.path.expanduser(db_file))
+        else:
+            zDisplayPanel._DB_FILE = None
+    ### end of database manipulation
+
+
     def get_editor(self):
         return self.__editor_frame
 
@@ -150,10 +311,78 @@ class zDisplayPanel(gtk.VBox):
         self.__editor_frame = editor
 
 
+    def clear_content(self):
+        self.center.get_buffer().set_text('')
+
+    def update_content(self):
+        if self.__active_step:
+            text = self.fetch_content(self.__active_job ,self.__active_step)
+        elif self.__active_job:
+            text = self.fetch_content(self.__active_job)
+        else:
+            text = ''
+        self.center.get_buffer().set_text(text)
+
+    def clear_job_list(self):
+        self.job_panel.model.clear()
+        self.__job_list = []
+
+    def update_job_list(self):
+        self.clear_job_list()
+
+        self.__job_list = self.fetch_job_list()
+        found = None
+        for indx in range(len(self.__job_list)):
+            job_id = self.__job_list[indx][0]
+
+            self.job_panel.model.append([job_id])
+            if self.__active_job == job_id:
+                found = indx
+
+        if found != None:
+            self.job_panel.set_cursor((found,))
+        else:
+            self.clear_step_list()
+            self.clear_content()
+
+    def clear_step_list(self):
+        self.step_panel.model.clear()
+        self.__step_list = []
+
+    def update_step_list(self):
+        self.clear_step_list()
+
+        if not self.__active_job:
+            return              # no job selected, early return
+
+        self.__step_list = self.fetch_dd_list(self.__active_job)
+        for (dd_name, step_name) in self.__step_list:
+            self.step_panel.model.append([dd_name])
+
+
     ### cell data function
-    def __cell_data_func(self, column, cell, model, iterator):
-        pass
+    def __cell_data_job_name(self, column, cell, model, iterator):
+        if self.is_connected_db():
+            cell.set_property('text', self.__job_list[ self.job_panel.model.get_path(iterator)[-1] ][1])
+
+    def __cell_data_step_name(self, column, cell, model, iterator):
+        if self.is_connected_db():
+            cell.set_property('text', self.__step_list[ self.step_panel.model.get_path(iterator)[-1] ][0])
     ### end of cell data function
+
+
+    ### supporting function
+    def __watch_overall_settings(self):
+        '''used with `timer`'''
+        if zDisplayPanel._DB_FILE:
+            self.set_db(zDisplayPanel._DB_FILE)
+
+        job_list = self.fetch_job_list()
+        if job_list != self.__job_list:
+            self.update_job_list()
+
+        return True
+    ### end of supporting function
 
 
 ######## ######## ######## ######## ########

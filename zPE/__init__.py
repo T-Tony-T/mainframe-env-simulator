@@ -8,7 +8,7 @@ import os, sys
 import re
 
 ### Diagnostic Function Definition
-def abort(rc, msg):
+def abort(rc, *msg):
     '''
     Abort the entire program with the given return code and
     error message.
@@ -22,12 +22,12 @@ def abort(rc, msg):
       92: Assembler pass 2 error
       -1: zPE error
     '''
-    sys.stderr.write(msg)
+    sys.stderr.write(''.join(msg))
     sys.exit(rc)
 
 def mark4future(feature):
     '''Mark the function as \"not implemented\".'''
-    abort(1, '\n\n!!! ' + feature + ': feature not supported !!!\n\n')
+    abort(1, ''.join(['\n\n!!! ', feature, ': feature not supported !!!\n\n']))
 
 
 ### Utility Function Definition
@@ -171,12 +171,12 @@ class Step(object):             # for JCL['step'][*]
 
             def append(self, ddname, ddcard):
                 if not isinstance(ddname, str):
-                    abort(9, 'Error: ' + ddname + ': Invalid DD name.\n')
+                    abort(9, 'Error: ', ddname, ': Invalid DD name.\n')
                 if ddname in self.__items:
-                    abort(9, 'Error: ' + ddname + ': Duplicated DD names.\n')
+                    abort(9, 'Error: ', ddname, ': Duplicated DD names.\n')
                 for k,v in ddcard.items():
                     if k not in ['SYSOUT', 'DSN', 'DISP']:
-                        abort(9, 'Error: ' + k + '=' + v +
+                        abort(9, 'Error: ', k, '=', v,
                               ': Un-recognized option\n')
                 # parse DISP
                 if ddcard['DISP'] != '':
@@ -185,18 +185,15 @@ class Step(object):             # for JCL['step'][*]
                     else:
                         disp = [ddcard['DISP']]
                     if disp[0] not in DISP_STATUS:  # check status
-                        abort(9, 'Error: ' + disp[0] +
-                              ': Invalid DISP status.\n')
+                        abort(9, 'Error: ', disp[0], ': Invalid DISP status.\n')
                     if len(disp) == 1:              # check normal
                         disp.append(DISP_STATUS[disp[0]])
                     if disp[1] not in DISP_ACTION:
-                        abort(9, 'Error: ' + disp[1] +
-                              ': Invalid DISP action.\n')
+                        abort(9, 'Error: ', disp[1], ': Invalid DISP action.\n')
                     if len(disp) == 2:              # check abnormal
                         disp.append(disp[1])
                     if disp[2] not in DISP_ACTION:
-                        abort(9, 'Error: ' + disp[2] +
-                              ': Invalid DISP action.\n')
+                        abort(9, 'Error: ', disp[2], ': Invalid DISP action.\n')
                     ddcard['DISP'] = disp
                 else:
                     ddcard['DISP'] = ['','','']
@@ -212,7 +209,7 @@ class Step(object):             # for JCL['step'][*]
                 elif isinstance(key, int):
                     del self.__items[self.__indxs.pop(key)]
                 else:
-                    abort(9, 'Error: ' + key + ': Invalid key/index.\n')
+                    abort(9, 'Error: ', key, ': Invalid key/index.\n')
 
             def dict(self):
                 return self.__items
@@ -244,17 +241,17 @@ class Step(object):             # for JCL['step'][*]
                 elif isinstance(key, int):
                     return self.__items[self.__indxs[key]]
                 else:
-                    abort(9, 'Error: ' + key + ': Invalid key/index.\n')
+                    abort(9, 'Error: ', key, ': Invalid key/index.\n')
 
             def __setitem__(self, key, val):
                 if isinstance(key, str):
                     if key not in self.__items:
-                        abort(9, 'Error: ' + key + ': DD name not found.\n')
+                        abort(9, 'Error: ', key, ': DD name not found.\n')
                     self.__items[key] = val
                 elif isinstance(key, int):
                     self.__items[self.__indxs[key]] = val
                 else:
-                    abort(9, 'Error: ' + key + ': Invalid key.\n')
+                    abort(9, 'Error: ', key, ': Invalid key.\n')
         # end of inner class definition
 
         self.name = name        # 'step_name'
@@ -293,7 +290,7 @@ def is_dir(dsn):
 
 def open_file(dsn, mode, f_type):
     '''Open the target file in regardless of the existance'''
-    return eval('core.' + JES[f_type] + '.open_file')(dsn, mode)
+    return eval(''.join(['core.', JES[f_type], '.open_file']))(dsn, mode)
 
 def flush(sp):
     '''Flush the indicated SPOOL to the indicated file'''

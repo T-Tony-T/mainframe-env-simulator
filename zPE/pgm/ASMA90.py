@@ -352,7 +352,7 @@ def pass_1(amode = 31, rmode = 31):
             try:
                 sd_info = zPE.core.asm.parse_sd(tmp)
             except:
-                zPE.abort(90, 'Error: {0}'.format(tmp) +
+                zPE.abort(90, 'Error: ', tmp,
                           ': Invalid constant at line {0}.\n'.format(line_num))
 
             # check =constant
@@ -368,7 +368,7 @@ def pass_1(amode = 31, rmode = 31):
                 if field[1] in SYMBOL_EQ:
                     symbol = __HAS_EQ(field[1], scope_id)
                     if symbol == None or symbol.defn != None:
-                        zPE.abort(90, 'Error: {0}'.format(field[1]) +
+                        zPE.abort(90, 'Error: ', field[1],
                                   ': Fail to find the allocation.\n')
                     else:       # found successfully
                         const_left -= 1
@@ -377,8 +377,8 @@ def pass_1(amode = 31, rmode = 31):
                         symbol.r_type = sd_info[2]
                         symbol.defn = line_num
                 else:
-                    zPE.abort(90, 'Error: {0}'.format(field[1]) +
-                                  ': Fail to allocate the constant.\n')
+                    zPE.abort(90, 'Error: ', field[1],
+                              ': Fail to allocate the constant.\n')
 
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
@@ -422,7 +422,7 @@ def pass_1(amode = 31, rmode = 31):
                         sd_info[4][lbl_i] = '0' # fool the paser
                     pass        # check internal reference in pass 2
                 else:
-                    zPE.abort(90, 'Error: {0}'.format(sd_info[2]) +
+                    zPE.abort(90, 'Error: ', sd_info[2],
                               ': Invalid address type.\n')
 
             # align boundary
@@ -590,7 +590,7 @@ def pass_1(amode = 31, rmode = 31):
             for code in op_code:
                 length += len(code)
             if length % 2 != 0:
-                zPE.abort(90, 'Error: {0}'.format(length / 2) +
+                zPE.abort(90, 'Error: {0}'.format(length / 2),
                           '.5: Invalid OP code length\n')
             addr += length / 2
 
@@ -986,7 +986,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                                 ))
                                 except:
                                     zPE.abort(
-                                        92, 'Error: {0}'.format(res[0][indx]) +
+                                        92, 'Error: ', res[0][indx],
                                         ': Fail to parse the expression.\n'
                                               )
                         # end of processing res
@@ -999,7 +999,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                             try:
                                 tmp_val = eval(''.join(res[0]))
                             except:
-                                zPE.abort(92, 'Error: ' + ''.join(res[0]) +
+                                zPE.abort(92, 'Error: ', ''.join(res[0]),
                                           ': Invalid expression.\n')
                         # evaluate expression
                         if reloc_cnt == 0:      # no relocatable symbol
@@ -1125,10 +1125,10 @@ def pass_2(rc, amode = 31, rmode = 31):
                                            )
                                 elif symbol == None:
                                     if not __INFO_GE(line_num, 'E'):
-                                        zPE.abort(90, 'Error: ' + p1_lbl +
+                                        zPE.abort(90, 'Error: ', p1_lbl,
                                                   ': symbol not in EQ table.\n')
                                 elif symbol.defn == None:
-                                    zPE.abort(90, 'Error: ' + p1_lbl +
+                                    zPE.abort(90, 'Error: ', p1_lbl,
                                               ': symbol not allocated.\n')
                             elif res[1][indx] == 'location_ptr':
                                 pass # no special process required
@@ -1224,7 +1224,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                 if not abs_addr and reloc_cnt < 2:
                     tmp_val = __REDUCE_EXP(''.join(res[0]))
                     if tmp_val == None:
-                        zPE.abort(92, 'Error: ' + ''.join(res[0]) +
+                        zPE.abort(92, 'Error: ', ''.join(res[0]),
                                   ': Invalid expression.\n')
                     sd_info = zPE.core.asm.parse_sd(tmp_val)
                     sd_info = (sd_info[0], sd_info[1], sd_info[2],

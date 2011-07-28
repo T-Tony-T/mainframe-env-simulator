@@ -61,10 +61,11 @@ def submit(job):
                         flush_all = True
                     zPE.core.jcl.finish_step(step)
                 else:           # not found at all
-                    zPE.abort(-1, 'Error: ' + step.pgm +
-                               ': Program not supported.\n' +
-                               'For more information, see \'' +
-                               sys.argv[0] + ' -l\' for help.\n')
+                    zPE.abort(-1, 'Error: ', step.pgm,
+                               ': Program not supported.\n',
+                               'For more information, see \'',
+                               sys.argv[0], ' -l\' for help.\n'
+                               )
         # end of all steps
     else:
         overall_rc = 9       # JCL error; see zPE.__init__.py for help

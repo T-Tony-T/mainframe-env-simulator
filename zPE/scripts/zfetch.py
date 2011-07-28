@@ -79,9 +79,10 @@ def main(argv = sys.argv):
                     fetch_out.write(row[0])
         else:
             # JOB ID is invalid
-            sys.stderr.write('Error: ' + args.job_id +
-                             ': JOB not found inside the JOB queue\n'
-                             )
+            sys.stderr.write(''.join([
+                        'Error: ', args.job_id,
+                        ': JOB not found inside the JOB queue\n'
+                        ]))
             return -1
     elif job_pttn:
         # JOB pattern is offered, process it
@@ -99,9 +100,10 @@ def main(argv = sys.argv):
         elif args.purge:
             delete_jobs(conn, '%')
         else:
-            sys.stderr.write('Error: No JOB ID offered. Run `' + prog_name +
-                             ' -h` for more information.\n'
-                             )
+            sys.stderr.write(''.join([
+                        'Error: No JOB ID offered. Run `', prog_name,
+                        ' -h` for more information.\n'
+                        ]))
             return -1
 
     sys.stdout.write('\n')
@@ -167,7 +169,9 @@ def fetch_job_list_by(conn, job_pttn):
 
 
 def print_dd_list(out, job_id, dd_list):
-    out.write('\n  DD Names (and the step they belong to) in ' + job_id + ':\n')
+    out.write(''.join([
+                '\n  DD Names (and the step they belong to) in ', job_id, ':\n'
+                ]))
     for r in dd_list:
         out.write('    {0:<8}    {1}\n'.format(r[0], r[1]))
 
@@ -209,10 +213,11 @@ Note: JOB_ID_PATTERN can be a JOB ID, a pattern like '*1013?' (matches all
         action = 'store',
         nargs = '?',
         default = None,
-        help = ( 'the JOB ID (pattern) of the JOB to be fetched or listed. ' +
-                 'Any pattern without an exact match can only be used with ' +
-                 '`-l` or `-p`'
-                 ),
+        help = ''.join([
+                'the JOB ID (pattern) of the JOB to be fetched or listed. ',
+                'Any pattern without an exact match can only be used with ',
+                '`-l` or `-p`'
+                ]),
         metavar = 'JOB_ID | JOB_ID_PATTERN',
         dest = 'job_id'
         )
@@ -232,10 +237,11 @@ Note: JOB_ID_PATTERN can be a JOB ID, a pattern like '*1013?' (matches all
         '-l', '--list',
         action = 'store_true',
         default = False,
-        help = ( 'list all DD Names of all outputs in the indicated JOB,' +
-                 ' or all matched JOBs if no JOB pattern is offered but ' +
-                 'not an exact match'
-                 ),
+        help = ''.join([
+                'list all DD Names of all outputs in the indicated JOB,',
+                ' or all matched JOBs if no JOB pattern is offered but ',
+                'not an exact match'
+                ]),
         dest = 'list'
         )
     parser.add_argument(
@@ -243,9 +249,10 @@ Note: JOB_ID_PATTERN can be a JOB ID, a pattern like '*1013?' (matches all
         action = 'store',
         nargs = 1,
         default = [],
-        help = ( 'write the fetched JOB output into the indicated file, ' +
-                 'instead of print it on screen'
-                 ),
+        help = ''.join([
+                'write the fetched JOB output into the indicated file, ',
+                'instead of print it on screen'
+                ]),
         metavar = 'OUTPUT_FILE',
         dest = 'output'
         )

@@ -110,29 +110,37 @@ class PSW(object):
     def dump_bin(self):
         if self.C == PSW_MODE['EC']:
             return (
+                ''.join([
                 # 1st word
-                '0{0}000{1}{2}{3}'.format(self.R, self.T, self.I, self.E) + #  8
-                '{0:0>4}'.format(bin(self.PSW_key)[2:]) +                   # 12
-                '{0}{1}{2}{3}'.format(self.C, self.M, self.W, self.P) +     # 16
-                '{0}0{1:0>2}'.format(self.S, bin(self.CC)[2:]) +            # 20
-                '{0:0>4}'.format(bin(self.Program_mask)[2:]) +              # 24
+                '0{0}000{1}{2}{3}'.format(self.R, self.T, self.I, self.E),  #  8
+                '{0:0>4}'.format(bin(self.PSW_key)[2:]),                    # 12
+                '{0}{1}{2}{3}'.format(self.C, self.M, self.W, self.P),      # 16
+                '{0}0{1:0>2}'.format(self.S, bin(self.CC)[2:]),             # 20
+                '{0:0>4}'.format(bin(self.Program_mask)[2:]),               # 24
                 '00000000',                                                 # 32
+                ]),
+                ''.join([
                 # 2nd word
-                '00000000' +                                                #  8
+                '00000000',                                                 #  8
                 '{0:0>24}'.format(bin(self.Instruct_addr)[2:])              # 32
+                ])
                 )
         else:
             return (
+                ''.join([
                 # 1st word
-                '{0:0>7}{1}'.format(bin(self.Channel_masks)[2:], self.E) +  #  8
-                '{0:0>4}'.format(bin(self.PSW_key)[2:]) +                   # 12
-                '{0}{1}{2}{3}'.format(self.C, self.M, self.W, self.P) +     # 16
+                '{0:0>7}{1}'.format(bin(self.Channel_masks)[2:], self.E),   #  8
+                '{0:0>4}'.format(bin(self.PSW_key)[2:]),                    # 12
+                '{0}{1}{2}{3}'.format(self.C, self.M, self.W, self.P),      # 16
                 '{0:0>16}'.format(bin(self.Interruption_code)[2:]),         # 32
+                ]),
+                ''.join([
                 # 2nd word
-                '{0:0>2}'.format(bin(self.ILC)[2:]) +                       #  2
-                '{0:0>2}'.format(bin(self.CC)[2:]) +                        #  4
-                '{0:0>4}'.format(bin(self.Program_mask)[2:]) +              #  8
+                '{0:0>2}'.format(bin(self.ILC)[2:]),                        #  2
+                '{0:0>2}'.format(bin(self.CC)[2:]),                         #  4
+                '{0:0>4}'.format(bin(self.Program_mask)[2:]),               #  8
                 '{0:0>24}'.format(bin(self.Instruct_addr)[2:])              # 32
+                ])
                 )
 
     def dump_hex(self):

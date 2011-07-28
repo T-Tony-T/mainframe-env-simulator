@@ -56,10 +56,12 @@ class Spool(object):
         self.spool.remove(-1)
 
     def __str__(self):
-        return str('mode : ' + self.mode +
-                   ', type : ' + self.f_type +
-                   ', v_fn : ' + str(self.virtual_path) +
-                   ', r_fn : ' + str(self.real_path))
+        return ''.join([
+                'mode : ',   self.mode,
+                ', type : ', self.f_type,
+                ', v_fn : ', str(self.virtual_path),
+                ', r_fn : ', str(self.real_path)
+                ])
 
     def __len__(self):
         return len(self.spool)
@@ -123,15 +125,15 @@ def new(key, mode, f_type, path = [], real_path = []):
              (path == path_of[key]) and (real_path == real_path_of(key))
              ):
             return SPOOL[key]   # passed from previous step
-        zPE.abort(5, 'Error: ' + key + ': SPOOL name conflicts.\n')
+        zPE.abort(5, 'Error: ', key, ': SPOOL name conflicts.\n')
 
     # check SPOOL mode
     if mode not in ['i', 'o', '+']:
-        zPE.abort(5, 'Error: ' + mode + ': Invalid SPOOL mode.\n')
+        zPE.abort(5, 'Error: ', mode, ': Invalid SPOOL mode.\n')
 
     # check SPOOL type
     if f_type not in zPE.JES:
-        zPE.abort(5, 'Error: ' + f_type + ': invalid SPOOL types.\n')
+        zPE.abort(5, 'Error: ', f_type, ': invalid SPOOL types.\n')
 
     # check path auto-generation
     if len(path) == 0:

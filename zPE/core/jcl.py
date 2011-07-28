@@ -27,7 +27,7 @@ def parse(job):
     zPE.JCL['read_cnt'] += 1
     zPE.JCL['card_cnt'] += 1
     if len(line) > 72:
-        zPE.abort(9, 'Error: line ' + str(zPE.JCL['read_cnt']) +
+        zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
                   'Statement cannot exceed colomn 72.\n')
 
     # field_0    field_1 field_2
@@ -50,7 +50,7 @@ def parse(job):
         zPE.abort(9, 'Error: JOB name is not 8 charactors long.\n')
     zPE.JCL['owner'] = zPE.JCL['jobname'][:7]
     zPE.JCL['class'] = zPE.JCL['jobname'][-1]
-    zPE.JCL['jobid'] = 'JOB' + str(zPE.conf.Config['job_id'])
+    zPE.JCL['jobid'] = 'JOB{0:0>5}'.format(zPE.conf.Config['job_id'])
 
     # args_0,args_1,args_2
     # AccInfo,'pgmer'[,parameters]
@@ -60,14 +60,14 @@ def parse(job):
     # parse AccInfo
     zPE.JCL['accinfo'] = args[0]
     if args[1][0] != '\'' or args[1][-1] != '\'':
-        zPE.abort(9, 'Error: ' + args[1] +
-                  ':\n       The programmer\'s name need to be ' +
+        zPE.abort(9, 'Error: ', args[1],
+                  ':\n       The programmer\'s name need to be ',
                   'surrounded by single quotes.\n')
     # parse pgmer
     zPE.JCL['pgmer'] = args[1][1:-1]
     if len(zPE.JCL['pgmer']) > 20:
-        zPE.abort(9, 'Error: ' + args[1] +
-                  ':\n       The programmer\'s name cannot be exceed ' +
+        zPE.abort(9, 'Error: ', args[1],
+                  ':\n       The programmer\'s name cannot be exceed ',
                   '20 characters.\n')
     # parse parameters
     zPE.JCL['region'] = zPE.conf.Config['memory_sz']
@@ -77,10 +77,10 @@ def parse(job):
                 try:
                     zPE.JCL['region'] = zPE.core.mem.parse_region(part[7:])
                 except SyntaxError:
-                    zPE.abort(9, 'Error: ' + part +
+                    zPE.abort(9, 'Error: ', part,
                               ': Invalid region size.\n')
                 except ValueError:
-                    zPE.abort(9, 'Error: ' + part +
+                    zPE.abort(9, 'Error: ', part,
                               ': Region must be divisible by 4K.\n')
         #   elif part[:9] == 'MSGCLASS=':
 
@@ -108,7 +108,7 @@ def parse(job):
         zPE.JCL['card_cnt'] += 1
 
         if len(line) > 72:
-            zPE.abort(9, 'Error: line ' + str(zPE.JCL['read_cnt']) +
+            zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
                       'Statement cannot exceed colomn 72.\n')
 
         # check comment
@@ -152,11 +152,11 @@ def parse(job):
                         try:
                             region = zPE.core.mem.parse_region(part[7:])
                         except SyntaxError:
-                            zPE.abort(9, 'Error: ' + part +
+                            zPE.abort(9, 'Error: ', part,
                                       ': Invalid region size.\n')
                         except ValueError:
-                            zPE.abort(9, 'Error: ' + part +
-                                      ': Region must be divisible ' +
+                            zPE.abort(9, 'Error: ', part,
+                                      ': Region must be divisible ',
                                       'by 4K.\n')
                 #   elif part[:5] == 'COND=':
 
@@ -187,10 +187,10 @@ def parse(job):
                     elif part[:5] == 'DISP=':
                         disp = part[5:]
                     else:
-                        zPE.abort(9, 'Error: ' + part +
+                        zPE.abort(9, 'Error: ', part,
                                   ': Parameter not supported.\n')
                 if disp == '':
-                    zPE.abort(9, 'Error: ' + field[0][2:] +
+                    zPE.abort(9, 'Error: ', field[0][2:],
                               ': Need DISP=[disp].\n')
 
             zPE.JCL['step'][-1].dd.append(
@@ -360,9 +360,11 @@ def finish_step(step):
             if ddname == 'STEPLIB':                     # already processed
                 continue
             if step.dd[ddname]['STAT'] != zPE.DD_STATUS['normal']:
-                sys.error.write('Warning: ' + ddname + ': File status is not' +
-                                'normal. (' + step.dd[ddname]['STAT'] + ')\n' +
-                                '        Ignored.\n')
+                sys.error.write(''.join([
+                            'Warning: ', ddname, ': File status is not',
+                            'normal. (', step.dd[ddname]['STAT'], ')\n',
+                            '        Ignored.\n'
+                            ]))
                 continue
 
             path = zPE.core.SPOOL.path_of(ddname)

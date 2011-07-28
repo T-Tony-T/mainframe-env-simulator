@@ -833,7 +833,7 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_ALWAYS)
                 widget_shell.set_placement(gtk.CORNER_TOP_RIGHT)
 
-                widget = zTextView()
+                widget = zTextView(editor = self)
                 widget_button_press_id = widget.center.connect('populate-popup', self._sig_button_press_textview)
                 widget_key_press_id = {
                     widget : widget.connect('key-press-event', zEdit._sig_key_pressed),
@@ -842,7 +842,7 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell = gtk.Frame()
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
-                widget = zFileManager()
+                widget = zFileManager(editor = self)
                 widget_button_press_id = widget.center.connect('button-press-event', self._sig_button_press_browser)
                 widget_key_press_id = {
                     widget.path_entry : widget.path_entry.connect('key-press-event', zEdit._sig_key_pressed),
@@ -852,7 +852,7 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell = gtk.Frame()
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
-                widget = zDisplayPanel()
+                widget = zDisplayPanel(editor = self)
                 widget_button_press_id = widget.center.connect('populate-popup', self._sig_button_press_textview)
                 widget_key_press_id = {
                     widget.job_panel  : widget.job_panel.connect('key-press-event', zEdit._sig_key_pressed),
@@ -877,7 +877,6 @@ class zEdit(z_ABC, gtk.VBox):
                 self.remove(self.center_shell)
             self.center_shell = widget_shell
             self.center = widget
-            self.center.set_editor(self)
             self.center_shell.add(self.center)
             self.pack_start(self.center_shell, True, True, 0)
 
@@ -1078,7 +1077,7 @@ class zEditBuffer(z_ABC):
                             break
                 if no_rec:
                     # no duplication, generate new name of the new file
-                    self.name += '(' + str(len(zEditBuffer.buff_rec[self.name])) + ')'
+                    self.name += '({0})'.format(len(zEditBuffer.buff_rec[self.name]))
 
             if no_rec:
                 # name not in record, add it

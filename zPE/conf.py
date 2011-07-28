@@ -108,8 +108,10 @@ def read_rc(dry_run = False):
 
             if not ok:
                 Config[k] = JOB_ID_MIN
-                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
-                                 ': Invalid job ID.\n')
+                sys.stderr.write(''.join([
+                            'CONFIG WARNING: ', v[:-1],
+                            ': Invalid job ID.\n'
+                            ]))
         elif k == 'addr_mode':
             try:
                 Config[k] = int(v)
@@ -120,8 +122,10 @@ def read_rc(dry_run = False):
 
             if not ok:
                 Config[k] = DEFAULT['ADDR_MODE']
-                sys.stderr.write('CONFIG WARNING: ' + v[:-1] +
-                                 ': Invalid address mode.\n')
+                sys.stderr.write(''.join([
+                            'CONFIG WARNING: ', v[:-1],
+                            ': Invalid address mode.\n'
+                            ]))
         elif k == 'memory_sz':
             try:
                 Config[k] = parse_region(v)
@@ -197,7 +201,7 @@ CREATE TABLE IF NOT EXISTS SPOOL (
 
 def __TOUCH_RC():
     fp = open(CONFIG_PATH['rc'], 'w')
-    fp.write('job_id = ' + str(Config['job_id']) + '\n')
-    fp.write('addr_mode = ' + str(Config['addr_mode']) + '\n')
-    fp.write('memory_sz = ' + Config['memory_sz'] + '\n')
+    fp.write(''.join(['job_id = ', str(Config['job_id']), '\n']))
+    fp.write(''.join(['addr_mode = ', str(Config['addr_mode']), '\n']))
+    fp.write(''.join(['memory_sz = ', Config['memory_sz'], '\n']))
     fp.close()

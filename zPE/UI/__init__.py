@@ -174,6 +174,7 @@ class BaseFrame(object):
         ### create main window
         self.mw = zComp.zSplitWindow(zComp.zEdit, [], (self.frame_init, self.frame_uninit), self.frame_split_dup)
         w_vbox.pack_start(self.mw, True, True, 0)
+        zComp.zDisplayPanel.set_db_all(os.path.join(zPE.conf.CONFIG_PATH['SPOOL']))
 
 
         ### create last-line
