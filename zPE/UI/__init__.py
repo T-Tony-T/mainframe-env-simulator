@@ -1,5 +1,5 @@
 # modules that will be auto imported
-import comp, conf
+import zComp, conf
 import zPE.conf
 
 import os, sys, copy, re, subprocess
@@ -34,11 +34,11 @@ class BaseFrame(object):
 #            'zPE_submit_with_JCL'       : lambda *arg: self._sig_submit(None, 'wrap'),
             }
         for key in conf.DEFAULT_FUNC_KEY_BIND:
-            comp.zEdit.reg_add_registry(key)
+            zComp.zEdit.reg_add_registry(key)
 
 
         ### redirect STDOUT and STDERR to the error console
-        self.err_console = comp.zErrConsole('zPE Error Console', True)
+        self.err_console = zComp.zErrConsole('zPE Error Console', True)
         sys.stdout = self.err_console
         sys.stderr = self.err_console
 
@@ -147,11 +147,11 @@ class BaseFrame(object):
         self.toolbar.insert(self.tool_quit, 15)
 
         ## connect auto-update items
-        comp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
+        zComp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
 
-        comp.zSplitWindow.register('frame_removed', comp.zEdit.reg_clean_up)
-        comp.zSplitWindow.register('frame_removed', comp.zEditBuffer.reg_clean_up)
-        comp.zSplitWindow.register('frame_removed', comp.zTheme.reg_clean_up)
+        zComp.zSplitWindow.register('frame_removed', zComp.zEdit.reg_clean_up)
+        zComp.zSplitWindow.register('frame_removed', zComp.zEditBuffer.reg_clean_up)
+        zComp.zSplitWindow.register('frame_removed', zComp.zTheme.reg_clean_up)
 
 
         ## connect signals
@@ -172,16 +172,16 @@ class BaseFrame(object):
 
 
         ### create main window
-        self.mw = comp.zSplitWindow(comp.zEdit, [], self.frame_init, self.frame_split_dup)
+        self.mw = zComp.zSplitWindow(zComp.zEdit, [], self.frame_init, self.frame_split_dup)
         w_vbox.pack_start(self.mw, True, True, 0)
 
 
         ### create last-line
-        self.lastline = comp.zLastLine('z# ')
+        self.lastline = zComp.zLastLine('z# ')
         w_vbox.pack_end(self.lastline, False, False, 0)
 
         # add the last-line to the editor
-        comp.zEdit.set_last_line(self.lastline)
+        zComp.zEdit.set_last_line(self.lastline)
 
         ### set accel
 
@@ -409,9 +409,9 @@ class BaseFrame(object):
 
     def frame_split_dup(self, frame):
         if frame:
-            new_frame = comp.zEdit(* frame.get_buffer())
+            new_frame = zComp.zEdit(* frame.get_buffer())
         else:
-            new_frame = comp.zEdit()
+            new_frame = zComp.zEdit()
 
         return new_frame
     ### end of callback functions for SplitWindow
@@ -421,7 +421,7 @@ class BaseFrame(object):
     def set_accel(self):
         for (k, v) in conf.Config['FUNC_BINDING'].iteritems():
             if k in self.__key_binding_func:
-                comp.zEdit.register(k, self.__key_binding_func[k], self)
+                zComp.zEdit.register(k, self.__key_binding_func[k], self)
     ### end of key binding
 
 
@@ -493,11 +493,11 @@ class ConfigWindow(gtk.Window):
 
         ct_gui_tab.add(gtk.HBox())
 
-        self.tabbar_on =      gtk.CheckButton('Show Tabbar         ')
-        self.tabbar_grouped = gtk.CheckButton('Group Tabs in Tabbar')
+        self.tabbar_on =      zComp.zCheckButton('Show Tabbar         ')
+        self.tabbar_grouped = zComp.zCheckButton('Group Tabs in Tabbar')
 
-        self.__label['LABEL'].append(self.get_label_widget(self.tabbar_on))
-        self.__label['LABEL'].append(self.get_label_widget(self.tabbar_grouped))
+        self.__label['LABEL'].append(self.tabbar_on.get_label_widget())
+        self.__label['LABEL'].append(self.tabbar_grouped.get_label_widget())
 
         ct_gui_tab.child.pack_start(self.tabbar_on, False, False, 10)
         ct_gui_tab.child.pack_start(self.tabbar_grouped, False, False, 10)
@@ -566,7 +566,7 @@ class ConfigWindow(gtk.Window):
             self.__label['LABEL'].append(gtk.Label(' {0:<{1}}'.format(key.replace('_', ' ').title(), label_len[col])))
 
             self.color_entry[key] = gtk.Entry(7)
-            self.color_picker[key] = comp.zColorPicker(self.__ebox, self._sig_color_selected)
+            self.color_picker[key] = zComp.zColorPickerButton(self.__ebox, self._sig_color_selected)
 
             self.color_entry[key].set_property('width-chars', 7)
             self.color_picker[key].set_size_button(35, -1)
@@ -596,12 +596,12 @@ class ConfigWindow(gtk.Window):
 
         self.key_style_key = [ 'emacs', 'vi', 'other' ]
         self.key_style = {}
-        self.key_style['emacs'] = gtk.RadioButton(None,                    'Emacs Mode')
-        self.key_style['vi']    = gtk.RadioButton(self.key_style['emacs'], 'Vi(m) Mode')
-        self.key_style['other'] = gtk.RadioButton(self.key_style['emacs'], 'Other     ')
+        self.key_style['emacs'] = zComp.zRadioButton(None,                    'Emacs Mode')
+        self.key_style['vi']    = zComp.zRadioButton(self.key_style['emacs'], 'Vi(m) Mode')
+        self.key_style['other'] = zComp.zRadioButton(self.key_style['emacs'], 'Other     ')
 
         for key in self.key_style_key:
-            self.__label['LABEL'].append(self.get_label_widget(self.key_style[key]))
+            self.__label['LABEL'].append(self.key_style[key].get_label_widget())
 
             ct_key_style.child.pack_start(self.key_style[key], False, False, 15)
 
@@ -644,7 +644,7 @@ class ConfigWindow(gtk.Window):
         self.kb_stroke = {}
         row = 0
         for func in sorted(conf.DEFAULT_FUNC_KEY_BIND.iterkeys()):
-            self.kb_function[func] = gtk.ToggleButton('  ' + func, False)
+            self.kb_function[func] = zComp.zToggleButton('  ' + func, False)
             self.kb_stroke[func] = gtk.Label('')
 
             bttn = self.kb_function[func]
@@ -652,7 +652,7 @@ class ConfigWindow(gtk.Window):
             style.bg[gtk.STATE_PRELIGHT] = style.bg[gtk.STATE_ACTIVE]
             bttn.set_style(style)
 
-            self.__label['LABEL'].append(self.get_label_widget(self.kb_function[func]))
+            self.__label['LABEL'].append(self.kb_function[func].get_label_widget())
             self.__label['LABEL'][-1].set_alignment(0, 0.5)
             self.__label['LABEL'].append(self.kb_stroke[func])
             self.__label['LABEL'][-1].set_alignment(0, 0.5)
@@ -824,12 +824,12 @@ class ConfigWindow(gtk.Window):
     ### signal for GUI
     def _sig_tabbar_on(self, bttn):
         conf.Config['MISC']['tab_on'] = bttn.get_active()
-        comp.zEdit.set_tab_on(conf.Config['MISC']['tab_on'])
+        zComp.zEdit.set_tab_on(conf.Config['MISC']['tab_on'])
         self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
 
     def _sig_tabbar_grouped(self, bttn):
         conf.Config['MISC']['tab_grouped'] = bttn.get_active()
-        comp.zEdit.set_tab_grouped(conf.Config['MISC']['tab_grouped'])
+        zComp.zEdit.set_tab_grouped(conf.Config['MISC']['tab_grouped'])
 
     def _sig_font_changed(self, combo):
         new_font = {}
@@ -841,7 +841,7 @@ class ConfigWindow(gtk.Window):
         new_font['size'] = int(new_font['size'])
 
         conf.Config['FONT'] = new_font
-        comp.zTheme.set_font(conf.Config['FONT'])
+        zComp.zTheme.set_font(conf.Config['FONT'])
 
     def _sig_color_entry_activate(self, entry, key):
         color_code = entry.get_text()
@@ -849,14 +849,14 @@ class ConfigWindow(gtk.Window):
             entry.set_text('')
             return
         self.set_color_modify(key, color_code)
-        comp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+        zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
 
     def _sig_color_selected(self, widget, color_code):
         for key in self.color_picker:
             if widget == self.color_picker[key]:
                 break
         self.set_color_modify(key, color_code)
-        comp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+        zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
     ### end of signal for GUI
 
 
@@ -867,8 +867,8 @@ class ConfigWindow(gtk.Window):
 
             conf.read_key_binding()
 
-            comp.zEdit.set_style(conf.Config['MISC']['key_binding'])
-            comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+            zComp.zEdit.set_style(conf.Config['MISC']['key_binding'])
+            zComp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
 
             self.load_binding()
 
@@ -928,7 +928,7 @@ class ConfigWindow(gtk.Window):
                     warning = False
                     ):
                     # key sequence added
-                    comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+                    zComp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
                     binding_is_valid = True
                 else:
                     binding_is_valid = None
@@ -951,7 +951,7 @@ class ConfigWindow(gtk.Window):
                             warning = False
                             ):
                             # key sequence added
-                            comp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+                            zComp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
                             self.kb_stroke[err_func].set_text('') # clear conflict binding text
                             binding_is_valid = True
                         else:
@@ -1040,7 +1040,7 @@ class ConfigWindow(gtk.Window):
         # GUI->Theme
         for key in self.color_entry:
             self.set_color_modify(key, conf.Config['COLOR_MAP'][key])
-        comp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+        zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
 
         # KeyBinding->Style
         for key in self.key_style_key:
@@ -1079,23 +1079,6 @@ class ConfigWindow(gtk.Window):
 
 
     ### utility function definition
-    def get_label_widget(self, current):
-        try:
-            if not len(current.get_children()):
-                raise AttributeError
-        except:
-            if isinstance(current, gtk.Label):
-                return current  # found the label
-            else:
-                return None     # end of the path
-
-        for child in current.get_children():
-            found = self.get_label_widget(child)
-            if found:
-                return found    # found in previous search
-        return None             # not found at all
-
-
     def select_combo_item(self, combo, item):
         tm = combo.get_model()
 
