@@ -516,6 +516,10 @@ class zFileManager(gtk.VBox):
         '''
         super(zFileManager, self).__init__()
 
+
+        self.__file_list = []
+        self.__dir_list = []
+
         self.set_editor(editor)
 
         # layout of the frame:
@@ -591,6 +595,9 @@ class zFileManager(gtk.VBox):
 
         # set cwd
         self.set_folder()
+
+        # initiate the timer to watch the overall settings
+        gobject.timeout_add(20, self.__watch_overall_settings)
 
 
     ### signal redirection definition
@@ -759,24 +766,24 @@ class zFileManager(gtk.VBox):
         self.treeview.dirname = self.dirname
 
         # fetch file listing
-        file_list = []
-        dir_list = []
+        self.__file_list = []
+        self.__dir_list = []
         for non_hidden in [ fn for fn in os.listdir(self.dirname) if fn[0] <> '.' ]:
             fn_list = [ self.dirname, non_hidden ]
             if io_encap.is_dir(fn_list):
-                dir_list.append(non_hidden)
+                self.__dir_list.append(non_hidden)
             else:
-                file_list.append(non_hidden)
+                self.__file_list.append(non_hidden)
 
-        file_list.sort(key = str.lower)
-        dir_list.sort(key = str.lower)
-        dir_list = ['..'] + dir_list
+        self.__file_list.sort(key = str.lower)
+        self.__dir_list.sort(key = str.lower)
+        self.__dir_list = ['..'] + self.__dir_list
 
         # update model with the listing
         self.treeview.model.clear()
-        for fn in dir_list:
+        for fn in self.__dir_list:
             self.treeview.model.append([fn, False])
-        for fn in file_list:
+        for fn in self.__file_list:
             self.treeview.model.append([fn, False])
         self.path_entry.set_text(self.dirname + os.path.sep)
 
@@ -864,3 +871,27 @@ class zFileManager(gtk.VBox):
 
         self.treeview.cell_list[indx].set_property('text', time.ctime(filestat.st_mtime))
     ### end of cell data function
+
+
+    ### supporting function
+    def __watch_overall_settings(self):
+        '''used with `timer`'''
+        # fetch file listing
+        file_list = []
+        dir_list = []
+        for non_hidden in [ fn for fn in os.listdir(self.dirname) if fn[0] <> '.' ]:
+            fn_list = [ self.dirname, non_hidden ]
+            if io_encap.is_dir(fn_list):
+                dir_list.append(non_hidden)
+            else:
+                file_list.append(non_hidden)
+
+        file_list.sort(key = str.lower)
+        dir_list.sort(key = str.lower)
+        dir_list = ['..'] + dir_list
+
+        if file_list != self.__file_list or dir_list != self.__dir_list:
+            self.refresh_folder()
+
+        return True
+    ### end of supporting function
