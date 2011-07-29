@@ -319,5 +319,5 @@ def __PARSE_OUT():
     print asm_ser
 
     print '\nUsing Map:'
-    for k,v in asm_using.items():
+    for k,v in asm_using.iteritems():
         print k, v.__dict__

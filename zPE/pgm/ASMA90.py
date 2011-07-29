@@ -628,7 +628,7 @@ def pass_1(amode = 31, rmode = 31):
                 MNEMONIC[line_num][1] += RELOCATE_OFFSET[scope_id]
 
     # check cross references table integrality
-    for k,v in SYMBOL.items():
+    for k,v in SYMBOL.iteritems():
         if v.defn == None:
             # symbol not defined
             INVALID_SYMBOL.append(k)
@@ -1308,7 +1308,7 @@ def __ADDRESSING(lbl, csect_lbl, ex_dis = 0):
     rv = [ 4096, None, '-1', ]  # init to least priority USING (non-exsit)
     eq_const = __HAS_EQ(lbl, ESD[csect_lbl][0].id)
 
-    for k,v in ACTIVE_USING.items():
+    for k,v in ACTIVE_USING.iteritems():
         if __IS_IN_RANGE(lbl, ex_dis, USING_MAP[v,k], ESD[csect_lbl][0]):
             if lbl[0] == '*':
                 dis = MNEMONIC[ int( lbl[1:] ) ][1] - USING_MAP[v,k].u_value
@@ -1341,7 +1341,7 @@ def __IS_ADDRESSABLE(lbl, csect_lbl, ex_dis = 0):
         return False            # not an *, a symbol, nor a =constant
     if len(ACTIVE_USING) == 0:
         return False            # not in the domain of any USING
-    for k,v in ACTIVE_USING.items():
+    for k,v in ACTIVE_USING.iteritems():
         if __IS_IN_RANGE(lbl, ex_dis, USING_MAP[v,k], ESD[csect_lbl][0]):
             return True
     return False                # not in the range of any USING

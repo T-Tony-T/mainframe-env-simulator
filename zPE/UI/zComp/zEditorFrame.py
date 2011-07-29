@@ -905,6 +905,12 @@ class zEdit(z_ABC, gtk.VBox):
         self.show_all()
 
 
+    def save_buffer(self, buff):
+        return self.center.buffer_save(buff)
+
+    def save_buffer_as(self, buff):
+        return self.center.buffer_save_as(buff)
+
     def rm_buffer(self, buff, force = False):
         return zEditBuffer.rm_buffer(buff, force)
 
@@ -924,10 +930,10 @@ class zEdit(z_ABC, gtk.VBox):
     @staticmethod
     def set_last_line(lastline):
         if zEdit.__last_line != lastline:
-            if zEdit.__last_line and zEdit.__last_line.handler_is_connected(zEdit.__last_line_sig_id):
-                zEdit.__last_line.disconnect(zEdit.__last_line_sig_id)
+            if zEdit.__last_line:
+                zEdit.__last_line.reset()
             zEdit.__last_line = lastline
-            zEdit.__last_line_sig_id = zEdit.__last_line.connect('key-press-event', zEdit._sig_key_pressed)
+            zEdit.__last_line.connect('key-press-event', zEdit._sig_key_pressed)
 
     @staticmethod
     def get_style():
@@ -1105,6 +1111,7 @@ class zEditBuffer(z_ABC):
         zEditBuffer.reg_emit('buffer_list_modified', self)
 
         # fetch content
+        self.modified = None
         if self.type == 'file':
             self.buffer = gtk.TextBuffer()
 
@@ -1120,14 +1127,31 @@ class zEditBuffer(z_ABC):
             else:
                 # new file
                 pass
-            self.modified = False
+            self.set_modified(False)
+
+            # connect internal signals
+            self.buffer.connect('changed', self._sig_buffer_changed)
+
         elif buffer_type in [ 'dir', 'disp' ]:
             self.buffer = None
-            self.modified = None
+            self.set_modified(None)
         else:
             raise TypeError
 
         return self
+
+
+    ### internal signal definition
+    def _sig_buffer_changed(self, textbuff):
+        self.set_modified(True)
+    ### end of internal signal definition
+
+
+    def set_modified(self, setting):
+        if setting != self.modified:
+            self.modified = setting
+            # mark, emit signel here
+            # remember to check `None`
 
 
     @staticmethod
@@ -1151,6 +1175,26 @@ class zEditBuffer(z_ABC):
         zEditBuffer.reg_emit('buffer_list_modified')
 
         zEditBuffer._on_restore = False
+
+
+    def flush(self):
+        if self.path:
+            full_path = os.path.join(* self.path)
+            if not self.modified:
+                return full_path, '(No changes need to be saved.)'
+            elif io_encap.flush(self):
+                self.set_modified(False)
+                return full_path, 'buffer saved.'
+            else:
+                return full_path, '(Cannot save the buffer. Permission denied.)'
+        else:
+            if not self.modified:
+                return self.name, '(No changes need to be saved.)'
+            else:
+                raise ValueError('Cannot find the path! Use flush_to(path) instead.')
+
+    def flush_to(self, path):
+        print os.path.split(os.path.abspath(os.path.expanduser(path)))
 
 
     @staticmethod

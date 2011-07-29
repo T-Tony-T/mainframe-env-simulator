@@ -51,7 +51,7 @@ COLOR_LIST = {
     'yellow'            : '#FFFF00',
     }
 
-INVERSE_COLOR_LIST = dict( [ (v, k) for (k, v) in COLOR_LIST.items() ] )
+INVERSE_COLOR_LIST = dict( [ (v, k) for (k, v) in COLOR_LIST.iteritems() ] )
 
 ## Configurable Definition
 DEFAULT = {
@@ -254,7 +254,7 @@ def init_key_binding():
     kb_style = Config['MISC']['key_binding']
     Config['FUNC_BINDING'] = dict(
         zip( DEFAULT_FUNC_KEY_BIND.keys(),
-             [ v[kb_style] for v in DEFAULT_FUNC_KEY_BIND.values() ]
+             [ v[kb_style] for v in DEFAULT_FUNC_KEY_BIND.itervalues() ]
              )
         )
     Config['KEY_BINDING'] = dict((v, k) for (k, v) in Config['FUNC_BINDING'].iteritems())
@@ -582,7 +582,7 @@ def reset_key_binding():
     for style in DEFAULT_FUNC_KEY_BIND_KEY:
         func_binding = dict(
             zip( DEFAULT_FUNC_KEY_BIND.keys(),
-                 [ v[style] for v in DEFAULT_FUNC_KEY_BIND.values() ]
+                 [ v[style] for v in DEFAULT_FUNC_KEY_BIND.itervalues() ]
                  )
             )
         __TOUCH_KEY(style, func_binding)

@@ -19,6 +19,8 @@ class BaseFrame(object):
     def __init__(self):
         self.__key_binding_func = {
             'buffer_open'               : lambda *arg: self._sig_buff_manip(None, 'open'),
+            'buffer_save'               : lambda *arg: self._sig_buff_manip(None, 'save'),
+            'buffer_save_as'            : lambda *arg: self._sig_buff_manip(None, 'save-as'),
             'buffer_close'              : lambda *arg: self._sig_buff_manip(None, 'close'),
 
             'prog_show_config'          : lambda *arg: ( self.config_window.open(), self.lastline.clear(), ),
@@ -155,12 +157,14 @@ class BaseFrame(object):
 
 
         ## connect signals
-        self.tool_buff_open.connect('clicked', self._sig_buff_manip, 'open')
-        self.tool_buff_close.connect('clicked', self._sig_buff_manip, 'close')
+        self.tool_buff_open.connect(   'clicked', self._sig_buff_manip, 'open')
+        self.tool_buff_save.connect(   'clicked', self._sig_buff_manip, 'save')
+        self.tool_buff_save_as.connect('clicked', self._sig_buff_manip, 'save-as')
+        self.tool_buff_close.connect(  'clicked', self._sig_buff_manip, 'close')
 
-        self.tool_win_split_horz.connect('clicked', self._sig_sw_manip, 'split_horz')
-        self.tool_win_split_vert.connect('clicked', self._sig_sw_manip, 'split_vert')
-        self.tool_win_delete.connect('clicked', self._sig_sw_manip, 'delete')
+        self.tool_win_split_horz.connect(  'clicked', self._sig_sw_manip, 'split_horz')
+        self.tool_win_split_vert.connect(  'clicked', self._sig_sw_manip, 'split_vert')
+        self.tool_win_delete.connect(      'clicked', self._sig_sw_manip, 'delete')
         self.tool_win_delete_other.connect('clicked', self._sig_sw_manip, 'delete_other')
 
         self.tool_submit.connect('clicked', self._sig_submit, 'direct')
@@ -231,12 +235,12 @@ class BaseFrame(object):
         is_dir  = (buff.type == 'dir')
 
         # update toolbar
-        self.tool_buff_open.set_property('sensitive', not is_dir)
-        self.tool_buff_save.set_property('sensitive', is_file and buff.modified)
+        self.tool_buff_open.set_property(   'sensitive', not is_dir)
+        self.tool_buff_save.set_property(   'sensitive', is_file and buff.modified)
         self.tool_buff_save_as.set_property('sensitive', is_file and buff.modified)
-        self.tool_buff_close.set_property('sensitive', is_file)
+        self.tool_buff_close.set_property(  'sensitive', is_file)
 
-        self.tool_submit.set_property('sensitive', buff.path)
+        self.tool_submit.set_property(     'sensitive', buff.path)
         self.tool_submit_wrap.set_property('sensitive', buff.path)
     ### end of signal-like auto-update function
 
@@ -257,10 +261,13 @@ class BaseFrame(object):
                     frame.set_buffer(buff.path[:-1], 'dir')
                 else:
                     frame.set_buffer(None, 'dir')
+                msg = None
+            else:
+                msg = buff.name, '(Already in browser mood.)'
         elif task == 'save':
-            pass
+            msg = frame.save_buffer(buff)
         elif task == 'save-as':
-            pass
+            msg = frame.save_buffer_as(buff)
         elif task == 'close':
             if buff.modified:
                 need_save = False # ask for saving here
@@ -273,10 +280,13 @@ class BaseFrame(object):
             else:
                 # force quit (without saving)
                 msg = frame.rm_buffer(buff, force = True)
-
-            self.lastline.set_text('', '{0}: {1}'.format(* msg))
         else:
             raise KeyError
+
+        if msg:
+            self.lastline.set_text('', '{0}: {1}'.format(* msg))
+        else:
+            self.lastline.clear()
 
 
     def _sig_quit(self, widget, data = None):

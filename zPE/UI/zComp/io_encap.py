@@ -63,7 +63,10 @@ def flush(buff):
     if buff.path == None:
         return False
 
-    fp = open_file(buff.path, 'w')
+    try:
+        fp = open_file(buff.path, 'w')
+    except:
+        return False
     tb = buff.buffer
     fp.write(tb.get_text(tb.get_start_iter(), tb.get_end_iter(), True))
     return True

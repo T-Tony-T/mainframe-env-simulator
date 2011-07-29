@@ -142,6 +142,10 @@ class zDisplayPanel(gtk.VBox):
         self.job_panel.connect( 'cursor-changed', self._sig_job_selected)
         self.step_panel.connect('cursor-changed', self._sig_step_selected)
 
+        self.job_panel.connect( 'button-press-event', self._sig_button_press)
+        self.step_panel.connect('button-press-event', self._sig_button_press)
+
+
         # initiate the timer to watch the overall settings
         gobject.timeout_add(20, self.__watch_overall_settings)
 
@@ -176,6 +180,46 @@ class zDisplayPanel(gtk.VBox):
         self.__active_step = dd_name
 
         self.update_content()
+
+
+    def _sig_button_press(self, treeview, event, data = None):
+        if event.button != 3:
+            return
+
+        # create the menu
+        menu = gtk.Menu()
+
+        # fill the menu
+        try:
+            ( tree_path, tree_col, dummy_x, dummy_y ) = treeview.get_path_at_pos(int(event.x), int(event.y))
+        except:
+            # not on a row; select the last row
+            try:
+                iterator = treeview.model.get_iter_first()
+                while treeview.model.iter_next(iterator):
+                    iterator = treeview.model.iter_next(iterator)
+                tree_path = treeview.model.get_path(iterator)
+            except:
+                # no row in the listing, early return
+                return
+        treeview.set_cursor(tree_path)
+
+        mi_purge     = gtk.MenuItem('_Purge Selected Job')
+        mi_purge_all = gtk.MenuItem('P_urge All Jobs')
+
+        menu.append(mi_purge)
+        menu.append(mi_purge_all)
+
+        mi_purge.connect(    'activate', self._sig_purge_jobs, self.__active_job)
+        mi_purge_all.connect('activate', self._sig_purge_jobs, '%')
+
+
+        # popup the menu
+        menu.show_all()
+        menu.popup(None, None, None, event.button, event.time)
+
+    def _sig_purge_jobs(self, menuitem, job_pttn):
+        self.delete_jobs(job_pttn)
     ### end of signal definition
 
 
@@ -240,12 +284,12 @@ class zDisplayPanel(gtk.VBox):
         return self.__conn != None
 
 
-    def delete_job(self, job_id):
+    def delete_jobs(self, job_pttn):
         stmt = '''DELETE
                     FROM  JOB
-                   WHERE  Job_ID = ?
+                   WHERE  Job_ID LIKE ?
                '''
-        self.__c.execute(stmt, (job_id,))
+        self.__c.execute(stmt, (job_pttn,))
         self.__conn.commit()
 
 
@@ -302,6 +346,13 @@ class zDisplayPanel(gtk.VBox):
         else:
             zDisplayPanel._DB_FILE = None
     ### end of database manipulation
+
+
+    def buffer_save(self, buff):
+        return self.buffer_save_as(buff)
+
+    def buffer_save_as(self, buff):
+        print self.get_editor().get_last_line()
 
 
     def get_editor(self):
@@ -463,11 +514,11 @@ class zListing(gtk.TreeView):
         return super(zListing, self).remove_column(column)
 
     def insert_column_with_attributes(self, *arg):
-        raise NotImplementedError('method not implemented. use insert_column() followed by set_attributes() instead.')
+        raise NotImplementedError('Method not implemented. use insert_column() followed by set_attributes() instead.')
     def insert_column_with_data_func(self, *arg):
-        raise NotImplementedError('method not implemented. use insert_column() followed by set_cell_data_func() instead.')
+        raise NotImplementedError('Method not implemented. use insert_column() followed by set_cell_data_func() instead.')
     def set_reorderable(self, setting):
-        raise NotImplementedError('method not implemented. try to handle drag and drop manually.')
+        raise NotImplementedError('Method not implemented. try to handle drag and drop manually.')
 
 
     def move_column_after(column, base_column):
@@ -729,6 +780,13 @@ class zFileManager(gtk.VBox):
         if not self.get_editor():
             raise ReferenceError('No editor set! Use `set_editor(editor)` first.')
         self.get_editor().set_buffer(fn_list, 'file')
+
+
+    def buffer_save(self, buff):
+        return buff.name, '(Cannot save this buffer)'
+
+    def buffer_save_as(self, buff):
+        return self.buffer_save(buff)
 
 
     def get_editor(self):

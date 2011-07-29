@@ -174,7 +174,7 @@ class Step(object):             # for JCL['step'][*]
                     abort(9, 'Error: ', ddname, ': Invalid DD name.\n')
                 if ddname in self.__items:
                     abort(9, 'Error: ', ddname, ': Duplicated DD names.\n')
-                for k,v in ddcard.items():
+                for k,v in ddcard.iteritems():
                     if k not in ['SYSOUT', 'DSN', 'DISP']:
                         abort(9, 'Error: ', k, '=', v,
                               ': Un-recognized option\n')
