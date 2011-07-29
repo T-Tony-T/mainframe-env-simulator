@@ -645,7 +645,6 @@ class zFileManager(gtk.VBox):
         # connect signal for internal usage
         self.path_entry.connect('key-press-event', zEntry._sig_key_pressed, 'path')
         self.path_entry.connect('activate', self._sig_open_file_from_entry)
-        self.path_entry.connect('activate', self._sig_open_file_from_entry)
         self.treeview.connect('row-activated', self._sig_open_file_from_tree)
         self.treeview.fn_cell_rdr.connect('edited', self._sig_entry_edited)
 

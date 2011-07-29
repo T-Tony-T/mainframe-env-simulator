@@ -1132,7 +1132,7 @@ class zEditBuffer(z_ABC):
                     raise BufferError('Failed to fetch the content.')
             else:
                 # new file
-                pass
+                pass            # passive alloc (copy on write)
             self.set_modified(False)
 
             # connect internal signals
