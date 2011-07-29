@@ -58,6 +58,11 @@ class zEdit(z_ABC, gtk.VBox):
     # see zEdit._sig_key_pressed() => 'emacs'
     __mx_commanding = False
     __mx_command_content = ''
+    @staticmethod
+    def mx_commanding_reset():
+        zEdit.__mx_commanding = False
+        zEdit.__mx_command_content = ''
+
     __mx_command_prefix = 'M-x '
 
     _focus = None
@@ -407,9 +412,9 @@ class zEdit(z_ABC, gtk.VBox):
                 try:
                     if widget.get_editable():
                         if re.match(r'^[\x20-\x7e]$', stroke):
-                            widget.insert_text(stroke)
+                            widget.insert_text(stroke, zEdit.__last_line)
                         elif stroke.upper() in zEdit.__ctrl_char_map:
-                            widget.insert_text(zEdit.__ctrl_char_map[stroke.upper()])
+                            widget.insert_text(zEdit.__ctrl_char_map[stroke.upper()], zEdit.__last_line)
                 except:
                     pass
                 zEdit.__escaping = False
@@ -432,8 +437,7 @@ class zEdit(z_ABC, gtk.VBox):
                 else:
                     # no M-x commanding, or focus in lastline
                     # reset lastline
-                    zEdit.__mx_commanding = False
-                    zEdit.__mx_command_content = ''
+                    zEdit.mx_commanding_reset()
 
                     zEdit.__last_line.unlock()
                     zEdit.__last_line.set_editable(False)
@@ -451,16 +455,14 @@ class zEdit(z_ABC, gtk.VBox):
                 # on M-x Commanding, Commanding *MUST NOT* be initiated
                 if re.match(r'^[\x20-\x7e]$', stroke):
                     # regular keypress
-                    widget.insert_text(stroke)
+                    widget.insert_text(stroke, zEdit.__last_line)
                     zEdit.__mx_command_content = widget.get_text()
                     return True
                 elif stroke.upper() == 'RETURN':
                     # Enter key pressed
 
                     # reset last line
-                    zEdit.__last_line.unlock()
-                    zEdit.__last_line.set_editable(False)
-                    zEdit.__last_line.clear()
+                    zEdit.__last_line.reset() # this is to clear all bindings with the lastline
 
                     if zEdit.__mx_command_content in reg_func:
                         # is a valid functionality
@@ -478,8 +480,7 @@ class zEdit(z_ABC, gtk.VBox):
                             '',
                             '({0}: no such function)'.format(zEdit.__mx_command_content)
                             )
-                    zEdit.__mx_commanding = False
-                    zEdit.__mx_command_content = ''
+                    zEdit.mx_commanding_reset()
                     if zEdit._focus:
                         zEdit._focus.grab_focus()
                     return True
@@ -496,8 +497,10 @@ class zEdit(z_ABC, gtk.VBox):
                         # initiate M-x Commanding
                         zEdit.__mx_commanding = True
                         zEdit.__last_line.set_text(zEdit.__mx_command_prefix, '')
-                        zEdit.__last_line.lock()
                         zEdit.__last_line.set_editable(True)
+
+                        zEdit.__last_line.connect('key-press-event', zEdit._sig_key_pressed)
+                        zEdit.__last_line.lock(zEdit.mx_commanding_reset)
                     return True
                 elif stroke == 'C-q':
                     # start C-q Escaping
@@ -933,7 +936,6 @@ class zEdit(z_ABC, gtk.VBox):
             if zEdit.__last_line:
                 zEdit.__last_line.reset()
             zEdit.__last_line = lastline
-            zEdit.__last_line.connect('key-press-event', zEdit._sig_key_pressed)
 
     @staticmethod
     def get_style():
@@ -1038,7 +1040,7 @@ class zEditBuffer(z_ABC):
                 # both name and type match => system-opened buffer
                 buff_group = 'system'
                 self.name = buffer_path
-                self.path = None # path is ".name", no information for ".path"
+                self.path = None # path is "buffer.name", no information for "buffer.path"
                 self.type = buffer_type
             else:
                 # not system-opened buffer => error
@@ -1047,13 +1049,17 @@ class zEditBuffer(z_ABC):
             # file with a path => user-opened buffer
             buff_group = 'user'
             self.name = buffer_path[-1]
-            self.path = buffer_path
+            self.path = os.path.split( # normalize path
+                os.path.abspath(os.path.expanduser(
+                        os.path.join(* buffer_path)
+                        ))
+                )
             self.type = 'file'  # must be type::file
         else:
             # not type::file, must be system-opened buffer
             buff_group = 'system'
             self.name = zEditBuffer.DEFAULT_BUFFER[buffer_type]
-            self.path = buffer_path # not type::file, no limitation on ".path" property
+            self.path = buffer_path # not type::file, no limitation on "buffer.path" property
             self.type = buffer_type
 
         # update buffer list
@@ -1186,7 +1192,7 @@ class zEditBuffer(z_ABC):
                 self.set_modified(False)
                 return full_path, 'buffer saved.'
             else:
-                return full_path, '(Cannot save the buffer. Permission denied.)'
+                return full_path, '(Cannot save the buffer! Permission denied!)'
         else:
             if not self.modified:
                 return self.name, '(No changes need to be saved.)'
@@ -1194,7 +1200,21 @@ class zEditBuffer(z_ABC):
                 raise ValueError('Cannot find the path! Use flush_to(path) instead.')
 
     def flush_to(self, path):
-        print os.path.split(os.path.abspath(os.path.expanduser(path)))
+        if self.path and os.path.samefile(os.path.join(* self.path), os.path.join(* path)):
+            return self.flush()
+
+        if self.name in zEditBuffer.buff_group['system']:
+            # system-opened buffer, cannot be renamed
+
+            # create a new buffer
+            new_buff = zEditBuffer(path, 'file')
+            if new_buff in zEditBuffer.buff_list.itervalues():
+                # buffer already opened, refuse renaming
+                return path[-1], '(Cannot write to an existing buffer!)'
+
+            
+
+        print self.name, self.type, self.path, path
 
 
     @staticmethod

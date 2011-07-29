@@ -17,13 +17,177 @@ class zEntry(gtk.Entry):
     def __init__(self):
         super(zEntry, self).__init__()
 
-        self.try_completing = 0 # how many times tring completion; reset to 0 if completion success
+        self.__comp_list = []       # completion list
+        self.__try_completing = 0   # how many times tring completion; reset to 0 if completion success
+
+        self.__locked_widget = None # the widget that locks the entry
 
 
-    def insert_text(self, text):
+    ### public signal definition
+    @staticmethod
+    def _sig_key_pressed(entry, event, task = None):
+        '''
+        task = None
+            the task that the entry is asked to complete.
+            Could be one of the following:
+              -  None  : no special rules applied.
+              - 'path' : apply completion and checkings for getting a path.
+              - 'file' : same to 'path' except text entered must not be a dir.
+              - 'dir'  : same to 'path' except text entered must not be a file.
+        '''
+        if event.type != gtk.gdk.KEY_PRESS:
+            return False
+
+        if event.is_modifier:
+            return False
+
+        ctrl_mod_mask = gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
+
+        if (event.state & ctrl_mod_mask) == ctrl_mod_mask:
+            stroke = 'C-M-' + gtk.gdk.keyval_name(event.keyval)
+
+        elif event.state & gtk.gdk.CONTROL_MASK:
+            stroke = 'C-' + gtk.gdk.keyval_name(event.keyval)
+
+        elif event.state & gtk.gdk.MOD1_MASK:
+            stroke = 'M-' + gtk.gdk.keyval_name(event.keyval)
+
+        else:
+            stroke = gtk.gdk.keyval_name(event.keyval)
+
+
+        if stroke == 'C-g':
+            # at any time, this means 'cancel'
+            entry.__unlock()
+            entry.set_text('')  # clear path to cancel
+            return True
+        elif stroke.upper() == 'RETURN':
+            text_entered = entry.get_text()
+            if text_entered:
+                if ( (task == 'file' and not os.path.isdir(text_entered) ) or
+                     (task == 'dir'  and not os.path.isfile(text_entered)) or
+                     task in [ None, 'path' ] # tasks that require no checkings
+                     ):
+                    entry.__unlock()
+                    return False # pass the 'enter' on to emit 'activate' signel
+                else:
+                    entry.popup_comp_list()
+            return True
+        elif stroke.upper() == 'TAB':
+            entry.__try_completing += 1
+
+            if task in [ 'path', 'dir', 'file' ]:
+                curr_path = entry.get_text()
+                if curr_path:
+                    # normalize the path
+                    curr_path = os.path.abspath(os.path.expanduser(curr_path))
+                    # get the completion list
+                    if os.path.isdir(curr_path):
+                        entry.set_comp_list( os.listdir(curr_path) )
+                        curr_name = ''
+                    else:
+                        ( curr_path, curr_name ) = os.path.split(curr_path)
+                        entry.set_comp_list([ fn for fn in os.listdir(curr_path)
+                                              if fn.startswith(curr_name)
+                                              ])
+                    if task == 'dir':
+                        entry.set_comp_list([ fn for fn in entry.get_comp_list()
+                                              if os.path.isdir(os.path.join(curr_path, fn))
+                                              ])
+                    # check for unique complete
+                    if not entry.get_comp_list_len():
+                        return True # no completion, early return
+                    elif entry.get_comp_list_len() == 1:
+                        # exact match, complete it
+                        curr_path = os.path.join(curr_path, entry.get_comp_list()[0])
+                        if os.path.isdir(curr_path):
+                            curr_path += os.path.sep
+
+                        entry.__try_completing = 0
+                    else:
+                        # check for max complete
+                        for indx in range(len(curr_name), len(entry.get_comp_list()[0])):
+                            next_char = entry.get_comp_list()[0][indx]
+                            conflict = False
+                            for item in entry.get_comp_list()[1:]:
+                                if indx == len(item) or next_char != item[indx]:
+                                    conflict = True
+                                    break
+                            if conflict:
+                                break
+                            else:
+                                # has at least 1 char completed
+                                entry.__try_completing = 0
+                                curr_name += next_char
+                        curr_path = os.path.join(curr_path, curr_name)
+                        if entry.__try_completing > 1:
+                            # more than one try
+                            entry.popup_comp_list()
+
+                    entry.__set_text(curr_path) # force to set the text
+                    entry.set_position(-1)
+
+            return True
+
+        return False
+    ### end of public signal definition
+
+
+    ### overridden function definition
+    def insert_text(self, text, widget = None):
+        if self.is_locked() and self.__locked_widget != widget:
+            raise AssertionError('Entry is locked. Permission denied.')
+
         pos = self.get_position()
-        super(gtk.Entry, self).insert_text(text, pos)
+        super(zEntry, self).insert_text(text, pos)
         self.set_position(pos + len(text))
+
+    def set_text(self, text, widget = None):
+        if self.is_locked() and self.__locked_widget != widget:
+            raise AssertionError('Entry is locked. Permission denied.')
+
+        self.__set_text(text)
+    ### end of overridden function definition
+
+
+    ### completion related functions
+    def get_comp_list(self):
+        return self.__comp_list
+
+    def get_comp_list_len(self):
+        return len(self.__comp_list)
+
+    def set_comp_list(self, comp_list):
+        self.__comp_list = comp_list
+
+    def popup_comp_list(self):
+        print 'list completion not implemented yet'
+    ### end of completion related functions
+
+
+    def is_locked(self):
+        return self.__locked_widget
+
+    def lock(self, widget):
+        self.__locked_widget = widget
+
+    def unlock(self, widget):
+        if not self.__locked_widget:
+            return              # no need to unlock, early return
+
+        if widget == self.__locked_widget:
+            self.__unlock()
+        else:
+            raise AssertionError('Cannot unlock the entry. Permission denied.')
+
+
+    ### supporting functions
+    def __set_text(self, text):
+        super(zEntry, self).set_text(text)
+
+    def __unlock(self):
+        self.__locked_widget = None
+    ### end of supporting functions
 
 
 ######## ######## ######## ######## ########
@@ -39,8 +203,10 @@ class zLastLine(gtk.HBox):
         '''
         super(zLastLine, self).__init__()
 
+        self.__n_alternation = 0    # initiate the blinking counter to 0
+        self.__sig_id = {}          # stores all signals connected to the interactive line
 
-        self.__sig_id = {}      # stores all signals connected to the interactive line
+        self.__lock_reset_func = None # see lock() and reset() for more information
 
         # create widgets
         self.__label = gtk.Label(label)
@@ -58,7 +224,6 @@ class zLastLine(gtk.HBox):
         # init flags
         self.__editable = None
         self.__force_focus = None
-        self.__locked = False   # if locked, all `set_*()` refer to `blink()`
 
         # connect auto-update items
         zTheme.register('update_font', zTheme._sig_update_font_modify, self.__label)
@@ -97,93 +262,6 @@ class zLastLine(gtk.HBox):
     ### end of focus related signal
 
 
-    ### public signal definition
-    @staticmethod
-    def _sig_key_pressed(widget, event, task = 'path'):
-        if event.type != gtk.gdk.KEY_PRESS:
-            return False
-
-        if event.is_modifier:
-            return False
-
-        ctrl_mod_mask = gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
-
-        if (event.state & ctrl_mod_mask) == ctrl_mod_mask:
-            stroke = 'C-M-' + gtk.gdk.keyval_name(event.keyval)
-
-        elif event.state & gtk.gdk.CONTROL_MASK:
-            stroke = 'C-' + gtk.gdk.keyval_name(event.keyval)
-
-        elif event.state & gtk.gdk.MOD1_MASK:
-            stroke = 'M-' + gtk.gdk.keyval_name(event.keyval)
-
-        else:
-            stroke = gtk.gdk.keyval_name(event.keyval)
-
-
-        if stroke == 'C-g':
-            # at any time, this means 'cancel'
-            widget.lastline.unlock()
-            widget.lastline.set_text('', '')
-            return True
-        elif stroke.upper() == 'RETURN':
-            if widget.get_text():
-                widget.lastline.unlock()
-            else:
-                widget.lastline.blink_text()
-            return True
-        elif stroke.upper() == 'TAB':
-            widget.try_completing += 1
-
-            if task == 'path':
-                curr_path = widget.get_text()
-                if curr_path:
-                    # normalize the path
-                    curr_path = os.path.abspath(os.path.expanduser(curr_path))
-                    # get the completion list
-                    if os.path.isdir(curr_path):
-                        comp_list = os.listdir(curr_path)
-                        curr_name = ''
-                    else:
-                        ( curr_path, curr_name ) = os.path.split(curr_path)
-                        comp_list = [ fn for fn in os.listdir(curr_path) if fn.startswith(curr_name) ]
-                    # check for unique complete
-                    if len(comp_list) == 1:
-                        # exact match, complete it
-                        curr_path = os.path.join(curr_path, comp_list[0])
-                        if os.path.isdir(curr_path):
-                            curr_path += os.path.sep
-
-                        widget.try_completing = 0
-                    else:
-                        # check for max complete
-                        for indx in range(len(curr_name), len(comp_list[0])):
-                            next_char = comp_list[0][indx]
-                            conflict = False
-                            for item in comp_list[1:]:
-                                if indx == len(item) or next_char != item[indx]:
-                                    conflict = True
-                                    break
-                            if conflict:
-                                break
-                            else:
-                                # has at least 1 char completed
-                                widget.try_completing = 0
-                                curr_name += next_char
-                        curr_path = os.path.join(curr_path, curr_name)
-                        if widget.try_completing > 1:
-                            # more than one try
-                            print 'list completion not implemented yet'
-
-                    widget.set_text(curr_path)
-                    widget.set_position(-1)
-
-            return True
-
-        return False
-    ### end of public signal definition
-
-
     ### overridden function definition
     def connect(self, sig, callback, *data):
         if sig in self.__sig_id:
@@ -208,13 +286,16 @@ class zLastLine(gtk.HBox):
 
 
     def is_locked(self):
-        return self.__locked
+        return self.__line_interactive.is_locked()
 
-    def lock(self):
-        self.__locked = True
+    def lock(self, reset_func = None):
+        '''if reset_func is set, it will be called when reset() is called'''
+        if reset_func:
+            self.__lock_reset_func = reset_func
+        self.__line_interactive.lock(self)
 
     def unlock(self):
-        self.__locked = False
+        self.__line_interactive.unlock(self)
 
 
     def clear(self):
@@ -227,6 +308,10 @@ class zLastLine(gtk.HBox):
             if self.__line_interactive.handler_is_connected(v):
                 self.__line_interactive.disconnect(v)
         self.__sig_id = {}
+
+        if self.__lock_reset_func:
+            self.__lock_reset_func()
+            self.__lock_reset_func = None
 
         self.unlock()
         self.set_editable(False)
@@ -252,24 +337,30 @@ class zLastLine(gtk.HBox):
             self.blink(hlt_text, entry_text)
         else:
             self.__line_highlight.set_text(hlt_text)
-            self.__line_interactive.set_text(entry_text)
+            self.__line_interactive.set_text(entry_text, self)
             self.__line_interactive.set_position(-1)
     ### end of overridden function definition
 
 
     def blink(self, hlt_text, entry_text, period = 1):
+        if self.__n_alternation:
+            return              # already on blinking, early return
+
         self.blink_set(
             hlt_text, entry_text, period,
             self.__line_highlight.get_text(), self.__line_interactive.get_text()
             )
 
     def blink_text(self, period = 0.09):
+        if self.__n_alternation:
+            return              # already on blinking, early return
+
         hlt_text = self.__line_highlight.get_text()
         entry_text = self.__line_interactive.get_text()
 
         # initial set
         self.__line_highlight.set_text('')
-        self.__line_interactive.set_text(hlt_text)
+        self.__line_interactive.set_text(hlt_text, self)
 
         # register the timer to alter the texts three times
         self.__set_alternation(2)
@@ -286,9 +377,12 @@ class zLastLine(gtk.HBox):
                   period = 1,
                   set_hlt_text = '', set_entry_text = ''
                   ):
+        if self.__n_alternation:
+            return              # already on blinking, early return
+
         # initial set
         self.__line_highlight.set_text(blk_hlt_text)
-        self.__line_interactive.set_text(blk_entry_text)
+        self.__line_interactive.set_text(blk_entry_text, self)
 
         # register the timer to alter the texts exactly once
         self.__set_alternation(1)
@@ -336,6 +430,7 @@ class zLastLine(gtk.HBox):
             self.__n_alternation = n_alternation
         else:
             self.__n_alternation -= 1
+
         self.set_editable(not self.__n_alternation, ignore_focus = self.__n_alternation)
 
 
@@ -346,7 +441,7 @@ class zLastLine(gtk.HBox):
         indx = self.__n_alternation % 2
 
         self.__line_highlight.set_text(hlt_text[indx])
-        self.__line_interactive.set_text(entry_text[indx])
+        self.__line_interactive.set_text(entry_text[indx], self)
 
         self.__set_timer()
 
@@ -374,9 +469,17 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         self.center = self
 
     ### overridden function definition
-    def insert_text(self, text):
+    def insert_text(self, text, data = None):
         buff = self.get_buffer()
         buff.insert_at_cursor(text)
+
+    def get_text(self):
+        buff = self.get_buffer()
+        buff.get_text()
+
+    def set_text(self, text):
+        buff = self.get_buffer()
+        buff.set_text(text)
     ### end of overridden function definition
 
 
@@ -398,7 +501,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
             lastline.set_editable(True)
             lastline.set_force_focus(True)
             lastline.set_text('Write File: ', os.path.join(*path))
-            lastline.connect('key-press-event', zLastLine._sig_key_pressed, 'path')
+            lastline.connect('key-press-event', zEntry._sig_key_pressed, 'file')
 
             # lock the lastline until getting the path
             lastline.lock()
@@ -432,7 +535,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
                 chooser.destroy()
                 return None     # cancelled
 
-        print path
+        return buff.flush_to(path)
 
 
     def get_editor(self):

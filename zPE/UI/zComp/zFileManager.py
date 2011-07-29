@@ -20,6 +20,7 @@ import io_encap
 from z_support import XPM, PIXBUF
 
 from zBase import zTheme
+from zText import zEntry, zTextView
 
 import os, stat, time
 import sqlite3
@@ -118,7 +119,7 @@ class zDisplayPanel(gtk.VBox):
         self.minor_paned.pack1(scrolled_job, True, True)
         self.minor_paned.pack2(scrolled_step, True, True)
 
-        self.center = gtk.TextView()
+        self.center = zTextView(self.get_editor())
         self.center.set_editable(False)
         self.center.set_cursor_visible(False)
 
@@ -352,7 +353,7 @@ class zDisplayPanel(gtk.VBox):
         return self.buffer_save_as(buff)
 
     def buffer_save_as(self, buff):
-        print self.get_editor().get_last_line()
+        return self.center.buffer_save_as(buff)
 
 
     def get_editor(self):
@@ -360,10 +361,12 @@ class zDisplayPanel(gtk.VBox):
 
     def set_editor(self, editor):
         self.__editor_frame = editor
+        if not self.__on_init:
+            self.center.set_editor(editor)
 
 
     def clear_content(self):
-        self.center.get_buffer().set_text('')
+        self.center.set_text('')
 
     def update_content(self):
         if self.__active_step:
@@ -372,7 +375,7 @@ class zDisplayPanel(gtk.VBox):
             text = self.fetch_content(self.__active_job)
         else:
             text = ''
-        self.center.get_buffer().set_text(text)
+        self.center.set_text(text)
 
     def clear_job_list(self):
         self.job_panel.model.clear()
@@ -587,7 +590,7 @@ class zFileManager(gtk.VBox):
 
         path_box = gtk.HBox()
         self.path_entry_label = gtk.Label('Path: ')
-        self.path_entry = gtk.Entry()
+        self.path_entry = zEntry()
         path_box.pack_start(self.path_entry_label, False, False, 0)
         path_box.pack_start(self.path_entry, True, True, 0)
 
@@ -640,6 +643,8 @@ class zFileManager(gtk.VBox):
         self.treeview.connect(  'focus-out-event', self._focus_evnt_redirect, 'focus-out-event')
 
         # connect signal for internal usage
+        self.path_entry.connect('key-press-event', zEntry._sig_key_pressed, 'path')
+        self.path_entry.connect('activate', self._sig_open_file_from_entry)
         self.path_entry.connect('activate', self._sig_open_file_from_entry)
         self.treeview.connect('row-activated', self._sig_open_file_from_tree)
         self.treeview.fn_cell_rdr.connect('edited', self._sig_entry_edited)
