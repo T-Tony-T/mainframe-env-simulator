@@ -17,32 +17,43 @@ class BaseFrame(object):
 
 
     def __init__(self):
-        self.__key_binding_func = {
-            'buffer_open'               : lambda *arg: self._sig_buff_manip(None, 'open'),
-            'buffer_save'               : lambda *arg: self._sig_buff_manip(None, 'save'),
-            'buffer_save_as'            : lambda *arg: self._sig_buff_manip(None, 'save-as'),
-            'buffer_close'              : lambda *arg: self._sig_buff_manip(None, 'close'),
-
+        self.__global_key_binding_func = {
             'prog_show_config'          : lambda *arg: ( self.config_window.open(), self.lastline.clear(), ),
             'prog_show_error'           : lambda *arg: ( self.err_console.open(),   self.lastline.clear(), ),
             'prog_quit'                 : lambda *arg: self._sig_quit(None),
 
+            'zPE_submit'                : lambda *arg: self._sig_submit(None, 'direct'),
+#            'zPE_submit_with_JCL'       : lambda *arg: self._sig_submit(None, 'wrap'),
+            }
+
+        # enable the global bindings for all listeners
+        zComp.zStrokeListener.global_add_func_registry(self.__global_key_binding_func.keys())
+        for func in self.__global_key_binding_func:
+            zComp.zStrokeListener.global_set_func_enabled(func, True)
+
+        # register callbacks for function bindings
+        for (func, cb) in self.__global_key_binding_func.iteritems():
+            zComp.zStrokeListener.global_register_func_callback(func, cb)
+
+        # override the default behavior of the buffer manipulation
+        zComp.zEdit.func_callback_map = {
+            'buffer_open'               : lambda *arg: self._sig_buff_manip(None, 'open'),
+            'buffer_save'               : lambda *arg: self._sig_buff_manip(None, 'save'),
+            'buffer_save_as'            : lambda *arg: self._sig_buff_manip(None, 'save-as'),
+            'buffer_close'              : lambda *arg: self._sig_buff_manip(None, 'close'),
+            }
+        # override the default behavior of the split-window manipulation
+        zComp.zSplitWindow.func_callback_map = {
             'window_split_horz'         : lambda *arg: self._sig_sw_manip(None, 'split_horz'),
             'window_split_vert'         : lambda *arg: self._sig_sw_manip(None, 'split_vert'),
             'window_delete'             : lambda *arg: self._sig_sw_manip(None, 'delete'),
             'window_delete_other'       : lambda *arg: self._sig_sw_manip(None, 'delete_other'),
-
-            'zPE_submit'                : lambda *arg: self._sig_submit(None, 'direct'),
-#            'zPE_submit_with_JCL'       : lambda *arg: self._sig_submit(None, 'wrap'),
             }
-        for key in conf.DEFAULT_FUNC_KEY_BIND:
-            zComp.zEdit.reg_add_registry(key)
-
 
         ### redirect STDOUT and STDERR to the error console
         self.err_console = zComp.zErrConsole('zPE Error Console', True)
-        sys.stdout = self.err_console
-        sys.stderr = self.err_console
+#        sys.stdout = self.err_console
+#        sys.stderr = self.err_console
 
         ### retrive configuration
         self.config_window = ConfigWindow()
@@ -170,9 +181,9 @@ class BaseFrame(object):
         self.tool_submit.connect('clicked', self._sig_submit, 'direct')
 #        self.tool_submit_wrap.connect('clicked', self._sig_submit, 'wrap')
 
-        self.tool_config.connect('clicked', self.__key_binding_func['prog_show_config'])
-        self.tool_err_console.connect('clicked', self.__key_binding_func['prog_show_error'])
-        self.tool_quit.connect('clicked', self.__key_binding_func['prog_quit'])
+        self.tool_config.connect('clicked', self.__global_key_binding_func['prog_show_config'])
+        self.tool_err_console.connect('clicked', self.__global_key_binding_func['prog_show_error'])
+        self.tool_quit.connect('clicked', self.__global_key_binding_func['prog_quit'])
 
 
         ### create main window
@@ -188,10 +199,8 @@ class BaseFrame(object):
         # add the last-line to the editor
         zComp.zEdit.set_last_line(self.lastline)
 
-        ### set accel
 
-        ## for root window
-        self.set_accel()
+        ### set accel
 
         ## for config window
         self.agr_conf = gtk.AccelGroup()
@@ -288,6 +297,8 @@ class BaseFrame(object):
         else:
             self.lastline.clear()
 
+        return self.lastline.get_text()[1]
+
 
     def _sig_quit(self, widget, data = None):
         #########################
@@ -352,14 +363,14 @@ class BaseFrame(object):
             sys.stderr.write(zsub.stdout.read())
 
             self.lastline.set_text(
-                basename + ': ',
-                'JOB submitted but aborted with {0}.'.format(rc)
+                '', '{0}: JOB submitted but aborted with {1}.'.format(basename, rc)
                 )
         else:
             self.lastline.set_text(
-                basename + ': ',
-                'JOB submitted with ID={0}, return value is {1}.'.format(zPE.conf.fetch_job_id(), rc)
+                '', '{0}: JOB submitted with ID={1}, return value is {2}.'.format(basename, zPE.conf.fetch_job_id(), rc)
                 )
+
+        return self.lastline.get_text()[1]
     ### end of top level signals
 
 
@@ -432,14 +443,6 @@ class BaseFrame(object):
 
         return new_frame
     ### end of callback functions for SplitWindow
-
-
-    ### key binding
-    def set_accel(self):
-        for (k, v) in conf.Config['FUNC_BINDING'].iteritems():
-            if k in self.__key_binding_func:
-                zComp.zEdit.register(k, self.__key_binding_func[k], self)
-    ### end of key binding
 
 
     def main(self):
@@ -884,8 +887,8 @@ class ConfigWindow(gtk.Window):
 
             conf.read_key_binding()
 
-            zComp.zEdit.set_style(conf.Config['MISC']['key_binding'])
-            zComp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+            zComp.zStrokeListener.set_style(conf.Config['MISC']['key_binding'])
+            zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
 
             self.load_binding()
 

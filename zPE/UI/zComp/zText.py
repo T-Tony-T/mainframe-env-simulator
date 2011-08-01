@@ -1,8 +1,9 @@
 # this is the text module of the zComponent package
 
 from zBase import z_ABC, zTheme
+from zStrokeParser import zStrokeListener, zComplete
 
-import os
+import os, re
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -12,142 +13,106 @@ import gobject
 ######## ######## ######## ######## ########
 ########           zEntry           ########
 ######## ######## ######## ######## ########
+
 class zEntry(gtk.Entry):
     '''A gtk.Entry that has additional methods'''
+    global_func_list = [
+        'complete',             # complete the current typing
+        'complete_list',        # show completion list of the current typing;
+                                # whether set of not, two successive fail in complete will cause the list to show
+
+        'delete_char_backward', # delete prev char
+        'delete_char_forward',  # delete next char
+
+        'delete_word_backward', # delete to start of curr word, or delete prev word if not in one
+        'delete_word_forward',  # delete to end of curr word, or delete next word if not in one
+
+        'delete_line_backward', # delete to start of curr line, or delete curr line if at line end
+        'delete_line_forward',  # delete to end of curr line, or delete curr line if at line start,
+
+        'delete_para_backward', # delete to start of curr para, or delete prev para if not in one or at para start
+        'delete_para_forward',  # delete to end of curr para, or delete next para if not in one or at para end
+        ]
+    # only make the following function bindable, no actual binding applied
+    zStrokeListener.global_add_func_registry(global_func_list)
+
     def __init__(self):
         super(zEntry, self).__init__()
 
-        self.__comp_list = []       # completion list
-        self.__try_completing = 0   # how many times tring completion; reset to 0 if completion success
+        self.complete = zComplete()
+        self.listener = zStrokeListener(self.complete)
 
-        self.__locked_widget = None # the widget that locks the entry
+        self.set_editable(True) # default editable
 
-
-    ### public signal definition
-    @staticmethod
-    def _sig_key_pressed(entry, event, task = None):
-        '''
-        task = None
-            the task that the entry is asked to complete.
-            Could be one of the following:
-              -  None  : no special rules applied.
-              - 'path' : apply completion and checkings for getting a path.
-              - 'file' : same to 'path' except text entered must not be a dir.
-              - 'dir'  : same to 'path' except text entered must not be a file.
-        '''
-        if event.type != gtk.gdk.KEY_PRESS:
-            return False
-
-        if event.is_modifier:
-            return False
-
-        ctrl_mod_mask = gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
-
-        if (event.state & ctrl_mod_mask) == ctrl_mod_mask:
-            stroke = 'C-M-' + gtk.gdk.keyval_name(event.keyval)
-
-        elif event.state & gtk.gdk.CONTROL_MASK:
-            stroke = 'C-' + gtk.gdk.keyval_name(event.keyval)
-
-        elif event.state & gtk.gdk.MOD1_MASK:
-            stroke = 'M-' + gtk.gdk.keyval_name(event.keyval)
-
-        else:
-            stroke = gtk.gdk.keyval_name(event.keyval)
-
-
-        if stroke == 'C-g':
-            # at any time, this means 'cancel'
-            entry.__unlock()
-            entry.set_text('')  # clear path to cancel
-            return True
-        elif stroke.upper() == 'RETURN':
-            text_entered = entry.get_text()
-            if text_entered:
-                if ( (task == 'file' and not os.path.isdir(text_entered) ) or
-                     (task == 'dir'  and not os.path.isfile(text_entered)) or
-                     task in [ None, 'path' ] # tasks that require no checkings
-                     ):
-                    entry.__unlock()
-                    return False # pass the 'enter' on to emit 'activate' signel
-                else:
-                    entry.popup_comp_list()
-            return True
-        elif stroke.upper() == 'TAB':
-            entry.__try_completing += 1
-
-            if task in [ 'path', 'dir', 'file' ]:
-                curr_path = entry.get_text()
-                if curr_path:
-                    # normalize the path
-                    curr_path = os.path.abspath(os.path.expanduser(curr_path))
-                    # get the completion list
-                    if os.path.isdir(curr_path):
-                        entry.set_comp_list( os.listdir(curr_path) )
-                        curr_name = ''
-                    else:
-                        ( curr_path, curr_name ) = os.path.split(curr_path)
-                        entry.set_comp_list([ fn for fn in os.listdir(curr_path)
-                                              if fn.startswith(curr_name)
-                                              ])
-                    if task == 'dir':
-                        entry.set_comp_list([ fn for fn in entry.get_comp_list()
-                                              if os.path.isdir(os.path.join(curr_path, fn))
-                                              ])
-                    # check for unique complete
-                    if not entry.get_comp_list_len():
-                        return True # no completion, early return
-                    elif entry.get_comp_list_len() == 1:
-                        # exact match, complete it
-                        curr_path = os.path.join(curr_path, entry.get_comp_list()[0])
-                        if os.path.isdir(curr_path):
-                            curr_path += os.path.sep
-
-                        entry.__try_completing = 0
-                    else:
-                        # check for max complete
-                        for indx in range(len(curr_name), len(entry.get_comp_list()[0])):
-                            next_char = entry.get_comp_list()[0][indx]
-                            conflict = False
-                            for item in entry.get_comp_list()[1:]:
-                                if indx == len(item) or next_char != item[indx]:
-                                    conflict = True
-                                    break
-                            if conflict:
-                                break
-                            else:
-                                # has at least 1 char completed
-                                entry.__try_completing = 0
-                                curr_name += next_char
-                        curr_path = os.path.join(curr_path, curr_name)
-                        if entry.__try_completing > 1:
-                            # more than one try
-                            entry.popup_comp_list()
-
-                    entry.__set_text(curr_path) # force to set the text
-                    entry.set_position(-1)
-
-            return True
-
-        return False
-    ### end of public signal definition
+        # register callbacks for function bindings
+        self.default_func_callback = {
+            'complete'              : lambda *arg: self.complete(),
+            'complete_list'         : lambda *arg: self.complete_list(),
+        
+            'delete_char_backward'  : lambda *arg: self.delete_backward('char'),
+            'delete_char_forward'   : lambda *arg: self.delete_forward( 'char'),
+            'delete_word_backward'  : lambda *arg: self.delete_backward('word'),
+            'delete_word_forward'   : lambda *arg: self.delete_forward( 'word'),
+            'delete_line_backward'  : lambda *arg: self.delete_backward('line'),
+            'delete_line_forward'   : lambda *arg: self.delete_forward( 'line'),
+            'delete_para_backward'  : lambda *arg: self.delete_backward('para'),
+            'delete_para_forward'   : lambda *arg: self.delete_forward( 'para'),
+            }
+        for (func, cb) in self.default_func_callback.iteritems():
+            self.listener.register_func_callback(func, cb)
 
 
     ### overridden function definition
-    def insert_text(self, text, widget = None):
-        if self.is_locked() and self.__locked_widget != widget:
-            raise AssertionError('Entry is locked. Permission denied.')
+    def complete():
+        self.complete.complete()
 
+    def complete_list():
+        self.complete.complete_list()
+
+
+    def is_listenning(self):
+        return self.listener.is_listenning_on(self)
+
+    def listen_on_task(self, task = None):
+        self.listener.listen_on(self, task)
+
+    def listen_off(self):
+        self.listener.listen_off(self)
+
+
+    def insert_text(self, text):
         pos = self.get_position()
         super(zEntry, self).insert_text(text, pos)
         self.set_position(pos + len(text))
 
-    def set_text(self, text, widget = None):
-        if self.is_locked() and self.__locked_widget != widget:
-            raise AssertionError('Entry is locked. Permission denied.')
+    # no overridden for get_editable()
+    def set_editable(self, setting):
+        super(zEntry, self).set_editable(setting)
+        self.set_property('can-default', setting)
+        self.set_property('can-focus', setting)
 
-        self.__set_text(text)
+        # enable/disable the editor related function bindings
+        for func in zEntry.global_func_list:
+            self.listener.set_func_enabled(func, setting)
     ### end of overridden function definition
+
+
+    ### editor related API
+    def delete_backward(self, task = 'char'):
+        end_pos = self.get_position()
+
+        if task == 'char':
+            start_pos = end_pos - 1
+        elif task == 'word':
+            return
+        elif task == 'line':
+            return
+        elif task == 'para':
+            return
+
+        self.delete_text(start_pos, end_pos)
+#        self.set_position(start_pos)
+    ### end of editor related API
 
 
     ### completion related functions
@@ -163,31 +128,6 @@ class zEntry(gtk.Entry):
     def popup_comp_list(self):
         print 'list completion not implemented yet'
     ### end of completion related functions
-
-
-    def is_locked(self):
-        return self.__locked_widget
-
-    def lock(self, widget):
-        self.__locked_widget = widget
-
-    def unlock(self, widget):
-        if not self.__locked_widget:
-            return              # no need to unlock, early return
-
-        if widget == self.__locked_widget:
-            self.__unlock()
-        else:
-            raise AssertionError('Cannot unlock the entry. Permission denied.')
-
-
-    ### supporting functions
-    def __set_text(self, text):
-        super(zEntry, self).set_text(text)
-
-    def __unlock(self):
-        self.__locked_widget = None
-    ### end of supporting functions
 
 
 ######## ######## ######## ######## ########
@@ -206,8 +146,6 @@ class zLastLine(gtk.HBox):
         self.__n_alternation = 0    # initiate the blinking counter to 0
         self.__sig_id = {}          # stores all signals connected to the interactive line
 
-        self.__lock_reset_func = None # see lock() and reset() for more information
-
         # create widgets
         self.__label = gtk.Label(label)
         self.pack_start(self.__label, False, False, 0)
@@ -224,6 +162,11 @@ class zLastLine(gtk.HBox):
         # init flags
         self.__editable = None
         self.__force_focus = None
+
+        self.__mx_commanding = False
+
+        self.__lock_reset_func = None # see lock() and reset() for more information
+        self.__locked = False         # if locked, all `set_*()` refer to `blink()`
 
         # connect auto-update items
         zTheme.register('update_font', zTheme._sig_update_font_modify, self.__label)
@@ -286,16 +229,16 @@ class zLastLine(gtk.HBox):
 
 
     def is_locked(self):
-        return self.__line_interactive.is_locked()
+        return self.__locked
 
     def lock(self, reset_func = None):
         '''if reset_func is set, it will be called when reset() is called'''
         if reset_func:
             self.__lock_reset_func = reset_func
-        self.__line_interactive.lock(self)
+        self.__locked = True
 
     def unlock(self):
-        self.__line_interactive.unlock(self)
+        self.__locked = False
 
 
     def clear(self):
@@ -337,7 +280,7 @@ class zLastLine(gtk.HBox):
             self.blink(hlt_text, entry_text)
         else:
             self.__line_highlight.set_text(hlt_text)
-            self.__line_interactive.set_text(entry_text, self)
+            self.__line_interactive.set_text(entry_text)
             self.__line_interactive.set_position(-1)
     ### end of overridden function definition
 
@@ -360,7 +303,7 @@ class zLastLine(gtk.HBox):
 
         # initial set
         self.__line_highlight.set_text('')
-        self.__line_interactive.set_text(hlt_text, self)
+        self.__line_interactive.set_text(hlt_text)
 
         # register the timer to alter the texts three times
         self.__set_alternation(2)
@@ -382,7 +325,7 @@ class zLastLine(gtk.HBox):
 
         # initial set
         self.__line_highlight.set_text(blk_hlt_text)
-        self.__line_interactive.set_text(blk_entry_text, self)
+        self.__line_interactive.set_text(blk_entry_text)
 
         # register the timer to alter the texts exactly once
         self.__set_alternation(1)
@@ -391,6 +334,35 @@ class zLastLine(gtk.HBox):
             [ blk_hlt_text,   set_hlt_text   ],
             [ blk_entry_text, set_entry_text ]
             )
+
+
+    def is_mx_commanding(self):
+        return self.__mx_commanding
+
+    def start_mx_commanding(self):
+        if self.is_mx_commanding():
+            # already in M-x Commanding, warn it
+            self.blink('Warn: ', 'invalid key press!', 1)
+        elif self.__line_interactive.is_listenning():
+            raise AssertionError('lastline is listenning on another task!')
+        elif self.is_locked():
+            raise AssertionError('lastline is locked! permission denied!')
+        else:
+            # initiate M-x Commanding
+            self.__mx_commanding = True
+            self.set_text('M-x ', '')
+            self.set_editable(True)
+
+            self.__line_interactive.listen_on_task('func')
+            self.lock(self.stop_mx_commanding)
+
+    def stop_mx_commanding(self):
+        self.unlock()
+        self.__line_interactive.listen_off()
+
+        self.set_editable(False)
+        self.clear()
+        self.__mx_commanding = False
 
 
     def get_editable(self):
@@ -441,7 +413,7 @@ class zLastLine(gtk.HBox):
         indx = self.__n_alternation % 2
 
         self.__line_highlight.set_text(hlt_text[indx])
-        self.__line_interactive.set_text(entry_text[indx], self)
+        self.__line_interactive.set_text(entry_text[indx])
 
         self.__set_timer()
 
@@ -455,6 +427,27 @@ class zLastLine(gtk.HBox):
 
 class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.TextView
     '''The Customized TextView that Support zEdit'''
+
+    global_func_list = [
+        'complete',             # complete the current typing
+        'complete_list',        # show completion list of the current typing;
+                                # whether set of not, two successive fail in complete will cause the list to show
+
+        'delete_char_backward', # delete prev char
+        'delete_char_forward',  # delete next char
+
+        'delete_word_backward', # delete to start of curr word, or delete prev word if not in one
+        'delete_word_forward',  # delete to end of curr word, or delete next word if not in one
+
+        'delete_line_backward', # delete to start of curr line, or delete curr line if at line end
+        'delete_line_forward',  # delete to end of curr line, or delete curr line if at line start,
+
+        'delete_para_backward', # delete to start of curr para, or delete prev para if not in one or at para start
+        'delete_para_forward',  # delete to end of curr para, or delete next para if not in one or at para end
+        ]
+    # only make the following function bindable, no actual binding applied
+    zStrokeListener.global_add_func_registry(global_func_list)
+
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         }
@@ -468,8 +461,48 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         self.set_editor(editor)
         self.center = self
 
+        self.complete = zComplete()
+        self.listener = zStrokeListener(self.complete)
+
+        self.set_editable(True) # default editable
+
+        # register callbacks for function bindings
+        self.default_func_callback = {
+            'complete'              : lambda *arg: self.complete(),
+            'complete_list'         : lambda *arg: self.complete_list(),
+        
+            'delete_char_backward'  : lambda *arg: self.delete_backward('char'),
+            'delete_char_forward'   : lambda *arg: self.delete_forward( 'char'),
+            'delete_word_backward'  : lambda *arg: self.delete_backward('word'),
+            'delete_word_forward'   : lambda *arg: self.delete_forward( 'word'),
+            'delete_line_backward'  : lambda *arg: self.delete_backward('line'),
+            'delete_line_forward'   : lambda *arg: self.delete_forward( 'line'),
+            'delete_para_backward'  : lambda *arg: self.delete_backward('para'),
+            'delete_para_forward'   : lambda *arg: self.delete_forward( 'para'),
+            }
+        for (func, cb) in self.default_func_callback.iteritems():
+            self.listener.register_func_callback(func, cb)
+
+
     ### overridden function definition
-    def insert_text(self, text, data = None):
+    def complete():
+        self.complete.complete()
+
+    def complete_list():
+        self.complete.complete_list()
+
+
+    def is_listenning(self):
+        return self.listener.is_listenning_on(self)
+
+    def listen_on_task(self, task = None):
+        self.listener.listen_on(self, task)
+
+    def listen_off(self):
+        self.listener.listen_off(self)
+
+
+    def insert_text(self, text):
         buff = self.get_buffer()
         buff.insert_at_cursor(text)
 
@@ -480,7 +513,196 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
     def set_text(self, text):
         buff = self.get_buffer()
         buff.set_text(text)
+
+
+    # no overridden for get_editable()
+    def set_editable(self, setting):
+        super(zTextView, self).set_editable(setting)
+
+        # enable/disable the editor related function bindings
+        for func in zTextView.global_func_list:
+            self.listener.set_func_enabled(func, setting)
     ### end of overridden function definition
+
+
+    ### editor related API
+    def delete_backward(self, task = 'char'):
+        buff = self.get_buffer()
+
+        start_iter = buff.get_iter_at_mark(buff.get_insert())
+        end_iter   = buff.get_iter_at_mark(buff.get_insert())
+
+        if task == 'char':
+            start_iter.backward_char()
+
+        elif task == 'word':
+            start_iter.backward_word_start()
+
+        elif task == 'line':
+            if start_iter.ends_line():
+                # is at line-end, remove the entire line
+                start_iter.backward_line()
+                self.forward_to_line_end(start_iter)
+            else:
+                # not at line-end, delete to the line-start
+                start_iter.set_line_offset(0)
+
+        elif task == 'para':
+            # check for para start
+            if not end_iter.is_start()  and  self.is_para_start(buff, start_iter):
+                # not at buffer start but at para start, move to prev line
+                start_iter.backward_line()
+
+            start_iter = self.get_para_start(buff, start_iter)
+
+        buff.delete(start_iter, end_iter)
+
+
+    def delete_forward(self, task = 'char'):
+        buff = self.get_buffer()
+
+        start_iter = buff.get_iter_at_mark(buff.get_insert())
+        end_iter   = buff.get_iter_at_mark(buff.get_insert())
+
+        if task == 'char':
+            end_iter.forward_char()
+
+        elif task == 'word':
+            end_iter.forward_word_end()
+
+        elif task == 'line':
+            if end_iter.starts_line():
+                # is at line-start, remove the entire line
+                end_iter.forward_line()
+            elif end_iter.ends_line():
+                # already at line-end, remove the new-line char
+                end_iter.forward_line()
+            else:
+                # not at line-end, delete to the line-end
+                self.forward_to_line_end(end_iter)
+
+        elif task == 'para':
+            # check for para end
+            if not end_iter.is_end()  and  self.is_para_end(buff, end_iter):
+                # not at buffer end but at para end, move to next line
+                end_iter.forward_line()
+
+            end_iter = self.get_para_end(buff, end_iter)
+
+        buff.delete(start_iter, end_iter)
+
+
+    def forward_to_line_end(self, iterator):
+        '''always move the iter to the end of the current line'''
+        if not iterator.ends_line():
+            # not already at line-end
+            iterator.forward_to_line_end()
+
+
+    def is_in_para(self, buff, iterator):
+        ln_s = iterator.copy()
+        ln_s.set_line_offset(0)
+        ln_e = ln_s.copy()
+        self.forward_to_line_end(ln_e)
+
+        return re.search(r'[\x21-\x7e]', buff.get_text(ln_s, ln_e)) # whether the curr line contains any visible char(s)
+
+    def is_para_end(self, buff, iterator):
+        if not self.is_in_para(buff, iterator):
+            return False        # not in para           =>  not at para end
+        elif iterator.is_end():
+            return True         # end of buffer         =>  end of para
+        elif not iterator.ends_line():
+            return False        # not at line end       =>  not at para end
+
+        # at line end, test next line (exist since at line end but not buffer end)
+        ln_next = iterator.copy()
+        ln_next.forward_line()
+
+        if self.is_in_para(buff, ln_next):
+            return False        # next line in para     =>  not at para end
+        else:
+            return True
+
+    def get_para_end(self, buff, iterator):
+        ln_iter = iterator.copy()
+        ln_indx = ln_iter.get_line()
+
+        # skip between-para space
+        while not self.is_in_para(buff, ln_iter):
+            # not in any para, keep move next
+            ln_iter.forward_line()
+
+            if ln_indx == ln_iter.get_line():
+                # not moving, at last line
+                self.forward_to_line_end(ln_iter)
+                return ln_iter  # return end of last line
+            else:
+                ln_indx = ln_iter.get_line()
+
+        # go to line just pass para end
+        while self.is_in_para(buff, ln_iter):
+            # in para, keep move next
+            ln_iter.forward_line()
+
+            if ln_indx == ln_iter.get_line():
+                # not moving, at last line
+                self.forward_to_line_end(ln_iter)
+                return ln_iter  # return end of last line
+            else:
+                ln_indx = ln_iter.get_line()
+
+        ln_iter.backward_line() # back to last line of para
+        self.forward_to_line_end(ln_iter)
+        return ln_iter          # return end of last line
+
+
+    def is_para_start(self, buff, iterator):
+        if not self.is_in_para(buff, iterator):
+            return False        # not in para           =>  not at para start
+        elif iterator.is_start():
+            return True         # start of buffer       =>  start of para
+        elif not iterator.starts_line():
+            return False        # not at line start     =>  not at para start
+
+        # at line start, test prev line (exist since at line start but not buffer start)
+        ln_prev = iterator.copy()
+        ln_prev.backward_line()
+
+        if self.is_in_para(buff, ln_prev):
+            return False        # prev line in para     =>  not at para start
+        else:
+            return True
+
+    def get_para_start(self, buff, iterator):
+        ln_iter = iterator.copy()
+        ln_indx = ln_iter.get_line()
+
+        # skip between-para space
+        while not self.is_in_para(buff, ln_iter):
+            # not in any para, keep move prev
+            ln_iter.backward_line()
+
+            if ln_indx == ln_iter.get_line():
+                # not moving, at first line
+                return ln_iter  # return start of first line
+            else:
+                ln_indx = ln_iter.get_line()
+
+        # go to line just above para start
+        while self.is_in_para(buff, ln_iter):
+            # in para, keep move prev
+            ln_iter.backward_line()
+
+            if ln_indx == ln_iter.get_line():
+                # not moving, at first line
+                return ln_iter  # return start of first line
+            else:
+                ln_indx = ln_iter.get_line()
+
+        ln_iter.forward_line() # back to first line of para
+        return ln_iter          # return start of last line
+    ### end of editor related API
 
 
     def buffer_save(self, buff):

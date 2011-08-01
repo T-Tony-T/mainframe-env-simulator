@@ -12,32 +12,47 @@ class z_ABC(object):
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         }
+
     _auto_update_blocked = [
         # 'signal_like_string'
         ]
 
     @classmethod
     def register(cls, sig, callback, widget, *data):
-        '''This function register a function to a signal-like string'''
+        '''
+        This function register a function to a signal-like string.
+        widget could be None to allow non-removable, global emission.
+        '''
         cls._auto_update[sig].append((widget, callback, data))
 
     @classmethod
     def unregister(cls, sig, widget):
         '''This function un-register the widget from the signal-like string'''
+        if not widget:
+            return              # cannot unregister a global signal
+
         reserve = []
         for item in cls._auto_update[sig]:
             if widget != item[0]:
                 reserve.append(item)
         cls._auto_update[sig] = reserve
 
+
     @classmethod
     def reg_add_registry(cls, sig):
-        cls._auto_update[sig] = [  ]
+        if sig not in cls._auto_update:
+            cls._auto_update[sig] = [  ]
 
     @classmethod
     def reg_is_registered(cls, sig, widget):
         return ( sig    in  cls._auto_update  and
                  widget in [ item[0] for item in cls._auto_update[sig] ]
+                 )
+
+    @classmethod
+    def reg_is_registered_globally(cls, sig):
+        return ( sig  in  cls._auto_update  and
+                 None in [ item[0] for item in cls._auto_update[sig] ]
                  )
 
     @classmethod
@@ -52,6 +67,7 @@ class z_ABC(object):
         if sig in cls._auto_update_blocked:
             cls._auto_update_blocked.remove(sig)
 
+
     @classmethod
     def reg_clean_up(cls):
         '''This function un-register all invisible widgets from the list'''
@@ -65,35 +81,40 @@ class z_ABC(object):
                     reserve.append(item)
             cls._auto_update[sig] = reserve
 
+
     @classmethod
     def reg_emit(cls, sig, info = None):
         '''
         This function emit the signal to all registered object
 
         Caution: may cause multiple emission. To avoid that,
-                 use reg_emit_from() instead.
+                 use reg_emit_to() instead.
         '''
         if sig in cls._auto_update_blocked:
             return              # signal being blocked, early return
 
-        for (widget, callback, data_list) in cls._auto_update[sig]:
+        for (w, cb, data) in cls._auto_update[sig]:
             if info:
-                callback(widget, info, *data_list)
+                cb(w, info, *data)
             else:
-                callback(widget, *data_list)
+                cb(w, *data)
 
     @classmethod
-    def reg_emit_from(cls, sig, target, info = None):
-        '''This function emit the signal to the indicated registered object'''
+    def reg_emit_to(cls, sig, target, info = None):
+        '''
+        This function emit the signal to the indicated registered
+        object, and all un-bounded objects (registered with None)
+        '''
         if sig in cls._auto_update_blocked:
             return              # signal being blocked, early return
 
-        for (widget, callback, data_list) in cls._auto_update[sig]:
-            if target == widget:
+        for (w, cb, data) in cls._auto_update[sig]:
+            if not w or w == target:
                 if info:
-                    callback(widget, info, *data_list)
+                    cb(w, info, *data)
                 else:
-                    callback(widget, *data_list)
+                    cb(w, *data)
+
 
 
 ######## ######## ######## ######## ########

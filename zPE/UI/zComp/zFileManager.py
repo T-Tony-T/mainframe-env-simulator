@@ -643,8 +643,12 @@ class zFileManager(gtk.VBox):
         self.treeview.connect(  'focus-out-event', self._focus_evnt_redirect, 'focus-out-event')
 
         # connect signal for internal usage
-        self.path_entry.connect('key-press-event', zEntry._sig_key_pressed, 'path')
-        self.path_entry.connect('activate', self._sig_open_file_from_entry)
+        self.path_entry.listen_on_task('path')
+        self.path_entry.listener.connect('z_activate', self._sig_open_file_from_entry)
+        self.path_entry.listener.connect('z_cancel', lambda *arg: (
+                self.path_entry.set_text(self.dirname + os.path.sep),
+                self.grab_focus(),
+                ))
         self.treeview.connect('row-activated', self._sig_open_file_from_tree)
         self.treeview.fn_cell_rdr.connect('edited', self._sig_entry_edited)
 
@@ -709,7 +713,7 @@ class zFileManager(gtk.VBox):
         self.treeview.set_cursor(self.__cell_data_func_skip['path'], self.treeview.fn_tree_col, True)
 
 
-    def _sig_open_file_from_entry(self, entry):
+    def _sig_open_file_from_entry(self, entry, msg):
         fullpath = os.path.abspath(os.path.expanduser(self.path_entry.get_text()))
         fn_list = os.path.split(fullpath)
 

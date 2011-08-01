@@ -4,6 +4,7 @@ from z_support import XPM, PIXBUF, SUPPORT
 
 from zBase import z_ABC, zTheme
 from zEditorFrame import zEdit
+from zStrokeParser import zStrokeListener
 
 import os, sys, time
 import pygtk
@@ -18,6 +19,29 @@ import gobject
 
 class zSplitWindow(z_ABC, gtk.Frame):
     '''A Split-Window Frame with DnD Splitting Supported'''
+    global_func_list = [
+        'window_split_horz',
+        'window_split_vert',
+        'window_delete',
+        'window_delete_other',
+        ]
+    # only make the following function bindable, no actual binding applied
+    zStrokeListener.global_add_func_registry(global_func_list)
+
+    func_callback_map = {}      # if set, will override the default setting for newly added instance
+
+    def func_callback_map_generator(self, frame):
+        if zSplitWindow.func_callback_map:
+            return zSplitWindow.func_callback_map
+        else:
+            return {
+                'window_split_horz'   : lambda *arg: self.window_split_horz(frame),
+                'window_split_vert'   : lambda *arg: self.window_split_vert(frame),
+                'window_delete'       : lambda *arg: self.window_delete(frame),
+                'window_delete_other' : lambda *arg: self.window_delete_other(frame),
+                }
+
+
     _auto_update = {
         # 'signal_like_string'  : [ callback, ... ]
         'frame_removed'         : [  ],
@@ -80,6 +104,9 @@ class zSplitWindow(z_ABC, gtk.Frame):
         self.frame_init = frame_init
         self.frame_split_dup = frame_split_dup
         self.frame_sz_min = frame_sz_min
+
+        if issubclass(self.frame, zEdit) and not self.frame_alist:
+            self.frame_alist = [ None, None, self.func_callback_map_generator ]
 
         # layout of the zSplitWindow:
         #

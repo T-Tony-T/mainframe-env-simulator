@@ -381,7 +381,7 @@ class zComboBox(z_ABC, gtk.ToolButton):
         self.__item_list.insert(indx, item)
         if self.active_item == None:
             self.set_active_indx(indx)
-        zComboBox.reg_emit_from('changed', self)
+        zComboBox.reg_emit_to('changed', self)
 
     def prepend(self, item):
         self.insert(0, item)
@@ -410,12 +410,12 @@ class zComboBox(z_ABC, gtk.ToolButton):
         self.__item_list.pop(indx)
         if indx == self.active_item:
             self.set_active(None)
-        zComboBox.reg_emit_from('changed', self)
+        zComboBox.reg_emit_to('changed', self)
 
     def clear(self):
         self.__item_list = []
         self.set_active(None)
-        zComboBox.reg_emit_from('changed', self)
+        zComboBox.reg_emit_to('changed', self)
 
     def index(self, item):
         try:
@@ -489,7 +489,7 @@ class zComboBox(z_ABC, gtk.ToolButton):
         except:
             self.set_label('')
             self.active_item = None
-        zComboBox.reg_emit_from('changed', self)
+        zComboBox.reg_emit_to('changed', self)
 
 
     def get_label(self):
@@ -738,7 +738,7 @@ class zTabbar(z_ABC, gtk.EventBox):
 
         if not self.active_tab or self.active_tab != tab:
             self.active_tab = tab
-            zTabbar.reg_emit_from('changed', tab)
+            zTabbar.reg_emit_to('changed', tab)
     ### end of overridden function definition
 
 

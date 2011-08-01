@@ -19,6 +19,7 @@ import io_encap
 
 from zBase import z_ABC, zTheme
 from zFileManager import zDisplayPanel, zFileManager
+from zStrokeParser import zStrokeListener
 from zText import zLastLine, zTextView
 from zWidget import zComboBox, zTabbar
 
@@ -34,38 +35,23 @@ import gtk
 
 class zEdit(z_ABC, gtk.VBox):
     '''A Multi-Buffer Text Editor with an Internal File Browser'''
-    __style = 'other'           # see zEdit.set_style()
-    __key_binding = {}          # see zEdit.set_key_binding()
+    global_func_list = [
+        'buffer_open',
+        'buffer_save',
+        'buffer_save_as',
+        'buffer_close',
+        ]
+    # only make the following function bindable, no actual binding applied
+    zStrokeListener.global_add_func_registry(global_func_list)
+
+    func_callback_map = {}      # if set, will override the default setting for all newly added/switched instance
 
     __tab_on = False            # see zEdit.set_tab_on()
     __tab_grouped = False       # see zEdit.set_tab_grouped()
 
     __last_line = None          # see zEdit.set_last_line()
 
-    # see zEdit._sig_key_pressed() => 'emacs'
-    __escaping = False
-    __ctrl_char_map = {
-        'C-I' : '\t',
-        'C-J' : '\n',
-        'C-M' : '\r',
-        }
-
-    # see zEdit._sig_key_pressed() => 'emacs'
-    __commanding = False
-    __command_content = ''
-    __command_widget_focus_id = None
-
-    # see zEdit._sig_key_pressed() => 'emacs'
-    __mx_commanding = False
-    __mx_command_content = ''
-    @staticmethod
-    def mx_commanding_reset():
-        zEdit.__mx_commanding = False
-        zEdit.__mx_command_content = ''
-
-    __mx_command_prefix = 'M-x '
-
-    _focus = None
+    focused_widget = None       # records the current focus (set by focus-in-event signal)
 
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
@@ -75,14 +61,11 @@ class zEdit(z_ABC, gtk.VBox):
         'populate_popup'        : [  ],
 
         'update_tabbar'         : [  ],
-
-        # for key binding
-        # use zEdit.reg_add_registry(reg)
         }
 
-    def __init__(self, buffer_path = None, buffer_type = None):
+    def __init__(self, buffer_path = None, buffer_type = None, local_func_binding_generator = None):
         '''
-        buffer_path
+        buffer_path = None
             a list of nodes representing the path of the file/buffer
             the editor is suppose to open.
 
@@ -92,10 +75,14 @@ class zEdit(z_ABC, gtk.VBox):
               Linux  | /home/user/doc/file       | [ '/', 'home', 'user', 'doc', 'file'    ]
              Windows | C:\User\Document\file.txt | [ 'C:\', 'User', 'Document', 'file.txt' ]
 
-        buffer_type
+        buffer_type = None
             'file' : the buffer corresponds to a file (hopefully a text file) [read-write]
             'dir'  : the buffer corresponds to a directory [read-only]
             'disp' : the buffer corresponds to a display panel [read-only]
+
+        local_func_binding_generator = None
+            a generator that take an zEdit instance as argument and return a func_callback_map
+            binded to that instance. If None, no binding is applied.
 
         Note:
           - any system-opened "file" buffer should has "None" as the ".path" property.
@@ -114,6 +101,21 @@ class zEdit(z_ABC, gtk.VBox):
 
         self.ui_init_func = None
         self.need_init = None   # since no init_func is set at this time
+
+        if zEdit.func_callback_map:
+            self.default_func_callback = zEdit.func_callback_map
+        else:
+            self.default_func_callback = {
+                # although works in most cases, ugly behavior.
+                # rebind them by setting zEdit.func_callback_map beforehand
+                'buffer_open'    : lambda *arg: self.set_buffer(None, 'dir'),
+                'buffer_save'    : lambda *arg: self.save_buffer(self.active_buffer),
+                'buffer_save_as' : lambda *arg: self.save_buffer_as(self.active_buffer),
+                'buffer_close'   : lambda *arg: self.rm_buffer(self.active_buffer),
+                }
+        if local_func_binding_generator:
+            self.default_func_callback.update(local_func_binding_generator(self))
+
 
         # layout of the frame:
         #
@@ -191,8 +193,8 @@ class zEdit(z_ABC, gtk.VBox):
             self.tabbar.show_all()
 
             # retain focus
-            if zEdit._focus:
-                zEdit._focus.grab_focus()
+            if zEdit.focused_widget:
+                zEdit.focused_widget.grab_focus()
             else:
                 self.grab_focus()
 
@@ -215,8 +217,8 @@ class zEdit(z_ABC, gtk.VBox):
                 self.tabbar = None
 
                 # retain focus
-                if zEdit._focus:
-                    zEdit._focus.grab_focus()
+                if zEdit.focused_widget:
+                    zEdit.focused_widget.grab_focus()
                 else:
                     self.grab_focus()
 
@@ -346,266 +348,6 @@ class zEdit(z_ABC, gtk.VBox):
     ### end of signal-like auto-update function
 
 
-    ### top-level signal
-    @staticmethod
-    def _sig_kp_fo_rm(widget):
-        '''see _sig_key_pressed() [below] for more information'''
-        if ( zEdit.__command_widget_focus_id  and
-             widget.handler_is_connected(zEdit.__command_widget_focus_id)
-             ):
-            widget.disconnect(zEdit.__command_widget_focus_id)
-            zEdit.__command_widget_focus_id = None
-
-    @staticmethod
-    def _sig_key_pressed_focus_out(widget, event):
-        '''see _sig_key_pressed() [below] for more information'''
-        if ( zEdit.__command_widget_focus_id  and
-             widget.handler_is_connected(zEdit.__command_widget_focus_id)
-             ):
-            # widget switched during Commanding
-            # cancel it
-            zEdit.__commanding = False
-            zEdit.__command_content = ''
-            widget.disconnect(zEdit.__command_widget_focus_id)
-            zEdit.__command_widget_focus_id = None
-
-            if zEdit.__mx_commanding:
-                # on M-x Commanding
-                # restore it
-                zEdit.__last_line.blink_set('', 'Quit', 1, zEdit.__mx_command_prefix, zEdit.__mx_command_content)
-            else:
-                # no M-x commanding
-                # reset lastline
-                zEdit.__last_line.set_text('', 'Quit')
-
-
-    @staticmethod
-    def _sig_key_pressed(widget, event, data = None):
-        if event.type != gtk.gdk.KEY_PRESS:
-            return False
-
-        if event.is_modifier:
-            return False
-
-        ctrl_mod_mask = gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
-
-        if (event.state & ctrl_mod_mask) == ctrl_mod_mask:
-            stroke = 'C-M-' + gtk.gdk.keyval_name(event.keyval)
-
-        elif event.state & gtk.gdk.CONTROL_MASK:
-            stroke = 'C-' + gtk.gdk.keyval_name(event.keyval)
-
-        elif event.state & gtk.gdk.MOD1_MASK:
-            stroke = 'M-' + gtk.gdk.keyval_name(event.keyval)
-
-        else:
-            stroke = gtk.gdk.keyval_name(event.keyval)
-
-        key_binding = zEdit.__key_binding
-        reg_func = zEdit._auto_update
-
-        if zEdit.__style == 'emacs':
-            # style::emacs
-
-            # check C-q Escaping
-            if not zEdit.__commanding and zEdit.__escaping:
-                try:
-                    if widget.get_editable():
-                        if re.match(r'^[\x20-\x7e]$', stroke):
-                            widget.insert_text(stroke, zEdit.__last_line)
-                        elif stroke.upper() in zEdit.__ctrl_char_map:
-                            widget.insert_text(zEdit.__ctrl_char_map[stroke.upper()], zEdit.__last_line)
-                except:
-                    pass
-                zEdit.__escaping = False
-                return True
-            # no C-q Escaping
-
-            # check C-g Cancelling
-            if stroke == 'C-g': # at any time, this means 'cancel'
-                zEdit.__commanding = False
-                zEdit.__command_content = ''
-                zEdit._sig_kp_fo_rm(widget)
-
-                if ( zEdit.__mx_commanding  and                     # has M-x commanding, and
-                     widget not in zEdit.__last_line.get_children() # focus not in lastline
-                     ):
-                    # must be commanding over M-x commanding
-                    # restore M-x commanding
-                    zEdit.__last_line.set_editable(True)
-                    zEdit.__last_line.blink_set('', 'Quit', 1, zEdit.__mx_command_prefix, zEdit.__mx_command_content)
-                else:
-                    # no M-x commanding, or focus in lastline
-                    # reset lastline
-                    zEdit.mx_commanding_reset()
-
-                    zEdit.__last_line.unlock()
-                    zEdit.__last_line.set_editable(False)
-                    zEdit.__last_line.set_text('', 'Quit')
-                    if zEdit._focus:
-                        zEdit._focus.grab_focus()
-                return True
-            # no C-g Cancelling
-
-            # check M-x Commanding input
-            if ( not zEdit.__commanding  and
-                 zEdit.__mx_commanding   and
-                 widget in zEdit.__last_line.get_children()
-                 ):
-                # on M-x Commanding, Commanding *MUST NOT* be initiated
-                if re.match(r'^[\x20-\x7e]$', stroke):
-                    # regular keypress
-                    widget.insert_text(stroke, zEdit.__last_line)
-                    zEdit.__mx_command_content = widget.get_text()
-                    return True
-                elif stroke.upper() == 'RETURN':
-                    # Enter key pressed
-
-                    # reset last line
-                    zEdit.__last_line.reset() # this is to clear all bindings with the lastline
-
-                    if zEdit.__mx_command_content in reg_func:
-                        # is a valid functionality
-                        if len(reg_func[zEdit.__mx_command_content]):
-                            # has registered functions
-                            zEdit._focus.grab_focus() # retain focus before emit the function
-                            zEdit.reg_emit(zEdit.__mx_command_content)
-                        else:
-                            zEdit.__last_line.set_text(
-                                '',
-                                '(function `{0}` not implemented)'.format(zEdit.__mx_command_content)
-                                )
-                    else:
-                        zEdit.__last_line.set_text(
-                            '',
-                            '({0}: no such function)'.format(zEdit.__mx_command_content)
-                            )
-                    zEdit.mx_commanding_reset()
-                    if zEdit._focus:
-                        zEdit._focus.grab_focus()
-                    return True
-            # no active M-x Commanding
-
-            # check initiated Commanding
-            if not zEdit.__commanding:
-                # initiating stroke, check reserved bindings (M-x and C-q)
-                if stroke == 'M-x':
-                    if zEdit.__mx_commanding:
-                        # already in M-x Commanding, warn it
-                        zEdit.__last_line.blink('Warn: ', 'invalid key press!', 1)
-                    else:
-                        # initiate M-x Commanding
-                        zEdit.__mx_commanding = True
-                        zEdit.__last_line.set_text(zEdit.__mx_command_prefix, '')
-                        zEdit.__last_line.set_editable(True)
-
-                        zEdit.__last_line.connect('key-press-event', zEdit._sig_key_pressed)
-                        zEdit.__last_line.lock(zEdit.mx_commanding_reset)
-                    return True
-                elif stroke == 'C-q':
-                    # start C-q Escaping
-                    zEdit.__escaping = True
-                    return True
-                # not reserved bindings
-
-                # initiate Commanding
-                if not zEdit.__mx_commanding:
-                    zEdit.__last_line.clear()
-                zEdit.__commanding = True
-                zEdit.__command_widget_focus_id = widget.connect('focus-out-event', zEdit._sig_key_pressed_focus_out)
-            # Commanding initiated
-
-            # retrive previous combo, if there is any
-            if zEdit.__command_content:
-                # appand previous combo to stroke
-                stroke = '{0} {1}'.format(zEdit.__command_content, stroke)
-
-            # validate stroke sequence
-            if ( stroke in key_binding  and       # is a binded key stroke
-                 key_binding[stroke] in reg_func  # is a valid functionality
-                 ):
-                zEdit.__commanding = False
-                zEdit.__command_content = ''
-                zEdit._sig_kp_fo_rm(widget)
-                zEdit.__last_line.clear()
-
-                if len(reg_func[key_binding[stroke]]):
-                    # has registered functions
-                    zEdit.reg_emit(key_binding[stroke])
-                else:
-                    info = [ '', '(function `{0}` not implemented)'.format(key_binding[stroke]) ]
-
-                    if zEdit.__mx_commanding:
-                        # on M-x Commanding
-                        # restore it after blink the msg
-                        zEdit.__last_line.blink_set(
-                            info[0], info[1], 1,
-                            zEdit.__mx_command_prefix, zEdit.__mx_command_content
-                            )
-                    else:
-                        # no M-x commanding
-                        # print the msg
-                        zEdit.__last_line.set_text(info[0], info[1])
-
-                return True
-            else:
-                # not a valid stroke sequence so far
-                found = False
-                for key in key_binding:
-                    if key.startswith(stroke):
-                        # part of a valid stroke sequence
-                        found = True
-                        if not zEdit.__mx_commanding:
-                            # display stroke if in echoing mode
-                            zEdit.__last_line.set_text(stroke + ' ', None)
-                        break
-
-                if found:
-                    zEdit.__command_content = stroke
-                    return True
-                else:
-                    # not a valid stroke sequence *AT ALL*
-                    zEdit.__commanding = False
-                    zEdit._sig_kp_fo_rm(widget)
-
-                    if not zEdit.__command_content:
-                        # initiate stroke, pass it on
-                        return False
-                    else:
-                        # has previous combo, eat the current combo
-                        if zEdit.__mx_commanding:
-                            # on M-x Commanding
-                            # restore it
-                            zEdit.__last_line.blink_set(
-                                '', stroke + ' is undefined', 1,
-                                zEdit.__mx_command_prefix, zEdit.__mx_command_content
-                                )
-                        else:
-                            # no M-x commanding
-                            # reset lastline
-                            zEdit.__last_line.set_text('', stroke + ' is undefined')
-                        zEdit.__command_content = ''
-                        return True
-
-        elif zEdit.__style == 'vi':
-            # style::vi
-            return False        # not implemetad yet
-
-        else:
-            # style::other
-            if ( stroke in key_binding            and # is a binded key stroke
-                 key_binding[stroke] in reg_func  and # is a valid functionality
-                 len(reg_func[key_binding[stroke]])   # has registered functions
-                 ):
-                zEdit.reg_emit(key_binding[stroke])
-                return True
-            else:
-                return False
-
-        return False            # pass on any left-over (should not exist)
-    ### end of top-level signal
-
-
     ### signal for center
     def _sig_button_press_browser(self, treeview, event, data = None):
         if event.button != 3:
@@ -650,17 +392,17 @@ class zEdit(z_ABC, gtk.VBox):
         mi_rename.connect_object('activate', self.center._sig_rename_file, treeview, tree_path)
 
         # callback
-        zEdit.reg_emit_from('populate_popup', self.center, menu)
+        zEdit.reg_emit_to('populate_popup', self.center, menu)
 
         # popup the menu
         menu.popup(None, None, None, event.button, event.time)
 
     def _sig_button_press_textview(self, textview, menu):
-        zEdit.reg_emit_from('populate_popup', self.center, menu)
+        zEdit.reg_emit_to('populate_popup', self.center, menu)
 
 
     def _sig_focus_in(self, widget, event):
-        zEdit._focus = self
+        zEdit.focused_widget = self
 
         if len(zEdit._auto_update['buffer_focus_in']):
             zEdit.reg_emit('buffer_focus_in')
@@ -671,6 +413,71 @@ class zEdit(z_ABC, gtk.VBox):
             zEdit.reg_emit('buffer_focus_out')
         self.update_theme_focus_out()
 
+
+    def _sig_listener_active(self, listener, msg, sig_type):
+        if 'z_run_cmd' in msg:
+            # M-x initiated
+            zEdit.__last_line.start_mx_commanding()
+            return
+
+        widget = msg['widget']
+
+        if sig_type == 'cancel':
+            # on cancelling, clean up if needed
+
+            if msg['style'] == 'emacs':
+                if ( zEdit.__last_line.is_mx_commanding()  and      # on M-x commanding, and
+                     widget not in zEdit.__last_line.get_children() # focus not in lastline
+                     ):
+                    # must be commanding over M-x commanding
+                    # restore M-x commanding
+                    zEdit.__last_line.set_editable(True)
+                    zEdit.__last_line.blink('', msg['return_msg'])
+
+                elif zEdit.__last_line.is_mx_commanding():
+                    # focus in lastline (M-x commanding cancelled)
+                    # reset lastline and retain focus
+                    zEdit.__last_line.stop_mx_commanding()
+                    zEdit.__last_line.set_text('', msg['return_msg'])
+
+                    if zEdit.focused_widget:
+                        zEdit.focused_widget.grab_focus()
+                else:
+                    # no M-x commanding, or focus in lastline (M-x commanding cancelled)
+                    # reset lastline
+                    zEdit.__last_line.set_text('', msg['return_msg'])
+
+
+            elif msg['style'] == 'vi':
+                pass            # not implemented yet
+
+            else:
+                pass
+        else:
+            # on activating, perform additional action if needed
+
+            if msg['style'] == 'emacs':
+                if widget in zEdit.__last_line.get_children(): # lastline activated, reset it
+                    # reset last line
+                    zEdit.__last_line.reset() # this is to clear all bindings with the lastline
+
+                    # retain focus
+                    if zEdit.focused_widget:
+                        zEdit.focused_widget.grab_focus()
+
+                if not zEdit.__last_line.is_mx_commanding():
+                    if msg['return_msg'] == '':
+                        zEdit.__last_line.set_text('', '')
+                    elif msg['return_msg'] == 'z_combo':
+                        zEdit.__last_line.set_text(msg['stroke'], '')
+
+            elif msg['style'] == 'vi':
+                pass            # not implemented yet
+
+            else:
+                pass
+
+
     def _sig_tab_clicked(self, tab):
         buffer_name = self.tabbar.get_label_of(tab)
 
@@ -679,8 +486,8 @@ class zEdit(z_ABC, gtk.VBox):
             self.set_buffer(buff.path, buff.type)
 
         # set focus
-        if zEdit._focus:
-            zEdit._focus.grab_focus()
+        if zEdit.focused_widget:
+            zEdit.focused_widget.grab_focus()
         else:
             self.grab_focus()
     ### end of signal for center
@@ -701,8 +508,8 @@ class zEdit(z_ABC, gtk.VBox):
             self.set_buffer(buff.path, buff.type)
 
         # set focus
-        if zEdit._focus and self.__list_modified:
-            zEdit._focus.grab_focus()
+        if zEdit.focused_widget and self.__list_modified:
+            zEdit.focused_widget.grab_focus()
         else:
             self.grab_focus()
     ### end of signal for bottom
@@ -837,44 +644,47 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell.set_placement(gtk.CORNER_TOP_RIGHT)
 
                 widget = zTextView(editor = self)
+                widget.listen_on_task('text')
+
                 widget_button_press_id = widget.center.connect('populate-popup', self._sig_button_press_textview)
-                widget_key_press_id = {
-                    widget : widget.connect('key-press-event', zEdit._sig_key_pressed),
-                    }
+
             elif new_buff.type == 'dir':
                 widget_shell = gtk.Frame()
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
                 widget = zFileManager(editor = self)
+                widget.listener = zStrokeListener() # not for input, thus no completion
+                widget.listener.listen_on(widget.center, None)
+
                 widget_button_press_id = widget.center.connect('button-press-event', self._sig_button_press_browser)
-                widget_key_press_id = {
-                    widget.path_entry : widget.path_entry.connect('key-press-event', zEdit._sig_key_pressed),
-                    widget.treeview   : widget.treeview.connect('key-press-event', zEdit._sig_key_pressed),
-                    }
+
             elif new_buff.type == 'disp':
                 widget_shell = gtk.Frame()
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
                 widget = zDisplayPanel(editor = self)
+                widget.listener = zStrokeListener() # not for input, thus no completion
+                widget.listener.listen_on(widget.job_panel, None)
+                widget.listener.listen_on(widget.step_panel, None)
+                widget.listener.listen_on(widget.center, None)
+
                 widget_button_press_id = widget.center.connect('populate-popup', self._sig_button_press_textview)
-                widget_key_press_id = {
-                    widget.job_panel  : widget.job_panel.connect('key-press-event', zEdit._sig_key_pressed),
-                    widget.step_panel : widget.step_panel.connect('key-press-event', zEdit._sig_key_pressed),
-                    widget.center     : widget.center.connect('key-press-event', zEdit._sig_key_pressed),
-                    }
             else:
                 raise KeyError
 
             # switch widget
             if self.center:
                 self.center.center.disconnect(self.sig_id['button_press'])
+                for handler in self.center.listener_sig:
+                    if self.center.listener.handler_is_connected(handler):
+                        self.center.listener.disconnect(handler)
+                self.center.listener.clear_all()
+
                 self.exec_uninit_func()                
 
                 zTheme.unregister('update_font', self.center)
                 self.center.disconnect(self.sig_id['focus_in'])
                 self.center.disconnect(self.sig_id['focus_out'])
-                for (k, v) in self.sig_id['key_press'].iteritems():
-                    k.disconnect(v)
 
                 self.center_shell.remove(self.center)
                 self.remove(self.center_shell)
@@ -883,10 +693,20 @@ class zEdit(z_ABC, gtk.VBox):
             self.center_shell.add(self.center)
             self.pack_start(self.center_shell, True, True, 0)
 
+            # enable the function bindings for the specific listener
+            for func in self.default_func_callback:
+                self.center.listener.set_func_enabled(func, True)
+            # register callbacks for function bindings
+            for (func, cb) in self.default_func_callback.iteritems():
+                self.center.listener.register_func_callback(func, cb)
+            self.center.listener_sig = [
+                self.center.listener.connect('z_activate', self._sig_listener_active, 'activate'),
+                self.center.listener.connect('z_cancel',   self._sig_listener_active, 'cancel'),
+                ]
+
             zTheme.register('update_font', zTheme._sig_update_font_modify, self.center)
             self.sig_id['focus_in'] = self.center.connect('focus-in-event', self._sig_focus_in)
             self.sig_id['focus_out'] = self.center.connect('focus-out-event', self._sig_focus_out)
-            self.sig_id['key_press'] = widget_key_press_id
             self.sig_id['button_press'] = widget_button_press_id
 
             zTheme._sig_update_font_modify(self.center)
@@ -919,31 +739,13 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     @staticmethod
-    def get_key_binding():
-        return zEdit.__key_binding
-
-    @staticmethod
-    def set_key_binding(dic):
-        zEdit.__key_binding = copy.deepcopy(dic)
-
-    @staticmethod
     def get_last_line():
         return zEdit.__last_line
 
     @staticmethod
     def set_last_line(lastline):
-        if zEdit.__last_line != lastline:
-            if zEdit.__last_line:
-                zEdit.__last_line.reset()
-            zEdit.__last_line = lastline
+        zEdit.__last_line = lastline
 
-    @staticmethod
-    def get_style():
-        return zEdit.__style
-
-    @staticmethod
-    def set_style(style):
-        zEdit.__style = style
 
     @staticmethod
     def get_tab_on():
@@ -1212,7 +1014,7 @@ class zEditBuffer(z_ABC):
                 # buffer already opened, refuse renaming
                 return path[-1], '(Cannot write to an existing buffer!)'
 
-            
+            print self.buffer
 
         print self.name, self.type, self.path, path
 

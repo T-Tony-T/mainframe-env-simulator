@@ -1,3 +1,6 @@
+from zComp.zStrokeParser import KEY_BINDING_RULE_MKUP
+from zComp.zStrokeParser import parse_key_binding as zSP_PARSE_KEY_BINDING
+
 import os, sys
 import pygtk
 pygtk.require('2.0')
@@ -92,51 +95,30 @@ DEFAULT_FUNC_KEY_BIND_KEY = [
     'other'
     ]
 
-KEY_BINDING_RULE_MKUP = {
-    'emacs' :
-'''<b>Meaning of the 'Stroke':</b>
-  - 'C-x'   : press 'x' while holding Ctrl
-  - 'C-M-x' : press 'x' while holding both Ctrl and Alt
-  - 'C-x X' : first press 'x' while holding Ctrl, then
-              press 'x' while holding Shift
-
-<b>Limitation:</b>
-  - Key sequence cannot start with M-x (run command),
-    C-q (escape next key stroke), or any character you can
-    find on the keyboard
-  - Key sequence cannot contain C-g (cancel current action)
-  - Key sequence cannot contain more than one stand-alone
-    (i.e. without prefix such as 'C-' or 'M-') function keys
-
-<b>'Stroke' of Function Keys:</b>
-  - BackSpace, Enter, Escape, Space, Tab
-  - Insert, Delete, Home, End, Page_Up, Page_Down
-  - Left, Right, Up, Down
-  - F1 ~ F12
-''',
-
-    'vi'    : '''Not Implemented Yet''',
-
-    'other' :
-'''<b>Meaning of the 'Stroke':</b>
-  - 'C-x'   : press 'x' while holding Ctrl
-  - 'C-M-x' : press 'x' while holding both Ctrl and Alt
-  - 'X'     : press 'x' while holding Shift
-
-<b>Limitation:</b>
-  - No space allowed in the 'Stroke' definition. Use the
-    word 'Space' to bind the Space key on your keyboard
-
-<b>'Stroke' of Function Keys:</b>
-  - BackSpace, Enter, Escape, Space, Tab
-  - Insert, Delete, Home, End, Page_Up, Page_Down
-  - Left, Right, Up, Down
-  - F1 ~ F12
-''',
-    }
-
 DEFAULT_FUNC_KEY_BIND = {
-    # buffer manipulation
+    # split window manipulation; required by zSplitWindow
+    'window_split_horz'     : {
+        'emacs' : 'C-x 3',
+        'vi'    : '',
+        'other' : '',
+        },
+    'window_split_vert'     : {
+        'emacs' : 'C-x 2',
+        'vi'    : '',
+        'other' : '',
+        },
+    'window_delete'         : {
+        'emacs' : 'C-x 0',
+        'vi'    : '',
+        'other' : '',
+        },
+    'window_delete_other'   : {
+        'emacs' : 'C-x 1',
+        'vi'    : '',
+        'other' : '',
+        },
+
+    # buffer manipulation; required by zEdit
     'buffer_open'           : {
         'emacs' : 'C-x C-f',
         'vi'    : '',
@@ -158,6 +140,63 @@ DEFAULT_FUNC_KEY_BIND = {
         'other' : 'F4',
         },
 
+    # editor related functions; required by zTextView and zEntry
+    'complete'              : { # complete the current typing
+        'emacs' : 'Tab',
+        'vi'    : '',
+        'other' : 'Tab',
+        },    
+    'complete_list'         : { # show completion list of the current typing;
+                                # whether set of not, two successive fail in complete will cause the list to show
+        'emacs' : 'M-/',
+        'vi'    : '',
+        'other' : '',
+        },    
+
+    'delete_char_backward'  : { # delete prev char
+        'emacs' : 'BackSpace',
+        'vi'    : '',
+        'other' : 'BackSpace',
+        },    
+    'delete_char_forward'   : { # delete next char
+        'emacs' : 'Delete',
+        'vi'    : '',
+        'other' : 'Delete',
+        },    
+    'delete_word_backward'  : { # delete to start of curr word, or delete prev word if not in one
+        'emacs' : 'M-D',
+        'vi'    : '',
+        'other' : '',
+        },    
+    'delete_word_forward'   : { # delete to end of curr word, or delete next word if not in one
+        'emacs' : 'M-d',
+        'vi'    : '',
+        'other' : '',
+        },    
+    'delete_line_backward'  : { # delete to start of curr line, or delete curr line if at line end
+        'emacs' : 'C-K',
+        'vi'    : '',
+        'other' : '',
+        },    
+    'delete_line_forward'   : { # delete to end of curr line, or delete curr line if at line start,
+                                # or delete '\n' if at line end
+        'emacs' : 'C-k',
+        'vi'    : '',
+        'other' : '',
+        },    
+    'delete_para_backward'  : { # delete to start of curr para, or delete prev para if not in one or at para start
+        'emacs' : 'M-K',
+        'vi'    : '',
+        'other' : '',
+        },    
+    'delete_para_forward'   : { # delete to end of curr para, or delete next para if not in one or at para end
+        'emacs' : 'M-k',
+        'vi'    : '',
+        'other' : '',
+        },    
+
+    # functions that are not required by any z* module
+
     # top-level functions
     'prog_show_config'      : {
         'emacs' : 'C-c c',
@@ -178,28 +217,6 @@ DEFAULT_FUNC_KEY_BIND = {
         'emacs' : 'C-x C-c',
         'vi'    : '',
         'other' : 'C-q',
-        },
-
-    # split window manipulation
-    'window_split_horz'     : {
-        'emacs' : 'C-x 3',
-        'vi'    : '',
-        'other' : '',
-        },
-    'window_split_vert'     : {
-        'emacs' : 'C-x 2',
-        'vi'    : '',
-        'other' : '',
-        },
-    'window_delete'         : {
-        'emacs' : 'C-x 0',
-        'vi'    : '',
-        'other' : '',
-        },
-    'window_delete_other'   : {
-        'emacs' : 'C-x 1',
-        'vi'    : '',
-        'other' : '',
         },
 
     # zPE related functions
@@ -450,133 +467,8 @@ def func_binding_rm(func):
         del Config['KEY_BINDING'][old_strock]
 
 
-__FUNC_KEY_MAP = {
-    'BACKSPACE' : 'BackSpace',
-    'ENTER'     : 'Enter',
-    'ESCAPE'    : 'Escape',
-    'SPACE'     : 'space',
-    'TAB'       : 'Tab',
-
-    'INSERT'    : 'Insert',
-    'DELETE'    : 'Delete',
-    'HOME'      : 'Home',
-    'END'       : 'End',
-    'PAGE_UP'   : 'Page_Up',
-    'PAGE_DOWN' : 'Page_Down',
-
-    'LEFT'      : 'Left',
-    'RIGHT'     : 'Rignt',
-    'UP'        : 'Up',
-    'DOWN'      : 'Down',
-    }
-
-__BASE_PATTERN = {
-    'func_key' : r'''
-( BACKSPACE | BackSpace | backspace ) |
-( ENTER     | Enter     | enter     ) |
-( ESCAPE    | Escape    | escape    ) |
-( SPACE     | Space     | space     ) |
-( TAB       | Tab       | tab       ) |
-
-( INSERT    | Insert    | insert    ) |
-( DELETE    | Delete    | delete    ) |
-( HOME      | Home      | home      ) |
-( END       | End       | end       ) |
-( PAGE_UP   | Page_Up   | page_up   ) |
-( PAGE_DOWN | Page_Down | page_down ) |
-
-( LEFT      | Left      | left      ) |
-( RIGHT     | Rignt     | right     ) |
-( UP        | Up        | up        ) |
-( DOWN      | Down      | down      ) |
-
-( [Ff] (1[0-2] | [2-9]) )               # F1 ~ F12
-''',
-
-    'printable' : r'''
-[\x21-\x7e]                             # all chars that are printed on the keyboard
-''',
-    }
-
-__PATTERN = {
-    # comment '# 1' and '# 2' means '1' or '2'
-    # comment '# 1' and '#   2' means '12' (1 followed by 2)
-    'func_key' : r'''^(                 # anchor to the beginning
-{0}                                     #   function key
-)$                                      #     anchor to the end
-'''.format(__BASE_PATTERN['func_key']),
-
-    'printable' : r'''^(                # anchor to the beginning
-{0}                                     #   printable char
-)$                                      #     anchor to the end
-'''.format(__BASE_PATTERN['printable']),
-
-    'combo' : r'''^(                    # anchor to the beginning
-( C-M- | [CM]- )                        #   C-M- / C- / M- followed by
-( {0} | {1} )                           #     function key or printable char
-)$                                      #       anchor to the end
-'''.format(__BASE_PATTERN['func_key'], __BASE_PATTERN['printable']),
-
-    'forbid_emacs' : r'''^(             # anchor to the beginning
-C-g                                     #   cancel
-)$                                      #     anchor to the end
-''',
-
-    'forbid_emacs_init' : r'''^(        # anchor to the beginning
-{0} |                                   #   printable char
-M-x |                                   #   run command
-C-g |                                   #   cancel
-C-q                                     #   escape next stroke
-)$                                      #     anchor to the end
-'''.format(__BASE_PATTERN['printable']),
-    }
-
 def parse_key_binding(key_sequence):
-    sequence = key_sequence.split()
-
-    if Config['MISC']['key_binding'] == 'emacs':
-        # style::emacs
-        if not len(sequence):
-            return None
-
-        if re.match(__PATTERN['forbid_emacs_init'], sequence[0], re.X):
-            # not allow for re-define as starting of a combo
-            return None
-
-        for indx in range(len(sequence)):
-            if re.match(__PATTERN['forbid_emacs'], sequence[indx], re.X):
-                # not allow for re-define
-                return None
-
-            m_func_key  = re.match(__PATTERN['func_key'],  sequence[indx], re.X)
-            m_printable = re.match(__PATTERN['printable'], sequence[indx], re.X)
-            m_combo     = re.match(__PATTERN['combo'],     sequence[indx], re.X)
-
-            if not (m_func_key or m_printable or m_combo):
-                # not a func_key stroke, printable, nor a combo
-                return None
-
-            if m_func_key:
-                if indx != len(sequence) - 1:
-                    # func_key stroke is not the last stroke
-                    return None
-                else:
-                    sequence[indx] = sequence[indx].upper()
-                    if sequence[indx] in __FUNC_KEY_MAP:
-                        sequence[indx] = __FUNC_KEY_MAP[sequence[indx]]
-
-    elif Config['MISC']['key_binding'] == 'vi':
-        # style::vi
-        return None             # not supported yet
-
-    else:
-        # style::other
-        if len(sequence) != 1:
-            # style::other must contain only 1 stroke
-            return None
-
-    return sequence
-
+    return zSP_PARSE_KEY_BINDING(key_sequence, Config['MISC']['key_binding'])
 
 def reset_key_binding():
     for style in DEFAULT_FUNC_KEY_BIND_KEY:
