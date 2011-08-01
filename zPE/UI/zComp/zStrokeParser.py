@@ -581,6 +581,7 @@ class zStrokeListener(gobject.GObject):
         ### generate stroke
         ctrl_mod_mask = gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
 
+        # check and re-map punctuation mark
         key_name = gtk.gdk.keyval_name(event.keyval)
         if key_name in PUNCT_KEY_MAP:
             key_name = PUNCT_KEY_MAP[key_name]
@@ -668,7 +669,7 @@ class zStrokeListener(gobject.GObject):
             if text_entered:
                 if ( (task == 'file' and not os.path.isdir(text_entered) ) or
                      (task == 'dir'  and not os.path.isfile(text_entered)) or
-                     task == 'path'
+                     (task == 'path')
                      ):
                     self.emit('z_activate', self.__build_msg(widget, stroke, 'Accept'))
 
@@ -682,12 +683,13 @@ class zStrokeListener(gobject.GObject):
             return True
         # no Activating
 
+
         ### style-specific checkings
         if self.get_style() == 'emacs':
             # style::emacs
 
             # check C-q Escaping
-            if not self.__combo_entering and self.__escaping:
+            if self.__escaping: # this should guarantee no combo is entering
                 try:
                     if widget.get_editable():
                         if self.__is_printable(stroke):
@@ -699,7 +701,7 @@ class zStrokeListener(gobject.GObject):
                         else:
                             insertion = '' # ignore the rest ctrl chars
 
-                        self.__insert_text(widget, insertion, task)
+                        self.__insert_text(widget, insertion)
                 except:
                     pass # if anything goes wrong, give up the escaping
 
@@ -714,7 +716,7 @@ class zStrokeListener(gobject.GObject):
                 # on M-x Commanding, Commanding *MUST NOT* be initiated
                 if self.__is_printable(stroke):
                     # regular keypress
-                    self.__insert_text(widget , stroke, task)
+                    self.__insert_text(widget , stroke)
                     return True
                 elif self.__is_space(stroke):
                     # space
@@ -735,14 +737,19 @@ class zStrokeListener(gobject.GObject):
                     # start C-q Escaping
                     self.__escaping = True
                     return True
-                # not reserved bindings
+                # not reserved bindings, check forbidden bindings (printable)
+                elif self.__is_printable(stroke):
+                    # is a printable
+                    self.__insert_text(widget, stroke)
+                    return True
 
+                # not any reserved or forbidden bindings
                 # initiate Commanding
                 self.__combo_entering = True
                 self.__combo_widget_focus_id = widget.connect('focus-out-event', self._sig_kp_focus_out)
             # Commanding initiated
 
-
+            # on commanding
             # retrive previous combo, if there is any
             if self.__combo_content:
                 # appand previous combo to stroke
@@ -800,13 +807,9 @@ class zStrokeListener(gobject.GObject):
                         # initiate stroke, do not eat it
                         self.__combo_entering = False
 
-                        if self.__is_printable(stroke):
-                            # regular keypress
-                            self.__insert_text(widget , stroke, task)
-                            return True
-                        elif self.__is_space(stroke):
+                        if self.__is_space(stroke):
                             # space
-                            self.__insert_text(widget , ' ', task)
+                            self.__insert_text(widget , ' ')
                             return True
                         else:
                             # not regular keypress nor space, pass it to the widget
@@ -853,7 +856,7 @@ class zStrokeListener(gobject.GObject):
             else:
                 if self.__is_printable(stroke):
                     # regular keypress
-                    self.__insert_text(widget , stroke, task)
+                    self.__insert_text(widget , stroke)
                     return True
                 elif self.__is_space(stroke):
                     # space
@@ -892,7 +895,7 @@ class zStrokeListener(gobject.GObject):
 
         return msg
 
-    def __insert_text(self, widget, insertion, task):
+    def __insert_text(self, widget, insertion):
         widget.insert_text(insertion)
         if self.__entry_entering:
             # update the content backup
@@ -1052,6 +1055,7 @@ class zComplete(gobject.GObject):
         if not self.widget.is_word_end():
             self.__try_completing = 0 # reset the completion counter
             self.emit('z_mid_of_word')
+            return
 
         if self.__task == 'text':
             # text completion

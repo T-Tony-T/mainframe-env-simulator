@@ -701,13 +701,16 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
 
     def is_word_start(self):
-        return self.get_buffer().get_iter_at_mark(buff.get_insert()).starts_word()
+        buff = self.get_buffer()
+        return buff.get_iter_at_mark(buff.get_insert()).starts_word()
 
     def is_in_word(self):
-        return self.get_buffer().get_iter_at_mark(buff.get_insert()).inside_word()
+        buff = self.get_buffer()
+        return buff.get_iter_at_mark(buff.get_insert()).inside_word()
 
     def is_word_end(self):
-        return self.get_buffer().get_iter_at_mark(buff.get_insert()).ends_word()
+        buff = self.get_buffer()
+        return buff.get_iter_at_mark(buff.get_insert()).ends_word()
 
 
     def is_in_para(self, buff, iterator):
