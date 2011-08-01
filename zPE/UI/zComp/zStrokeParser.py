@@ -983,8 +983,6 @@ class zComplete(gobject.GObject):
     '''
     A completion module that can be applied to any editable widget
     that (at least) implements the following methods:
-      - widget.is_word_start()  : test if cursor is at word start
-      - widget.is_in_word()     : test if cursor is in a word
       - widget.is_word_end()    : test if cursor is at word end
 
       - widget.get_current_word()     : get the word in front of the cursor
@@ -992,8 +990,8 @@ class zComplete(gobject.GObject):
 
     Notes:
         a word is a completion unit that you wish to apply completion
-        on. for function completion, [\w]+ is recommended; for path
-        completion, [\S]+ is recommended.
+        on. for text completion, r'[a-zA-Z0-9]+' is recommended; for
+        function completion, r'[\w]+'; for path completion, r'[\S]+'
 
     it will emit 'z_mid_of_word' signal if completion happened when
     the cursor is not at a word-end boundary

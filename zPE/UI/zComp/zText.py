@@ -123,59 +123,104 @@ class zEntry(gtk.Entry):
 
         if task == 'char':
             start_pos = end_pos - 1
+
         elif task == 'word':
-            return
-        elif task == 'line':
-            return
-        elif task == 'para':
-            return
+            letter = r'[a-zA-Z0-9]'
+            start_pos = end_pos
+            if self.is_out_word(letter) or self.is_word_start(letter):
+                # outside of a word, or at word start => move to prev work end
+                start_pos = self.__get_word_start(start_pos, r'[^a-zA-Z0-9]')
+            # move to word start
+            start_pos = self.__get_word_start(start_pos, letter)
+
+        elif task in [ 'line', 'para' ]:
+            start_pos = 0
+
+        else:
+            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
 
         self.delete_text(start_pos, end_pos)
-#        self.set_position(start_pos)
+
+    def delete_forward(self, task = 'char'):
+        start_pos = self.get_position()
+
+        if task == 'char':
+            end_pos = start_pos + 1
+
+        elif task == 'word':
+            letter = r'[a-zA-Z0-9]'
+            end_pos = start_pos
+            if self.is_out_word(letter) or self.is_word_end(letter):
+                # outside of a word, or at word end => move to next work start
+                end_pos = self.__get_word_end(end_pos, r'[^a-zA-Z0-9]')
+            # move to word start
+            end_pos = self.__get_word_end(end_pos, letter)
+
+        elif task in [ 'line', 'para' ]:
+            end_pos = -1
+
+        else:
+            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
+
+        self.delete_text(start_pos, end_pos)
 
 
-    def get_current_word(self):
+    def get_current_word(self, letter = r'\S'):
         curr = self.get_position()
-        start = self.__get_word_start()
+        start = self.__get_word_start(curr, letter)
         return self.get_chars(start, curr)
 
-    def set_current_word(self, word):
+    def set_current_word(self, word, letter = r'\S'):
         curr = self.get_position()
-        start = self.__get_word_start()
+        start = self.__get_word_start(curr, letter)
 
         self.select_region(start, curr)
         self.delete_selection()
         self.insert_text(word)
 
 
-    def is_word_start(self):
-        return self.__test_cursor_anchor(self.get_position(), False, True)
+    def is_word_start(self, letter = r'\S'):
+        return self.__test_cursor_anchor(self.get_position(), False, True, letter)
 
-    def is_in_word(self):
-        return self.__test_cursor_anchor(self.get_position(), True, True)
+    def is_in_word(self, letter = r'\S'):
+        return self.__test_cursor_anchor(self.get_position(), True, True, letter)
 
-    def is_word_end(self):
-        return self.__test_cursor_anchor(self.get_position(), True, False)
+    def is_word_end(self, letter = r'\S'):
+        return self.__test_cursor_anchor(self.get_position(), True, False, letter)
+
+    def is_out_word(self, letter = r'\S'):
+        return self.__test_cursor_anchor(self.get_position(), False, False, letter)
     ### end of editor related API
 
 
     ### supporting function
-    def __get_word_start(self):
-        pos = self.get_position()
-        if re.match('\s', self.get_chars(pos - 1, pos)):
-            return None
+    def __get_word_start(self, pos, letter = r'\S'):
+        if not pos:
+            return 0            # at start of the entry
+        if not re.match(letter, self.get_chars(pos - 1, pos)):
+            raise ValueError('outside of word or at word start')
 
-        while pos > 0 and re.match('\S', self.get_chars(pos - 1, pos)):
+        while pos > 0 and re.match(letter, self.get_chars(pos - 1, pos)):
             pos -= 1
         return pos
 
-    def __test_cursor_anchor(self, pos, prev_w, next_w):
+    def __get_word_end(self, pos, letter = r'\S'):
+        if pos == self.get_text_length():
+            return pos          # at end of the entry
+        if not re.match(letter, self.get_chars(pos, pos + 1)):
+            raise ValueError('outside of word or at word end')
+
+        while pos > 0 and re.match(letter, self.get_chars(pos, pos + 1)):
+            pos += 1
+        return pos
+
+    def __test_cursor_anchor(self, pos, prev_w, next_w, letter = r'\S'):
         prev = self.get_chars(pos - 1, pos)
         next = self.get_chars(pos, pos + 1)
 
         return (
-            prev_w == bool(re.match('\S', prev)) and
-            next_w == bool(re.match('\S', next))
+            prev_w == bool(re.match(letter, prev)) and
+            next_w == bool(re.match(letter, next))
             )
     ### end of supporting function
 
@@ -194,7 +239,6 @@ class zLastLine(gtk.HBox):
         super(zLastLine, self).__init__()
 
         self.__n_alternation = 0    # initiate the blinking counter to 0
-        self.__sig_id = {}          # stores all signals connected to the interactive line
 
         # create widgets
         self.__label = gtk.Label(label)
@@ -237,6 +281,44 @@ class zLastLine(gtk.HBox):
         self.set_editable(False)
 
 
+    ### internal signals
+    def _sig_entry_activate(self, listener, msg, sig_type):
+        if not ( ( sig_type == 'cancel'
+                   )  or
+                 ( sig_type == 'activate'  and
+                   msg['return_msg'] == 'Accept' # this guarantee a real activate keypress
+                   )
+                 ):
+            return
+
+        if sig_type == 'activate':
+            # reserve the content before resetting
+            new_text = self.get_text()
+        else:
+            new_text = ('', msg['return_msg'])
+
+        self.reset()
+        self.set_text(* new_text) # retain content / messages
+
+
+    def _sig_mx_activate(self, listener, msg, sig_type):
+        if not ( ( sig_type == 'cancel'
+                   )  or
+                 ( sig_type == 'activate'  and
+                   msg['return_msg'] == 'Accept' # this guarantee a real activate keypress
+                   )
+                 ):
+            return
+
+        self.reset()            # clear all bindings with the lastline
+        if sig_type == 'cancel':
+            self.set_text('', msg['return_msg'])
+
+        # retain focus
+        msg['widget'].grab_focus()
+    ### end of internal signals
+
+
     ### signal-like auto-update function
     def _sig_update_color_map(self, widget = None):
         self.__line_highlight.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['reserve']))
@@ -256,21 +338,6 @@ class zLastLine(gtk.HBox):
 
 
     ### overridden function definition
-    def connect(self, sig, callback, *data):
-        if sig in self.__sig_id:
-            raise ReferenceError('Already connected to a signal of the same type. Use reset() to disconnect all signals.')
-        self.__sig_id[sig] = self.__line_interactive.connect(sig, callback, *data)
-
-    def disconnect(self, handler):
-        raise NotImplementedError('Method not implemented. Use reset() to disconnect all signals.')
-    def handler_is_connected(self, handler):
-        raise NotImplementedError('Method not implemented. Use reset() to disconnect all signals.')
-    def handler_block(self, handler):
-        raise NotImplementedError('Method not implemented. Use reset() to disconnect all signals.')
-    def handler_unblock(self, handler):
-        raise NotImplementedError('Method not implemented. Use reset() to disconnect all signals.')
-
-
     def is_focus(self):
         return self.__line_interactive.is_focus()
 
@@ -278,37 +345,45 @@ class zLastLine(gtk.HBox):
         self.__line_interactive.grab_focus()
 
 
-    def is_locked(self):
-        return self.__locked
-
-    def lock(self, reset_func = None):
-        '''if reset_func is set, it will be called when reset() is called'''
-        if reset_func:
-            self.__lock_reset_func = reset_func
-        self.__locked = True
-
-    def unlock(self):
-        self.__locked = False
-
-
     def clear(self):
         if self.is_locked():
             return
         self.set_text('', '')
 
+    def is_locked(self):
+        return self.__locked
+
     def reset(self):
-        for (k, v) in self.__sig_id.iteritems():
-            if self.__line_interactive.handler_is_connected(v):
-                self.__line_interactive.disconnect(v)
-        self.__sig_id = {}
-
-        if self.__lock_reset_func:
-            self.__lock_reset_func()
-            self.__lock_reset_func = None
-
-        self.unlock()
+        self.__unlock()
         self.set_editable(False)
         self.clear()
+
+    def run(self, task, reset_func = None):
+        '''if reset_func is set, it will be called when reset() is called'''
+        if self.is_locked():
+            raise AssertionError('lastline has already been locked.')
+
+        # lock the last line and wait for its unlock
+        self.set_editable(True)
+        self.set_force_focus(True)
+
+        self.__line_interactive.set_completion_task(task)
+        self.__line_interactive.listen_on_task(task)
+
+        sig_1 = self.__line_interactive.listener.connect('z_activate', self._sig_entry_activate, 'activate')
+        sig_2 = self.__line_interactive.listener.connect('z_cancel',   self._sig_entry_activate, 'cancel')
+        self.__lock(reset_func)
+
+        while self.is_locked():
+            gtk.main_iteration(False)
+
+        self.__line_interactive.listen_off()
+        if self.__line_interactive.listener.handler_is_connected(sig_1):
+            self.__line_interactive.listener.disconnect(sig_1)
+        if self.__line_interactive.listener.handler_is_connected(sig_2):
+            self.__line_interactive.listener.disconnect(sig_2)
+
+        return self.get_text()
 
 
     def get_label(self):
@@ -413,7 +488,7 @@ class zLastLine(gtk.HBox):
                 self.__line_interactive.listener.connect('z_cancel',   self._sig_mx_activate, 'cancel'),
                 ]
 
-            self.lock(self.stop_mx_commanding)
+            self.__lock(self.stop_mx_commanding)
 
     def stop_mx_commanding(self):
         for handler in self.__mx_sig:
@@ -423,19 +498,6 @@ class zLastLine(gtk.HBox):
         self.__line_interactive.listen_off()
 
         self.__mx_commanding = False
-
-    def _sig_mx_activate(self, listener, msg, sig_type):
-        if sig_type == 'cancel':
-            # M-x commanding cancelled
-            self.reset() # this is to clear all bindings with the lastline
-            self.set_text('', msg['return_msg'])
-        elif sig_type == 'activate' and msg['return_msg'] == 'Accept':
-            self.reset() # this is to clear all bindings with the lastline
-        else:
-            return
-
-        # retain focus
-        msg['widget'].grab_focus()
 
 
     def get_editable(self):
@@ -466,6 +528,17 @@ class zLastLine(gtk.HBox):
 
 
     ### supporting function
+    def __lock(self, reset_func):
+        self.__lock_reset_func = reset_func
+        self.__locked = True
+
+    def __unlock(self):
+        if self.__lock_reset_func:
+            self.__lock_reset_func()
+            self.__lock_reset_func = None
+        self.__locked = False
+
+
     def __set_alternation(self, n_blink):
         self.__set_timer(n_blink * 2 - 1)
 
@@ -633,8 +706,10 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
             start_iter = self.get_para_start(buff, start_iter)
 
-        buff.delete(start_iter, end_iter)
+        else:
+            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
 
+        buff.delete(start_iter, end_iter)
 
     def delete_forward(self, task = 'char'):
         buff = self.get_buffer()
@@ -666,6 +741,9 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
                 end_iter.forward_line()
 
             end_iter = self.get_para_end(buff, end_iter)
+
+        else:
+            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
 
         buff.delete(start_iter, end_iter)
 
@@ -833,19 +911,11 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
             path = [ os.path.expanduser('~'), '']
 
         if lastline.get_property('visible'):
-            lastline.reset()
-            lastline.set_editable(True)
-            lastline.set_force_focus(True)
+            lastline.reset()    # force to clear all other actions
             lastline.set_text('Write File: ', os.path.join(*path))
-            lastline.connect('key-press-event', zEntry._sig_key_pressed, 'file')
 
             # lock the lastline until getting the path
-            lastline.lock()
-            while lastline.is_locked():
-                gtk.main_iteration(False)
-            ( msg, path ) = lastline.get_text()
-
-            lastline.reset()
+            ( msg, path ) = lastline.run('file')
             self.grab_focus()
 
             if path:
