@@ -643,12 +643,12 @@ class zFileManager(gtk.VBox):
         self.treeview.connect(  'focus-out-event', self._focus_evnt_redirect, 'focus-out-event')
 
         # connect signal for internal usage
+        self.path_entry.set_completion_task('path')
         self.path_entry.listen_on_task('path')
-        self.path_entry.listener.connect('z_activate', self._sig_open_file_from_entry)
-        self.path_entry.listener.connect('z_cancel', lambda *arg: (
-                self.path_entry.set_text(self.dirname + os.path.sep),
-                self.grab_focus(),
-                ))
+
+        self.path_entry.listener.connect('z_activate', self._sig_path_entry_activate, 'activate')
+        self.path_entry.listener.connect('z_cancel',   self._sig_path_entry_activate, 'cancel')
+
         self.treeview.connect('row-activated', self._sig_open_file_from_tree)
         self.treeview.fn_cell_rdr.connect('edited', self._sig_entry_edited)
 
@@ -713,18 +713,31 @@ class zFileManager(gtk.VBox):
         self.treeview.set_cursor(self.__cell_data_func_skip['path'], self.treeview.fn_tree_col, True)
 
 
-    def _sig_open_file_from_entry(self, entry, msg):
-        fullpath = os.path.abspath(os.path.expanduser(self.path_entry.get_text()))
-        fn_list = os.path.split(fullpath)
+    def _sig_path_entry_activate(self, entry, msg, task):
+        if 'z_run_cmd' in msg:
+            # M-x initiated
+            self.get_editor().get_last_line().start_mx_commanding(msg['z_run_cmd'])
+            return
 
-        if io_encap.is_dir(fn_list):
-            self.set_folder(os.path.join(* fn_list))
-        elif io_encap.is_file(fn_list):
-            self.open_file(fn_list)
-        else:
+        if task == 'activate' and msg['return_msg'] == 'Accept':
+            # activate key is pressed
+            fullpath = os.path.abspath(os.path.expanduser(self.path_entry.get_text()))
+            fn_list = os.path.split(fullpath)
+
+            if io_encap.is_dir(fn_list):
+                self.set_folder(os.path.join(* fn_list))
+            elif io_encap.is_file(fn_list):
+                self.open_file(fn_list)
+            else:
+                self.path_entry.set_text(self.dirname + os.path.sep)
+                self.path_entry.grab_focus()
+                raise ValueError('Cannot open "{0}".\n    Make sure the path is spelled correctly.'.format(fullpath))
+
+        elif task == 'cancel' and msg['return_msg'] == 'Quit':
+            # cancel key is pressed
             self.path_entry.set_text(self.dirname + os.path.sep)
-            self.path_entry.grab_focus()
-            raise ValueError('Cannot open "{0}".\n    Make sure the path is spelled correctly.'.format(fullpath))
+            self.grab_focus()
+
 
     def _sig_open_file_from_tree(self, treeview, tree_path, tree_col = None):
         iterator = self.treeview.model.get_iter(tree_path)
@@ -812,7 +825,7 @@ class zFileManager(gtk.VBox):
         if not fullpath:
             new_dirname = os.path.expanduser('~')
         else:
-            new_dirname = os.path.abspath(fullpath)
+            new_dirname = os.path.abspath(os.path.expanduser(fullpath))
 
         # test permission
         if not os.access(new_dirname, os.F_OK):

@@ -39,8 +39,8 @@ class zEntry(gtk.Entry):
     def __init__(self):
         super(zEntry, self).__init__()
 
-        self.complete = zComplete()
-        self.listener = zStrokeListener(self.complete)
+        self.completer = zComplete(self)
+        self.listener = zStrokeListener()
 
         self.set_editable(True) # default editable
 
@@ -63,18 +63,24 @@ class zEntry(gtk.Entry):
 
 
     ### overridden function definition
-    def complete():
-        self.complete.complete()
+    def complete(self):
+        self.completer.complete()
 
-    def complete_list():
-        self.complete.complete_list()
+    def complete_list(self):
+        self.completer.complete_list()
+
+    def set_completion_task(self, task):
+        if task not in zComplete.task_list:
+            raise ValueError('{0}: invalid task for zComplete instance.'.format(task))
+        else:
+            self.completer.set_completion_task(task)
 
 
     def is_listenning(self):
         return self.listener.is_listenning_on(self)
 
-    def listen_on_task(self, task = None):
-        self.listener.listen_on(self, task)
+    def listen_on_task(self, task = None, init_widget = None):
+        self.listener.listen_on(self, task, init_widget)
 
     def listen_off(self):
         self.listener.listen_off(self)
@@ -84,6 +90,20 @@ class zEntry(gtk.Entry):
         pos = self.get_position()
         super(zEntry, self).insert_text(text, pos)
         self.set_position(pos + len(text))
+
+
+    # no overridden for is_focus()
+    def grab_focus(self):
+        pos = self.get_position()
+        super(zEntry, self).grab_focus()
+        self.set_position(pos)
+
+
+    # no overridden for get_text()
+    def set_text(self, text):
+        super(zEntry, self).set_text(text)
+        self.set_position(-1)
+
 
     # no overridden for get_editable()
     def set_editable(self, setting):
@@ -112,22 +132,52 @@ class zEntry(gtk.Entry):
 
         self.delete_text(start_pos, end_pos)
 #        self.set_position(start_pos)
+
+
+    def get_current_word(self):
+        curr = self.get_position()
+        start = self.__get_word_start()
+        return self.get_chars(start, curr)
+
+    def set_current_word(self, word):
+        curr = self.get_position()
+        start = self.__get_word_start()
+
+        self.select_region(start, curr)
+        self.delete_selection()
+        self.insert_text(word)
+
+
+    def is_word_start(self):
+        return self.__test_cursor_anchor(self.get_position(), False, True)
+
+    def is_in_word(self):
+        return self.__test_cursor_anchor(self.get_position(), True, True)
+
+    def is_word_end(self):
+        return self.__test_cursor_anchor(self.get_position(), True, False)
     ### end of editor related API
 
 
-    ### completion related functions
-    def get_comp_list(self):
-        return self.__comp_list
+    ### supporting function
+    def __get_word_start(self):
+        pos = self.get_position()
+        if re.match('\s', self.get_chars(pos - 1, pos)):
+            return None
 
-    def get_comp_list_len(self):
-        return len(self.__comp_list)
+        while pos > 0 and re.match('\S', self.get_chars(pos - 1, pos)):
+            pos -= 1
+        return pos
 
-    def set_comp_list(self, comp_list):
-        self.__comp_list = comp_list
+    def __test_cursor_anchor(self, pos, prev_w, next_w):
+        prev = self.get_chars(pos - 1, pos)
+        next = self.get_chars(pos, pos + 1)
 
-    def popup_comp_list(self):
-        print 'list completion not implemented yet'
-    ### end of completion related functions
+        return (
+            prev_w == bool(re.match('\S', prev)) and
+            next_w == bool(re.match('\S', next))
+            )
+    ### end of supporting function
 
 
 ######## ######## ######## ######## ########
@@ -281,7 +331,6 @@ class zLastLine(gtk.HBox):
         else:
             self.__line_highlight.set_text(hlt_text)
             self.__line_interactive.set_text(entry_text)
-            self.__line_interactive.set_position(-1)
     ### end of overridden function definition
 
 
@@ -339,30 +388,54 @@ class zLastLine(gtk.HBox):
     def is_mx_commanding(self):
         return self.__mx_commanding
 
-    def start_mx_commanding(self):
+    def start_mx_commanding(self, init_widget):
         if self.is_mx_commanding():
             # already in M-x Commanding, warn it
             self.blink('Warn: ', 'invalid key press!', 1)
+
         elif self.__line_interactive.is_listenning():
             raise AssertionError('lastline is listenning on another task!')
+
         elif self.is_locked():
             raise AssertionError('lastline is locked! permission denied!')
+
         else:
             # initiate M-x Commanding
             self.__mx_commanding = True
             self.set_text('M-x ', '')
             self.set_editable(True)
 
-            self.__line_interactive.listen_on_task('func')
+            self.__line_interactive.set_completion_task('func')
+            self.__line_interactive.listen_on_task('func', init_widget)
+
+            self.__mx_sig = [
+                self.__line_interactive.listener.connect('z_activate', self._sig_mx_activate, 'activate'),
+                self.__line_interactive.listener.connect('z_cancel',   self._sig_mx_activate, 'cancel'),
+                ]
+
             self.lock(self.stop_mx_commanding)
 
     def stop_mx_commanding(self):
-        self.unlock()
+        for handler in self.__mx_sig:
+            if self.__line_interactive.handler_is_connected(handler):
+                self.__line_interactive.disconnect(handler)
+
         self.__line_interactive.listen_off()
 
-        self.set_editable(False)
-        self.clear()
         self.__mx_commanding = False
+
+    def _sig_mx_activate(self, listener, msg, sig_type):
+        if sig_type == 'cancel':
+            # M-x commanding cancelled
+            self.reset() # this is to clear all bindings with the lastline
+            self.set_text('', msg['return_msg'])
+        elif sig_type == 'activate' and msg['return_msg'] == 'Accept':
+            self.reset() # this is to clear all bindings with the lastline
+        else:
+            return
+
+        # retain focus
+        msg['widget'].grab_focus()
 
 
     def get_editable(self):
@@ -380,7 +453,6 @@ class zLastLine(gtk.HBox):
         self.__line_interactive.set_editable(setting)
         if setting and not ignore_focus:
             self.grab_focus()
-            self.__line_interactive.set_position(-1)
 
     def get_force_focus(self):
         return self.__force_focus
@@ -461,8 +533,8 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         self.set_editor(editor)
         self.center = self
 
-        self.complete = zComplete()
-        self.listener = zStrokeListener(self.complete)
+        self.completer = zComplete(self)
+        self.listener = zStrokeListener()
 
         self.set_editable(True) # default editable
 
@@ -485,18 +557,24 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
 
     ### overridden function definition
-    def complete():
-        self.complete.complete()
+    def complete(self):
+        self.completer.complete()
 
-    def complete_list():
-        self.complete.complete_list()
+    def complete_list(self):
+        self.completer.complete_list()
+
+    def set_completion_task(self, task):
+        if task not in zComplete.task_list:
+            raise ValueError('{0}: invalid task for zComplete instance.'.format(task))
+        else:
+            self.completer.set_completion_task(task)
 
 
     def is_listenning(self):
         return self.listener.is_listenning_on(self)
 
-    def listen_on_task(self, task = None):
-        self.listener.listen_on(self, task)
+    def listen_on_task(self, task = None, init_widget = None):
+        self.listener.listen_on(self, task, init_widget)
 
     def listen_off(self):
         self.listener.listen_off(self)
@@ -508,7 +586,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
     def get_text(self):
         buff = self.get_buffer()
-        buff.get_text()
+        return buff.get_text(buff.get_start_iter(), buff.get_end_iter(), False)
 
     def set_text(self, text):
         buff = self.get_buffer()
@@ -597,6 +675,39 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         if not iterator.ends_line():
             # not already at line-end
             iterator.forward_to_line_end()
+
+
+    def get_current_word(self):
+        buff = self.get_buffer()
+        start_iter = buff.get_iter_at_mark(buff.get_insert())
+        end_iter   = buff.get_iter_at_mark(buff.get_insert())
+
+        # move start back to the word start
+        start_iter.backward_word_start()
+
+        return buff.get_text(start_iter, end_iter, False)
+
+    def set_current_word(self, word):
+        buff = self.get_buffer()
+        start_iter = buff.get_iter_at_mark(buff.get_insert())
+        end_iter   = buff.get_iter_at_mark(buff.get_insert())
+
+        # move start back to the word start
+        start_iter.backward_word_start()
+
+        # replace the current word with the new word
+        buff.delete(start_iter, end_iter)
+        buff.insert_text(start_iter, word)
+
+
+    def is_word_start(self):
+        return self.get_buffer().get_iter_at_mark(buff.get_insert()).starts_word()
+
+    def is_in_word(self):
+        return self.get_buffer().get_iter_at_mark(buff.get_insert()).inside_word()
+
+    def is_word_end(self):
+        return self.get_buffer().get_iter_at_mark(buff.get_insert()).ends_word()
 
 
     def is_in_para(self, buff, iterator):

@@ -1,6 +1,6 @@
 # this is the key stroke parser module of the zComponent package
 
-import sys, re, copy
+import os, sys, re, copy
 
 import pygtk
 pygtk.require('2.0')
@@ -56,6 +56,41 @@ KEY_BINDING_RULE_MKUP = {
 ''',
     }
 
+
+PUNCT_KEY_MAP = {
+    'asciitilde'    : '~',
+    'exclam'        : '!',
+    'at'            : '@',
+    'numbersign'    : '#',
+    'dollar'        : '$',
+    'percent'       : '%',
+    'asciicircum'   : '^',
+    'ampersand'     : '&',
+    'asterisk'      : '*',
+    'parenleft'     : '(',
+    'parenright'    : ')',
+    'underscore'    : '_',
+    'plus'          : '+',
+    'grave'         : '`',
+    'minus'         : '-',
+    'equal'         : '=',
+    'braceleft'     : '{',
+    'braceright'    : '}',
+    'bar'           : '|',
+    'bracketleft'   : '[',
+    'bracketright'  : ']',
+    'backslash'     : '\\',
+    'colon'         : ':',
+    'quotedbl'      : '"',
+    'semicolon'     : ';',
+    'apostrophe'    : "'",
+    'less'          : '<',
+    'greater'       : '>',
+    'question'      : '?',
+    'comma'         : ',',
+    'period'        : '.',
+    'slash'         : '/',
+    }
 
 FUNC_KEY_MAP = {                # the name (all caps) of the function key : the name gtk returns
     'BACKSPACE' : 'BackSpace',
@@ -261,47 +296,65 @@ class zStrokeListener(gobject.GObject):
     according to the pre-defined rules ()
 
     lookup structure:
-        1) listen to all strokes defined in zStrokeListener.__key_func_binding (set by zStrokeListener.set_key_binding())
+        0) listen on activate key and cancel key. if either is found, emit
+           the corresponding signal with message 'Accept' / 'Quit'
 
-        2) for a successful catch, search `listener.is_enabled_func` for the function
-           only if no match, fall through to search in `zStrokeListener.global_is_enabled_func`
+        1) listen to all strokes in zStrokeListener.__key_func_binding
+           (set by zStrokeListener.set_key_binding())
 
-           a) for a successful match while the value is set to True, the function is considered "enabled"
-              search `self.func_callback_map` and `zSplitWindow.global_func_callback_map` for callback
+        2) for a successful catch, search `listener.is_enabled_func` for
+           the function that is binded to the stroke; only if no match,
+           fall through to search `zStrokeListener.global_is_enabled_func`
 
-              -) if matches, emit 'z_activate' and call the callback as class closure
-                 (called after 'connect' handler but before 'connect_after' handler)
+           a) for a successful match while the value is True, the function
+              is considered "enabled". search `self.func_callback_map` and
+              `zSplitWindow.global_func_callback_map` for callback
 
-              -) if partially matches (match the start of a combo), emit 'z_activate'
-                 with message 'z_combo'
+              -) if matches, emit 'z_activate' and call the callback as
+                 class closure (called after 'connect' handler but before
+                 'connect_after' handler)
 
-              -) otherwise, emit 'z_cancel' with message 'function not implemented'
+              -) if partially matches (match the start of a combo), emit
+                 'z_activate' with message 'z_combo'
 
-           b) if the matched value is False or no match at all, the function is considered "disabled"
-              emit 'z_cancel' with message 'function is disabled'
+              -) if no match at all, emit 'z_cancel' with message
+                 'function not implemented'
+
+           b) if the matched value is False or no match at all, the function
+              is considered "disabled"; emit 'z_cancel' with message
+              'function is disabled'
 
         either 'z_activate' or 'z_cancel' require the callback to be:
-          def callback(widget, msg, *data)
-        where msg is a dict containing all messages generated during the parsing
+            def callback(widget, msg, *data)
+        where msg is a dict containing all messages generated during
+        the listenning process
 
         keys in msg:
-          'style'               : the current key-binding style
+          'style'           : the current key-binding style
 
-          'widget'              : the widget that cause the signal to be emitted
-          'stroke'              : the stroke that cause the signal to be emitted
+          'widget'          : the widget that cause the signal to be emitted
+          'stroke'          : the stroke that cause the signal to be emitted
 
-          'return_msg'          : the message the listener returned;
-                                  with 'z_cancel', it is usually a warning or an error message
+          'return_msg'      : the message the listener returned;
+                              with 'z_cancel', it's usually a warn / err msg
 
-          'combo_entering'      : whether the widget is on combo_entering (in the middle of a binded key sequence)
-          'combo_content'       : the content of the command if on combo_entering; otherwise not accessable
+          'combo_entering'  : whether the widget is on combo_entering
+                              (in the middle of a binded key sequence)
+          'combo_content'   : the content of the command if on combo_entering
+                              otherwise not accessable
 
-          'entry_entering'      : whether the widget is on entry_entering (in the middle of typing a binded function name)
-          'entry_content'       : the content of the command if on entry_entering; otherwise not accessable
+          'entry_entering'  : whether the widget is on entry_entering (in the
+                              middle of typing a binded function name)
+          'entry_content'   : the content of the command if on entry_entering
+                              otherwise not accessable
 
-        Note: in emacs style, an initial stroke of 'M-x' will cause 'z_activate' to be emitted with
-              msg = { 'z_run_cmd' : widget }  [no other entrys in the dict so you probably want to check this first]
-              this means you need to prepare an entry for getting the command as raw input from user.
+        Note:
+            in emacs style, an initial stroke of 'M-x' will cause 'z_activate'
+            to be emitted with  msg = { 'z_run_cmd' : widget }
+            [no other entrys in the dict so you need to check this first]
+
+            this means you need to prepare an entry for getting the command
+            as raw input from user
     '''
     __gsignals__ = {
         'z_activate' : (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,)),
@@ -366,17 +419,13 @@ class zStrokeListener(gobject.GObject):
     __style = 'other'           # see zStrokeListener.set_style()
     __key_func_binding = {}     # stroke-to-funcname binding; global; see zStrokeListener.set_key_binding()
 
+    task_list = [               # all supported tasks
+        'text', 'func', 'path', 'file', 'dir',
+        ]
 
-    def __init__(self, complete = None):
-        '''
-        complete = None
-            the completion module the parser can use. If set, 'complete'
-            will try fill the matching content and 'complete-list' will
-            show a list of all matching terms.
-        '''
+    def __init__(self):
         super(zStrokeListener, self).__init__()
 
-        self.complete = complete
 
         self.listener_id = { # see is_listenning_on(), listen_on(), and listen_off() for more info
             # widget : handler_id for 'key-press-event'
@@ -395,9 +444,10 @@ class zStrokeListener(gobject.GObject):
         # local vars for the listener
         self.__escaping = False
         self.__ctrl_char_map = {
-            'C-I' : '\t',
-            'C-J' : '\n',
-            'C-M' : '\r',
+            'SPACE' : ' ',
+            'C-I'   : '\t',
+            'C-J'   : '\n',
+            'C-M'   : '\r',
             }
 
         self.__combo_entering = False
@@ -458,23 +508,29 @@ class zStrokeListener(gobject.GObject):
     def is_listenning_on(self, widget):
         return widget in self.listener_id
 
-    def listen_on(self, widget, task = None):
+    def listen_on(self, widget, task = 'text', init_widget = None):
         '''
-        task = None
-            the task that the entry is asked to complete.
-            Could be one of the following:
-              -  None  : no special rules applied and pass 'Enter' keypress to the widget.
-              - 'text' : apply text completion and pass 'Enter' keypress to the widget.
+        task = 'text'
+          - 'text' : on activate, pass 'Enter' keypress to the widget to handle
 
-              - 'func' : apply function completion
+          - 'func' : on activate, validate the function and invoke callback if success
 
-              - 'path' : apply path completion
-              - 'file' : same to 'path' except text entered must not be a dir.
-              - 'dir'  : same to 'path' except text entered must not be a file.
+          - 'path' : on activate, normalize the text entered
+          - 'file' : on activate, normalize the text entered and enforce text entered not to be an exsiting dir
+          - 'dir'  : on activate, normalize the text entered and enforce text entered not to be an exsiting file
+
+        init_widget = None
+            this is only useful when task = 'func' is set. in that case, the function name will be searched in
+            init_widget's registry list, instead of widget's.
         '''
+        if task not in zStrokeListener.task_list:
+            raise ValueError('{0}: invalid task for zStrokeListener instance.'.format(task))
+
         if self.is_listenning_on(widget):
             raise AssertionError('Listener already binded. use listen_off(widget) to remove it.')
-        self.listener_id[widget] = widget.connect('key-press-event', self._sig_key_pressed, task)
+
+        self.listener_id[widget] = widget.connect('key-press-event', self._sig_key_pressed, task, init_widget)
+
 
     def listen_off(self, widget):
         if self.is_listenning_on(widget) and widget.handler_is_connected(self.listener_id[widget]):
@@ -513,7 +569,7 @@ class zStrokeListener(gobject.GObject):
 
 
 
-    def _sig_key_pressed(self, widget, event, task):
+    def _sig_key_pressed(self, widget, event, task, init_widget = None):
 #        self.__debug_print_maps()
 
         if event.type != gtk.gdk.KEY_PRESS:
@@ -525,24 +581,34 @@ class zStrokeListener(gobject.GObject):
         ### generate stroke
         ctrl_mod_mask = gtk.gdk.CONTROL_MASK | gtk.gdk.MOD1_MASK
 
+        key_name = gtk.gdk.keyval_name(event.keyval)
+        if key_name in PUNCT_KEY_MAP:
+            key_name = PUNCT_KEY_MAP[key_name]
+
         if (event.state & ctrl_mod_mask) == ctrl_mod_mask:
-            stroke = 'C-M-' + gtk.gdk.keyval_name(event.keyval)
+            stroke = 'C-M-' + key_name
 
         elif event.state & gtk.gdk.CONTROL_MASK:
-            stroke = 'C-' + gtk.gdk.keyval_name(event.keyval)
+            stroke = 'C-' + key_name
 
         elif event.state & gtk.gdk.MOD1_MASK:
-            stroke = 'M-' + gtk.gdk.keyval_name(event.keyval)
+            stroke = 'M-' + key_name
 
         else:
-            stroke = gtk.gdk.keyval_name(event.keyval)
+            stroke = key_name
+
+        if task == 'func':
+            self.__entry_entering = True
 
 
         ### style-regardless checkings
         # check Cancelling
         if is_sp_func_key(stroke, 'CANCEL', self.get_style()):
             # with any style, this means 'cancel'
-            self.emit('z_cancel', self.__build_msg(widget, stroke, 'Quit'))
+            if not init_widget or task != 'func':
+                # init_widget not set, or in regular mode (non-mx-mode)
+                init_widget = widget
+            self.emit('z_cancel', self.__build_msg(init_widget, stroke, 'Quit'))
 
             # on cancelling, reset all modes
             self.__combo_entering = False
@@ -558,32 +624,38 @@ class zStrokeListener(gobject.GObject):
         if ( not self.__combo_entering  and                       # must not on combo-entering, and
              is_sp_func_key(stroke, 'ACTIVATE', self.get_style()) # the activate kay is pressed
              ):
-            if task in [ None, 'text' ]:
+            if task == 'text':
                 return False    # pass 'Enter' to the widget to handle
 
             elif task == 'func':
                 # is on M-x commanding
-                if self.__is_enabled_func(self.__entry_content):
+                if not init_widget:
+                    init_widget = widget
+
+                local_is_enabled_func   = init_widget.listener.is_enabled_func
+                local_func_callback_map = init_widget.listener.func_callback_map
+
+                if self.__is_enabled_func(self.__entry_content, local_is_enabled_func):
                     # is a valid functionality
 
-                    if self.__entry_content in self.func_callback_map:
+                    if self.__entry_content in local_func_callback_map:
                         # has registered function
-                        self.__z_activate_callback = self.func_callback_map[self.__entry_content]
-                        self.emit('z_activate', self.__build_msg(widget, stroke, ''))
+                        self.__z_activate_callback = local_func_callback_map[self.__entry_content]
+                        self.emit('z_activate', self.__build_msg(init_widget, stroke, 'Accept'))
                         self.__z_activate_callback = None
 
                     elif self.__entry_content in zStrokeListener.global_func_callback_map:
                         # has globally registered function
                         self.__z_activate_callback = zStrokeListener.global_func_callback_map[self.__entry_content]
-                        self.emit('z_activate', self.__build_msg(widget, stroke, ''))
+                        self.emit('z_activate', self.__build_msg(init_widget, stroke, 'Accept'))
                         self.__z_activate_callback = None
                     else:
                         self.emit('z_cancel', self.__build_msg(
-                                widget, stroke, '(function `{0}` not implemented)'.format(self.__entry_content)
+                                init_widget, stroke, '(function `{0}` not implemented)'.format(self.__entry_content)
                                 ))
                 else:
                     self.emit('z_cancel', self.__build_msg(
-                            widget, stroke, '({0}: no such function)'.format(self.__entry_content)
+                            init_widget, stroke, '({0}: no such function)'.format(self.__entry_content)
                             ))
 
                 # M-x cmd emitted, reset entering mode
@@ -596,11 +668,16 @@ class zStrokeListener(gobject.GObject):
             if text_entered:
                 if ( (task == 'file' and not os.path.isdir(text_entered) ) or
                      (task == 'dir'  and not os.path.isfile(text_entered)) or
-                     task in [ 'path' ] # tasks that require no checkings
+                     task == 'path'
                      ):
-                    self.emit('z_activate', self.__build_msg(widget, stroke, ''))
-                elif self.complete:
-                    self.complete.popup_comp_list()
+                    self.emit('z_activate', self.__build_msg(widget, stroke, 'Accept'))
+
+                elif self.__is_enabled_func('complete_list'):
+                    # list completion is enabled, execute it if mapped
+                    if 'complete_list' in self.func_callback_map:
+                        self.func_callback_map['complete_list']()
+                    elif 'complete_list' in zStrokeListener.global_func_callback_map:
+                        zStrokeListener.global_func_callback_map['complete_list']()
 
             return True
         # no Activating
@@ -613,14 +690,16 @@ class zStrokeListener(gobject.GObject):
             if not self.__combo_entering and self.__escaping:
                 try:
                     if widget.get_editable():
-                        if re.match(r'^[\x20-\x7e]$', stroke):
+                        if self.__is_printable(stroke):
                             insertion = stroke
+
                         elif stroke.upper() in self.__ctrl_char_map:
                             insertion = self.__ctrl_char_map[stroke.upper()]
+
                         else:
                             insertion = '' # ignore the rest ctrl chars
 
-                        self.__insert_text(widget, insertion)
+                        self.__insert_text(widget, insertion, task)
                 except:
                     pass # if anything goes wrong, give up the escaping
 
@@ -633,9 +712,13 @@ class zStrokeListener(gobject.GObject):
                  self.__entry_entering
                  ):
                 # on M-x Commanding, Commanding *MUST NOT* be initiated
-                if re.match(r'^[\x20-\x7e]$', stroke):
+                if self.__is_printable(stroke):
                     # regular keypress
-                    self.__insert_text(widget ,stroke)
+                    self.__insert_text(widget , stroke, task)
+                    return True
+                elif self.__is_space(stroke):
+                    # space
+                    self.__insert_text(widget , ' ', task)
                     return True
                 else:
                     # leave the rest checking to commanding
@@ -714,9 +797,20 @@ class zStrokeListener(gobject.GObject):
                     self.__kp_focus_out_rm(widget) # release focus requirement
 
                     if not self.__combo_content:
-                        # initiate stroke, pass it on
+                        # initiate stroke, do not eat it
                         self.__combo_entering = False
-                        return False
+
+                        if self.__is_printable(stroke):
+                            # regular keypress
+                            self.__insert_text(widget , stroke, task)
+                            return True
+                        elif self.__is_space(stroke):
+                            # space
+                            self.__insert_text(widget , ' ', task)
+                            return True
+                        else:
+                            # not regular keypress nor space, pass it to the widget
+                            return False
                     else:
                         # has previous combo, eat the current combo
                         self.emit('z_cancel', self.__build_msg(
@@ -757,9 +851,19 @@ class zStrokeListener(gobject.GObject):
                             ))
                 return True
             else:
-                return False
+                if self.__is_printable(stroke):
+                    # regular keypress
+                    self.__insert_text(widget , stroke, task)
+                    return True
+                elif self.__is_space(stroke):
+                    # space
+                    self.__insert_text(widget , ' ', task)
+                    return True
+                else:
+                    # not regular keypress nor space, pass it to the widget
+                    return False
 
-        raise LookupError('{0}: key stroke not captured or processed.'.format(stroke))
+        raise LookupError('{0}: key stroke not captured or processed.\n\tPlease report this as a bug.'.format(stroke))
     ### end of key stroke listener API
 
 
@@ -788,16 +892,19 @@ class zStrokeListener(gobject.GObject):
 
         return msg
 
-    def __insert_text(self, widget, insertion):
+    def __insert_text(self, widget, insertion, task):
         widget.insert_text(insertion)
         if self.__entry_entering:
             # update the content backup
             self.__entry_content = widget.get_text()
 
-    def __is_enabled_func(self, func):
-        if func in self.is_enabled_func:
+
+    def __is_enabled_func(self, func, local_list = None):
+        if not local_list:
+            local_list = self.is_enabled_func
+        if func in local_list:
             # if locally registered, do not search in global settings
-            return self.is_enabled_func[func]
+            return local_list[func]
 
         elif func in zStrokeListener.global_is_enabled_func:
             # if not locally registered but globally registered
@@ -805,6 +912,12 @@ class zStrokeListener(gobject.GObject):
         else:
             # if neither locally nor globally registered
             return False
+
+    def __is_printable(self, stroke):
+        return re.match(KEY_RE_PATTERN['printable'], stroke, re.X)
+
+    def __is_space(self, stroke): 
+        return is_func_key(stroke, 'Space')
 
 
     def __debug_print_maps(self):
@@ -856,8 +969,6 @@ class zStrokeListener(gobject.GObject):
 
         sys.stderr.write('\n================================================\n')
     ### end of supporting function
-
-
 gobject.type_register(zStrokeListener)
 
 
@@ -865,10 +976,194 @@ gobject.type_register(zStrokeListener)
 ########          zComplete         ########
 ######## ######## ######## ######## ########
 
-class zComplete(object):
-    '''A gtk.Entry that has additional methods'''
-    def __init__(self):
+class zComplete(gobject.GObject):
+    '''
+    A completion module that can be applied to any editable widget
+    that (at least) implements the following methods:
+      - widget.is_word_start()  : test if cursor is at word start
+      - widget.is_in_word()     : test if cursor is in a word
+      - widget.is_word_end()    : test if cursor is at word end
+
+      - widget.get_current_word()     : get the word in front of the cursor
+      - widget.set_current_word(word) : set the word in front of the cursor
+
+    Notes:
+        a word is a completion unit that you wish to apply completion
+        on. for function completion, [\w]+ is recommended; for path
+        completion, [\S]+ is recommended.
+
+    it will emit 'z_mid_of_word' signal if completion happened when
+    the cursor is not at a word-end boundary
+    '''
+    __gsignals__ = {
+        'z_mid_of_word' : (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, ()),
+        }
+
+    task_list = [               # all supported tasks
+        'text', 'func', 'path', 'file', 'dir',
+        ]
+
+    def __init__(self, widget, task = 'text'):
+        '''
+        widget
+            the widget that is to be binded to this completer
+        '''
+        super(zComplete, self).__init__()
+
+        self.widget = widget
+        self.set_completion_task(task)
 
         self.__comp_list = []           # completion list
         self.__try_completing = 0       # how many times tring completion; reset to 0 if completion success
 
+
+    def complete(self):
+        if not self.widget.get_editable():
+            return              # no need to complete, early return
+
+        # check position
+        if not self.widget.is_word_end():
+            self.__try_completing = 0 # reset the completion counter
+            self.emit('z_mid_of_word')
+            return
+
+        # increment the completion counter
+        self.__try_completing += 1
+
+        if self.__task == 'text':
+            # text completion
+            return              # not implemented yet
+
+        elif self.__task == 'func':
+            # function completion
+            normalized_text = self.__generate_func_list(self.widget.get_current_word())
+        else:
+            # path completion
+            normalized_text = self.__generate_path_list(self.widget.get_current_word(), self.__task)
+
+        self.__complete(normalized_text, self.__task)
+
+
+    def complete_list(self):
+        if not self.widget.get_editable():
+            return              # no need to complete, early return
+
+        # check position
+        if not self.widget.is_word_end():
+            self.__try_completing = 0 # reset the completion counter
+            self.emit('z_mid_of_word')
+
+        if self.__task == 'text':
+            # text completion
+            return              # not implemented yet
+
+        elif self.__task == 'func':
+            # function completion
+            normalized_text = self.__generate_func_list(self.widget.get_current_word())
+        else:
+            # path completion
+            normalized_text = self.__generate_path_list(self.widget.get_current_word(), self.__task)
+
+        self.widget.set_current_word(normalized_text)
+        self.__popup_complete_list()
+
+
+    def set_completion_task(self, task):
+        if task not in zComplete.task_list:
+            raise ValueError('{0}: invalid task for zComplete instance.'.format(task))
+        self.__task = task
+
+
+    def clear_list(self):
+        self.__comp_list = []
+        self.__try_completing = 0
+
+
+    ### supporting function
+    def __complete(self, normalized_text, task):
+        # check for unique complete
+        if not len(self.__comp_list):
+            return True # no completion, early return
+
+        # set the joining function
+        if task == 'path':
+            text_join = lambda *arg: os.path.join(*arg)
+        else:
+            text_join = lambda *arg: ''.join(arg)
+
+        # process completion
+        if len(self.__comp_list) == 1:
+            # exact match, complete it
+            normalized_text = self.__comp_list[0]
+
+            # if the text corresponding to a dir, append the path separator to it
+            if os.path.isdir(normalized_text):
+                normalized_text += os.path.sep
+
+            # reset completion counter and list
+            self.__try_completing = 0
+            self.__comp_list = []
+        else:
+            # check for max complete
+            for indx in range(len(normalized_text), len(self.__comp_list[0])):
+                next_char = self.__comp_list[0][indx]
+                conflict = False
+
+                for item in self.__comp_list[1:]:
+                    if indx == len(item) or next_char != item[indx]:
+                        conflict = True
+                        break
+
+                if conflict:
+                    break
+                else:
+                    # has at least 1 char completed, reset the completion counter
+                    self.__try_completing = 0
+                    normalized_text += next_char
+
+            if self.__try_completing > 1:
+                # more than one try, switch to complete_list()
+                self.__popup_complete_list()
+
+        self.widget.set_current_word(normalized_text)
+
+
+    def __popup_complete_list(self):
+        print 'complete_list'
+
+
+    def __generate_func_list(self, curr_func):
+        return
+
+    def __generate_path_list(self, curr_path, task):
+        # normalize the path
+        if curr_path:
+            normalized_path = os.path.abspath(os.path.expanduser(curr_path))
+        else:
+            normalized_path = os.getcwd()
+
+        # get the completion list
+        if os.path.isdir(normalized_path):
+            path = normalized_path
+            self.__comp_list = os.listdir(normalized_path)
+        else:
+            ( path, name ) = os.path.split(normalized_path)
+            self.__comp_list = [ fn for fn in os.listdir(path)
+                                 if fn.startswith(name)
+                                 ]
+        # expend to full path
+        self.__comp_list = [ os.path.join(path, fn) for fn in self.__comp_list ]
+
+        if task == 'dir':
+            # filter out non-dir entrys if a 'dir' task is performed
+            self.__comp_list = [ fn for fn in self.__comp_list
+                                 if os.path.isdir(fn)
+                                 ]
+
+        # if the text corresponding to a dir, append the path separator to it
+        if os.path.isdir(normalized_path):
+            normalized_path += os.path.sep
+
+        return normalized_path
+    ### end of supporting function
+gobject.type_register(zComplete)

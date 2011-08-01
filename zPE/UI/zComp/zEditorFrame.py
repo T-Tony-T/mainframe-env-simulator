@@ -417,7 +417,7 @@ class zEdit(z_ABC, gtk.VBox):
     def _sig_listener_active(self, listener, msg, sig_type):
         if 'z_run_cmd' in msg:
             # M-x initiated
-            zEdit.__last_line.start_mx_commanding()
+            zEdit.__last_line.start_mx_commanding(msg['z_run_cmd'])
             return
 
         widget = msg['widget']
@@ -653,8 +653,11 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
                 widget = zFileManager(editor = self)
-                widget.listener = zStrokeListener() # not for input, thus no completion
-                widget.listener.listen_on(widget.center, None)
+                widget.listener = zStrokeListener()
+                widget.listener.listen_on(widget.treeview)
+                widget.listener.listen_on(widget.path_entry)
+                widget.treeview.listener   = widget.listener
+                widget.path_entry.listener = widget.listener
 
                 widget_button_press_id = widget.center.connect('button-press-event', self._sig_button_press_browser)
 
@@ -663,10 +666,13 @@ class zEdit(z_ABC, gtk.VBox):
                 widget_shell.set_shadow_type(gtk.SHADOW_NONE)
 
                 widget = zDisplayPanel(editor = self)
-                widget.listener = zStrokeListener() # not for input, thus no completion
-                widget.listener.listen_on(widget.job_panel, None)
-                widget.listener.listen_on(widget.step_panel, None)
-                widget.listener.listen_on(widget.center, None)
+                widget.listener = zStrokeListener()
+                widget.listener.listen_on(widget.job_panel)
+                widget.listener.listen_on(widget.step_panel)
+                widget.listener.listen_on(widget.center)
+                widget.job_panel.listener  = widget.listener
+                widget.step_panel.listener = widget.listener
+                widget.center.listener     = widget.listener
 
                 widget_button_press_id = widget.center.connect('populate-popup', self._sig_button_press_textview)
             else:
@@ -851,11 +857,7 @@ class zEditBuffer(z_ABC):
             # file with a path => user-opened buffer
             buff_group = 'user'
             self.name = buffer_path[-1]
-            self.path = os.path.split( # normalize path
-                os.path.abspath(os.path.expanduser(
-                        os.path.join(* buffer_path)
-                        ))
-                )
+            self.path = os.path.split(os.path.abspath(os.path.join(* buffer_path))) # normalize path
             self.type = 'file'  # must be type::file
         else:
             # not type::file, must be system-opened buffer
