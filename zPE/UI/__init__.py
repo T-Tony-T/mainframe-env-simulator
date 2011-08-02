@@ -52,8 +52,8 @@ class BaseFrame(object):
 
         ### redirect STDOUT and STDERR to the error console
         self.err_console = zComp.zErrConsole('zPE Error Console', True)
-#        sys.stdout = self.err_console
-#        sys.stderr = self.err_console
+        sys.stdout = self.err_console
+        sys.stderr = self.err_console
 
         ### retrive configuration
         self.config_window = ConfigWindow()
