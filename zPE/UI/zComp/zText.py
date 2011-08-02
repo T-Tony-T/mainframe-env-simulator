@@ -239,6 +239,7 @@ class zLastLine(gtk.HBox):
         super(zLastLine, self).__init__()
 
         self.__n_alternation = 0    # initiate the blinking counter to 0
+        self.__response_msg = None  # used by run() and run_confirm()
 
         # create widgets
         self.__label = gtk.Label(label)
@@ -282,6 +283,28 @@ class zLastLine(gtk.HBox):
 
 
     ### internal signals
+    def _sig_comfirm(self, entry, event, choice):
+        if event.type != gtk.gdk.KEY_PRESS:
+            return False
+
+        # check modifier
+        if ( event.is_modifier or
+             (event.state & gtk.gdk.CONTROL_MASK) or
+             (event.state & gtk.gdk.MOD1_MASK   )
+             ):
+            return True         # eat all modifiers
+
+        if gtk.gdk.keyval_name(event.keyval).upper() == 'RETURN':
+            response = entry.get_text()
+            if response in choice:
+                self.__response_msg = response
+                self.reset()    # release the lock
+            else:
+                entry.set_text('')
+
+            return True         # eat the enter
+
+
     def _sig_entry_activate(self, listener, msg, sig_type):
         if not ( ( sig_type == 'cancel'
                    )  or
@@ -293,12 +316,12 @@ class zLastLine(gtk.HBox):
 
         if sig_type == 'activate':
             # reserve the content before resetting
-            new_text = self.get_text()
+            self.__response_msg = self.get_text()
         else:
-            new_text = ('', msg['return_msg'])
+            # set the msg and leave the text empty
+            self.__response_msg = (msg['return_msg'], '')
 
         self.reset()
-        self.set_text(* new_text) # retain content / messages
 
 
     def _sig_mx_activate(self, listener, msg, sig_type):
@@ -363,7 +386,7 @@ class zLastLine(gtk.HBox):
         if self.is_locked():
             raise AssertionError('lastline has already been locked.')
 
-        # lock the last line and wait for its unlock
+        # lock the last line for input
         self.set_editable(True)
         self.set_force_focus(True)
 
@@ -374,17 +397,59 @@ class zLastLine(gtk.HBox):
         sig_2 = self.__line_interactive.listener.connect('z_cancel',   self._sig_entry_activate, 'cancel')
         self.__lock(reset_func)
 
+        # wait for its unlock
         while self.is_locked():
             gtk.main_iteration(False)
 
+        # clean up
         self.__line_interactive.listen_off()
         if self.__line_interactive.listener.handler_is_connected(sig_1):
             self.__line_interactive.listener.disconnect(sig_1)
         if self.__line_interactive.listener.handler_is_connected(sig_2):
             self.__line_interactive.listener.disconnect(sig_2)
 
-        return self.get_text()
+        return self.__response_msg
 
+    def run_confirm(self, msg, choice, default = None):
+        '''
+        msg
+            what you want to display. choice list will be appended
+
+        choice
+            a list / tuple consists of all choices
+
+        default
+            the default choice being filled in at start
+            if not set, use choice[0] as default
+        '''
+        if self.is_locked():
+            raise AssertionError('lastline has already been locked.')
+
+        # prepare the lastline for confirming
+        msg = '{0} ({1} or {2}) '.format(msg, ', '.join(choice[:-1]), choice[-1])
+        if not default:
+            default = choice[0]
+
+        self.set_editable(True)
+        self.set_force_focus(True)
+
+        self.set_text(msg, default)
+        self.__line_interactive.select_region(0, -1)
+
+        # lock the last line for input
+        sig_id = self.__line_interactive.connect('key-press-event', self._sig_comfirm, choice)
+        self.__lock(None)
+
+        # wait for its unlock
+        while self.is_locked():
+            gtk.main_iteration(False)
+
+        # clean up
+        if self.__line_interactive.handler_is_connected(sig_id):
+            self.__line_interactive.disconnect(sig_id)
+
+        return self.__response_msg
+        
 
     def get_label(self):
         return self.__label.get_text()
@@ -919,6 +984,18 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
             self.grab_focus()
 
             if path:
+                if buff.path and os.path.samefile(os.path.join(* buff.path), path):
+                    return buff.flush() # no change in filename, save it directly
+
+                if os.path.isfile(path): # target already exist, confirm overwritting
+                    response = lastline.run_confirm(
+                        '"{0}" exists on disk, overwrite it?'.format(path),
+                        [ 'y', 'n', 'w', 'q', '!', ],
+                        'n'
+                        )
+                    self.grab_focus()
+                    if response not in [ 'y', 'w' ]:
+                        return None
                 path = os.path.split(path)
             else:
                 return None     # cancelled
@@ -941,7 +1018,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
                 chooser.destroy()
                 return None     # cancelled
 
-        return buff.flush_to(path)
+        return buff.flush_to(path, lambda buff: self.get_editor().set_buffer(buff.path, buff.type))
 
 
     def get_editor(self):

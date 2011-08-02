@@ -85,8 +85,8 @@ class zEdit(z_ABC, gtk.VBox):
             binded to that instance. If None, no binding is applied.
 
         Note:
-          - any system-opened "file" buffer should has "None" as the ".path" property.
-          - any system-opened "non-file" buffer should has "None" as the ".buffer" property.
+          - any system-opened "savable" buffer should has "None" as the ".path" property.
+          - any system-opened "non-savable" buffer should has "None" as the ".buffer" property.
         '''
         super(zEdit, self).__init__()
 
@@ -725,9 +725,13 @@ class zEdit(z_ABC, gtk.VBox):
         # connect buffer
         if self.active_buffer.type == 'file':
             self.center.set_buffer(new_buff.buffer)
+
         elif self.active_buffer.type == 'dir':
             if self.active_buffer.path and io_encap.is_dir(self.active_buffer.path):
                 self.center.set_folder(os.path.join(* self.active_buffer.path))
+
+        elif self.active_buffer.type == 'disp':
+            self.center.center.set_buffer(new_buff.buffer)
 
         if self.need_init:
             self.exec_init_func()
@@ -848,7 +852,7 @@ class zEditBuffer(z_ABC):
                 # both name and type match => system-opened buffer
                 buff_group = 'system'
                 self.name = buffer_path
-                self.path = None # path is "buffer.name", no information for "buffer.path"
+                self.path = None # buffer_path is "buffer.name", no information for "buffer.path"
                 self.type = buffer_type
             else:
                 # not system-opened buffer => error
@@ -863,7 +867,10 @@ class zEditBuffer(z_ABC):
             # not type::file, must be system-opened buffer
             buff_group = 'system'
             self.name = zEditBuffer.DEFAULT_BUFFER[buffer_type]
-            self.path = buffer_path # not type::file, no limitation on "buffer.path" property
+            if buffer_type == 'disp':
+                self.path = None
+            else:               # dir
+                self.path = buffer_path
             self.type = buffer_type
 
         # update buffer list
@@ -940,10 +947,14 @@ class zEditBuffer(z_ABC):
             self.set_modified(False)
 
             # connect internal signals
-            self.buffer.connect('changed', self._sig_buffer_changed)
+            self.buffer.connect('changed', self._sig_buffer_content_changed)
 
-        elif buffer_type in [ 'dir', 'disp' ]:
+        elif buffer_type == 'dir':
             self.buffer = None
+            self.set_modified(None)
+
+        elif buffer_type == 'disp':
+            self.buffer = gtk.TextBuffer()
             self.set_modified(None)
         else:
             raise TypeError
@@ -952,7 +963,7 @@ class zEditBuffer(z_ABC):
 
 
     ### internal signal definition
-    def _sig_buffer_changed(self, textbuff):
+    def _sig_buffer_content_changed(self, textbuff):
         self.set_modified(True)
     ### end of internal signal definition
 
@@ -988,7 +999,11 @@ class zEditBuffer(z_ABC):
 
 
     def flush(self):
-        if self.path:
+        if not self.buffer:
+            return self.name, '(Buffer not savable!)'
+
+        elif self.path:
+            # user-opened buffer
             full_path = os.path.join(* self.path)
             if not self.modified:
                 return full_path, '(No changes need to be saved.)'
@@ -998,27 +1013,53 @@ class zEditBuffer(z_ABC):
             else:
                 return full_path, '(Cannot save the buffer! Permission denied!)'
         else:
+            # system-opened buffer
             if not self.modified:
                 return self.name, '(No changes need to be saved.)'
             else:
                 raise ValueError('Cannot find the path! Use flush_to(path) instead.')
 
-    def flush_to(self, path):
-        if self.path and os.path.samefile(os.path.join(* self.path), os.path.join(* path)):
-            return self.flush()
+    def flush_to(self, path, callback):
+        '''
+        path
+            an list of path nodes (can be obtained by os.path.split())
 
-        if self.name in zEditBuffer.buff_group['system']:
+        callback
+            the callback function that will be called when a new buffer
+            is created. it should be defined as:
+                def callback(new_buff)
+        '''
+        if not self.buffer:
+            return self.name, '(Buffer not savable!)'
+
+        elif self.path:
+            # user-opened buffer
+            if os.path.samefile(os.path.join(* self.path), os.path.join(* path)):
+                return self.flush()
+
+
+        else:
             # system-opened buffer, cannot be renamed
 
             # create a new buffer
+            opened_buffs = zEditBuffer.buff_list.values()
             new_buff = zEditBuffer(path, 'file')
-            if new_buff in zEditBuffer.buff_list.itervalues():
+
+            if new_buff in opened_buffs:
                 # buffer already opened, refuse renaming
                 return path[-1], '(Cannot write to an existing buffer!)'
 
-            print self.buffer
+            # transfer content to the new buffer
+            new_buff.buffer.set_text(
+                self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
+                )
+            new_buff.flush()    # write the new buffer
+            if self.name == '*scratch*':
+                # scratch is being saved, clear it
+                zEditBuffer._reset_scratch()
+            callback(new_buff)
 
-        print self.name, self.type, self.path, path
+            return os.path.join(* new_buff.path), 'buffer saved.'
 
 
     @staticmethod

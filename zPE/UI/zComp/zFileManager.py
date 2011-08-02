@@ -229,7 +229,7 @@ class zDisplayPanel(gtk.VBox):
         return self.job_panel.is_focus() or self.step_panel.is_focus() or self.center.is_focus()
 
     def grab_focus(self):
-        self.job_panel.grab_focus()
+        self.center.grab_focus()
 
 
     def modify_font(self, font_desc):

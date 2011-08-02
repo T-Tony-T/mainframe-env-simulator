@@ -665,10 +665,15 @@ class zStrokeListener(gobject.GObject):
 
                 return True
 
-            text_entered = widget.get_text()
-            if text_entered:
-                if ( (task == 'file' and not os.path.isdir(text_entered) ) or
-                     (task == 'dir'  and not os.path.isfile(text_entered)) or
+            # must be 'file', 'dir', or 'path'
+            path_entered = widget.get_text()
+            if path_entered:
+                # normalize path
+                path_entered = os.path.abspath(os.path.expanduser(path_entered))
+                widget.set_text(path_entered)
+
+                if ( (task == 'file' and not os.path.isdir(path_entered) ) or
+                     (task == 'dir'  and not os.path.isfile(path_entered)) or
                      (task == 'path')
                      ):
                     self.emit('z_activate', self.__build_msg(widget, stroke, 'Accept'))
