@@ -1,5 +1,12 @@
 # this is the text module of the zComponent package
 
+import io_encap
+# this module requires io_encap to have the following APIs:
+#
+#   norm_path_list(fn_list):    return the normalized absolute path
+#   norm_path(full_path):       same as above; take a string as argument
+#
+
 from zBase import z_ABC, zTheme
 from zStrokeParser import zStrokeListener, zComplete
 
@@ -973,7 +980,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         if buff.path:
             path = buff.path
         else:
-            path = [ os.path.expanduser('~'), '']
+            path = [ io_encap.norm_path('~'), '']
 
         if lastline.get_property('visible'):
             lastline.reset()    # force to clear all other actions
@@ -984,7 +991,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
             self.grab_focus()
 
             if path:
-                if buff.path and os.path.samefile(os.path.join(* buff.path), path):
+                if buff.path and io_encap.norm_path_list(buff.path) == path:
                     return buff.flush() # no change in filename, save it directly
 
                 if os.path.isfile(path): # target already exist, confirm overwritting
@@ -1012,7 +1019,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
             chooser.set_current_name(path[-1])
 
             if chooser.run() == gtk.RESPONSE_OK:
-                path = os.path.split(chooser.get_filename())
+                path = os.path.split(io_encap.norm_path(chooser.get_filename()))
                 chooser.destroy()
             else:
                 chooser.destroy()

@@ -1,17 +1,14 @@
 # this is the editor-frame module of the zComponent package
 
 import io_encap
-# this package should implement the following APIs:
+# this module requires io_encap to have the following APIs:
 #
 #   is_binary(fn_list):         test if the fn_list corresponding to a binary file
 #
 #   is_file(fn_list):           test if the fn_list corresponding to a file
 #   is_dir(fn_list):            test if the fn_list corresponding to a directory
 #
-#   new_file(fn_list):          create the file unless the fn_list corresponding to a file
-#   new_dir(fn_list):           create the dir unless the fn_list corresponding to a directory
-#
-#   open_file(fn_list, mode):   open the file with the indicated mode
+#   norm_path_list(fn_list):    return the normalized absolute path
 #
 #   fetch(buff):                read content from the corresponding file to the zEditBuffer
 #   flush(buff):                write content from the zEditBuffer to the corresponding file
@@ -861,7 +858,7 @@ class zEditBuffer(z_ABC):
             # file with a path => user-opened buffer
             buff_group = 'user'
             self.name = buffer_path[-1]
-            self.path = os.path.split(os.path.abspath(os.path.join(* buffer_path))) # normalize path
+            self.path = os.path.split(io_encap.norm_path_list(buffer_path)) # normalize path
             self.type = 'file'  # must be type::file
         else:
             # not type::file, must be system-opened buffer
@@ -1032,34 +1029,43 @@ class zEditBuffer(z_ABC):
         if not self.buffer:
             return self.name, '(Buffer not savable!)'
 
-        elif self.path:
+        if self.path and io_encap.norm_path_list(self.path) == io_encap.norm_path_list(path):
+            return self.flush() # no change in path, save directly
+
+
+        # create a new buffer
+        opened_buffs = zEditBuffer.buff_list.values()
+        new_buff = zEditBuffer(path, 'file')
+
+        if new_buff in opened_buffs:
+            # buffer already opened, refuse renaming
+            return path[-1], '(Cannot write to an existing buffer!)'
+
+        # transfer content to the new buffer
+        new_buff.buffer.set_text(
+            self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
+            )
+        new_buff.flush()        # write the new buffer
+
+        # clean up
+        if self.path:
             # user-opened buffer
-            if os.path.samefile(os.path.join(* self.path), os.path.join(* path)):
-                return self.flush()
+            # move new_buff in front of self
+            buff_group = zEditBuffer.buff_group['user']
+            buff_group.insert(
+                buff_group.index(self.name),
+                buff_group.pop( buff_group.index(new_buff.name) )
+                )
 
-
+            zEditBuffer.rm_buffer(self, True)
         else:
             # system-opened buffer, cannot be renamed
-
-            # create a new buffer
-            opened_buffs = zEditBuffer.buff_list.values()
-            new_buff = zEditBuffer(path, 'file')
-
-            if new_buff in opened_buffs:
-                # buffer already opened, refuse renaming
-                return path[-1], '(Cannot write to an existing buffer!)'
-
-            # transfer content to the new buffer
-            new_buff.buffer.set_text(
-                self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
-                )
-            new_buff.flush()    # write the new buffer
             if self.name == '*scratch*':
                 # scratch is being saved, clear it
                 zEditBuffer._reset_scratch()
-            callback(new_buff)
 
-            return os.path.join(* new_buff.path), 'buffer saved.'
+        callback(new_buff)
+        return os.path.join(* new_buff.path), 'buffer saved.'
 
 
     @staticmethod

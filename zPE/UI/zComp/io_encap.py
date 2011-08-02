@@ -1,42 +1,75 @@
 # this is the zPE IO encapsulation for UI
 import os, sys
 
+# this module implements the following APIs:
+#
+#   is_binary(fn_list):         test if the fn_list corresponding to a binary file
+#
+#   is_file(fn_list):           test if the fn_list corresponding to a file
+#   is_dir(fn_list):            test if the fn_list corresponding to a directory
+#
+#   norm_path_list(fn_list):    return the normalized absolute path
+#   norm_path(full_path):       same as above; take a string as argument
+#
+#   new_file(fn_list):          create the file unless the fn_list corresponding to a file
+#   new_dir(fn_list):           create the dir unless the fn_list corresponding to a directory
+#
+#   open_file(fn_list, mode):   open the file with the indicated mode
+#
+#   fetch(buff):                read content from the corresponding file to the zEditBuffer
+#   flush(buff):                write content from the zEditBuffer to the corresponding file
+#
 
-def is_binary(dsn):
-    if is_file(dsn):
-        return __IS_BINARY(os.path.join(*dsn))
+def is_binary(fn_list):
+    if is_file(fn_list):
+        return __IS_BINARY(os.path.join(* fn_list))
     else:
         raise ValueError
 
 
-def is_file(dsn):
-    return os.path.isfile(os.path.join(* dsn))
+def is_file(fn_list):
+    return os.path.isfile(os.path.join(* fn_list))
 
-def is_dir(dsn):
-    return os.path.isdir(os.path.join(* dsn))
+def is_dir(fn_list):
+    return os.path.isdir(os.path.join(* fn_list))
 
 
-def new_file(dsn):
-    if is_file(dsn):
+def norm_path_list(fn_list):
+    return norm_path(os.path.join(* fn_list))
+
+def norm_path(full_path):
+    if not full_path:
+        return ''            # indicates no path is given
+
+    return os.path.normcase(        # on Windows, convert all letters to lowercase
+        os.path.abspath(            # normalize the path to standard form
+            os.path.realpath(       # trace and eliminates any symbolic links (need to be done before normpath/abspath)
+                os.path.expanduser( # expand ~ or ~user (need to be done first)
+                    full_path
+                    ))))
+
+
+def new_file(fn_list):
+    if is_file(fn_list):
         raise IOError('File already exists.')
-    elif is_dir(dsn):
+    elif is_dir(fn_list):
         raise IOError('File name conflict with a folder.')
 
-    open_file(dsn, 'w')
+    open_file(fn_list, 'w')
         
 
-def new_dir(dsn):
-    if is_file(dsn):
+def new_dir(fn_list):
+    if is_file(fn_list):
         raise IOError('Folder name conflict with a file.')
-    elif is_dir(dsn):
+    elif is_dir(fn_list):
         raise IOError('Folder already exists.')
 
-    __CREATE_DIR(os.path.join(* dsn))
+    __CREATE_DIR(os.path.join(* fn_list))
 
 
-def open_file(dsn, mode):
+def open_file(fn_list, mode):
     '''Open the target file in regardless of the existance'''
-    path = os.path.join(* dsn)
+    path = os.path.join(* fn_list)
     __CREATE_DIR(os.path.dirname(path))
 
     return open(path, mode)

@@ -394,7 +394,7 @@ class zComboBox(z_ABC, gtk.ToolButton):
         for indx in new_order:
             item_list.append(self.__item_list[indx])
         self.__item_list = item_list
-        self.active_item = new_order.index(indx)
+        self.active_item = new_order.index(self.active_item)
 
     def move_after(self, src_indx, dest_indx):
         if src_indx >= dest_indx:

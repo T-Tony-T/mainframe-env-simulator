@@ -336,7 +336,7 @@ class BaseFrame(object):
         buff = frame.active_buffer
 
         if buff.type == 'file' and buff.path:
-            pathname = os.path.abspath(os.path.expanduser(os.path.join(* buff.path[:-1])))
+            pathname = io_encap.norm_path_list(buff.path[:-1])
             basename = buff.path[-1]
         elif buff.type == 'dir':
             try:
@@ -344,7 +344,7 @@ class BaseFrame(object):
             except:
                 raise AssertionError('Cannot fetch the submission information.')
 
-            if not os.path.isfile(os.path.join(pathname, basename)):
+            if not io_encap.is_file( (pathname, basename) ):
                 return          # dir selection is not a file, early return
         else:
             return              # not a file nor an dir, early return
@@ -384,7 +384,7 @@ class BaseFrame(object):
                 is_file = False
         elif buff_type == 'dir':
             fullpath = widget.get_active_item()
-            if fullpath and os.path.isfile(os.path.join(* fullpath)):
+            if fullpath and io_encap.is_file(fullpath):
                 is_file = True
             else:
                 is_file = False

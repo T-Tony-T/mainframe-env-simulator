@@ -1,20 +1,15 @@
 # this is the file-manager module of the zComponent package
 
 import io_encap
-# this package should implement the following APIs:
-#
-#   is_binary(fn_list):         test if the fn_list corresponding to a binary file
+# this module requires io_encap to have the following APIs:
 #
 #   is_file(fn_list):           test if the fn_list corresponding to a file
 #   is_dir(fn_list):            test if the fn_list corresponding to a directory
 #
+#   norm_path(full_path):       return the normalized absolute path
+#
 #   new_file(fn_list):          create the file unless the fn_list corresponding to a file
 #   new_dir(fn_list):           create the dir unless the fn_list corresponding to a directory
-#
-#   open_file(fn_list, mode):   open the file with the indicated mode
-#
-#   fetch(buff):                read content from the corresponding file to the zEditBuffer
-#   flush(buff):                write content from the zEditBuffer to the corresponding file
 #
 
 from z_support import XPM, PIXBUF
@@ -328,14 +323,16 @@ class zDisplayPanel(gtk.VBox):
         if zDisplayPanel._DB_FILE:
             db_file = zDisplayPanel._DB_FILE # force switch to overall setting
 
+        # normalize path
+        db_file = io_encap.norm_path(db_file)
         if self.__db_file:
-            if os.path.samefile(self.__db_file, db_file):
+            if self.__db_file == db_file:
                 return          # no need to change, early return
             else:
                 self.disconnect_db()
 
         if db_file:
-            self.__db_file = os.path.abspath(os.path.expanduser(db_file))
+            self.__db_file = db_file
             self.connect_db()
         else:
             self.__db_file = None
@@ -343,7 +340,7 @@ class zDisplayPanel(gtk.VBox):
     @staticmethod
     def set_db_all(db_file):
         if db_file:
-            zDisplayPanel._DB_FILE = os.path.abspath(os.path.expanduser(db_file))
+            zDisplayPanel._DB_FILE = io_encap.norm_path(db_file)
         else:
             zDisplayPanel._DB_FILE = None
     ### end of database manipulation
@@ -721,11 +718,11 @@ class zFileManager(gtk.VBox):
 
         if task == 'activate' and msg['return_msg'] == 'Accept':
             # activate key is pressed
-            fullpath = os.path.abspath(os.path.expanduser(self.path_entry.get_text()))
+            fullpath = io_encap.norm_path(self.path_entry.get_text())
             fn_list = os.path.split(fullpath)
 
             if io_encap.is_dir(fn_list):
-                self.set_folder(os.path.join(* fn_list))
+                self.set_folder(fullpath)
             elif io_encap.is_file(fn_list):
                 self.open_file(fn_list)
             else:
@@ -823,9 +820,9 @@ class zFileManager(gtk.VBox):
     def set_folder(self, fullpath = None):
         # get real path
         if not fullpath:
-            new_dirname = os.path.expanduser('~')
+            new_dirname = io_encap.norm_path('~')
         else:
-            new_dirname = os.path.abspath(os.path.expanduser(fullpath))
+            new_dirname = io_encap.norm_path(fullpath)
 
         # test permission
         if not os.access(new_dirname, os.F_OK):

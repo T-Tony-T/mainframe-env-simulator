@@ -1,5 +1,12 @@
 # this is the key stroke parser module of the zComponent package
 
+import io_encap
+# this module requires io_encap to have the following APIs:
+#
+#   norm_path(full_path):       return the normalized absolute path
+#
+
+
 import os, sys, re, copy
 
 import pygtk
@@ -669,7 +676,7 @@ class zStrokeListener(gobject.GObject):
             path_entered = widget.get_text()
             if path_entered:
                 # normalize path
-                path_entered = os.path.abspath(os.path.expanduser(path_entered))
+                path_entered = io_encap.norm_path(path_entered)
                 widget.set_text(path_entered)
 
                 if ( (task == 'file' and not os.path.isdir(path_entered) ) or
@@ -751,7 +758,7 @@ class zStrokeListener(gobject.GObject):
                 # not any reserved or forbidden bindings
                 # initiate Commanding
                 self.__combo_entering = True
-                self.__combo_widget_focus_id = widget.connect('focus-out-event', self._sig_kp_focus_out)
+                self.__combo_widget_focus_id  = widget.connect('focus-out-event', self._sig_kp_focus_out)
             # Commanding initiated
 
             # on commanding
@@ -1145,7 +1152,7 @@ class zComplete(gobject.GObject):
     def __generate_path_list(self, curr_path, task):
         # normalize the path
         if curr_path:
-            normalized_path = os.path.abspath(os.path.expanduser(curr_path))
+            normalized_path = io_encap.norm_path(curr_path)
         else:
             normalized_path = os.getcwd()
 
