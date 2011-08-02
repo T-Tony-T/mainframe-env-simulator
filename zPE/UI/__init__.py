@@ -242,11 +242,12 @@ class BaseFrame(object):
         buff = self.mw.active_frame().active_buffer
         is_file = (buff.type == 'file')
         is_dir  = (buff.type == 'dir')
+        is_disp = (buff.type == 'disp')
 
         # update toolbar
         self.tool_buff_open.set_property(   'sensitive', not is_dir)
-        self.tool_buff_save.set_property(   'sensitive', is_file and buff.modified)
-        self.tool_buff_save_as.set_property('sensitive', is_file and buff.modified)
+        self.tool_buff_save.set_property(   'sensitive', is_file and buff.modified or is_disp)
+        self.tool_buff_save_as.set_property('sensitive', is_file or is_disp)
         self.tool_buff_close.set_property(  'sensitive', is_file)
 
         self.tool_submit.set_property(     'sensitive', buff.path)

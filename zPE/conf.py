@@ -140,11 +140,11 @@ def read_rc(dry_run = False):
 
     Config['addr_max'] = 2 ** Config['addr_mode']
 
-    if JOB_ID_MAX - Config['job_id'] <= 3:
+    if JOB_ID_MAX - Config['job_id'] <= 3 and not dry_run:
         sys.stderr.write('\n  JOB queue will be cleared in {0} submit(s)!\n\n'.format(
                 JOB_ID_MAX - Config['job_id']
                 ))
-    elif Config['job_id'] == JOB_ID_MIN:
+    elif Config['job_id'] == JOB_ID_MIN and not dry_run:
         open(CONFIG_PATH['SPOOL'], 'w').close()
         __TOUCH_SPOOL()
         sys.stderr.write('\n  JOB queue cleared!\n\n')

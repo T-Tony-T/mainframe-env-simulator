@@ -753,7 +753,7 @@ class zStrokeListener(gobject.GObject):
                     return True
                 elif self.__is_space(stroke):
                     # space
-                    self.__insert_text(widget , ' ', task)
+                    self.__insert_text(widget , ' ')
                     return True
                 else:
                     # leave the rest checking to commanding
@@ -894,7 +894,7 @@ class zStrokeListener(gobject.GObject):
                     return True
                 elif self.__is_space(stroke):
                     # space
-                    self.__insert_text(widget , ' ', task)
+                    self.__insert_text(widget , ' ')
                     return True
                 else:
                     # not regular keypress nor space, pass it to the widget

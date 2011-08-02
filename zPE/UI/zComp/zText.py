@@ -94,6 +94,12 @@ class zEntry(gtk.Entry):
 
 
     def insert_text(self, text):
+        # clear selection region, if any
+        sel = self.get_selection_bounds()
+        if sel:
+            self.delete_text(* sel)
+
+        # insert text
         pos = self.get_position()
         super(zEntry, self).insert_text(text, pos)
         self.set_position(pos + len(text))
@@ -727,6 +733,13 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
     def insert_text(self, text):
         buff = self.get_buffer()
+
+        # clear selection region, if any
+        sel = buff.get_selection_bounds()
+        if sel:
+            buff.delete(* sel)
+
+        # insert text
         buff.insert_at_cursor(text)
 
     def get_text(self):
