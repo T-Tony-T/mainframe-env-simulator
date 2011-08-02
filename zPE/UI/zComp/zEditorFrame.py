@@ -627,6 +627,7 @@ class zEdit(z_ABC, gtk.VBox):
         if new_buff == self.active_buffer:
             return              # no need to switch, early return
 
+
         if ( self.active_buffer == None or
              self.active_buffer.type != new_buff.type
              ):
@@ -678,10 +679,10 @@ class zEdit(z_ABC, gtk.VBox):
             # switch widget
             if self.center:
                 self.center.center.disconnect(self.sig_id['button_press'])
+                self.center.listener.clear_all()
                 for handler in self.center.listener_sig:
                     if self.center.listener.handler_is_connected(handler):
                         self.center.listener.disconnect(handler)
-                self.center.listener.clear_all()
 
                 self.exec_uninit_func()                
 
@@ -718,6 +719,7 @@ class zEdit(z_ABC, gtk.VBox):
         # switch buffer
         self.active_buffer = new_buff
         self.update_buffer_list_selected(True, True)
+        self.center.listener.clear_kp_focus_out()
 
         # connect buffer
         if self.active_buffer.type == 'file':
@@ -732,6 +734,7 @@ class zEdit(z_ABC, gtk.VBox):
 
         if self.need_init:
             self.exec_init_func()
+
         self.show_all()
 
 

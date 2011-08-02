@@ -459,7 +459,9 @@ class zStrokeListener(gobject.GObject):
 
         self.__combo_entering = False
         self.__combo_content = ''
-        self.__combo_widget_focus_id = None
+
+        self.__combo_focus_widget    = None
+        self.__combo_focus_widget_id = None
 
         self.__entry_entering = False
         self.__entry_content = ''
@@ -545,34 +547,53 @@ class zStrokeListener(gobject.GObject):
             del self.listener_id[widget]
 
     def clear_all(self):
+        self.clear_kp_focus_out()
+
         for (w, h) in self.listener_id.iteritems():
             if w.handler_is_connected(h):
                 w.disconnect(h)
         self.listener_id = {}   # clear the list
 
 
+    def clear_kp_focus_out(self):
+        if self.__combo_focus_widget:
+            widget = self.__combo_focus_widget # backup
+            widget.emit('focus-out-event', gtk.gdk.Event(gtk.gdk.FOCUS_CHANGE))
+
+            # wait for kp_focus_out to be removed
+            while self.__combo_focus_widget:
+                gtk.main_iteration(False)
+
+            widget.emit('focus-in-event', gtk.gdk.Event(gtk.gdk.FOCUS_CHANGE))
+            return True
+        else:
+            return False
+
+
     # internal signals
     def _sig_kp_focus_out(self, widget, event):
         '''see _sig_key_pressed() [below] for more information'''
-        if ( self.__combo_widget_focus_id  and
-             widget.handler_is_connected(self.__combo_widget_focus_id)
+        if ( self.__combo_focus_widget_id  and
+             widget.handler_is_connected(self.__combo_focus_widget_id)
              ):
             # widget switched during Commanding
             # cancel it
             self.__combo_entering = False
             self.__combo_content  = ''
 
-            self.__kp_focus_out_rm(widget)
+            self.__kp_focus_out_rm()
 
             self.emit('z_cancel', self.__build_msg(widget, 'focus', 'Quit'))
 
-    def __kp_focus_out_rm(self, widget):
+    def __kp_focus_out_rm(self):
         '''see _sig_key_pressed() [below] for more information'''
-        if ( self.__combo_widget_focus_id  and
-             widget.handler_is_connected(self.__combo_widget_focus_id)
+        if ( self.__combo_focus_widget_id  and
+             self.__combo_focus_widget.handler_is_connected(self.__combo_focus_widget_id)
              ):
-            widget.disconnect(self.__combo_widget_focus_id)
-            self.__combo_widget_focus_id = None
+            self.__combo_focus_widget.disconnect(self.__combo_focus_widget_id)
+
+            self.__combo_focus_widget    = None
+            self.__combo_focus_widget_id = None
 
 
 
@@ -758,7 +779,8 @@ class zStrokeListener(gobject.GObject):
                 # not any reserved or forbidden bindings
                 # initiate Commanding
                 self.__combo_entering = True
-                self.__combo_widget_focus_id  = widget.connect('focus-out-event', self._sig_kp_focus_out)
+                self.__combo_focus_widget    = widget
+                self.__combo_focus_widget_id = widget.connect('focus-out-event', self._sig_kp_focus_out)
             # Commanding initiated
 
             # on commanding
@@ -774,7 +796,7 @@ class zStrokeListener(gobject.GObject):
             if stroke in key_binding  and  self.__is_enabled_func(key_binding[stroke]):
                 # is a valid functionality
                 self.__combo_content = stroke
-                self.__kp_focus_out_rm(widget) # release focus requirement
+                self.__kp_focus_out_rm() # release focus requirement
 
                 if key_binding[stroke] in self.func_callback_map:
                     # has registered functions
@@ -813,7 +835,7 @@ class zStrokeListener(gobject.GObject):
                     return True
                 else:
                     # not a valid stroke sequence *AT ALL*
-                    self.__kp_focus_out_rm(widget) # release focus requirement
+                    self.__kp_focus_out_rm() # release focus requirement
 
                     if not self.__combo_content:
                         # initiate stroke, do not eat it
