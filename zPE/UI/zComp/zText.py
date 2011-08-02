@@ -132,14 +132,23 @@ class zEntry(gtk.Entry):
 
     ### editor related API
     def delete_backward(self, task = 'char'):
-        end_pos = self.get_position()
+        sel = self.get_selection_bounds()
+        if sel:
+            start_pos = sel[1]
+            end_pos   = sel[1]
+            self.select_region(start_pos, end_pos)
+        else:
+            start_pos = self.get_position()
+            end_pos   = self.get_position()
 
         if task == 'char':
-            start_pos = end_pos - 1
+            if sel:
+                start_pos = sel[0]
+            else:
+                start_pos -= 1
 
         elif task == 'word':
             letter = r'[a-zA-Z0-9]'
-            start_pos = end_pos
             if self.is_out_word(letter) or self.is_word_start(letter):
                 # outside of a word, or at word start => move to prev work end
                 start_pos = self.__get_word_start(start_pos, r'[^a-zA-Z0-9]')
@@ -155,14 +164,23 @@ class zEntry(gtk.Entry):
         self.delete_text(start_pos, end_pos)
 
     def delete_forward(self, task = 'char'):
-        start_pos = self.get_position()
+        sel = self.get_selection_bounds()
+        if sel:
+            start_pos = sel[0]
+            end_pos   = sel[0]
+            self.select_region(start_pos, end_pos)
+        else:
+            start_pos = self.get_position()
+            end_pos   = self.get_position()
 
         if task == 'char':
-            end_pos = start_pos + 1
+            if sel:
+                end_pos = sel[1]
+            else:
+                end_pos += 1
 
         elif task == 'word':
             letter = r'[a-zA-Z0-9]'
-            end_pos = start_pos
             if self.is_out_word(letter) or self.is_word_end(letter):
                 # outside of a word, or at word end => move to next work start
                 end_pos = self.__get_word_end(end_pos, r'[^a-zA-Z0-9]')
@@ -218,12 +236,13 @@ class zEntry(gtk.Entry):
         return pos
 
     def __get_word_end(self, pos, letter = r'\S'):
-        if pos == self.get_text_length():
+        max_pos = self.get_text_length()
+        if pos == max_pos:
             return pos          # at end of the entry
         if not re.match(letter, self.get_chars(pos, pos + 1)):
             raise ValueError('outside of word or at word end')
 
-        while pos > 0 and re.match(letter, self.get_chars(pos, pos + 1)):
+        while pos < max_pos and re.match(letter, self.get_chars(pos, pos + 1)):
             pos += 1
         return pos
 
@@ -764,12 +783,21 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
     ### editor related API
     def delete_backward(self, task = 'char'):
         buff = self.get_buffer()
+        sel = buff.get_selection_bounds()
 
-        start_iter = buff.get_iter_at_mark(buff.get_insert())
-        end_iter   = buff.get_iter_at_mark(buff.get_insert())
+        if sel:
+            start_iter = sel[1].copy()
+            end_iter   = sel[1].copy()
+            buff.select_range(start_iter, end_iter)
+        else:
+            start_iter = buff.get_iter_at_mark(buff.get_insert())
+            end_iter   = buff.get_iter_at_mark(buff.get_insert())
 
         if task == 'char':
-            start_iter.backward_char()
+            if sel:
+                start_iter = sel[0]
+            else:
+                start_iter.backward_char()
 
         elif task == 'word':
             start_iter.backward_word_start()
@@ -798,12 +826,21 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
     def delete_forward(self, task = 'char'):
         buff = self.get_buffer()
+        sel = buff.get_selection_bounds()
 
-        start_iter = buff.get_iter_at_mark(buff.get_insert())
-        end_iter   = buff.get_iter_at_mark(buff.get_insert())
+        if sel:
+            start_iter = sel[0].copy()
+            end_iter   = sel[0].copy()
+            buff.select_range(start_iter, end_iter)
+        else:
+            start_iter = buff.get_iter_at_mark(buff.get_insert())
+            end_iter   = buff.get_iter_at_mark(buff.get_insert())
 
         if task == 'char':
-            end_iter.forward_char()
+            if sel:
+                end_iter   = sel[1]
+            else:
+                end_iter.forward_char()
 
         elif task == 'word':
             end_iter.forward_word_end()
