@@ -256,7 +256,11 @@ class BaseFrame(object):
 
     def _sig_buffer_modified_set(self, widget = None, setting = None):
         # get current buffer
-        buff = self.mw.active_frame().active_buffer
+        frame = self.mw.active_frame()
+        if not frame:
+            return              # cannot get active frame, early return
+
+        buff = frame.active_buffer
         is_file = (buff.type == 'file')
         is_disp = (buff.type == 'disp')
 
@@ -266,6 +270,30 @@ class BaseFrame(object):
 
 
     ### top level signals
+    def remove_buffer(self, buff, frame):
+        if buff.modified and buff.path:
+            response = self.lastline.run_confirm(
+                '"{0}" has been modified, save it?'.format(os.path.join(* buff.path)),
+                [ 'y', 'n', 'w', 'q', '!', ],
+                'y'
+                )
+            frame.grab_focus()
+            if response in [ 'y', 'w' ]:
+                need_save = True
+            else:
+                need_save = False
+        else:
+            need_save = False
+
+        if need_save:
+            frame.save_buffer(buff)
+            msg = frame.rm_buffer(buff)
+        else:
+            # force quit (without saving)
+            msg = frame.rm_buffer(buff, force = True)
+
+        return msg
+
     def _sig_buff_manip(self, widget, task):
         self.lastline.clear()
 
@@ -284,22 +312,15 @@ class BaseFrame(object):
                 msg = None
             else:
                 msg = buff.name, '(Already in browser mood.)'
+
         elif task == 'save':
             msg = frame.save_buffer(buff)
+
         elif task == 'save-as':
             msg = frame.save_buffer_as(buff)
-        elif task == 'close':
-            if buff.modified:
-                need_save = False # ask for saving here
-            else:
-                need_save = False
 
-            if need_save:
-                # save here
-                msg = frame.rm_buffer(buff)
-            else:
-                # force quit (without saving)
-                msg = frame.rm_buffer(buff, force = True)
+        elif task == 'close':
+            msg = self.remove_buffer(buff, frame)
         else:
             raise KeyError
 
@@ -312,9 +333,21 @@ class BaseFrame(object):
 
 
     def _sig_quit(self, widget, data = None):
-        #########################
-        # check save here       #
-        #########################
+        self.lastline.clear()
+
+        # reference to buffer list
+        buff_list = zComp.zEditBuffer.buff_list
+        buff_group = zComp.zEditBuffer.buff_group['user']
+
+        # close all user-opened buffer
+        while buff_group:
+            # create a dummy frame
+            buff = buff_list[buff_group[0]]
+            frame = zComp.zEdit(buff.path, buff.type)
+
+            self.remove_buffer(buff, frame)
+
+        # all user-opened buffer closed, quit
         gtk.main_quit()
 
 
