@@ -159,14 +159,6 @@ class BaseFrame(object):
         self.toolbar.insert(self.tool_err_console, 14)
         self.toolbar.insert(self.tool_quit, 15)
 
-        ## connect auto-update items
-        zComp.zEdit.register('buffer_focus_in', self._sig_buffer_focus_in, self)
-
-        zComp.zSplitWindow.register('frame_removed', zComp.zEdit.reg_clean_up)
-        zComp.zSplitWindow.register('frame_removed', zComp.zEditBuffer.reg_clean_up)
-        zComp.zSplitWindow.register('frame_removed', zComp.zTheme.reg_clean_up)
-
-
         ## connect signals
         self.tool_buff_open.connect(   'clicked', self._sig_buff_manip, 'open')
         self.tool_buff_save.connect(   'clicked', self._sig_buff_manip, 'save')
@@ -190,6 +182,15 @@ class BaseFrame(object):
         self.mw = zComp.zSplitWindow(zComp.zEdit, [], (self.frame_init, self.frame_uninit), self.frame_split_dup)
         w_vbox.pack_start(self.mw, True, True, 0)
         zComp.zDisplayPanel.set_db_all(os.path.join(zPE.conf.CONFIG_PATH['SPOOL']))
+
+
+        ## connect auto-update items
+        zComp.zEdit.register(      'buffer_focus_in',     self._sig_buffer_focus_in,     None) # register globally
+        zComp.zEditBuffer.register('buffer_modified_set', self._sig_buffer_modified_set, None) # register globally
+
+        zComp.zSplitWindow.register('frame_removed', zComp.zEdit.reg_clean_up)
+        zComp.zSplitWindow.register('frame_removed', zComp.zEditBuffer.reg_clean_up)
+        zComp.zSplitWindow.register('frame_removed', zComp.zTheme.reg_clean_up)
 
 
         ### create last-line
@@ -246,12 +247,21 @@ class BaseFrame(object):
 
         # update toolbar
         self.tool_buff_open.set_property(   'sensitive', not is_dir)
-        self.tool_buff_save.set_property(   'sensitive', is_file and buff.modified or is_disp)
+        self.tool_buff_save.set_property(   'sensitive', is_file and buff.modified)
         self.tool_buff_save_as.set_property('sensitive', is_file or is_disp)
         self.tool_buff_close.set_property(  'sensitive', is_file)
 
         self.tool_submit.set_property(     'sensitive', buff.path)
         self.tool_submit_wrap.set_property('sensitive', buff.path)
+
+    def _sig_buffer_modified_set(self, widget = None, setting = None):
+        # get current buffer
+        buff = self.mw.active_frame().active_buffer
+        is_file = (buff.type == 'file')
+        is_disp = (buff.type == 'disp')
+
+        self.tool_buff_save.set_property(   'sensitive', is_file and buff.modified)
+        self.tool_buff_save_as.set_property('sensitive', is_file or is_disp)
     ### end of signal-like auto-update function
 
 

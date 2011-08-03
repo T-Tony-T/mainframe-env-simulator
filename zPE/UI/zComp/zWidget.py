@@ -17,6 +17,12 @@ class zButton(gtk.Button):
     def __init__(self, *arg):
         super(zButton, self).__init__(*arg)
 
+    def __getattr__(self, name):
+        if name == 'label':
+            self.label = self.get_label_widget()
+            return self.label
+
+    ### overridden function definition
     def get_label_widget(self, current = None):
         if current == None:
             current = self
@@ -36,6 +42,17 @@ class zButton(gtk.Button):
                 return found    # found in previous search
         return None             # not found at all
 
+    def set_label_widget(self, label_widget):
+        raise NotImplementedError('method not implemented!')
+
+
+    def modify_font(self, font_desc):
+        self.label.modify_font(font_desc)
+
+    def modify_fg(self, state, color):
+        self.label.modify_fg(state, color)
+    ### overridden function definition
+
 class zCheckButton(zButton, gtk.CheckButton):
     '''A gtk.CheckButton that has additional methods'''
     def __init__(self, *arg):
@@ -50,6 +67,68 @@ class zToggleButton(zButton, gtk.ToggleButton):
     '''A gtk.ToggleButton that has additional methods'''
     def __init__(self, *arg):
         super(zToggleButton, self).__init__(*arg)
+
+class zToolButton(zButton):
+    '''A flat ToolButton that can be embeded into, say, a Status Bar'''
+    def __init__(self, label = ''):
+        super(zToolButton, self).__init__(label)
+
+        # internal (backup) variables
+        self.set_label(label)
+        self.__n_chars = -1
+        self.__font_desc = None
+
+        # set style to flat
+        rcstyle = self.get_modifier_style()
+        rcstyle.xthickness = 0  # no horizontal padding
+        rcstyle.ythickness = 2  # set vertical padding to 2 pixels
+        self.modify_style(rcstyle)
+
+        self.set_relief(gtk.RELIEF_NONE)
+
+        # set focus policy
+        self.set_property('can-default', False)
+        self.set_property('can-focus', False)
+
+
+    ### overridden function definition
+    def get_label(self):
+        return self.__label
+
+    def set_label(self, label):
+        self.__label = label
+        if self.__n_chars > 0:
+            self.label.set_text('{0:<{1}}'.format(self.__label, self.__n_chars))
+        else:
+            self.label.set_text(label)
+
+    def get_width_chars(self):
+        return self.__n_chars
+
+    def set_width_chars(self, n_chars):
+        self.__n_chars = n_chars
+        self.set_label(self.__label) # refresh label
+        self.resize()
+
+
+    def modify_font(self, font_desc):
+        self.label.modify_font(font_desc)
+        self.__font_desc = font_desc
+
+        self.resize()
+
+
+    def resize(self):
+        if self.__n_chars < 0:
+            return              # n_char not set
+
+        pango_layout = self.label.create_pango_layout('w')
+        pango_layout.set_font_description(self.__font_desc)
+
+        ( char_w, char_h ) = pango_layout.get_pixel_size()
+
+        self.set_size_request(char_w * self.__n_chars + 2, -1) # 2 for the border of the button itself
+    ### overridden function definition
 
 
 ######## ######## ######## ######## ########
@@ -325,7 +404,7 @@ class zColorPickerButton(gtk.Frame):
 ########         zComboBox          ########
 ######## ######## ######## ######## ########
 
-class zComboBox(z_ABC, gtk.ToolButton):
+class zComboBox(z_ABC, zToolButton):
     '''A Flat (Inline) ComboBox'''
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
@@ -333,10 +412,6 @@ class zComboBox(z_ABC, gtk.ToolButton):
         }
     def __init__(self):
         super(zComboBox, self).__init__()
-
-        # init label
-        self.set_label_widget(gtk.Label())
-        self.label = self.get_label_widget()
 
         # init item list
         self.__item_list = [
@@ -349,7 +424,6 @@ class zComboBox(z_ABC, gtk.ToolButton):
 
         # init menu
         self.menu = None
-        self.menu_width = None
         self.color_fg = {}      # state : color
         self.color_bg = {}      # state : color
 
@@ -424,11 +498,8 @@ class zComboBox(z_ABC, gtk.ToolButton):
             return None
 
 
-    def modify_font(self, font_desc):
-        self.label.modify_font(font_desc)
-
     def modify_fg(self, state, color):
-        self.label.modify_fg(state, color)
+        super(zComboBox, self).modify_fg(state, color)
         self.color_fg[state] = color
 
     def modify_bg(self, state, color):
@@ -440,8 +511,8 @@ class zComboBox(z_ABC, gtk.ToolButton):
         # create the menu
         self.menu = gtk.Menu()
         self.menu.set_property('reserve-toggle-size', False)
-        alloc = self.label.get_allocation()
-        self.menu.set_size_request(alloc.x + alloc.width, -1)
+        alloc = self.get_allocation()
+        self.menu.set_size_request(alloc.width, -1)
 
         # fill the menu
         for indx in range(len(self.__item_list)):
@@ -492,14 +563,11 @@ class zComboBox(z_ABC, gtk.ToolButton):
         zComboBox.reg_emit_to('changed', self)
 
 
-    def get_label(self):
-        return self.label.get_label()
-
     def set_label(self, label):
         w = self.get_width_chars()
         if w > 0 and len(label) > w:
             label = label[:w-2] + '..'
-        return self.label.set_label(label)
+        super(zComboBox, self).set_label(label)
 
 
     def get_value(self, indx, col):
@@ -515,11 +583,8 @@ class zComboBox(z_ABC, gtk.ToolButton):
             self.set_active(indx)
 
 
-    def get_width_chars(self):
-        return self.label.get_width_chars()
-
     def set_width_chars(self, n_chars):
-        self.label.set_width_chars(n_chars)
+        super(zComboBox, self).set_width_chars(n_chars)
         self.set_label(self.get_label())
 
 
@@ -593,9 +658,6 @@ class zTabbar(z_ABC, gtk.EventBox):
         self.viewport.hadj_preserve = None
         self.viewport.scrolling = False
         self.viewport.start_scrolling = False
-
-        self.scroll_left.label = self.scroll_left.get_label_widget()
-        self.scroll_right.label = self.scroll_right.get_label_widget()
 
         self.scroll_left.set_property('can_focus', False)
         self.scroll_right.set_property('can_focus', False)
@@ -691,15 +753,15 @@ class zTabbar(z_ABC, gtk.EventBox):
 
     def modify_font(self, font_desc):
         for tab in self.get_tab_list():
-            tab.label.modify_font(font_desc)
+            tab.modify_font(font_desc)
         self.tab_font = font_desc
 
-        self.scroll_left.label.modify_font(font_desc)
-        self.scroll_right.label.modify_font(font_desc)
+        self.scroll_left.modify_font(font_desc)
+        self.scroll_right.modify_font(font_desc)
 
     def modify_fg(self, state, color):
         for tab in self.get_tab_list():
-            tab.label.modify_fg(state, color)
+            tab.modify_fg(state, color)
         self.tab_fg[state] = color
 
 
@@ -732,7 +794,7 @@ class zTabbar(z_ABC, gtk.EventBox):
                 state = gtk.STATE_NORMAL
 
             if state in self.tab_fg and gtk.STATE_PRELIGHT not in self.tab_fg:
-                iter_tab.label.modify_fg(gtk.STATE_PRELIGHT, self.tab_fg[state])
+                iter_tab.modify_fg(gtk.STATE_PRELIGHT, self.tab_fg[state])
 
             iter_tab.handler_unblock(iter_tab.sig_id) # unblock signal
 
@@ -745,14 +807,13 @@ class zTabbar(z_ABC, gtk.EventBox):
     def new_tab(self, tab_label):
         tab = zToggleButton()
         tab.set_label(tab_label)
-        tab.label = tab.get_label_widget()
 
         tab.set_property('can-default', False)
         tab.set_property('can-focus', False)
 
-        tab.label.modify_font(self.tab_font)
+        tab.modify_font(self.tab_font)
         for state in self.tab_fg:
-            tab.label.modify_fg(state, self.tab_fg[state])
+            tab.modify_fg(state, self.tab_fg[state])
         for state in self.tab_bg:
             tab.modify_bg(state, self.tab_bg[state])
 

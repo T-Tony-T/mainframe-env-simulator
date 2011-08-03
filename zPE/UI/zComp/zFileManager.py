@@ -227,6 +227,13 @@ class zDisplayPanel(gtk.VBox):
         self.center.grab_focus()
 
 
+    def get_editable(self):
+        return False
+
+    def set_editable(self, setting):
+        return
+
+
     def modify_font(self, font_desc):
         font_desc.set_size(int(font_desc.get_size() * 0.85))
         self.job_panel.modify_font(font_desc)
@@ -774,6 +781,13 @@ class zFileManager(gtk.VBox):
             return None
         basename = self.treeview.model.get_value(self.treeview.model.get_iter(tree_path), 0)
         return (self.dirname, basename)
+
+
+    def get_editable(self):
+        return False
+
+    def set_editable(self, setting):
+        return
 
 
     def modify_font(self, font_desc):

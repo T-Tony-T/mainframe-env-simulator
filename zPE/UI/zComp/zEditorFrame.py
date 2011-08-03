@@ -18,7 +18,7 @@ from zBase import z_ABC, zTheme
 from zFileManager import zDisplayPanel, zFileManager
 from zStrokeParser import zStrokeListener
 from zText import zLastLine, zTextView
-from zWidget import zComboBox, zTabbar
+from zWidget import zToolButton, zComboBox, zTabbar
 
 import os, copy, re
 import pygtk
@@ -116,17 +116,21 @@ class zEdit(z_ABC, gtk.VBox):
 
         # layout of the frame:
         #
-        #                   tabbar (can be turn off)
-        #   +--+--+------+_/
-        #   +--+--+------+_
-        #   ||           | \
-        #   ||           |  center_shell
-        #   ||  center   |
-        #   ||           |
-        #   |+-----------|
-        #   +--+---------+
-        #   |sw| bottom  |
-        #   +--+---------+
+        #                      tabbar (can be turn off)
+        #   +--+--+---------+_/
+        #   +--+--+---------+_
+        #   ||              | \
+        #   ||              |  center_shell
+        #   ||    center    |
+        #   ||              |
+        #   |+--------------|
+        #   +-+-+--+--------+
+        #   |w|m|sw| bottom |
+        #   +-+-+--+--------+
+        #    | | |
+        #    | | +- buffer switcher
+        #    | +- modified flag
+        #    +- writeable flag
 
         # create tabbar if turned on
         self.tab_on_current = False
@@ -139,9 +143,22 @@ class zEdit(z_ABC, gtk.VBox):
         self.bottom = gtk.HBox()
         self.bottom_bg.add(self.bottom)
 
+        # create flag buttons
+        self.buffer_w = zToolButton('W')
+        self.buffer_m = zToolButton('M')
+
+        self.buffer_w.set_width_chars(1)
+        self.buffer_m.set_width_chars(1)
+
+        self.buffer_w.set_tooltip_markup("<tt>'-': writable\n'%': read-only</tt>")
+        self.buffer_m.set_tooltip_markup("<tt>'-': not modified\n'*': modified</tt>")
+
+        self.bottom.pack_start(self.buffer_w, False, False, 0)
+        self.bottom.pack_start(self.buffer_m, False, False, 0)
+
         # create buffer switcher
         self.buffer_sw = zComboBox()
-        self.bottom.pack_start(self.buffer_sw, False, False, 0)
+        self.bottom.pack_start(self.buffer_sw, False, False, 10)
 
         self.buffer_sw.set_row_separator_func(self.__separator)
 
@@ -153,11 +170,13 @@ class zEdit(z_ABC, gtk.VBox):
         # connect auto-update items
         zEdit.register('update_tabbar', self._sig_update_tabbar, self)
 
-        zEditBuffer.register('buffer_removed', zEdit._sig_buffer_removed, self)
+        zEditBuffer.register('buffer_modified_set', self._sig_buffer_modified_set, None)
+        zEditBuffer.register('buffer_removed', self._sig_buffer_removed, None)
+
         zEditBuffer.register('buffer_list_modified', zEdit._sig_buffer_list_modified, self)
         zEdit._sig_buffer_list_modified(self)
 
-        zTheme.register('update_font', self._sig_update_font, self.buffer_sw)
+        zTheme.register('update_font', self._sig_update_font, self)
         self._sig_update_font()
 
         zTheme.register('update_color_map', self._sig_update_color_map, self)
@@ -222,13 +241,12 @@ class zEdit(z_ABC, gtk.VBox):
                 self.tab_on_current = False
 
 
-    @staticmethod
-    def _sig_buffer_removed(z_editor, removed_buff_name):
-        if z_editor.active_buffer.name == removed_buff_name:
+    def _sig_buffer_removed(self, widget, removed_buff_name):
+        if self.active_buffer.name == removed_buff_name:
             # the removed buffer is the current active one
             # find a substitude
-            new_active_indx = z_editor.buffer_sw.index([removed_buff_name, False]) - 1
-            if z_editor.buffer_sw.get_value(new_active_indx, 1) == True:
+            new_active_indx = self.buffer_sw.index([removed_buff_name, False]) - 1
+            if self.buffer_sw.get_value(new_active_indx, 1) == True:
                 # separator, search the other direction
                 if len(zEditBuffer.buff_group['user']):
                     # has at least one other user buffer
@@ -238,14 +256,14 @@ class zEdit(z_ABC, gtk.VBox):
                     new_active_indx -= 1 # system buffer <= -1 <= separater
 
             # retrive the buffer info of the new active buffer
-            new_active_name = z_editor.buffer_sw.get_value(new_active_indx, 0)
+            new_active_name = self.buffer_sw.get_value(new_active_indx, 0)
             new_active = zEditBuffer.buff_list[new_active_name]
 
             # switch to that buffer
-            z_editor.set_buffer(new_active.path, new_active.type)
+            self.set_buffer(new_active.path, new_active.type)
 
         # update the buffer list
-        zEdit._sig_buffer_list_modified(z_editor)
+        zEdit._sig_buffer_list_modified(self)
 
 
     @staticmethod
@@ -307,7 +325,9 @@ class zEdit(z_ABC, gtk.VBox):
     def _sig_update_font(self, widget = None):
         if self.tab_on_current:
             zTheme._sig_update_font_modify(self.tabbar, 0.75)
-        zTheme._sig_update_font_modify(self.buffer_sw, 0.75)
+        zTheme._sig_update_font_modify(self.buffer_w, 0.85)
+        zTheme._sig_update_font_modify(self.buffer_m, 0.85)
+        zTheme._sig_update_font_modify(self.buffer_sw, 0.85)
         self.resize()
 
     def _sig_update_color_map(self, widget = None):
@@ -323,8 +343,9 @@ class zEdit(z_ABC, gtk.VBox):
         self.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
         self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
 
+        self.buffer_w.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_m.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
         self.buffer_sw.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
-        self.buffer_sw.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
 
         if self.is_focus():
             self.update_theme_focus_in()
@@ -335,12 +356,14 @@ class zEdit(z_ABC, gtk.VBox):
         if self.tab_on_current:
             self.tabbar.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
             self.tabbar.modify_bg(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['status_active']))
+
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status_active']))
 
     def update_theme_focus_out(self):
         if self.tab_on_current:
             self.tabbar.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
             self.tabbar.modify_bg(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['status']))
+
         self.bottom_bg.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['status']))
     ### end of signal-like auto-update function
 
@@ -404,6 +427,7 @@ class zEdit(z_ABC, gtk.VBox):
         if len(zEdit._auto_update['buffer_focus_in']):
             zEdit.reg_emit('buffer_focus_in')
         self.update_theme_focus_in()
+        self._sig_buffer_modified_set()
 
     def _sig_focus_out(self, widget, event):
         if len(zEdit._auto_update['buffer_focus_out']):
@@ -491,6 +515,29 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     ### signal for bottom
+    def _sig_buffer_modified_set(self, widget = None, setting = None):
+        buff = self.active_buffer
+
+        if buff.modified == None:
+            # not editable
+            self.buffer_w.set_label('%')
+            if setting:
+                self.buffer_m.set_label('*')
+            else:
+                self.buffer_m.set_label('%')
+
+            self.center.set_editable(False)
+        else:
+            if buff.modified:
+                self.buffer_w.set_label('*')
+                self.buffer_m.set_label('*')
+            else:
+                self.buffer_w.set_label('-')
+                self.buffer_m.set_label('-')
+
+            self.center.set_editable(True)
+
+
     def _sig_combo_changed(self, combobox):
         # check for switcher items
         active_item = combobox.get_active()
@@ -716,10 +763,10 @@ class zEdit(z_ABC, gtk.VBox):
             zTheme._sig_update_font_modify(self.center)
             self._sig_update_color_map()
 
+
         # switch buffer
         self.active_buffer = new_buff
         self.update_buffer_list_selected(True, True)
-        self.center.listener.clear_kp_focus_out()
 
         # connect buffer
         if self.active_buffer.type == 'file':
@@ -734,6 +781,10 @@ class zEdit(z_ABC, gtk.VBox):
 
         if self.need_init:
             self.exec_init_func()
+
+        # focus self out and in since the context has changed
+        self.center.emit('focus-out-event', gtk.gdk.Event(gtk.gdk.FOCUS_CHANGE))
+        self.center.emit('focus-in-event', gtk.gdk.Event(gtk.gdk.FOCUS_CHANGE))
 
         self.show_all()
 
@@ -828,6 +879,7 @@ class zEditBuffer(z_ABC):
     _auto_update = {
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'buffer_list_modified'    : [  ],
+        'buffer_modified_set'     : [  ],
         'buffer_removed'          : [  ],
         }
 
@@ -928,23 +980,10 @@ class zEditBuffer(z_ABC):
         zEditBuffer.reg_emit('buffer_list_modified', self)
 
         # fetch content
-        self.modified = None
+        self.modified = False
         if self.type == 'file':
             self.buffer = gtk.TextBuffer()
-
-            if self.name == '*scratch*':
-                # tmp buffer
-                zEditBuffer._reset_scratch()
-            elif io_encap.is_file(self.path):
-                # existing file
-                if io_encap.is_binary(self.path):
-                    raise TypeError('Cannot open a binary file.')
-                if not io_encap.fetch(self):
-                    raise BufferError('Failed to fetch the content.')
-            else:
-                # new file
-                pass            # passive alloc (copy on write)
-            self.set_modified(False)
+            self.__reload_buffer()
 
             # connect internal signals
             self.buffer.connect('changed', self._sig_buffer_content_changed)
@@ -970,9 +1009,9 @@ class zEditBuffer(z_ABC):
 
     def set_modified(self, setting):
         if setting != self.modified:
-            self.modified = setting
-            # mark, emit signel here
-            # remember to check `None`
+            if not self.modified == None:
+                self.modified = setting # only apply setting if buffer is modifible
+            zEditBuffer.reg_emit('buffer_modified_set', setting)
 
 
     @staticmethod
@@ -1065,7 +1104,7 @@ class zEditBuffer(z_ABC):
             # system-opened buffer, cannot be renamed
             if self.name == '*scratch*':
                 # scratch is being saved, clear it
-                zEditBuffer._reset_scratch()
+                self.__reload_buffer()
 
         callback(new_buff)
         return os.path.join(* new_buff.path), 'buffer saved.'
@@ -1077,7 +1116,7 @@ class zEditBuffer(z_ABC):
             # system-opened buffer, cannot be closed
             if buff.name == '*scratch*':
                 # close the scratch means to reset its content
-                zEditBuffer._reset_scratch()
+                buff.__reload_buffer()
                 return buff.name, 'buffer cleared'
             return buff.name, 'cannot close system buffer'
         elif buff.modified and not force:
@@ -1099,9 +1138,12 @@ class zEditBuffer(z_ABC):
             zEditBuffer.reg_emit('buffer_removed', buff.name)
             return os.path.join(* buff.path), 'buffer closed'
 
-    @staticmethod
-    def _reset_scratch():
-        zEditBuffer.buff_list['*scratch*'].buffer.set_text(
+
+    ### supporting function
+    def __reload_buffer(self):
+        if self.name == '*scratch*':
+            # tmp buffer
+            self.buffer.set_text(
 '''//*
 //* This buffer is for notes you don't want to save.
 //* If you want to create a file, do that with
@@ -1110,3 +1152,28 @@ class zEditBuffer(z_ABC):
 //*
 '''.format('"Open a New Buffer" -> Right Click -> "New File"')
 )
+            modified = False
+
+        elif io_encap.is_file(self.path):
+            # existing file
+            if io_encap.is_binary(self.path):
+                raise TypeError('Cannot open a binary file.')
+
+            # test permission
+            fullpath = os.path.join(* self.path)
+            if not os.access(fullpath, os.R_OK):
+                raise AssertionError('Permission Denied: directory not readable!')
+
+            if not io_encap.fetch(self):
+                raise BufferError('Failed to fetch the content.')
+            self.buffer.place_cursor(self.buffer.get_start_iter())
+
+            if os.access(fullpath, os.W_OK):
+                modified = False
+            else:
+                modified = None # mark buffer as read-only
+        else:
+            # new file
+            pass            # passive alloc (copy on write)
+        self.set_modified(modified)
+    ### end of supporting function

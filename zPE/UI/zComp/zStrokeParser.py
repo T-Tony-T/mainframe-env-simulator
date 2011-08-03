@@ -766,14 +766,18 @@ class zStrokeListener(gobject.GObject):
                 if stroke == 'M-x':
                     self.emit('z_activate', { 'z_run_cmd' : widget })
                     return True
+
                 elif stroke == 'C-q':
                     # start C-q Escaping
-                    self.__escaping = True
+                    if widget.get_editable():
+                        self.__escaping = True
                     return True
+
                 # not reserved bindings, check forbidden bindings (printable)
                 elif self.__is_printable(stroke):
                     # is a printable
-                    self.__insert_text(widget, stroke)
+                    if widget.get_editable():
+                        self.__insert_text(widget, stroke)
                     return True
 
                 # not any reserved or forbidden bindings
@@ -843,7 +847,8 @@ class zStrokeListener(gobject.GObject):
 
                         if self.__is_space(stroke):
                             # space
-                            self.__insert_text(widget , ' ')
+                            if widget.get_editable():
+                                self.__insert_text(widget , ' ')
                             return True
                         else:
                             # not regular keypress nor space, pass it to the widget
@@ -890,11 +895,13 @@ class zStrokeListener(gobject.GObject):
             else:
                 if self.__is_printable(stroke):
                     # regular keypress
-                    self.__insert_text(widget , stroke)
+                    if widget.get_editable():
+                        self.__insert_text(widget , stroke)
                     return True
                 elif self.__is_space(stroke):
                     # space
-                    self.__insert_text(widget , ' ')
+                    if widget.get_editable():
+                        self.__insert_text(widget , ' ')
                     return True
                 else:
                     # not regular keypress nor space, pass it to the widget
