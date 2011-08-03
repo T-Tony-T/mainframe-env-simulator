@@ -199,6 +199,7 @@ class BaseFrame(object):
 
         # add the last-line to the editor
         zComp.zEdit.set_last_line(self.lastline)
+        self.lastline.bind_to(self.mw)
 
 
         ### set accel

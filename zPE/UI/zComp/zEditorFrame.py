@@ -453,7 +453,7 @@ class zEdit(z_ABC, gtk.VBox):
                     # must be commanding over M-x commanding
                     # restore M-x commanding
                     zEdit.__last_line.set_editable(True)
-                    zEdit.__last_line.blink('', msg['return_msg'])
+                    zEdit.__last_line.blink('', msg['return_msg'], 0.5)
 
                 elif zEdit.__last_line.is_mx_commanding():
                     # focus in lastline (M-x commanding cancelled)
@@ -739,6 +739,7 @@ class zEdit(z_ABC, gtk.VBox):
 
                 self.center_shell.remove(self.center)
                 self.remove(self.center_shell)
+                self.center.hide_all()
             self.center_shell = widget_shell
             self.center = widget
             self.center_shell.add(self.center)

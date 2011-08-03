@@ -489,6 +489,7 @@ class zStrokeListener(gobject.GObject):
         for func in func_list:
             if func not in self.is_enabled_func:
                 self.is_enabled_func[func] = None
+        zStrokeListener.global_add_func_registry(func_list)
 
     def set_func_enabled(self, func_name, setting):
         if ( func_name not in self.is_enabled_func  and
@@ -658,7 +659,8 @@ class zStrokeListener(gobject.GObject):
 
             elif task == 'func':
                 # is on M-x commanding
-                if not init_widget:
+                self.__entry_content = widget.get_text() # update the content backup
+                if not init_widget: # set the responing widget
                     init_widget = widget
 
                 local_is_enabled_func   = init_widget.listener.is_enabled_func
@@ -1172,11 +1174,15 @@ class zComplete(gobject.GObject):
 
 
     def __popup_complete_list(self):
-        print 'complete_list'
+        print self.__comp_list
 
 
     def __generate_func_list(self, curr_func):
-        return
+        # get the completion list
+        self.__comp_list = [ func for func in zStrokeListener.global_is_enabled_func
+                             if func.startswith(curr_func)
+                             ]
+        return curr_func
 
     def __generate_path_list(self, curr_path, task):
         # normalize the path

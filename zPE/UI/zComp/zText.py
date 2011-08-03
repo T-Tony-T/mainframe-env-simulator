@@ -270,6 +270,8 @@ class zLastLine(gtk.HBox):
         '''
         super(zLastLine, self).__init__()
 
+        self.__binding_frame = None
+
         self.__n_alternation = 0    # initiate the blinking counter to 0
         self.__response_msg = None  # used by run() and run_confirm()
 
@@ -293,7 +295,7 @@ class zLastLine(gtk.HBox):
         self.__mx_commanding = False
 
         self.__lock_reset_func = None # see lock() and reset() for more information
-        self.__locked = False         # if locked, all `set_*()` refer to `blink()`
+        self.__locked = False         # if locked, map `set_text()` to `blink()`
 
         # connect auto-update items
         zTheme.register('update_font', zTheme._sig_update_font_modify, self.__label)
@@ -370,7 +372,13 @@ class zLastLine(gtk.HBox):
             self.set_text('', msg['return_msg'])
 
         # retain focus
-        msg['widget'].grab_focus()
+        if msg['widget'].get_property('visible'):
+            msg['widget'].grab_focus()
+        else:
+            try:
+                self.get_binding_frame().grab_focus()
+            except:
+                pass
     ### end of internal signals
 
 
@@ -499,14 +507,21 @@ class zLastLine(gtk.HBox):
             entry_text = self.__line_interactive.get_text()
 
         if self.is_locked():
-            self.blink(hlt_text, entry_text)
+            self.blink(hlt_text, entry_text, 1)
         else:
             self.__line_highlight.set_text(hlt_text)
             self.__line_interactive.set_text(entry_text)
     ### end of overridden function definition
 
 
-    def blink(self, hlt_text, entry_text, period = 1):
+    def bind_to(self, frame):
+        self.__binding_frame = frame
+
+    def get_binding_frame(self):
+        return self.__binding_frame
+
+
+    def blink(self, hlt_text, entry_text, period = 0.5):
         if self.__n_alternation:
             return              # already on blinking, early return
 
