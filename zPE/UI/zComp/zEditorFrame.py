@@ -968,8 +968,8 @@ class zEditBuffer(z_ABC):
         elif buffer_type in [ None, 'file' ]:
             # file with a path => user-opened buffer
             buff_group = 'user'
-            self.name = buffer_path[-1]
             self.path = os.path.split(io_encap.norm_path_list(buffer_path)) # normalize path
+            self.name = self.path[-1]
             self.type = 'file'  # must be type::file
         else:
             # not type::file, must be system-opened buffer
@@ -1148,7 +1148,7 @@ class zEditBuffer(z_ABC):
             return self.flush() # no change in path, save directly
 
         fullpath = os.path.join(* path)
-        if not os.access(fullpath, os.W_OK):
+        if io_encap.is_file(path) and not os.access(fullpath, os.W_OK):
             return fullpath, '(Target not writable!)'
 
         # create a new buffer
