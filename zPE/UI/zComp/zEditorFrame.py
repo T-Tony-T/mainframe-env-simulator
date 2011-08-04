@@ -1096,24 +1096,34 @@ class zEditBuffer(z_ABC):
         zEditBuffer._on_restore = False
 
 
+    def reload(self):
+        self.__reload_buffer()
+
+
     def flush(self):
         if not self.buffer:
             return self.name, '(Buffer not savable!)'
 
         elif self.path:
             # user-opened buffer
-            full_path = os.path.join(* self.path)
+            fullpath = os.path.join(* self.path)
+            self.mtime = None   # mark mtime unavailable
+
             if not self.writable:
+                self.mtime = os.stat(fullpath).st_mtime
                 raise ValueError('Buffer not writable! Try flush_to(path) instead.')
 
             elif not self.modified:
-                return full_path, '(No changes need to be saved.)'
+                self.mtime = os.stat(fullpath).st_mtime
+                return fullpath, '(No changes need to be saved.)'
 
             elif io_encap.flush(self):
                 self.set_modified(False)
-                return full_path, 'buffer saved.'
+                self.mtime = os.stat(fullpath).st_mtime
+                return fullpath, 'buffer saved.'
             else:
-                return full_path, '(Cannot save the buffer! Permission denied!)'
+                self.mtime = os.stat(fullpath).st_mtime
+                return fullpath, '(Cannot save the buffer! Permission denied!)'
         else:
             # system-opened buffer
             if not self.modified:
@@ -1238,11 +1248,13 @@ class zEditBuffer(z_ABC):
 
             self.writable = os.access(fullpath, os.W_OK) # whether can be saved
             self.editable = os.access(fullpath, os.W_OK) # whether can be modified
+            self.mtime = os.stat(fullpath).st_mtime      # time modified
         else:
             # new file
             # passive alloc (copy on write)
             self.writable = True
             self.editable = True
+            self.mtime = None
 
         self.set_modified(False)
     ### end of supporting function

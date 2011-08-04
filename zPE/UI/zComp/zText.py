@@ -332,7 +332,10 @@ class zLastLine(gtk.HBox):
             response = entry.get_text()
             if response in choice:
                 self.__response_msg = response
-                self.reset()    # release the lock
+                # release the lock
+                self.__unlock()
+                self.set_editable(False)
+                self.clear()
             else:
                 entry.set_text('')
 
@@ -355,7 +358,10 @@ class zLastLine(gtk.HBox):
             # set the msg and leave the text empty
             self.__response_msg = (msg['return_msg'], '')
 
-        self.reset()
+        # release the lock
+        self.__unlock()
+        self.set_editable(False)
+        self.clear()
 
 
     def _sig_mx_activate(self, listener, msg, sig_type):
@@ -417,6 +423,7 @@ class zLastLine(gtk.HBox):
         return self.__locked
 
     def reset(self):
+        self.__response_msg = None
         self.__unlock()
         self.set_editable(False)
         self.clear()

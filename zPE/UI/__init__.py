@@ -6,7 +6,7 @@ import os, sys, copy, re, subprocess
 import pygtk
 pygtk.require('2.0')
 import gtk
-import pango
+import gobject, pango
 
 
 class BaseFrame(object):
@@ -236,6 +236,37 @@ class BaseFrame(object):
         self.err_console.setup = False # signal the end of the setup phase; no more stderr
         if self.err_console.get_text():
             self.err_console.open()
+
+        gobject.timeout_add(100, self.__watch_modified_on_disk)
+
+
+    ### modified-on-disk watcher for zEditBuffer
+    def __watch_modified_on_disk(self):
+        '''used with `timer`'''
+        for name in zComp.zEditBuffer.buff_group['user']:
+            buff = zComp.zEditBuffer.buff_list[name]
+            fullpath = os.path.join(* buff.path)
+
+            if buff.mtime and buff.mtime != os.stat(fullpath).st_mtime:
+                # buffer modified on disk
+                self.lastline.reset()
+                response = self.lastline.run_confirm(
+                    '"{0}" has been modified on disk, reload it?'.format(fullpath),
+                    [ 'y', 'l', 'n', '!', ],
+                    'y'
+                    )
+                if response in [ 'y', 'l' ]:
+                    buff.reload()
+                else:
+                    buff.mtime = os.stat(fullpath).st_mtime
+
+                if self.mw.active_frame():
+                    self.mw.active_frame().grab_focus()
+                else:
+                    self.mw.grab_focus()
+
+        return True
+    ### end of modified-on-disk watcher for zEditBuffer
 
 
     ### signal-like auto-update function
