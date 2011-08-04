@@ -241,7 +241,10 @@ class BaseFrame(object):
     ### signal-like auto-update function
     def _sig_buffer_focus_in(self, widget = None):
         # get current buffer
-        buff = self.mw.active_frame().active_buffer
+        try:
+            buff = self.mw.active_frame().active_buffer
+        except:
+            return
         is_file = (buff.type == 'file')
         is_dir  = (buff.type == 'dir')
         is_disp = (buff.type == 'disp')
@@ -255,7 +258,7 @@ class BaseFrame(object):
         self.tool_submit.set_property(     'sensitive', buff.path)
         self.tool_submit_wrap.set_property('sensitive', buff.path)
 
-    def _sig_buffer_modified_set(self, widget = None, setting = None):
+    def _sig_buffer_modified_set(self, widget = None):
         # get current buffer
         frame = self.mw.active_frame()
         if not frame:
@@ -275,11 +278,17 @@ class BaseFrame(object):
         if buff.modified and buff.path:
             response = self.lastline.run_confirm(
                 '"{0}" has been modified, save it?'.format(os.path.join(* buff.path)),
-                [ 'y', 'n', 'w', 'q', '!', ],
+                [ 'y', 'w', 'n', '!', 'q', 'c', ],
                 'y'
                 )
             frame.grab_focus()
-            if response in [ 'y', 'w' ]:
+            if response in [ 'q', 'c' ]:
+                if self.mw.active_frame():
+                    self.mw.active_frame().grab_focus()
+                else:
+                    self.mw.grab_focus()
+                return None
+            elif response in [ 'y', 'w' ]:
                 need_save = True
             else:
                 need_save = False
@@ -328,7 +337,8 @@ class BaseFrame(object):
         if msg:
             self.lastline.set_text('', '{0}: {1}'.format(* msg))
         else:
-            self.lastline.clear()
+            if self.lastline.get_text()[0] != '':
+                self.lastline.clear()
 
         return self.lastline.get_text()[1]
 
@@ -341,12 +351,19 @@ class BaseFrame(object):
         buff_group = zComp.zEditBuffer.buff_group['user']
 
         # close all user-opened buffer
-        while buff_group:
+        for buff in [ buff_list[name] for name in buff_group ]:
+            if not buff.modified:
+                continue        # skip non-modified buffer
+
             # create a dummy frame
-            buff = buff_list[buff_group[0]]
             frame = zComp.zEdit(buff.path, buff.type)
 
-            self.remove_buffer(buff, frame)
+            if not self.remove_buffer(buff, frame):
+                if self.mw.active_frame():
+                    self.mw.active_frame().grab_focus()
+                else:
+                    self.mw.grab_focus()
+                return          # cancel quit
 
         # all user-opened buffer closed, quit
         gtk.main_quit()

@@ -1062,7 +1062,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
                 if os.path.isfile(path): # target already exist, confirm overwritting
                     response = lastline.run_confirm(
                         '"{0}" exists on disk, overwrite it?'.format(path),
-                        [ 'y', 'n', 'w', 'q', '!', ],
+                        [ 'y', 'w', 'n', '!', 'q', 'c', ],
                         'n'
                         )
                     self.grab_focus()

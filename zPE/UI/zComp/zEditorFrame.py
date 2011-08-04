@@ -153,6 +153,9 @@ class zEdit(z_ABC, gtk.VBox):
         self.buffer_w.set_tooltip_markup("<tt>'-': writable\n'%': read-only</tt>")
         self.buffer_m.set_tooltip_markup("<tt>'-': not modified\n'*': modified</tt>")
 
+        self.buffer_w.connect('clicked', self._sig_cycle_writable)
+        self.buffer_m.connect('clicked', self._sig_cycle_modified)
+
         self.bottom.pack_start(self.buffer_w, False, False, 0)
         self.bottom.pack_start(self.buffer_m, False, False, 0)
 
@@ -531,19 +534,21 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     ### signal for bottom
-    def _sig_buffer_modified_set(self, widget = None, setting = None):
+    def _sig_cycle_writable(self, bttn):
         buff = self.active_buffer
 
-        if buff.modified == None:
-            # not editable
-            self.buffer_w.set_label('%')
-            if setting:
-                self.buffer_m.set_label('*')
-            else:
-                self.buffer_m.set_label('%')
+    def _sig_cycle_modified(self, bttn):
+        buff = self.active_buffer
 
-            self.center.set_editable(False)
+        if buff.modified:
+            self.save_buffer(buff)
         else:
+            buff.set_modified(True)
+
+    def _sig_buffer_modified_set(self, widget = None):
+        buff = self.active_buffer
+
+        if buff.writable:
             if buff.modified:
                 self.buffer_w.set_label('*')
                 self.buffer_m.set_label('*')
@@ -552,6 +557,15 @@ class zEdit(z_ABC, gtk.VBox):
                 self.buffer_m.set_label('-')
 
             self.center.set_editable(True)
+        else:
+            # not writable
+            self.buffer_w.set_label('%')
+            if buff.modified:
+                self.buffer_m.set_label('*')
+                self.center.set_editable(True)
+            else:
+                self.buffer_m.set_label('%')
+                self.center.set_editable(False)
 
 
     def _sig_combo_changed(self, combobox):
@@ -807,13 +821,37 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     def save_buffer(self, buff):
-        return self.center.buffer_save(buff)
+        try:
+            return self.center.buffer_save(buff)
+        except:
+            if buff.path:
+                msg = '{0}: Fail to save buffer!'.format(os.path.join(* buff.path))
+            else:
+                msg = '{0}: Fail to save buffer!'.format(buff.name)
+            self.__last_line.set_text('', msg)
+            return None
 
     def save_buffer_as(self, buff):
-        return self.center.buffer_save_as(buff)
+        try:
+            return self.center.buffer_save_as(buff)
+        except:
+            if buff.path:
+                msg = '{0}: Fail to save buffer to the target file!'.format(os.path.join(* buff.path))
+            else:
+                msg = '{0}: Fail to save buffer to the target file!'.format(buff.name)
+            self.__last_line.set_text('', msg)
+            return None
 
     def rm_buffer(self, buff, force = False):
-        return zEditBuffer.rm_buffer(buff, force)
+        try:
+            return zEditBuffer.rm_buffer(buff, force)
+        except:
+            if buff.path:
+                msg = '{0}: Fail to remove buffer!'.format(os.path.join(* buff.path))
+            else:
+                msg = '{0}: Fail to remove buffer!'.format(buff.name)
+            self.__last_line.set_text('', msg)
+            return None
 
 
     @staticmethod
@@ -997,7 +1035,7 @@ class zEditBuffer(z_ABC):
         zEditBuffer.reg_emit('buffer_list_modified', self)
 
         # fetch content
-        self.modified = False
+        self.modified = None    # will be set after determining the content
         if self.type == 'file':
             self.buffer = gtk.TextBuffer()
             self.__reload_buffer()
@@ -1006,12 +1044,14 @@ class zEditBuffer(z_ABC):
             self.buffer.connect('changed', self._sig_buffer_content_changed)
 
         elif buffer_type == 'dir':
-            self.buffer = None
-            self.set_modified(None)
+            self.buffer   = None
+            self.writable = False
+            self.set_modified(False)
 
         elif buffer_type == 'disp':
-            self.buffer = gtk.TextBuffer()
-            self.set_modified(None)
+            self.buffer   = gtk.TextBuffer()
+            self.writable = False
+            self.set_modified(False)
         else:
             raise TypeError
 
@@ -1026,9 +1066,8 @@ class zEditBuffer(z_ABC):
 
     def set_modified(self, setting):
         if setting != self.modified:
-            if not self.modified == None:
-                self.modified = setting # only apply setting if buffer is modifible
-            zEditBuffer.reg_emit('buffer_modified_set', setting)
+            self.modified = setting
+            zEditBuffer.reg_emit('buffer_modified_set')
 
 
     @staticmethod
@@ -1061,8 +1100,12 @@ class zEditBuffer(z_ABC):
         elif self.path:
             # user-opened buffer
             full_path = os.path.join(* self.path)
-            if not self.modified:
+            if not self.writable:
+                raise ValueError('Buffer not writable! Try flush_to(path) instead.')
+
+            elif not self.modified:
                 return full_path, '(No changes need to be saved.)'
+
             elif io_encap.flush(self):
                 self.set_modified(False)
                 return full_path, 'buffer saved.'
@@ -1091,6 +1134,9 @@ class zEditBuffer(z_ABC):
         if self.path and io_encap.norm_path_list(self.path) == io_encap.norm_path_list(path):
             return self.flush() # no change in path, save directly
 
+        fullpath = os.path.join(* path)
+        if not os.access(fullpath, os.W_OK):
+            return fullpath, '(Target not writable!)'
 
         # create a new buffer
         opened_buffs = zEditBuffer.buff_list.values()
@@ -1104,7 +1150,8 @@ class zEditBuffer(z_ABC):
         new_buff.buffer.set_text(
             self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
             )
-        new_buff.flush()        # write the new buffer
+        new_buff.flush()           # write the new buffer
+        new_buff.__reload_buffer() # reload the new buffer to set all flags
 
         # clean up
         if self.path:
@@ -1169,7 +1216,7 @@ class zEditBuffer(z_ABC):
 //*
 '''.format('"Open a New Buffer" -> Right Click -> "New File"')
 )
-            modified = False
+            self.writable = True
 
         elif io_encap.is_file(self.path):
             # existing file
@@ -1185,12 +1232,11 @@ class zEditBuffer(z_ABC):
                 raise BufferError('Failed to fetch the content.')
             self.buffer.place_cursor(self.buffer.get_start_iter())
 
-            if os.access(fullpath, os.W_OK):
-                modified = False
-            else:
-                modified = None # mark buffer as read-only
+            self.writable = os.access(fullpath, os.W_OK)
         else:
             # new file
-            pass            # passive alloc (copy on write)
-        self.set_modified(modified)
+            # passive alloc (copy on write)
+            self.writable = True
+
+        self.set_modified(False)
     ### end of supporting function
