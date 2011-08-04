@@ -296,7 +296,7 @@ def init_step(step):
 
         # check for the f_type
         if ddname in zPE.core.SPOOL.list():
-            pass          # read in but not allocate, must be instream
+            f_type = 'instream' # read in but not allocate, must be instream
         else:
             v_path = []         # virtual path
             r_path = []         # real path
