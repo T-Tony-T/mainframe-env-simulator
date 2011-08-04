@@ -405,16 +405,38 @@ class zColorPickerButton(gtk.Frame):
 ######## ######## ######## ######## ########
 
 class zPopupMenu(gtk.Menu):
-    def __init__(self, attached_widget = None):
+    def __init__(self):
         super(zPopupMenu, self).__init__()
+
         self.set_property('reserve-toggle-size', False)
 
-        self.__attached_widget = attached_widget
+        self.__reset_w_arg()
 
 
-    def popup_given(self, attached_widget):
+    def popup_given(self, attached_widget, w_alloc = None):
+        '''
+        attached_widget
+            the widget that popups this menu
+
+        w_allco = None
+            a list of (x, y, width, height) that describes the geometry
+            of the attached widget (if not set, the position will be
+            decided by `attached_widget.get_allocation()`)
+        '''
+        # retrive info for the attached widget
         self.__attached_widget = attached_widget
+
+        if w_alloc:
+            self.__w_height = w_alloc[2]
+            self.__w_width  = w_alloc[3]
+        else:            
+            alloc = attached_widget.get_allocation()
+            self.__w_height = alloc.height
+            self.__w_width  = alloc.width
+
+        # popup the menu according to the given info
         self.popup(None, None, self.__menu_position_below_or_above, 1, 0)
+        self.__reset_w_arg()
 
 
     ### supporting function
@@ -423,9 +445,6 @@ class zPopupMenu(gtk.Menu):
         h_req = menu.get_style().ythickness * 2
         for mi in menu.get_children():
             h_req += mi.size_request()[1]
-
-        # get the allocation for the attached widget
-        alloc = self.__attached_widget.get_allocation()
 
         # calculate position
         toplevel = self.__attached_widget.get_toplevel()
@@ -439,23 +458,30 @@ class zPopupMenu(gtk.Menu):
         ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x,     ptr_abs_y - ptr_y     ) # top-left coords of widget 
 
         # check room
-        room_below = root.get_size()[1] - base_y - alloc.height
+        room_below = root.get_size()[1] - base_y - self.__w_height
         room_above = base_y - top_y # should not go above the top border of the toplevel
 
-        menu.set_size_request(alloc.width, -1)
+        menu.set_size_request(self.__w_width, -1)
 
         if h_req >= room_below and room_above > room_below:
             # not enough room below, and room above is larger then room below
             # pop above
             if room_above < h_req:
-                menu.set_size_request(alloc.width, room_above) # limit the height of the menu
+                menu.set_size_request(self.__w_width, room_above) # limit the height of the menu
                 return base_x, top_y, False
             else:
                 return base_x, base_y - h_req, False
         else:
             # room below is enough, or larger then room above
             # pop below
-            return base_x, base_y + alloc.height, False
+            return base_x, base_y + self.__w_height, False
+
+
+    def __reset_w_arg(self):
+        self.__attached_widget = None
+
+        self.__w_height = -1
+        self.__w_width  = -1
     ### end of supporting function
 
 
@@ -581,9 +607,11 @@ class zComboBox(z_ABC, zToolButton):
                 self.menu.append(mi)
                 mi.connect('activate', self._sig_item_selected, indx)
 
+                # modify the text and background color of each menu item
                 for (k, v) in self.color_fg.iteritems():
                     mi.child.modify_fg(k, v)
 
+        # modify the background color of the menu
         for (k, v) in self.color_bg.iteritems():
             self.menu.modify_bg(k, v)
 

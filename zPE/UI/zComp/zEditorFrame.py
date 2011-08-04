@@ -331,22 +331,38 @@ class zEdit(z_ABC, gtk.VBox):
         self.resize()
 
     def _sig_update_color_map(self, widget = None):
+        # tabbar
         if self.tab_on_current:
-            self.tabbar.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
-            self.tabbar.modify_fg(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['reserve']))
+            self.tabbar.modify_fg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))
+            self.tabbar.modify_fg(gtk.STATE_ACTIVE,   gtk.gdk.color_parse(zTheme.color_map['reserve']))
 
-        self.center.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
-        self.center.modify_text(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['text']))
+            self.tabbar.modify_fg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['text']))
+            self.tabbar.modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
+
+        # center
+        self.center.modify_text(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.center.modify_text(gtk.STATE_ACTIVE,   gtk.gdk.color_parse(zTheme.color_map['text']))
         self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['text_selected']))
 
-        self.center.modify_base(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['base']))
-        self.center.modify_base(gtk.STATE_ACTIVE, gtk.gdk.color_parse(zTheme.color_map['base']))
+        self.center.modify_base(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['base']))
+        self.center.modify_base(gtk.STATE_ACTIVE,   gtk.gdk.color_parse(zTheme.color_map['base']))
         self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
 
-        self.buffer_w.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
-        self.buffer_m.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
-        self.buffer_sw.modify_fg(gtk.STATE_NORMAL, gtk.gdk.color_parse(zTheme.color_map['text']))
+        # bottom
+        self.buffer_w.modify_fg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_w.modify_fg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_w.modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
 
+        self.buffer_m.modify_fg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_m.modify_fg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_m.modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
+
+        self.buffer_sw.modify_fg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_sw.modify_fg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_sw.modify_bg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['base']))          # for menu
+        self.buffer_sw.modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['base_selected'])) # for combo
+
+        # focus relevant
         if self.is_focus():
             self.update_theme_focus_in()
         else:
