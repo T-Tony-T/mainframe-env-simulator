@@ -536,36 +536,37 @@ class zEdit(z_ABC, gtk.VBox):
     ### signal for bottom
     def _sig_cycle_writable(self, bttn):
         buff = self.active_buffer
+        if buff.editable == None:
+            return              # this means not allow to toggle
+        buff.editable = not buff.editable
+        self._sig_buffer_modified_set()
 
     def _sig_cycle_modified(self, bttn):
         buff = self.active_buffer
-
         if buff.modified:
             self.save_buffer(buff)
         else:
             buff.set_modified(True)
 
+
     def _sig_buffer_modified_set(self, widget = None):
         buff = self.active_buffer
 
-        if buff.writable:
+        self.center.set_editable(buff.editable)
+        if buff.editable:
             if buff.modified:
                 self.buffer_w.set_label('*')
                 self.buffer_m.set_label('*')
             else:
                 self.buffer_w.set_label('-')
                 self.buffer_m.set_label('-')
-
-            self.center.set_editable(True)
         else:
             # not writable
             self.buffer_w.set_label('%')
             if buff.modified:
                 self.buffer_m.set_label('*')
-                self.center.set_editable(True)
             else:
                 self.buffer_m.set_label('%')
-                self.center.set_editable(False)
 
 
     def _sig_combo_changed(self, combobox):
@@ -1045,12 +1046,14 @@ class zEditBuffer(z_ABC):
 
         elif buffer_type == 'dir':
             self.buffer   = None
-            self.writable = False
+            self.writable = False # whether can be saved
+            self.editable = None  # whether can be modified
             self.set_modified(False)
 
         elif buffer_type == 'disp':
             self.buffer   = gtk.TextBuffer()
-            self.writable = False
+            self.writable = False # whether can be saved
+            self.editable = None  # whether can be modified
             self.set_modified(False)
         else:
             raise TypeError
@@ -1216,7 +1219,8 @@ class zEditBuffer(z_ABC):
 //*
 '''.format('"Open a New Buffer" -> Right Click -> "New File"')
 )
-            self.writable = True
+            self.writable = False # whether can be saved
+            self.editable = True  # whether can be modified
 
         elif io_encap.is_file(self.path):
             # existing file
@@ -1232,11 +1236,13 @@ class zEditBuffer(z_ABC):
                 raise BufferError('Failed to fetch the content.')
             self.buffer.place_cursor(self.buffer.get_start_iter())
 
-            self.writable = os.access(fullpath, os.W_OK)
+            self.writable = os.access(fullpath, os.W_OK) # whether can be saved
+            self.editable = os.access(fullpath, os.W_OK) # whether can be modified
         else:
             # new file
             # passive alloc (copy on write)
             self.writable = True
+            self.editable = True
 
         self.set_modified(False)
     ### end of supporting function
