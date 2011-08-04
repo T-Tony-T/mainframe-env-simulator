@@ -420,19 +420,32 @@ class zPopupMenu(gtk.Menu):
 
         w_allco = None
             a list of (x, y, width, height) that describes the geometry
-            of the attached widget (if not set, the position will be
-            decided by `attached_widget.get_allocation()`)
+            of the attached widget. they are:
+              - x       x displacement of the menu into attached_widget
+              - y       y displacement of the menu into attached_widget
+              - width   width of attached_widget
+              - height  height of attached_widget
+
+            if not set, the position will be decided by
+              ( 0, 0,
+                attached_widget.get_allocation().width,
+                attached_widget.get_allocation().height
+                )
         '''
         # retrive info for the attached widget
         self.__attached_widget = attached_widget
 
         if w_alloc:
-            self.__w_height = w_alloc[2]
-            self.__w_width  = w_alloc[3]
+            self.__w_x      = w_alloc[0]
+            self.__w_y      = w_alloc[1]
+            self.__w_width  = w_alloc[2]
+            self.__w_height = w_alloc[3]
         else:            
             alloc = attached_widget.get_allocation()
-            self.__w_height = alloc.height
+            self.__w_x      = 0
+            self.__w_y      = 0
             self.__w_width  = alloc.width
+            self.__w_height = alloc.height
 
         # popup the menu according to the given info
         self.popup(None, None, self.__menu_position_below_or_above, 1, 0)
@@ -454,8 +467,8 @@ class zPopupMenu(gtk.Menu):
         ( ptr_rel_x, ptr_rel_y ) = toplevel.get_pointer() # reletive position to toplevel
         ( ptr_abs_x, ptr_abs_y ) = root.get_pointer()[:2] # absolute position to root
 
-        ( top_x,     top_y     ) = ( ptr_abs_x - ptr_rel_x, ptr_abs_y - ptr_rel_y ) # top-left coords of toplevel
-        ( base_x,    base_y    ) = ( ptr_abs_x - ptr_x,     ptr_abs_y - ptr_y     ) # top-left coords of widget 
+        ( top_x,  top_y  ) = (ptr_abs_x - ptr_rel_x,          ptr_abs_y - ptr_rel_y         ) # top-left coords of toplevel
+        ( base_x, base_y ) = (ptr_abs_x - ptr_x + self.__w_x, ptr_abs_y - ptr_y + self.__w_y) # top-left coords of widget 
 
         # check room
         room_below = root.get_size()[1] - base_y - self.__w_height
@@ -480,6 +493,8 @@ class zPopupMenu(gtk.Menu):
     def __reset_w_arg(self):
         self.__attached_widget = None
 
+        self.__w_x      = 0
+        self.__w_y      = 0
         self.__w_height = -1
         self.__w_width  = -1
     ### end of supporting function

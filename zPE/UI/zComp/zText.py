@@ -805,8 +805,8 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
             end_iter   = sel[1].copy()
             buff.select_range(start_iter, end_iter)
         else:
-            start_iter = buff.get_iter_at_mark(buff.get_insert())
-            end_iter   = buff.get_iter_at_mark(buff.get_insert())
+            start_iter = self.get_cursor_iter()
+            end_iter   = self.get_cursor_iter()
 
         if task == 'char':
             if sel:
@@ -848,8 +848,8 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
             end_iter   = sel[0].copy()
             buff.select_range(start_iter, end_iter)
         else:
-            start_iter = buff.get_iter_at_mark(buff.get_insert())
-            end_iter   = buff.get_iter_at_mark(buff.get_insert())
+            start_iter = self.get_cursor_iter()
+            end_iter   = self.get_cursor_iter()
 
         if task == 'char':
             if sel:
@@ -892,10 +892,15 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
             iterator.forward_to_line_end()
 
 
+    def get_cursor_iter(self):
+        buff = self.get_buffer()
+        return buff.get_iter_at_mark(buff.get_insert())
+
+
     def get_current_word(self):
         buff = self.get_buffer()
-        start_iter = buff.get_iter_at_mark(buff.get_insert())
-        end_iter   = buff.get_iter_at_mark(buff.get_insert())
+        start_iter = self.get_cursor_iter()
+        end_iter   = self.get_cursor_iter()
 
         # move start back to the word start
         start_iter.backward_word_start()
@@ -904,8 +909,8 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
     def set_current_word(self, word):
         buff = self.get_buffer()
-        start_iter = buff.get_iter_at_mark(buff.get_insert())
-        end_iter   = buff.get_iter_at_mark(buff.get_insert())
+        start_iter = self.get_cursor_iter()
+        end_iter   = self.get_cursor_iter()
 
         # move start back to the word start
         start_iter.backward_word_start()
@@ -917,15 +922,15 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
     def is_word_start(self):
         buff = self.get_buffer()
-        return buff.get_iter_at_mark(buff.get_insert()).starts_word()
+        return self.get_cursor_iter().starts_word()
 
     def is_in_word(self):
         buff = self.get_buffer()
-        return buff.get_iter_at_mark(buff.get_insert()).inside_word()
+        return self.get_cursor_iter().inside_word()
 
     def is_word_end(self):
         buff = self.get_buffer()
-        return buff.get_iter_at_mark(buff.get_insert()).ends_word()
+        return self.get_cursor_iter().ends_word()
 
 
     def is_in_para(self, buff, iterator):

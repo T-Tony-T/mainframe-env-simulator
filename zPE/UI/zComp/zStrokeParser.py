@@ -6,6 +6,7 @@ import io_encap
 #   norm_path(full_path):       return the normalized absolute path
 #
 
+from zWidget import zPopupMenu
 
 import os, sys, re, copy
 
@@ -631,6 +632,12 @@ class zStrokeListener(gobject.GObject):
             self.__entry_entering = True
 
 
+        # initialize the editable flag
+        try:
+            w_editable = widget.get_editable()
+        except:
+            w_editable = None
+
         ### style-regardless checkings
         # check Cancelling
         if is_sp_func_key(stroke, 'CANCEL', self.get_style()):
@@ -726,7 +733,7 @@ class zStrokeListener(gobject.GObject):
             # check C-q Escaping
             if self.__escaping: # this should guarantee no combo is entering
                 try:
-                    if widget.get_editable():
+                    if w_editable:
                         if self.__is_printable(stroke):
                             insertion = stroke
 
@@ -737,6 +744,8 @@ class zStrokeListener(gobject.GObject):
                             insertion = '' # ignore the rest ctrl chars
 
                         self.__insert_text(widget, insertion)
+                    else:
+                        pass    # no need to handle C-q escaping when the widget is not editable
                 except:
                     pass # if anything goes wrong, give up the escaping
 
@@ -771,15 +780,19 @@ class zStrokeListener(gobject.GObject):
 
                 elif stroke == 'C-q':
                     # start C-q Escaping
-                    if widget.get_editable():
+                    if w_editable:
                         self.__escaping = True
+                    else:
+                        pass    # no need to handle C-q escaping when the widget is not editable
                     return True
 
                 # not reserved bindings, check forbidden bindings (printable)
                 elif self.__is_printable(stroke):
                     # is a printable
-                    if widget.get_editable():
+                    if w_editable:
                         self.__insert_text(widget, stroke)
+                    else:
+                        self.emit('z_activate', self.__build_msg(widget, stroke, ''))
                     return True
 
                 # not any reserved or forbidden bindings
@@ -849,8 +862,10 @@ class zStrokeListener(gobject.GObject):
 
                         if self.__is_space(stroke):
                             # space
-                            if widget.get_editable():
+                            if w_editable:
                                 self.__insert_text(widget , ' ')
+                            else:
+                                self.emit('z_activate', self.__build_msg(widget, ' ', ''))
                             return True
                         else:
                             # not regular keypress nor space, pass it to the widget
@@ -897,13 +912,17 @@ class zStrokeListener(gobject.GObject):
             else:
                 if self.__is_printable(stroke):
                     # regular keypress
-                    if widget.get_editable():
+                    if w_editable:
                         self.__insert_text(widget , stroke)
+                    else:
+                        self.emit('z_activate', self.__build_msg(widget, stroke, ''))
                     return True
                 elif self.__is_space(stroke):
                     # space
-                    if widget.get_editable():
+                    if w_editable:
                         self.__insert_text(widget , ' ')
+                    else:
+                        self.emit('z_activate', self.__build_msg(widget, ' ', ''))
                     return True
                 else:
                     # not regular keypress nor space, pass it to the widget
@@ -1057,17 +1076,16 @@ class zComplete(gobject.GObject):
         self.widget = widget
         self.set_completion_task(task)
 
-        self.__comp_list = []           # completion list
-        self.__try_completing = 0       # how many times tring completion; reset to 0 if completion success
+        self.__reset_complete_list()
 
 
     def complete(self):
         if not self.widget.get_editable():
             return              # no need to complete, early return
 
-        # check position
-        if not self.widget.is_word_end():
-            self.__try_completing = 0 # reset the completion counter
+        # check position if it is text completion
+        if self.__task == 'text' and not self.widget.is_word_end():
+            self.__reset_complete_list()
             self.emit('z_mid_of_word')
             return
 
@@ -1092,9 +1110,9 @@ class zComplete(gobject.GObject):
         if not self.widget.get_editable():
             return              # no need to complete, early return
 
-        # check position
-        if not self.widget.is_word_end():
-            self.__try_completing = 0 # reset the completion counter
+        # check position if it is text completion
+        if self.__task == 'text' and not self.widget.is_word_end():
+            self.__reset_complete_list()
             self.emit('z_mid_of_word')
             return
 
@@ -1120,8 +1138,7 @@ class zComplete(gobject.GObject):
 
 
     def clear_list(self):
-        self.__comp_list = []
-        self.__try_completing = 0
+        self.__reset_complete_list()
 
 
     ### supporting function
@@ -1145,9 +1162,7 @@ class zComplete(gobject.GObject):
             if os.path.isdir(normalized_text):
                 normalized_text += os.path.sep
 
-            # reset completion counter and list
-            self.__try_completing = 0
-            self.__comp_list = []
+            self.__reset_complete_list()
         else:
             # check for max complete
             for indx in range(len(normalized_text), len(self.__comp_list[0])):
@@ -1173,15 +1188,12 @@ class zComplete(gobject.GObject):
         self.widget.set_current_word(normalized_text)
 
 
-    def __popup_complete_list(self):
-        print self.__comp_list
-
-
     def __generate_func_list(self, curr_func):
         # get the completion list
         self.__comp_list = [ func for func in zStrokeListener.global_is_enabled_func
                              if func.startswith(curr_func)
                              ]
+        self.__comp_list.sort(key = str.lower) # sort alphabetically
         return curr_func
 
     def __generate_path_list(self, curr_path, task):
@@ -1200,6 +1212,13 @@ class zComplete(gobject.GObject):
             self.__comp_list = [ fn for fn in os.listdir(path)
                                  if fn.startswith(name)
                                  ]
+        def cmp_path(path):
+            if path[0] == '.':
+                return path[1:].lower()
+            else:
+                return path.lower()
+        self.__comp_list.sort(key = cmp_path)
+
         # expend to full path
         self.__comp_list = [ os.path.join(path, fn) for fn in self.__comp_list ]
 
@@ -1214,5 +1233,112 @@ class zComplete(gobject.GObject):
             normalized_path += os.path.sep
 
         return normalized_path
+
+
+    def __menu_completion_selected(self, widget, indx):
+        self.__popdown_complete_list()
+
+        # set the list to contain only the select item
+        self.__comp_list = [ self.__comp_list[indx] ]
+        # complete it
+        self.__complete(self.widget.get_text(), self.__task)
+
+    def __menu_listener_active(self, widget, msg):
+        curr_text = self.widget.get_text()
+
+        # check for function key
+        key_binding = zStrokeListener.get_key_binding()
+        if msg['stroke'] in key_binding:
+            func = key_binding[msg['stroke']]
+
+            if func in [ 'complete', 'complete_list' ] and not self.__try_completing:
+                # complete again
+                self.__popdown_complete_list()
+                self.__complete(curr_text, self.__task)
+                if self.__comp_list and self.widget.get_text() not in self.__comp_list:
+                    # there are more partial-matches
+                    self.__popup_complete_list()
+                else:
+                    # no matches, or there exists an exact match
+                    self.__try_completing = 1 # menu just popdown, set it to stand-by mode
+
+            elif func == 'delete_char_backward':
+                # backspace
+                self.__popdown_complete_list()
+                self.__reset_complete_list()
+                self.widget.delete_backward('char')
+                self.__try_completing = 1 # backspace => no exact match
+            return
+
+        # not complete
+        new_comp_list = []
+        new_char = ''
+
+        if re.match(KEY_RE_PATTERN['printable'], msg['stroke'], re.X):
+            new_char = msg['stroke']
+            indx = len(curr_text) # the index of the newly typed char
+
+            # generate new list
+            for item in self.__comp_list:
+                if len(item) > indx and new_char == item[indx]:
+                    new_comp_list.append(item)
+
+        self.widget.set_text(curr_text + new_char)
+
+        # test if there is any match
+        if new_comp_list:
+            self.__comp_list = new_comp_list
+
+            # update completion menu
+            self.__popdown_complete_list()
+            self.__try_completing = 0
+            if self.__comp_list and self.widget.get_text() not in self.__comp_list:
+                # there are more partial-matches
+                self.__popup_complete_list()
+            else:
+                # no matches, or there exists an exact match
+                self.__try_completing = 1
+        else:
+            # key stroke is not a printable, popdown the menu
+            self.__popdown_complete_list()
+            self.__reset_complete_list()
+
+
+    def __popup_complete_list(self):
+        # create the menu
+        self.menu = zPopupMenu()
+
+        # setup key listener
+        self.menu.listener = zStrokeListener()
+        self.menu.listener.listen_on(self.menu)
+        self.menu.listener_sig = self.menu.listener.connect('z_activate', self.__menu_listener_active)
+
+        # fill the menu
+        for indx in range(len(self.__comp_list)):
+            mi = gtk.MenuItem(self.__comp_list[indx], False)
+            self.menu.append(mi)
+            mi.connect('activate', self.__menu_completion_selected, indx)
+
+        # calculate the popup position
+        if isinstance(self.widget, gtk.Entry):
+            w_alloc = None
+        else:
+            w_alloc = self.widget.get_iter_location(self.widget.get_cursor_iter())
+            w_alloc[2] = -1     # release the width requirement
+
+        self.menu.show_all()
+        self.menu.popup_given(self.widget, w_alloc)
+
+    def __popdown_complete_list(self):
+        self.menu.popdown()
+        self.menu.listener.clear_all()
+        if self.menu.listener.handler_is_connected(self.menu.listener_sig):
+            self.menu.listener.disconnect(self.menu.listener_sig)
+        self.menu = None
+
+
+    def __reset_complete_list(self):
+        self.__comp_list = []     # completion list
+        self.__try_completing = 0 # how many times tring completion; reset to 0 if completion success
     ### end of supporting function
 gobject.type_register(zComplete)
