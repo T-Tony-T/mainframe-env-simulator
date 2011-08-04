@@ -10,7 +10,7 @@ def read(fname):
 
 setup(
     name = "mainframe-env-simulator",
-    version = "0.0.1",
+    version = "0.0.7",
     author = "Tony C. Zhang",
     author_email = "niu.tony.c.zhang@gmail.com",
     description = ("This software is a Mainframe Programming Environment Simulator running on PC (Linux, Max OS, Windows, etc.) that will compile / assemble source code written to be compiled / assembled on a Mainframe machine. The final goal is to let the developer work on their own PC when developing / testing their programs without worrying about internet connection or connection to a Mainframe machine. It is also aimed at reduce the teaching cost of IBM Assembler, COBOL, etc."),
