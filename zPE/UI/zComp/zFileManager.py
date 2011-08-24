@@ -17,7 +17,7 @@ from z_support import XPM, PIXBUF
 from zBase import zTheme
 from zText import zEntry, zTextView
 
-import os, stat, time
+import os, stat, time, re
 import sqlite3
 
 import pygtk
@@ -733,14 +733,12 @@ class zFileManager(gtk.VBox):
             elif io_encap.is_file(fn_list):
                 self.open_file(fn_list)
             else:
-                self.path_entry.set_text(self.dirname + os.path.sep)
-                self.path_entry.grab_focus()
+                self.update_path_entry()
                 raise ValueError('Cannot open "{0}".\n    Make sure the path is spelled correctly.'.format(fullpath))
 
         elif task == 'cancel' and msg['return_msg'] == 'Quit':
             # cancel key is pressed
-            self.path_entry.set_text(self.dirname + os.path.sep)
-            self.grab_focus()
+            self.update_path_entry()
 
 
     def _sig_open_file_from_tree(self, treeview, tree_path, tree_col = None):
@@ -875,9 +873,8 @@ class zFileManager(gtk.VBox):
             self.treeview.model.append([fn, False])
         for fn in self.__file_list:
             self.treeview.model.append([fn, False])
-        self.path_entry.set_text(self.dirname + os.path.sep)
 
-        self.grab_focus()
+        self.update_path_entry()
 
         # clear flags
         for key in self.__cell_data_func_skip:
@@ -889,6 +886,16 @@ class zFileManager(gtk.VBox):
 
     def refresh_folder(self):
         self.set_folder(self.dirname)
+
+
+    def update_path_entry(self):
+        path_str = self.dirname + os.path.sep
+        if re.search(r'\s', path_str):
+            path_str = ''.join(['"', path_str, '"'])
+        self.path_entry.set_text(path_str)
+
+        # retain focus
+        self.path_entry.grab_focus()
 
 
     ### cell data function

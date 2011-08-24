@@ -706,6 +706,8 @@ class zStrokeListener(gobject.GObject):
             path_entered = widget.get_text()
             if path_entered:
                 # normalize path
+                if '"' in path_entered:
+                    path_entered = path_entered.replace('"', '')
                 path_entered = io_encap.norm_path(path_entered)
                 widget.set_text(path_entered)
 
@@ -1126,6 +1128,10 @@ class zComplete(gobject.GObject):
         else:
             # path completion
             normalized_text = self.__generate_path_list(self.widget.get_current_word(), self.__task)
+            if '"' in normalized_text:
+                normalized_text = normalized_text.replace('"', '')
+            if re.search(r'\s', normalized_text):
+                normalized_text = ''.join(['"', normalized_text])
 
         self.widget.set_current_word(normalized_text)
         self.__popup_complete_list()
@@ -1185,6 +1191,12 @@ class zComplete(gobject.GObject):
                 # more than one try, switch to complete_list()
                 self.__popup_complete_list()
 
+        if self.__task == 'path':
+            if '"' in normalized_text:
+                normalized_text = normalized_text.replace('"', '')
+            if re.search(r'\s', normalized_text):
+                normalized_text = ''.join(['"', normalized_text])
+
         self.widget.set_current_word(normalized_text)
 
 
@@ -1199,9 +1211,17 @@ class zComplete(gobject.GObject):
     def __generate_path_list(self, curr_path, task):
         # normalize the path
         if curr_path:
-            normalized_path = io_encap.norm_path(curr_path)
+            normalized_path = curr_path
+            if '"' in normalized_path:    # remove quote-marks
+                normalized_path = normalized_path.replace('"', '')
+            normalized_path = io_encap.norm_path(normalized_path)
         else:
             normalized_path = os.getcwd()
+
+        if re.search(r'\s', normalized_path):
+            prefix = '"'
+        else:
+            prefix = ''
 
         # get the completion list
         if os.path.isdir(normalized_path):
@@ -1231,6 +1251,10 @@ class zComplete(gobject.GObject):
         # if the text corresponding to a dir, append the path separator to it
         if os.path.isdir(normalized_path):
             normalized_path += os.path.sep
+
+        if prefix:
+            self.__comp_list = [ ''.join(['"', fn, '"']) for fn in self.__comp_list ]
+            normalized_path = ''.join(['"', normalized_path])
 
         return normalized_path
 
