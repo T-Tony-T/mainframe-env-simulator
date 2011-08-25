@@ -408,10 +408,22 @@ class zPopupMenu(gtk.Menu):
     def __init__(self):
         super(zPopupMenu, self).__init__()
 
+        self.popdown_cb      = None
+        self.popdown_cb_args = ()
+
         self.set_property('reserve-toggle-size', False)
 
         self.__reset_w_arg()
 
+
+    def register_popdown_cb(self, callback, *data):
+        self.popdown_cb      = callback
+        self.popdown_cb_args = data
+
+    def popdown(self):
+        if self.popdown_cb:
+            self.popdown_cb(* self.popdown_cb_args)
+        super(zPopupMenu, self).popdown()
 
     def popup_given(self, attached_widget, w_alloc = None):
         '''

@@ -519,6 +519,14 @@ class zStrokeListener(gobject.GObject):
     def is_listenning_on(self, widget):
         return widget in self.listener_id
 
+    def block_listenning(self, widget):
+        if self.is_listenning_on(widget) and widget.handler_is_connected(self.listener_id[widget]):
+            widget.handler_block(self.listener_id[widget])
+
+    def unblock_listenning(self, widget):
+        if self.is_listenning_on(widget) and widget.handler_is_connected(self.listener_id[widget]):
+            widget.handler_unblock(self.listener_id[widget])
+
     def listen_on(self, widget, task = 'text', init_widget = None):
         '''
         task = 'text'
@@ -1333,8 +1341,11 @@ class zComplete(gobject.GObject):
         self.menu = zPopupMenu()
 
         # setup key listener
+        self.widget.block_listenning() # temporarily disable the old listener
+        self.menu.register_popdown_cb(self.widget.unblock_listenning)
         self.menu.listener = zStrokeListener()
         self.menu.listener.listen_on(self.menu)
+        self.menu.listener.listen_on(self.widget)
         self.menu.listener_sig = self.menu.listener.connect('z_activate', self.__menu_listener_active)
 
         # fill the menu

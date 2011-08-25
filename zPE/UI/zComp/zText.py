@@ -161,6 +161,12 @@ class zEntry(gtk.Entry):
     def is_listenning(self):
         return self.listener.is_listenning_on(self)
 
+    def block_listenning(self):
+        self.listener.block_listenning(self)
+
+    def unblock_listenning(self):
+        self.listener.unblock_listenning(self)
+
     def listen_on_task(self, task = None, init_widget = None):
         self.listener.listen_on(self, task, init_widget)
 
@@ -848,6 +854,12 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
     def is_listenning(self):
         return self.listener.is_listenning_on(self)
+
+    def block_listenning(self):
+        self.listener.block_listenning(self)
+
+    def unblock_listenning(self):
+        self.listener.unblock_listenning(self)
 
     def listen_on_task(self, task = None, init_widget = None):
         self.listener.listen_on(self, task, init_widget)
