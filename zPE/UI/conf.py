@@ -1,6 +1,8 @@
 from zComp.zStrokeParser import KEY_BINDING_RULE_MKUP
 from zComp.zStrokeParser import parse_key_binding as zSP_PARSE_KEY_BINDING
 
+import zComp.io_encap
+
 import os, sys
 import pygtk
 pygtk.require('2.0')
@@ -85,6 +87,10 @@ DEFAULT = {
         'COMMENT'       : '#008000', # green
         'LITERAL'       : '#FF0000', # red
         'LABEL'         : '#808000', # olive
+        },
+
+    'ENV'       : {
+        'STARTING_PATH' : '~',
         },
     }
 
@@ -267,6 +273,10 @@ def init_rc():
         'label'         : DEFAULT['COLOR_MAP']['LABEL'],
         }
 
+    Config['ENV']       = {
+        'starting_path' : zComp.io_encap.norm_path( DEFAULT['ENV']['STARTING_PATH'] ),
+        }
+
 def init_key_binding():
     kb_style = Config['MISC']['key_binding']
     Config['FUNC_BINDING'] = dict(
@@ -298,9 +308,12 @@ def read_rc():
 
     label = None
     for line in open(CONFIG_PATH['gui_rc'], 'r'):
+        if line.isspace():      # skip empty line
+            continue
+
         line = line[:-1]        # get rid of the '\n'
 
-        if line in [ '[MISC]', '[FONT]', '[COLOR_MAP]' ]:
+        if line in [ '[MISC]', '[FONT]', '[COLOR_MAP]', '[ENV]' ]:
             label = line[1:-1]  # retrive the top-level key
             continue
 
@@ -365,6 +378,15 @@ def read_rc():
                 Config[label][k] = v
             else:
                 sys.stderr.write('CONFIG WARNING: {0}: Invalid color mapping.\n'.format(k))
+
+        elif label == 'ENV':
+            if k == 'starting_path':
+                tmp_v = zComp.io_encap.norm_path(v)
+                if os.path.isdir(tmp_v):
+                    Config[label][k] = tmp_v
+                else:
+                    Config[label][k] = zComp.io_encap.norm_path( DEFAULT['ENV']['STARTING_PATH'] )
+                    sys.stderr.write('CONFIG WARNING: {0}: Invalid starting path.\n'.format(v))
 
     write_rc()
 
@@ -511,15 +533,11 @@ def __CK_KEY():
 def __TOUCH_RC():
     fp = open(CONFIG_PATH['gui_rc'], 'w')
 
-    label = 'MISC'
-    fp.write('[{0}]\n'.format(label))
-    for key in sorted(Config[label].iterkeys()):
-        fp.write('{0} = {1}\n'.format(key, Config[label][key]))
-
-    label = 'FONT'
-    fp.write('[{0}]\n'.format(label))
-    for key in sorted(Config[label].iterkeys()):
-        fp.write('{0} = {1}\n'.format(key, Config[label][key]))
+    for label in [ 'MISC', 'ENV', 'FONT' ]:
+        fp.write('[{0}]\n'.format(label))
+        for key in sorted(Config[label].iterkeys()):
+            fp.write('{0} = {1}\n'.format(key, Config[label][key]))
+        fp.write('\n')
 
     label = 'COLOR_MAP'
     fp.write('[{0}]\n'.format(label))
@@ -528,6 +546,7 @@ def __TOUCH_RC():
         if value in INVERSE_COLOR_LIST:
             value = INVERSE_COLOR_LIST[value]
         fp.write('{0} = {1}\n'.format(key, value))
+    fp.write('\n')
 
     fp.close()
 

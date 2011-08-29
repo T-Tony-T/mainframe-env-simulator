@@ -1153,7 +1153,7 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         if buff.path:
             path = buff.path
         else:
-            path = [ io_encap.norm_path('~'), '']
+            path = [ zTheme.env['starting_path'], '']
 
         if lastline.get_property('visible'):
             lastline.reset()    # force to clear all other actions

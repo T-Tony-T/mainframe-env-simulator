@@ -693,6 +693,46 @@ class ConfigWindow(gtk.Window):
 
             self.color_entry[key].connect('activate', self._sig_color_entry_activate, key)
 
+        # Environment
+        self.__label['FRAME'].append(gtk.Label('Environment'))
+        ct_gui_env = gtk.Frame()
+        ct_gui_env.set_label_widget(self.__label['FRAME'][-1])
+        ct_gui.pack_start(ct_gui_env, False, False, 10)
+
+        ct_gui_env.add(gtk.Table(1, 2, False))
+        ct_gui_env.child.set_col_spacings(5)
+
+        self.env_bttn  = {}
+        self.env_entry = {}
+        row = 0
+        for key in conf.Config['ENV']:
+            self.env_bttn[key] = zComp.zToggleButton(key.title(), False)
+            self.env_entry[key] = zComp.zText.zEntry()
+
+            bttn = self.env_bttn[key]
+            style = bttn.get_style().copy()
+            style.bg[gtk.STATE_PRELIGHT] = style.bg[gtk.STATE_ACTIVE]
+            bttn.set_style(style)
+
+            self.env_bttn[key].connect('toggled', self._sig_env_entry_edit_request, key)
+
+            self.env_entry[key].set_completion_task('dir')
+            self.env_entry[key].listen_on_task('dir')
+
+            self.env_entry[key].listener.connect('z_activate', self._sig_env_entry_activate, key, 'activate')
+            self.env_entry[key].listener.connect('z_cancel',   self._sig_env_entry_activate, key, 'cancel')
+
+            self.env_entry[key].set_property('sensitive', False)
+            self.env_entry[key].modify_text(gtk.STATE_INSENSITIVE, gtk.gdk.color_parse('#000000'))
+
+            self.__label['LABEL'].append(self.env_bttn[key].get_label_widget())
+            self.__label['LABEL'][-1].set_alignment(0, 0.5)
+            self.__entry.append(self.env_entry[key])
+
+            ct_gui_env.child.attach(self.env_bttn[key],  0, 1, row, row + 1, xoptions = gtk.FILL)
+            ct_gui_env.child.attach(self.env_entry[key], 1, 2, row, row + 1)
+            row += 1
+
 
         ## KeyBinding
         ct_key = gtk.VBox()
@@ -741,7 +781,7 @@ class ConfigWindow(gtk.Window):
         ct_key_binding_scroll = gtk.ScrolledWindow()
         ct_key_binding_scroll.set_policy(gtk.POLICY_NEVER, gtk.POLICY_ALWAYS)
         ct_key_binding_scroll.set_placement(gtk.CORNER_TOP_RIGHT)
-        ct_key_binding_scroll.set_size_request(-1, 128)
+        ct_key_binding_scroll.set_size_request(-1, 192)
 
         ct_key_binding_entry = gtk.HBox()
 
@@ -765,6 +805,8 @@ class ConfigWindow(gtk.Window):
             style.bg[gtk.STATE_PRELIGHT] = style.bg[gtk.STATE_ACTIVE]
             bttn.set_style(style)
 
+            self.kb_function[func].connect('toggled', self._sig_key_stroke_change_request, func)
+
             self.__label['LABEL'].append(self.kb_function[func].get_label_widget())
             self.__label['LABEL'][-1].set_alignment(0, 0.5)
             self.__label['LABEL'].append(self.kb_stroke[func])
@@ -776,8 +818,6 @@ class ConfigWindow(gtk.Window):
             ct_key_binding_table.attach(self.kb_function[func], 0, 1, row, row + 1, xoptions = gtk.FILL)
             ct_key_binding_table.attach(kb_stroke_frame,        1, 2, row, row + 1, xoptions = gtk.FILL)
             row += 1
-
-            self.kb_function[func].connect('toggled', self._sig_key_stroke_change_request, func)
 
         self.kb_rules = gtk.Button('Rules <_h>')
         ct_key_binding_entry.pack_start(self.kb_rules, False, False, 10)
@@ -970,6 +1010,40 @@ class ConfigWindow(gtk.Window):
                 break
         self.set_color_modify(key, color_code)
         zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+
+
+    def _sig_env_entry_edit_request(self, tggl_bttn, key):
+        active = self.env_bttn[key].get_active()
+        self.env_entry[key].set_property('sensitive', active)
+
+        if active:
+            # self push down
+            self.env_entry[key].grab_focus()
+            self.env_entry[key].set_position(-1)
+        else:
+            # self pop up
+            self.set_path_quoted(self.env_entry[key], conf.Config['ENV'][key])
+            self.env_bttn[key].grab_focus()
+
+    def _sig_env_entry_activate(self, entry, msg, key, task):
+        if 'z_run_cmd' in msg:
+            return              # M-x should not be invoked here
+
+        if task == 'activate' and msg['return_msg'] == 'Accept':
+            # activate key is pressed
+            env_path = self.env_entry[key].get_text()
+            if not os.path.isdir(env_path):
+                self.env_entry[key].set_text('<Invalid Path>')
+                self.env_entry[key].select_region(0, -1)
+                return
+            conf.Config['ENV'][key] = env_path
+
+            zComp.zTheme.set_env({ key : conf.Config['ENV'][key], })
+            self.env_bttn[key].set_active(False)
+
+        elif task == 'cancel' and msg['return_msg'] == 'Quit':
+            # cancel key is pressed
+            self.env_bttn[key].set_active(False)
     ### end of signal for GUI
 
 
@@ -1155,6 +1229,12 @@ class ConfigWindow(gtk.Window):
             self.set_color_modify(key, conf.Config['COLOR_MAP'][key])
         zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
 
+        # GUI->Environment
+        for key in self.env_entry:
+            self.set_path_quoted(self.env_entry[key], conf.Config['ENV'][key])
+        zComp.zTheme.set_env(conf.Config['ENV'])
+
+
         # KeyBinding->Style
         for key in self.key_style_key:
             if key not in conf.DEFAULT_FUNC_KEY_BIND_KEY:
@@ -1188,6 +1268,13 @@ class ConfigWindow(gtk.Window):
         self.color_picker[key].modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(color_code))
 
         conf.Config['COLOR_MAP'][key] = color_code
+
+    def set_path_quoted(self, entry, path_str):
+        path_str += os.path.sep
+        if re.search(r'\s', path_str):
+            path_str = ''.join(['"', path_str, '"'])
+
+        entry.set_text(path_str)
     ### end of support function definition
 
 

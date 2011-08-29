@@ -832,7 +832,7 @@ class zFileManager(gtk.VBox):
     def set_folder(self, fullpath = None):
         # get real path
         if not fullpath:
-            new_dirname = io_encap.norm_path('~')
+            new_dirname = zTheme.env['starting_path']
         else:
             new_dirname = io_encap.norm_path(fullpath)
 

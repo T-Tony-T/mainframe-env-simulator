@@ -127,6 +127,10 @@ class zTheme(z_ABC):
         # no corresponding config for items in this dictionary
         'fn_len' : 16,
         }
+
+    env = {
+        'starting_path' : '~',
+        }
     font = {
         'name' : 'Monospace',
         'size' : 12,
@@ -168,6 +172,16 @@ class zTheme(z_ABC):
             )
     ### end of signal-like auto-update function
 
+
+    @staticmethod
+    def get_env():
+        return zTheme.evn
+
+    @staticmethod
+    def set_env(dic):
+        for (k, v) in dic.iteritems():
+            if k in zTheme.env and v != zTheme.env[k]:
+                zTheme.env[k] = v
 
     @staticmethod
     def get_font():
