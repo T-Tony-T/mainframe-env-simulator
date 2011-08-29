@@ -31,15 +31,18 @@ class zSplitWindow(z_ABC, gtk.Frame):
     func_callback_map = {}      # if set, will override the default setting for newly added instance
 
     def func_callback_map_generator(self, frame):
+        rv_dic = {
+            'window_split_horz'   : lambda *arg: self.window_split_horz(frame),
+            'window_split_vert'   : lambda *arg: self.window_split_vert(frame),
+            'window_delete'       : lambda *arg: self.window_delete(frame),
+            'window_delete_other' : lambda *arg: self.window_delete_other(frame),
+            }
         if zSplitWindow.func_callback_map:
-            return zSplitWindow.func_callback_map
-        else:
-            return {
-                'window_split_horz'   : lambda *arg: self.window_split_horz(frame),
-                'window_split_vert'   : lambda *arg: self.window_split_vert(frame),
-                'window_delete'       : lambda *arg: self.window_delete(frame),
-                'window_delete_other' : lambda *arg: self.window_delete_other(frame),
-                }
+            for (k, v) in zSplitWindow.func_callback_map.iteritems():
+                if k in zSplitWindow.global_func_list:
+                    rv_dic[k] = v
+
+        return rv_dic
 
 
     _auto_update = {
@@ -365,7 +368,7 @@ class zSplitWindow(z_ABC, gtk.Frame):
 
         # create new frame
         if self.frame_split_dup:
-            self.mw_new_child_frame = self.new_frame_on_dup()
+            self.mw_new_child_frame = self.new_frame_on_dup(self.frame_alist)
         else:
             self.mw_new_child_frame = self.new_frame(self.frame_alist)
 
@@ -472,9 +475,9 @@ class zSplitWindow(z_ABC, gtk.Frame):
 
         return frame
 
-    def new_frame_on_dup(self):
+    def new_frame_on_dup(self, alist):
         # prepare frame info
-        frame = self.frame_split_dup(self.active_frame())
+        frame = self.frame_split_dup(self.active_frame(), alist)
 
         frame.set_init_func(self.frame_init)
         frame.exec_init_func()

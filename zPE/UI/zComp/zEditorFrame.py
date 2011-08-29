@@ -37,6 +37,10 @@ class zEdit(z_ABC, gtk.VBox):
         'buffer_save',
         'buffer_save_as',
         'buffer_close',
+
+        'tabbar_mode',
+        'tabbar_prev',
+        'tabbar_next',
         ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -99,17 +103,24 @@ class zEdit(z_ABC, gtk.VBox):
         self.ui_init_func = None
         self.need_init = None   # since no init_func is set at this time
 
+        self.default_func_callback = {
+            # although works in most cases, ugly behavior.
+            # rebind (overrid) them by setting zEdit.func_callback_map beforehand
+            'buffer_open'    : lambda *arg: self.set_buffer(None, 'dir'),
+            'buffer_save'    : lambda *arg: self.save_buffer(self.active_buffer),
+            'buffer_save_as' : lambda *arg: self.save_buffer_as(self.active_buffer),
+            'buffer_close'   : lambda *arg: self.rm_buffer(self.active_buffer),
+
+            'tabbar_mode'    : lambda *arg: zEdit.toggle_tabbar_mode(),
+            'tabbar_prev'    : lambda *arg: self.switch_tab_prev(),
+            'tabbar_next'    : lambda *arg: self.switch_tab_next(),
+            }
+
         if zEdit.func_callback_map:
-            self.default_func_callback = zEdit.func_callback_map
-        else:
-            self.default_func_callback = {
-                # although works in most cases, ugly behavior.
-                # rebind them by setting zEdit.func_callback_map beforehand
-                'buffer_open'    : lambda *arg: self.set_buffer(None, 'dir'),
-                'buffer_save'    : lambda *arg: self.save_buffer(self.active_buffer),
-                'buffer_save_as' : lambda *arg: self.save_buffer_as(self.active_buffer),
-                'buffer_close'   : lambda *arg: self.rm_buffer(self.active_buffer),
-                }
+            for (k, v) in zEdit.func_callback_map.iteritems():
+                if k in zEdit.global_func_list:
+                    self.default_func_callback[k] = v
+
         if local_func_binding_generator:
             self.default_func_callback.update(local_func_binding_generator(self))
 
@@ -883,6 +894,26 @@ class zEdit(z_ABC, gtk.VBox):
         if zEdit.__tab_grouped != setting:
             zEdit.__tab_grouped = setting
             zEdit.reg_emit('update_tabbar')
+
+    @staticmethod
+    def toggle_tabbar_mode():
+        if not zEdit.get_tab_on():
+            # off -> on
+            zEdit.set_tab_on(True)
+            zEdit.set_tab_grouped(False)
+        elif zEdit.get_tab_on() and not zEdit.get_tab_grouped():
+            # on -> grouped
+            zEdit.set_tab_grouped(True)
+        else:
+            # grouped -> off
+            zEdit.set_tab_on(False)
+            zEdit.set_tab_grouped(False)
+
+    def switch_tab_prev(self):
+        pass
+
+    def switch_tab_next(self):
+        pass
 
 
     ### supporting function

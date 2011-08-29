@@ -528,13 +528,13 @@ class BaseFrame(object):
         for init_sig in frame.init_sig:
             frame.disconnect(init_sig)
 
-    def frame_split_dup(self, frame):
-        if frame:
-            new_frame = zComp.zEdit(* frame.get_buffer())
-        else:
-            new_frame = zComp.zEdit()
+    def frame_split_dup(self, frame, alist):
+        if frame:               # active frame exists, 
+            new_argv = frame.get_buffer()
+            for indx in range(len(new_argv)):
+                alist[indx] = new_argv[indx]
 
-        return new_frame
+        return zComp.zEdit(* alist)
     ### end of callback functions for SplitWindow
 
 
@@ -555,6 +555,11 @@ class ConfigWindow(gtk.Window):
         self.connect('delete_event', self._sig_cancel_mod)
 
         self.set_title('zPE Config')
+
+        # override the default behavior of the buffer manipulation
+        zComp.zEdit.func_callback_map = {
+            'tabbar_mode'    : self.toggle_tabbar_mode,
+            }
 
         # retrive configs
         conf.read_rc_all()
@@ -1216,9 +1221,7 @@ class ConfigWindow(gtk.Window):
     ### public API definition
     def load_rc(self):
         # GUI->Tabbar
-        self.tabbar_on.set_active(conf.Config['MISC']['tab_on'])
-        self.tabbar_grouped.set_active(conf.Config['MISC']['tab_grouped'])
-        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
+        self.update_tabbar_settings()
 
         # GUI->Font
         for key in conf.Config['FONT']:
@@ -1275,6 +1278,19 @@ class ConfigWindow(gtk.Window):
             path_str = ''.join(['"', path_str, '"'])
 
         entry.set_text(path_str)
+
+    def toggle_tabbar_mode(self):
+        zComp.zEdit.toggle_tabbar_mode()
+
+        conf.Config['MISC']['tab_on']      = zComp.zEdit.get_tab_on()
+        conf.Config['MISC']['tab_grouped'] = zComp.zEdit.get_tab_grouped()
+
+        self.update_tabbar_settings()
+
+    def update_tabbar_settings(self):
+        self.tabbar_on.set_active(conf.Config['MISC']['tab_on'])
+        self.tabbar_grouped.set_active(conf.Config['MISC']['tab_grouped'])
+        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
     ### end of support function definition
 
 

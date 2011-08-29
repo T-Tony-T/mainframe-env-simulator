@@ -146,6 +146,23 @@ DEFAULT_FUNC_KEY_BIND = {
         'other' : 'F4',
         },
 
+    # tab manipulation; required by zEdit
+    'tabbar_mode'           : { # on / grouped / off
+        'emacs' : 'F7',
+        'vi'    : '',
+        'other' : 'F7',
+        },
+    'tabbar_prev'           : { # will turn on tabbar automatically
+        'emacs' : 'C-left',
+        'vi'    : '',
+        'other' : 'C-left',
+        },
+    'tabbar_next'           : { # will turn on tabbar automatically
+        'emacs' : 'C-right',
+        'vi'    : '',
+        'other' : 'C-right',
+        },
+
     # editor related functions; required by zTextView and zEntry
     'complete'              : { # complete the current typing
         'emacs' : 'Tab',
