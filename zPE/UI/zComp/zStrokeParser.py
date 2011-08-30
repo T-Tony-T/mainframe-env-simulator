@@ -1265,10 +1265,12 @@ class zComplete(gobject.GObject):
         else:
             ( path, name ) = os.path.split(normalized_path)
             self.__comp_list = [ fn for fn in os.listdir(path)
-                                 if fn.startswith(name)
+                                 if os.path.normcase(fn).startswith(os.path.normcase(name))
                                  ]
+
+        # sort the list alphabetically (ignore case)
         def cmp_path(path):
-            if path[0] == '.':
+            if path[0] == '.':  # hidden file on *nix system
                 return path[1:].lower()
             else:
                 return path.lower()
@@ -1277,8 +1279,8 @@ class zComplete(gobject.GObject):
         # expend to full path
         self.__comp_list = [ io_encap.norm_path_list([path, fn]) for fn in self.__comp_list ]
 
+        # filter out non-dir entrys if a 'dir' task is performed
         if task == 'dir':
-            # filter out non-dir entrys if a 'dir' task is performed
             self.__comp_list = [ fn for fn in self.__comp_list
                                  if os.path.isdir(fn)
                                  ]
@@ -1287,6 +1289,7 @@ class zComplete(gobject.GObject):
         if os.path.isdir(normalized_path):
             normalized_path += os.path.sep
 
+        # add back the prefix (leading quote), if any
         if prefix:
             self.__comp_list = [ ''.join(['"', fn, '"']) for fn in self.__comp_list ]
             normalized_path = ''.join(['"', normalized_path])
