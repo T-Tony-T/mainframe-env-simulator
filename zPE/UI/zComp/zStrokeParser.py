@@ -1275,7 +1275,7 @@ class zComplete(gobject.GObject):
         self.__comp_list.sort(key = cmp_path)
 
         # expend to full path
-        self.__comp_list = [ os.path.join(path, fn) for fn in self.__comp_list ]
+        self.__comp_list = [ io_encap.norm_path_list([path, fn]) for fn in self.__comp_list ]
 
         if task == 'dir':
             # filter out non-dir entrys if a 'dir' task is performed
