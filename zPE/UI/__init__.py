@@ -556,11 +556,6 @@ class ConfigWindow(gtk.Window):
 
         self.set_title('zPE Config')
 
-        # override the default behavior of the buffer manipulation
-        zComp.zEdit.func_callback_map = {
-            'tabbar_mode'    : self.toggle_tabbar_mode,
-            }
-
         # retrive configs
         conf.read_rc_all()
         zPE.conf.read_rc(dry_run = True)
@@ -622,6 +617,9 @@ class ConfigWindow(gtk.Window):
 
         self.tabbar_on.connect('toggled', self._sig_tabbar_on)
         self.tabbar_grouped.connect('toggled', self._sig_tabbar_grouped)
+
+        zComp.zEdit.register('tabbar_mode_toggled', self._sig_tabbar_mode_toggled_sync, self)
+
 
         # Font
         self.__label['FRAME'].append(gtk.Label('Font'))
@@ -989,6 +987,13 @@ class ConfigWindow(gtk.Window):
         conf.Config['MISC']['tab_grouped'] = bttn.get_active()
         zComp.zEdit.set_tab_grouped(conf.Config['MISC']['tab_grouped'])
 
+    def _sig_tabbar_mode_toggled_sync(self, widget):
+        conf.Config['MISC']['tab_on']      = zComp.zEdit.get_tab_on()
+        conf.Config['MISC']['tab_grouped'] = zComp.zEdit.get_tab_grouped()
+
+        self.update_tabbar_settings()
+
+
     def _sig_font_changed(self, combo):
         new_font = {}
         for key in conf.Config['FONT']:
@@ -1000,6 +1005,7 @@ class ConfigWindow(gtk.Window):
 
         conf.Config['FONT'] = new_font
         zComp.zTheme.set_font(conf.Config['FONT'])
+
 
     def _sig_color_entry_activate(self, entry, key):
         color_code = entry.get_text()
@@ -1278,14 +1284,6 @@ class ConfigWindow(gtk.Window):
             path_str = ''.join(['"', path_str, '"'])
 
         entry.set_text(path_str)
-
-    def toggle_tabbar_mode(self):
-        zComp.zEdit.toggle_tabbar_mode()
-
-        conf.Config['MISC']['tab_on']      = zComp.zEdit.get_tab_on()
-        conf.Config['MISC']['tab_grouped'] = zComp.zEdit.get_tab_grouped()
-
-        self.update_tabbar_settings()
 
     def update_tabbar_settings(self):
         self.tabbar_on.set_active(conf.Config['MISC']['tab_on'])

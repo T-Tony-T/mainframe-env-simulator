@@ -62,6 +62,7 @@ class zEdit(z_ABC, gtk.VBox):
         'populate_popup'        : [  ],
 
         'update_tabbar'         : [  ],
+        'tabbar_mode_toggled'   : [  ],
         }
 
     def __init__(self, buffer_path = None, buffer_type = None, local_func_binding_generator = None):
@@ -112,8 +113,8 @@ class zEdit(z_ABC, gtk.VBox):
             'buffer_close'   : lambda *arg: self.rm_buffer(self.active_buffer),
 
             'tabbar_mode'    : lambda *arg: zEdit.toggle_tabbar_mode(),
-            'tabbar_prev'    : lambda *arg: self.switch_tab_prev(),
-            'tabbar_next'    : lambda *arg: self.switch_tab_next(),
+            'tabbar_prev'    : lambda *arg: self.switch_tab_to('prev'),
+            'tabbar_next'    : lambda *arg: self.switch_tab_to('next'),
             }
 
         if zEdit.func_callback_map:
@@ -909,30 +910,29 @@ class zEdit(z_ABC, gtk.VBox):
             zEdit.set_tab_on(False)
             zEdit.set_tab_grouped(False)
 
-    def switch_tab_prev(self):
+        zEdit.reg_emit('tabbar_mode_toggled')
+
+    def switch_tab_to(self, dest):
+        if dest not in [ 'prev', 'next' ]:
+            raise KeyError
+
         # make sure tabbar is on
         if not zEdit.get_tab_on():
             zEdit.set_tab_on(True)
+            zEdit.reg_emit('tabbar_mode_toggled')
 
         # wait tabbar to be turned on
         while not self.tab_on_current:
             gtk.main_iteration(False)
 
-        # switch to prev tab
-        print self.tabbar.get_active()
+        # retrive tabbar info
+        curr_tab = self.tabbar.get_active()
+        tab_list = self.tabbar.get_tab_list()
 
-    def switch_tab_next(self):
-        # make sure tabbar is on
-        if not zEdit.get_tab_on():
-            zEdit.set_tab_on(True)
-
-        # wait tabbar to be turned on
-        while not self.tab_on_current:
-            gtk.main_iteration(False)
-
-        # switch to next tab
-
-
+        if dest == 'prev':
+            self.tabbar.set_active(tab_list[ tab_list.index(curr_tab) - 1                 ])
+        else:
+            self.tabbar.set_active(tab_list[(tab_list.index(curr_tab) + 1) % len(tab_list)])
 
     ### supporting function
     def __separator(self, item):
