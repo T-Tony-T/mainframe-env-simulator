@@ -910,10 +910,28 @@ class zEdit(z_ABC, gtk.VBox):
             zEdit.set_tab_grouped(False)
 
     def switch_tab_prev(self):
-        pass
+        # make sure tabbar is on
+        if not zEdit.get_tab_on():
+            zEdit.set_tab_on(True)
+
+        # wait tabbar to be turned on
+        while not self.tab_on_current:
+            gtk.main_iteration(False)
+
+        # switch to prev tab
+        print self.tabbar.get_active()
 
     def switch_tab_next(self):
-        pass
+        # make sure tabbar is on
+        if not zEdit.get_tab_on():
+            zEdit.set_tab_on(True)
+
+        # wait tabbar to be turned on
+        while not self.tab_on_current:
+            gtk.main_iteration(False)
+
+        # switch to next tab
+
 
 
     ### supporting function

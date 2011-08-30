@@ -115,7 +115,7 @@ FUNC_KEY_MAP = {                # the name (all caps) of the function key : the 
     'PAGE_DOWN' : 'Page_Down',
 
     'LEFT'      : 'Left',
-    'RIGHT'     : 'Rignt',
+    'RIGHT'     : 'Right',
     'UP'        : 'Up',
     'DOWN'      : 'Down',
     }
@@ -150,24 +150,24 @@ def is_sp_func_key(stroke, func_key, style):
 
 __BASE_PATTERN = {              # this is for internal use only; see KEY_RE_PATTERN below
     'func_key' : r'''
-( BACKSPACE | BackSpace | backspace ) |
-( ESCAPE    | Escape    | escape    ) |
-( SPACE     | Space     | space     ) |
-( TAB       | Tab       | tab       ) |
+(?: BACKSPACE | BackSpace | backspace ) |
+(?: ESCAPE    | Escape    | escape    ) |
+(?: SPACE     | Space     | space     ) |
+(?: TAB       | Tab       | tab       ) |
 
-( INSERT    | Insert    | insert    ) |
-( DELETE    | Delete    | delete    ) |
-( HOME      | Home      | home      ) |
-( END       | End       | end       ) |
-( PAGE_UP   | Page_Up   | page_up   ) |
-( PAGE_DOWN | Page_Down | page_down ) |
+(?: INSERT    | Insert    | insert    ) |
+(?: DELETE    | Delete    | delete    ) |
+(?: HOME      | Home      | home      ) |
+(?: END       | End       | end       ) |
+(?: PAGE_UP   | Page_Up   | page_up   ) |
+(?: PAGE_DOWN | Page_Down | page_down ) |
 
-( LEFT      | Left      | left      ) |
-( RIGHT     | Rignt     | right     ) |
-( UP        | Up        | up        ) |
-( DOWN      | Down      | down      ) |
+(?: LEFT      | Left      | left      ) |
+(?: RIGHT     | Right     | right     ) |
+(?: UP        | Up        | up        ) |
+(?: DOWN      | Down      | down      ) |
 
-( [Ff] (1[0-2] | [2-9]) )               # F1 ~ F12
+(?: [Ff] (1[0-2] | [2-9]) )             # F1 ~ F12
 ''',
 
     'activate' : r''' ENTER | Enter | enter ''',        # for all styles
@@ -182,33 +182,33 @@ __BASE_PATTERN = {              # this is for internal use only; see KEY_RE_PATT
 KEY_RE_PATTERN = {
     # comment '# 1' and '# 2' means '1' or '2'
     # comment '# 1' and '#   2' means '12' (1 followed by 2)
-    'func_key' : r'''^(                 # anchor to the start
+    'func_key' : r'''^(?:               # anchor to the start
 {0}                                     #   function key
 )$                                      #     anchor to the end
 '''.format(__BASE_PATTERN['func_key']),
 
-    'activate' : r'''^(                 # anchor to the start
+    'activate' : r'''^(?:               # anchor to the start
 {0}                                     #   activate
 )$                                      #      anchor to the end
 '''.format(__BASE_PATTERN['activate']),
 
-    'printable' : r'''^(                # anchor to the start
+    'printable' : r'''^(?:              # anchor to the start
 {0}                                     #   printable char
 )$                                      #     anchor to the end
 '''.format(__BASE_PATTERN['printable']),
 
-    'combo' : r'''^(                    # anchor to the start
-( C-M- | [CM]- )                        #   C-M- / C- / M- followed by
-( {0} | {1} )                           #     function key or printable char
+    'combo' : r'''^(?:                  # anchor to the start
+( C-M- | [CM]- )                        #   C-M- / C- / M- (capture) followed by
+( {0} | {1} )                           #     function key or printable char (capture)
 )$                                      #       anchor to the end
 '''.format(__BASE_PATTERN['func_key'], __BASE_PATTERN['printable']),
 
-    'forbid_emacs' : r'''^(             # anchor to the start
+    'forbid_emacs' : r'''^(?:           # anchor to the start
 {0}                                     #   cancel
 )$                                      #     anchor to the end
 '''.format(__BASE_PATTERN['cancel_e']),
 
-    'forbid_emacs_init' : r'''^(        # anchor to the start
+    'forbid_emacs_init' : r'''^(?:      # anchor to the start
 {0} |                                   #   printable char
 M-x |                                   #   run command
 C-q |                                   #   escape next stroke
@@ -217,7 +217,7 @@ C-q |                                   #   escape next stroke
 )$                                      #     anchor to the end
 '''.format(__BASE_PATTERN['printable'], __BASE_PATTERN['activate'], __BASE_PATTERN['cancel_e']),
 
-    'forbid_other' : r'''^(             # anchor to the start
+    'forbid_other' : r'''^(?:           # anchor to the start
 {0} |                                   #   printable char
 {1} |                                   #   activate
 {2}                                     #   cancel
@@ -245,6 +245,7 @@ def parse_key_binding(key_sequence, style):
 
             m_func_key  = re.match(KEY_RE_PATTERN['func_key'],  sequence[indx], re.X)
             m_activate  = re.match(KEY_RE_PATTERN['activate'],  sequence[indx], re.X)
+
             m_printable = re.match(KEY_RE_PATTERN['printable'], sequence[indx], re.X)
             m_combo     = re.match(KEY_RE_PATTERN['combo'],     sequence[indx], re.X)
 
@@ -252,18 +253,31 @@ def parse_key_binding(key_sequence, style):
                 # not a func_key stroke, activate stroke, printable, nor a combo
                 return None
 
+            if m_combo:
+                sq_prefix = m_combo.group(1)
+                sq_stroke = m_combo.group(2)
+            else:
+                sq_prefix = ''
+                sq_stroke = sequence[indx]
+
+            # re-matching stroke part for normalization purpose
+            m_func_key  = re.match(KEY_RE_PATTERN['func_key'],  sq_stroke, re.X)
+            m_activate  = re.match(KEY_RE_PATTERN['activate'],  sq_stroke, re.X)
+
             if m_func_key or m_activate:
                 if indx != len(sequence) - 1:
                     # func_key stroke or activate stroke need to be the last stroke
                     return None
                 elif m_func_key:
                     # normalize func_key stroke
-                    sequence[indx] = sequence[indx].upper()
-                    if sequence[indx] in FUNC_KEY_MAP:
-                        sequence[indx] = FUNC_KEY_MAP[sequence[indx]]
+                    sq_stroke = sq_stroke.upper()
+                    if sq_stroke in FUNC_KEY_MAP:
+                        sq_stroke = FUNC_KEY_MAP[sq_stroke]
                 else:
                     # normalize activate stroke
-                    sequence[indx] = 'Enter'
+                    sq_stroke = 'Enter'
+
+            sequence[indx] = sq_prefix + sq_stroke
 
     elif style == 'vi':
         # style::vi
@@ -279,17 +293,30 @@ def parse_key_binding(key_sequence, style):
             # not allow for re-define
             return None
 
-        m_func_key  = re.match(KEY_RE_PATTERN['func_key'],  sequence[0], re.X)
-        m_combo     = re.match(KEY_RE_PATTERN['combo'],     sequence[0], re.X)
+        m_func_key  = re.match(KEY_RE_PATTERN['func_key'], sequence[0], re.X)
+        m_combo     = re.match(KEY_RE_PATTERN['combo'],    sequence[0], re.X)
+
+        if not (m_func_key or m_combo):
+            # not a func_key stroke nor a combo
+            return None
+
+        if m_combo:
+            sq_prefix = m_combo.group(1)
+            sq_stroke = m_combo.group(2)
+        else:
+            sq_prefix = ''
+            sq_stroke = sequence[0]
+
+        # re-matching stroke part for normalization purpose
+        m_func_key  = re.match(KEY_RE_PATTERN['func_key'],  sq_stroke, re.X)
 
         if m_func_key:
             # normalize func_key stroke
-            sequence[0] = sequence[0].upper()
-            if sequence[0] in FUNC_KEY_MAP:
-                sequence[0] = FUNC_KEY_MAP[sequence[0]]
-        elif not m_combo:
-            # not a func_key stroke nor a combo
-            return None
+            sq_stroke = sq_stroke.upper()
+            if sq_stroke in FUNC_KEY_MAP:
+                sq_stroke = FUNC_KEY_MAP[sq_stroke]
+
+        sequence[0] = sq_prefix + sq_stroke
 
     return sequence
 

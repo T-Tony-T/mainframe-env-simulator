@@ -1120,7 +1120,7 @@ class ConfigWindow(gtk.Window):
                     warning = False
                     ):
                     # key sequence added
-                    zComp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+                    zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
                     binding_is_valid = True
                 else:
                     binding_is_valid = None
@@ -1143,7 +1143,7 @@ class ConfigWindow(gtk.Window):
                             warning = False
                             ):
                             # key sequence added
-                            zComp.zEdit.set_key_binding(conf.Config['KEY_BINDING'])
+                            zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
                             self.kb_stroke[err_func].set_text('') # clear conflict binding text
                             binding_is_valid = True
                         else:
