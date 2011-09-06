@@ -114,6 +114,12 @@ class zEntry(gtk.Entry):
 
         'delete_para_backward', # delete to start of curr para, or delete prev para if not in one or at para start
         'delete_para_forward',  # delete to end of curr para, or delete next para if not in one or at para end
+
+        'set_mark_command',     # set selection mark at current cursor position
+        'set_mark_prepend',     # set selection mark on initial stroke, prepend 1 char to selection on successive strokes
+        'set_mark_prepend_line',# set selection mark and select to start of entry
+        'set_mark_append',      # set selection mark on initial stroke, append 1 char to selection on successive strokes
+        'set_mark_append_line', # set selection mark and select to end of entry
         ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -123,6 +129,10 @@ class zEntry(gtk.Entry):
 
         self.completer = zComplete(self)
         self.listener = zStrokeListener()
+
+        self.__selection_mark = None
+        self.connect('move-cursor', self._sig_move_cursor)
+        gobject.timeout_add(20, self.__watch_selection)
 
         self.set_editable(True) # default editable
 
@@ -139,9 +149,23 @@ class zEntry(gtk.Entry):
             'delete_line_forward'   : lambda *arg: self.delete_forward( 'line'),
             'delete_para_backward'  : lambda *arg: self.delete_backward('para'),
             'delete_para_forward'   : lambda *arg: self.delete_forward( 'para'),
+
+            'set_mark_command'      : lambda *arg: self.set_mark(),
+            'set_mark_prepend'      : lambda *arg: self.set_mark(append = 'left'),
+            'set_mark_prepend_line' : lambda *arg: self.set_mark(append = 'up'),
+            'set_mark_append'       : lambda *arg: self.set_mark(append = 'right'),
+            'set_mark_append_line'  : lambda *arg: self.set_mark(append = 'down'),
             }
         for (func, cb) in self.default_func_callback.iteritems():
             self.listener.register_func_callback(func, cb)
+
+
+    ### overridden signal definition
+    def _sig_move_cursor(self, entry, step, count, extend_selection):
+        curr_pos = self.get_position()
+        self.select_region(curr_pos, curr_pos) # move cursor to the actual cursor position
+        return False           # pass the rest to the default handler
+    ### end of overridden signal definition
 
 
     ### overridden function definition
@@ -195,6 +219,7 @@ class zEntry(gtk.Entry):
 
     # no overridden for get_text()
     def set_text(self, text):
+        self.cancel_action()
         super(zEntry, self).set_text(text)
         self.set_position(-1)
 
@@ -243,6 +268,7 @@ class zEntry(gtk.Entry):
             raise KeyError('{0}: invalid task for delete pattern.'.format(task))
 
         self.delete_text(start_pos, end_pos)
+        self.unset_mark()
 
     def delete_forward(self, task = 'char'):
         sel = self.get_selection_bounds()
@@ -275,6 +301,7 @@ class zEntry(gtk.Entry):
             raise KeyError('{0}: invalid task for delete pattern.'.format(task))
 
         self.delete_text(start_pos, end_pos)
+        self.unset_mark()
 
 
     def get_current_word(self, letter = None):
@@ -297,6 +324,7 @@ class zEntry(gtk.Entry):
 
         self.select_region(start, curr)
         self.delete_selection()
+        self.unset_mark()
         self.insert_text(word)
 
 
@@ -311,6 +339,45 @@ class zEntry(gtk.Entry):
 
     def is_out_word(self, letter = r'\S'):
         return self.__test_cursor_anchor(self.get_position(), False, False, letter)
+
+
+    def get_mark(self):
+        return self.__selection_mark
+
+    def set_mark(self, where = None, append = ''):
+        if not append:
+            self.unset_mark()
+
+        if not where:
+            where = self.get_position()
+
+        if not self.get_mark():
+            self.__selection_mark = where
+
+        # for set_mark_*
+        if append:
+            max_pos = self.get_text_length()
+
+            if append == 'left' and where > 0:
+                where -= 1
+            elif append == 'right' and where < max_pos:
+                where += 1
+            elif append == 'up':
+                where = 0
+            else:
+                where = max_pos
+
+            self.set_position(where)
+
+    def unset_mark(self):
+        if self.get_mark():
+            curr_pos = self.get_position()
+            self.select_region(curr_pos, curr_pos)
+            self.__selection_mark = None
+
+
+    def cancel_action(self):
+        self.unset_mark()
     ### end of editor related API
 
 
@@ -344,6 +411,13 @@ class zEntry(gtk.Entry):
             prev_w == bool(re.match(letter, prev)) and
             next_w == bool(re.match(letter, next))
             )
+
+
+    def __watch_selection(self):
+        if self.get_mark():
+            self.select_region(self.get_mark(), self.get_position())
+
+        return True             # keep watching until dead
     ### end of supporting function
 
 
@@ -831,7 +905,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         self.center = self
 
         # initialize double-buffering buffers
-        self.disp_buff = self.get_buffer()
+        self.disp_buff = super(zTextView, self).get_buffer()
         self.true_buff = None
 
         self.disp_buff.create_tag('selected', background = self.get_style().bg[gtk.STATE_SELECTED])
@@ -1057,7 +1131,12 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             self.disp_buff.create_tag('selected', background = color)
 
 
-    # no overridden for get_buffer()
+    def get_buffer(self):
+        if self.true_buff:
+            return self.true_buff
+        else:
+            return self.disp_buff
+
     def set_buffer(self, buff, dry_run = False):
         if self.true_buff and not dry_run:
             if self.true_buff.handler_is_connected(self.__true_buff_watcher):
@@ -1361,7 +1440,6 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
             self.place_cursor(where)
 
-
     def unset_mark(self):
         if self.get_mark():
             self.disp_buff.delete_mark_by_name('selection_start')
@@ -1374,16 +1452,16 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
     ### end of editor related API
 
 
-    def buffer_save(self, buff):
+    def buffer_save(self, z_buffer):
         try:
-            return buff.flush()
+            return z_buffer.flush()
         except:
-            return self.buffer_save_as(buff)
+            return self.buffer_save_as(z_buffer)
 
-    def buffer_save_as(self, buff):
+    def buffer_save_as(self, z_buffer):
         lastline = self.get_editor().get_last_line()
-        if buff.path:
-            path = buff.path
+        if z_buffer.path:
+            path = z_buffer.path
         else:
             path = [ zTheme.env['starting_path'], '']
 
@@ -1396,8 +1474,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             self.grab_focus()
 
             if path:
-                if buff.path and io_encap.norm_path_list(buff.path) == path:
-                    return buff.flush() # no change in filename, save it directly
+                if z_buffer.path and io_encap.norm_path_list(z_buffer.path) == path:
+                    return z_buffer.flush() # no change in filename, save it directly
 
                 if os.path.isfile(path): # target already exist, confirm overwritting
                     response = lastline.run_confirm(
@@ -1430,7 +1508,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 chooser.destroy()
                 return None     # cancelled
 
-        return buff.flush_to(path, lambda buff: self.get_editor().set_buffer(buff.path, buff.type))
+        return z_buffer.flush_to(path, lambda z_buffer: self.get_editor().set_buffer(z_buffer.path, z_buffer.type))
 
 
     def get_editor(self):
