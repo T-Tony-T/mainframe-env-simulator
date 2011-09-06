@@ -153,14 +153,14 @@ DEFAULT_FUNC_KEY_BIND = {
         'other' : 'F7',
         },
     'tabbar_prev'           : { # will turn on tabbar automatically
-        'emacs' : 'C-left',
+        'emacs' : 'C-Left',
         'vi'    : '',
-        'other' : 'C-left',
+        'other' : 'C-Left',
         },
     'tabbar_next'           : { # will turn on tabbar automatically
-        'emacs' : 'C-right',
+        'emacs' : 'C-Right',
         'vi'    : '',
-        'other' : 'C-right',
+        'other' : 'C-Right',
         },
 
     # editor related functions; required by zTextView and zEntry
@@ -217,6 +217,33 @@ DEFAULT_FUNC_KEY_BIND = {
         'vi'    : '',
         'other' : '',
         },    
+
+    'set_mark_command'      : { # set selection mark at current cursor position
+        'emacs' : 'C-@',
+        'vi'    : '',
+        'other' : '',
+        },
+    'set_mark_prepend'      : { # set selection mark on initial stroke, prepend 1 char to selection on successive strokes
+        'emacs' : 'S-Left',
+        'vi'    : '',
+        'other' : 'S-Left',
+        },
+    'set_mark_prepend_line' : { # set selection mark on initial stroke, prepend 1 line to selection on successive strokes
+        'emacs' : 'S-Up',
+        'vi'    : '',
+        'other' : 'S-Up',
+        },
+    'set_mark_append'       : { # set selection mark on initial stroke, append 1 char to selection on successive strokes
+        'emacs' : 'S-Right',
+        'vi'    : '',
+        'other' : 'S-Right',
+        },
+    'set_mark_append_line'  : { # set selection mark on initial stroke, append 1 line to selection on successive strokes
+        'emacs' : 'S-Down',
+        'vi'    : '',
+        'other' : 'S-Down',
+        },
+
 
     # functions that are not required by any z* module
 

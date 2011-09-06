@@ -33,6 +33,9 @@ KEY_BINDING_RULE_MKUP = {
     C-q (escape next key stroke), 'Enter' key, or any
     character you can find on the keyboard
   - Key sequence cannot contain C-g (cancel current action)
+  - Only function keys can be prefixed by 'S-' (since they
+    do not have "uppercase form"s). Note that 'S-' should be
+    directly in front of the function key it associated with
   - Key sequence cannot contain more than one stand-alone
     (i.e. without prefix such as 'C-' or 'M-') function keys
 
@@ -55,6 +58,9 @@ KEY_BINDING_RULE_MKUP = {
     character you can find on the keyboard
   - No space allowed in the 'Stroke' definition. Use the
     word 'Space' to bind the Space key on your keyboard
+  - Only function keys can be prefixed by 'S-' (since they
+    do not have "uppercase form"s). Note that 'S-' should be
+    directly in front of the function key it associated with
 
 <b>'Stroke' of Function Keys:</b>
   - BackSpace, *Enter*, *Escape*, Space, Tab
@@ -198,8 +204,8 @@ KEY_RE_PATTERN = {
 '''.format(__BASE_PATTERN['printable']),
 
     'combo' : r'''^(?:                  # anchor to the start
-( C-M- | [CM]- )                        #   C-M- / C- / M- (capture) followed by
-( {0} | {1} )                           #     function key or printable char (capture)
+( C-M-(?:S-)? | [CM]-(?:S-)? | S- )     #   C-M-S- / C-S- / M-S- / S- (capture) followed by
+( {0} | {1} )                           #     function key or printable char (capture) [check 'S-' vs 'printable' later]
 )$                                      #       anchor to the end
 '''.format(__BASE_PATTERN['func_key'], __BASE_PATTERN['printable']),
 
@@ -263,6 +269,10 @@ def parse_key_binding(key_sequence, style):
             # re-matching stroke part for normalization purpose
             m_func_key  = re.match(KEY_RE_PATTERN['func_key'],  sq_stroke, re.X)
             m_activate  = re.match(KEY_RE_PATTERN['activate'],  sq_stroke, re.X)
+
+            if m_combo and sq_prefix[-2:] == 'S-' and not m_func_key:
+                # 'S-' can only be in the prefix if followed by a func_key
+                return None
 
             if m_func_key or m_activate:
                 if indx != len(sequence) - 1:
@@ -649,7 +659,14 @@ class zStrokeListener(gobject.GObject):
         # check and re-map punctuation mark
         key_name = gtk.gdk.keyval_name(event.keyval)
         if key_name in PUNCT_KEY_MAP:
+            # punctuation
             key_name = PUNCT_KEY_MAP[key_name]
+
+        elif key_name.upper() in FUNC_KEY_MAP:
+            # function key
+            if event.state & gtk.gdk.SHIFT_MASK:
+                # only check SHIFT modifier when a function key is pressed
+                key_name = 'S-' + key_name
 
         if (event.state & ctrl_mod_mask) == ctrl_mod_mask:
             stroke = 'C-M-' + key_name

@@ -10,7 +10,7 @@ import io_encap
 from zBase import z_ABC, zTheme
 from zStrokeParser import zStrokeListener, zComplete
 
-import os, re
+import os, sys, re
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -779,8 +779,13 @@ class zLastLine(gtk.HBox):
 ########         zTextView          ########
 ######## ######## ######## ######## ########
 
-class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.TextView
+class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified(), which is used internally
     '''The Customized TextView that Support zEdit'''
+    # debug flags
+    debug_sync = False
+    debug_sync_timestamp = 0
+
+    global_object_cnt = 0       # see self.obj_id
 
     global_func_list = [
         'complete',             # complete the current typing
@@ -798,6 +803,12 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
         'delete_para_backward', # delete to start of curr para, or delete prev para if not in one or at para start
         'delete_para_forward',  # delete to end of curr para, or delete next para if not in one or at para end
+
+        'set_mark_command',     # set selection mark at current cursor position
+        'set_mark_prepend',     # set selection mark on initial stroke, prepend 1 char to selection on successive strokes
+        'set_mark_prepend_line',# set selection mark on initial stroke, prepend 1 line to selection on successive strokes
+        'set_mark_append',      # set selection mark on initial stroke, append 1 char to selection on successive strokes
+        'set_mark_append_line', # set selection mark on initial stroke, append 1 line to selection on successive strokes
         ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -812,12 +823,28 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         '''
         super(zTextView, self).__init__()
 
+        zTextView.global_object_cnt += 1
+        self.obj_id = zTextView.global_object_cnt
+
+        # initialize vars
         self.set_editor(editor)
         self.center = self
 
+        # initialize double-buffering buffers
+        self.disp_buff = self.get_buffer()
+        self.true_buff = None
+
+        self.disp_buff.create_tag('selected', background = self.get_style().bg[gtk.STATE_SELECTED])
+        gobject.timeout_add(20, self.__watch_selection)
+
+        self.disp_buff.connect('modified_changed', self._sig_buffer_modified, 'disp')
+
+
+        # set up stroke listener
         self.completer = zComplete(self)
         self.listener = zStrokeListener()
 
+        # customize proporties
         self.set_editable(True) # default editable
 
         # register callbacks for function bindings
@@ -833,9 +860,115 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
             'delete_line_forward'   : lambda *arg: self.delete_forward( 'line'),
             'delete_para_backward'  : lambda *arg: self.delete_backward('para'),
             'delete_para_forward'   : lambda *arg: self.delete_forward( 'para'),
+
+            'set_mark_command'      : lambda *arg: self.set_mark(),
+            'set_mark_prepend'      : lambda *arg: self.set_mark(append = 'left'),
+            'set_mark_prepend_line' : lambda *arg: self.set_mark(append = 'up'),
+            'set_mark_append'       : lambda *arg: self.set_mark(append = 'right'),
+            'set_mark_append_line'  : lambda *arg: self.set_mark(append = 'down'),
             }
         for (func, cb) in self.default_func_callback.iteritems():
             self.listener.register_func_callback(func, cb)
+
+        # connect overridden signals
+        self.connect('button-press-event',   self._sig_button_press)
+        self.connect('button-release-event', self._sig_button_release)
+
+        self.mouse_motion_id = self.connect('motion_notify_event', self._sig_mouse_motion)
+        self.handler_block(self.mouse_motion_id)
+
+
+    ### overridden signal definition
+    def _sig_buffer_modified(self, buff, src):
+        zTextView.debug_sync_timestamp += 1
+        debug_timestamp = zTextView.debug_sync_timestamp
+
+        if zTextView.debug_sync:
+            debug_header = '{0},{1}'.format(self.obj_id, debug_timestamp)
+            sys.stderr.write('<span>\n{0}: {1} changed\n'.format(debug_header, src))
+
+        need_return = False
+        if not self.true_buff:
+            # no true_buff set, no need to sync
+            if zTextView.debug_sync:
+                sys.stderr.write('{0}: true buff not set\n'.format(debug_header))
+            need_return = True
+        if self.__on_sync:
+            # on synchronization, ignore new request
+            if zTextView.debug_sync:
+                sys.stderr.write('{0}: self on synchronization\n'.format(debug_header))
+            need_return = True
+
+        if need_return:
+            if zTextView.debug_sync:
+                sys.stderr.write('</span>\n')
+            return
+
+        if zTextView.debug_sync:
+            sys.stderr.write('{0}: disp: {1}\n'.format(debug_header, self.disp_buff.get_modified()))
+            sys.stderr.write('{0}: true: {1}\n'.format(debug_header, self.true_buff.get_modified()))
+
+        self.__sync_buff_from(src, debug_timestamp)
+
+        if zTextView.debug_sync:
+            sys.stderr.write('{0}: all done\n'.format(debug_header))
+            sys.stderr.write('</span>\n')
+
+
+    def _sig_button_press(self, widget, event):
+        if event.button == 1:
+            # left click
+            new_iter = self.get_iter_at_location(
+                * self.window_to_buffer_coords(gtk.TEXT_WINDOW_TEXT, int(event.x), int(event.y))
+                  )
+
+            if event.type == gtk.gdk.BUTTON_PRESS:
+                # single click
+                self.place_cursor(new_iter)
+
+                self.set_mark(new_iter)
+                self.handler_unblock(self.mouse_motion_id)
+
+            elif event.type == gtk.gdk._2BUTTON_PRESS:
+                # double click, select word
+                start_iter = new_iter.copy()
+                end_iter   = new_iter.copy()
+
+                start_iter.backward_word_start()
+                end_iter.forward_word_end()
+
+                self.set_mark(start_iter)
+                self.place_cursor(end_iter)
+
+            elif event.type == gtk.gdk._3BUTTON_PRESS:
+                # triple click, select line
+                start_iter = new_iter.copy()
+                end_iter   = new_iter.copy()
+
+                start_iter.set_line_offset(0)
+                self.forward_to_line_end(end_iter)
+
+                self.set_mark(start_iter)
+                self.place_cursor(end_iter)
+
+        return False
+
+    def _sig_mouse_motion(self, widget, event):
+        new_iter = self.get_iter_at_location(
+            * self.window_to_buffer_coords(gtk.TEXT_WINDOW_TEXT, int(event.x), int(event.y))
+              )
+        self.place_cursor(new_iter)
+
+        return False
+
+    def _sig_button_release(self, widget, event):
+        if event.button == 1:
+            # left click
+            self.handler_block(self.mouse_motion_id)
+            self.place_cursor(self.last_cursor_loc)
+
+        return False
+    ### end of overridden signal definition
 
 
     ### overridden function definition
@@ -869,23 +1002,77 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
 
     def insert_text(self, text):
-        buff = self.get_buffer()
-
         # clear selection region, if any
-        sel = buff.get_selection_bounds()
+        sel = self.get_selection_bounds()
         if sel:
-            buff.delete(* sel)
+            self.delete_selection()
 
         # insert text
-        buff.insert_at_cursor(text)
+        self.disp_buff.insert_at_cursor(text)
 
     def get_text(self):
-        buff = self.get_buffer()
-        return buff.get_text(buff.get_start_iter(), buff.get_end_iter(), False)
+        return self.disp_buff.get_text(self.disp_buff.get_start_iter(), self.disp_buff.get_end_iter(), False)
 
     def set_text(self, text):
-        buff = self.get_buffer()
-        buff.set_text(text)
+        self.disp_buff.set_text(text)
+        self.place_cursor(self.disp_buff.get_start_iter())
+
+
+    def get_has_selection(self):
+        return self.get_mark() != None
+
+    def get_selection_bound(self):
+        if self.get_has_selection():
+            return self.disp_buff.get_iter_at_mark(self.get_mark())
+        else:
+            return None
+
+    def get_selection_bounds(self):
+        if self.get_has_selection():
+            bound = self.get_selection_bound()
+            ins   = self.get_cursor_iter()
+            if bound.get_offset() > ins.get_offset():
+                return ( ins, bound, )
+            else:
+                return ( bound, ins, )
+        else:
+            return ()
+
+    def select_range(self, ins, bound):
+        self.set_mark(bound)
+        self.place_cursor(ins)
+
+    def delete_selection(self):
+        sel = self.get_selection_bounds()
+        if sel:
+            self.disp_buff.delete(* sel)
+            self.unset_mark()
+
+
+    def modify_base(self, state, color):
+        super(zTextView, self).modify_base(state, color)
+        if state == gtk.STATE_SELECTED:
+            old_tag = self.disp_buff.get_tag_table().lookup('selected')
+            self.disp_buff.get_tag_table().remove(old_tag)
+            self.disp_buff.create_tag('selected', background = color)
+
+
+    # no overridden for get_buffer()
+    def set_buffer(self, buff, dry_run = False):
+        if self.true_buff and not dry_run:
+            if self.true_buff.handler_is_connected(self.__true_buff_watcher):
+                self.true_buff.disconnect(self.__true_buff_watcher)
+            
+        if buff.get_modified():           # mark true buff "synchronized"
+            buff.set_modified(False)
+
+        if not dry_run:
+            self.true_buff = buff
+            self.__true_buff_watcher = self.true_buff.connect('modified_changed', self._sig_buffer_modified, 'true')
+
+        self.__sync_buff_from('true')
+        self.unset_mark()
+        self.place_cursor(self.disp_buff.get_start_iter())
 
 
     # no overridden for get_editable()
@@ -895,18 +1082,22 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         # enable/disable the editor related function bindings
         for func in zTextView.global_func_list:
             self.listener.set_func_enabled(func, setting)
+
+
+    def place_cursor(self, where):
+        self.disp_buff.place_cursor(where)
+        self.last_cursor_loc = where
     ### end of overridden function definition
 
 
     ### editor related API
     def delete_backward(self, task = 'char'):
-        buff = self.get_buffer()
-        sel = buff.get_selection_bounds()
+        sel = self.get_selection_bounds()
 
         if sel:
             start_iter = sel[1].copy()
             end_iter   = sel[1].copy()
-            buff.select_range(start_iter, end_iter)
+            self.select_range(start_iter, end_iter)
         else:
             start_iter = self.get_cursor_iter()
             end_iter   = self.get_cursor_iter()
@@ -940,23 +1131,23 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         else:
             raise KeyError('{0}: invalid task for delete pattern.'.format(task))
 
-        buff.delete(start_iter, end_iter)
+        self.disp_buff.delete(start_iter, end_iter)
+        self.unset_mark()
 
     def delete_forward(self, task = 'char'):
-        buff = self.get_buffer()
-        sel = buff.get_selection_bounds()
+        sel = self.get_selection_bounds()
 
         if sel:
             start_iter = sel[0].copy()
             end_iter   = sel[0].copy()
-            buff.select_range(start_iter, end_iter)
+            self.select_range(start_iter, end_iter)
         else:
             start_iter = self.get_cursor_iter()
             end_iter   = self.get_cursor_iter()
 
         if task == 'char':
             if sel:
-                end_iter   = sel[1]
+                end_iter = sel[1]
             else:
                 end_iter.forward_char()
 
@@ -985,7 +1176,8 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         else:
             raise KeyError('{0}: invalid task for delete pattern.'.format(task))
 
-        buff.delete(start_iter, end_iter)
+        self.disp_buff.delete(start_iter, end_iter)
+        self.unset_mark()
 
 
     def forward_to_line_end(self, iterator):
@@ -996,22 +1188,19 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
 
     def get_cursor_iter(self):
-        buff = self.get_buffer()
-        return buff.get_iter_at_mark(buff.get_insert())
+        return self.disp_buff.get_iter_at_mark(self.disp_buff.get_insert())
 
 
     def get_current_word(self):
-        buff = self.get_buffer()
         start_iter = self.get_cursor_iter()
         end_iter   = self.get_cursor_iter()
 
         # move start back to the word start
         start_iter.backward_word_start()
 
-        return buff.get_text(start_iter, end_iter, False)
+        return self.disp_buff.get_text(start_iter, end_iter, False)
 
     def set_current_word(self, word):
-        buff = self.get_buffer()
         start_iter = self.get_cursor_iter()
         end_iter   = self.get_cursor_iter()
 
@@ -1019,20 +1208,17 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
         start_iter.backward_word_start()
 
         # replace the current word with the new word
-        buff.delete(start_iter, end_iter)
-        buff.insert_text(start_iter, word)
+        self.disp_buff.delete(start_iter, end_iter)
+        self.disp_buff.insert_text(start_iter, word)
 
 
     def is_word_start(self):
-        buff = self.get_buffer()
         return self.get_cursor_iter().starts_word()
 
     def is_in_word(self):
-        buff = self.get_buffer()
         return self.get_cursor_iter().inside_word()
 
     def is_word_end(self):
-        buff = self.get_buffer()
         return self.get_cursor_iter().ends_word()
 
 
@@ -1139,6 +1325,52 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
         ln_iter.forward_line() # back to first line of para
         return ln_iter          # return start of last line
+
+
+    def get_mark(self):
+        return self.disp_buff.get_mark('selection_start')
+
+    def set_mark(self, where = None, append = ''):
+        if not append:
+            self.unset_mark()
+
+        if not where:
+            where = self.get_cursor_iter()
+
+        if not self.get_mark():
+            self.disp_buff.create_mark('selection_start', where, False)
+            self.disp_buff.create_mark('selection_end', where, False) # for internal usage
+
+        # for set_mark_*
+        if append:
+            if append == 'left':
+                where.backward_char()
+            elif append == 'right':
+                where.forward_char()
+            else:
+                line_offset = self.disp_buff.get_iter_at_mark(self.get_mark()).get_line_offset()
+                if append == 'up':
+                    where.backward_line()
+                else:
+                    where.forward_line()
+                max_offset = where.get_chars_in_line()
+                if line_offset < max_offset:
+                    where.set_line_offset(line_offset)
+                else:
+                    self.forward_to_line_end(where)
+
+            self.place_cursor(where)
+
+
+    def unset_mark(self):
+        if self.get_mark():
+            self.disp_buff.delete_mark_by_name('selection_start')
+            self.disp_buff.delete_mark_by_name('selection_end') # for internal usage
+            self.disp_buff.remove_tag_by_name('selected', self.disp_buff.get_start_iter(), self.disp_buff.get_end_iter())
+
+
+    def cancel_action(self):
+        self.unset_mark()
     ### end of editor related API
 
 
@@ -1206,3 +1438,91 @@ class zTextView(z_ABC, gtk.TextView): # will be rewritten to get rid of gtk.Text
 
     def set_editor(self, editor):
         self.__editor_frame = editor
+
+
+    ### supporting function
+    def __sync_buff_from(self, src, debug_timestamp = 0):
+        self.__on_sync = True   # start synchronizing
+
+        if zTextView.debug_sync:
+            debug_header = '{0},{1}'.format(self.obj_id, debug_timestamp)
+            sys.stderr.write('<span>\n{0}: sync from {1}: started\n'.format(debug_header, src))
+            sys.stderr.write('{0}: disp: {1}\n'.format(debug_header, self.disp_buff.get_modified()))
+            sys.stderr.write('{0}: true: {1}\n'.format(debug_header, self.true_buff.get_modified()))
+
+        if src == 'true':
+            if self.true_buff.reloading:
+                # add a watcher to wait true for completing modification
+                gobject.timeout_add(20, self.__watch_true_buff_reload)
+
+            if self.true_buff.get_modified():
+                # on modifying, pass
+                if zTextView.debug_sync:
+                    sys.stderr.write('{0}: true on modifying, pass\n'.format(debug_header))
+                    sys.stderr.write('</span>\n')
+                self.__on_sync = False  # stop synchronizing
+                return
+            else:
+                buff_src  = self.true_buff
+                buff_dest = self.disp_buff
+        else:
+            if not self.disp_buff.get_modified():
+                # already modified, pass
+                if zTextView.debug_sync:
+                    sys.stderr.write('{0}: disp already modified, pass\n'.format(debug_header))
+                    sys.stderr.write('</span>\n')
+                self.__on_sync = False  # stop synchronizing
+                return
+            else:
+                buff_src  = self.disp_buff
+                buff_dest = self.true_buff
+
+        text = buff_src.get_text(
+                buff_src.get_start_iter(), buff_src.get_end_iter(), False
+                )
+        if zTextView.debug_sync:
+            sys.stderr.write('{0}: src text retrived: {1} chars\n'.format(debug_header, len(text)))
+        buff_dest.set_text(text)
+        if zTextView.debug_sync:
+            sys.stderr.write('{0}: dest text set: {1} chars\n'.format(
+                        debug_header,
+                        len(buff_dest.get_text(buff_dest.get_start_iter(), buff_dest.get_end_iter(), False)
+                            )))
+
+        # reset modified watcher
+        if src != 'true':
+            # do not reset src if that is the true buffer
+            buff_src.set_modified(False)
+        buff_dest.set_modified(False)
+
+        if zTextView.debug_sync:
+            sys.stderr.write('{0}: disp: {1}\n'.format(debug_header, self.disp_buff.get_modified()))
+            sys.stderr.write('{0}: true: {1}\n'.format(debug_header, self.true_buff.get_modified()))
+            sys.stderr.write('{0}: sync finished\n'.format(debug_header))
+            sys.stderr.write('</span>\n')
+
+        self.__on_sync = False  # stop synchronizing
+
+
+    def __watch_selection(self):
+        if self.get_mark():
+            # clear previous selection
+            iter_start = self.disp_buff.get_iter_at_mark(self.get_mark())
+            iter_end   = self.disp_buff.get_iter_at_mark(self.disp_buff.get_mark('selection_end'))
+            self.disp_buff.remove_tag_by_name('selected', iter_start, iter_end)
+
+            # update new selection
+            iter_end = self.get_cursor_iter()
+            self.disp_buff.move_mark_by_name('selection_end', iter_end) # move end mark
+            self.disp_buff.apply_tag_by_name('selected', iter_start, iter_end)
+
+        return True             # keep watching until dead
+
+
+    def __watch_true_buff_reload(self):
+        if self.true_buff.reloading:
+            return True
+
+        self.set_buffer(self.true_buff, dry_run = True) # notify completion of modification
+        return False
+    ### end of supporting function

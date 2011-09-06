@@ -476,6 +476,10 @@ class zEdit(z_ABC, gtk.VBox):
 
         if sig_type == 'cancel':
             # on cancelling, clean up if needed
+            try:
+                widget.cancel_action()
+            except:
+                pass
 
             if msg['style'] == 'emacs':
                 if ( zEdit.__last_line.is_mx_commanding()  and      # on M-x commanding, and
@@ -1088,6 +1092,7 @@ class zEditBuffer(z_ABC):
         self.modified = None    # will be set after determining the content
         if self.type == 'file':
             self.buffer = gtk.TextBuffer()
+            self.buffer.reloading = False
             self.__reload_buffer()
 
             # connect internal signals
@@ -1101,6 +1106,7 @@ class zEditBuffer(z_ABC):
 
         elif buffer_type == 'disp':
             self.buffer   = gtk.TextBuffer()
+            self.buffer.reloading = False
             self.writable = False # whether can be saved
             self.editable = None  # whether can be modified
             self.set_modified(False)
@@ -1267,6 +1273,7 @@ class zEditBuffer(z_ABC):
 
     ### supporting function
     def __reload_buffer(self):
+        self.buffer.reloading = True # notify zTextView to wait for update
         if self.name == '*scratch*':
             # tmp buffer
             self.buffer.set_text(
@@ -1306,4 +1313,5 @@ class zEditBuffer(z_ABC):
             self.mtime = None
 
         self.set_modified(False)
+        self.buffer.reloading = False # notify zTextView to update
     ### end of supporting function

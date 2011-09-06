@@ -1117,47 +1117,47 @@ class ConfigWindow(gtk.Window):
             seq = conf.parse_key_binding(stroke)
             if not seq:
                 binding_is_valid = False
-
-            try:
-                if conf.key_sequence_add(
-                    entry.func_editing, seq,
-                    force_override = False,
-                    force_rebind = True,
-                    warning = False
-                    ):
-                    # key sequence added
-                    zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
-                    binding_is_valid = True
-                else:
-                    binding_is_valid = None
-            except ValueError as (err_type, err_msg, err_func, err_stroke):
-                if err_type == 'override':
-                    md = gtk.MessageDialog(
-                        self, 
-                        gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_QUESTION, 
-                        gtk.BUTTONS_NONE,
-                        'Conflicted key binding!'
-                        )
-                    md.format_secondary_text('Override the old one ({0})?'.format(err_func))
-                    md.add_buttons('_Override', gtk.RESPONSE_ACCEPT, '_Cancel', gtk.RESPONSE_CANCEL)
-                    md_id = md.run()
-                    if md_id == gtk.RESPONSE_ACCEPT:
-                        if conf.key_sequence_add(
-                            entry.func_editing, seq,
-                            force_override = True,
-                            force_rebind = True,
-                            warning = False
-                            ):
-                            # key sequence added
-                            zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
-                            self.kb_stroke[err_func].set_text('') # clear conflict binding text
-                            binding_is_valid = True
-                        else:
-                            sys.stderr.write('Warning: Fail to override the binding!\n')
-                            binding_is_valid = None
+            else:
+                try:
+                    if conf.key_sequence_add(
+                        entry.func_editing, seq,
+                        force_override = False,
+                        force_rebind = True,
+                        warning = False
+                        ):
+                        # key sequence added
+                        zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
+                        binding_is_valid = True
                     else:
-                        binding_is_valid = False
-                    md.destroy()
+                        binding_is_valid = None
+                except ValueError as (err_type, err_msg, err_func, err_stroke):
+                    if err_type == 'override':
+                        md = gtk.MessageDialog(
+                            self, 
+                            gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_QUESTION, 
+                            gtk.BUTTONS_NONE,
+                            'Conflicted key binding!'
+                            )
+                        md.format_secondary_text('Override the old one ({0})?'.format(err_func))
+                        md.add_buttons('_Override', gtk.RESPONSE_ACCEPT, '_Cancel', gtk.RESPONSE_CANCEL)
+                        md_id = md.run()
+                        if md_id == gtk.RESPONSE_ACCEPT:
+                            if conf.key_sequence_add(
+                                entry.func_editing, seq,
+                                force_override = True,
+                                force_rebind = True,
+                                warning = False
+                                ):
+                                # key sequence added
+                                zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
+                                self.kb_stroke[err_func].set_text('') # clear conflict binding text
+                                binding_is_valid = True
+                            else:
+                                sys.stderr.write('Warning: Fail to override the binding!\n')
+                                binding_is_valid = None
+                        else:
+                            binding_is_valid = False
+                        md.destroy()
 
             # process stroke
             if binding_is_valid:
