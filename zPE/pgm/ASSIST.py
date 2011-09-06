@@ -19,7 +19,7 @@
 #     SYSPRINT  source listing and diagnostic message
 #
 # Return Code:
-#     
+#
 # Return Value:
 #     none
 ################################################################
@@ -90,7 +90,7 @@ def __MISSED_FILE(step, i):
 
     if FILE[i][0] not in zPE.core.SPOOL.list():
         sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
-                   '  IEC130I {0:<8}'.format(FILE[i][0]), 
+                   '  IEC130I {0:<8}'.format(FILE[i][0]),
                    ' DD STATEMENT MISSING\n')
         sp3.append(ctrl, 'IEC130I {0:<8}'.format(FILE[i][0]),
                    ' DD STATEMENT MISSING\n')
@@ -177,7 +177,7 @@ def __PARSE_OUT():
             eojob = True
 
         tmp_str = ''
-                
+
         if len(asm_mnem[cnt]) == 3: # type 3
             for val in asm_mnem[cnt][2]:
                 tmp_str += zPE.core.asm.X_.tr(val.dump())
@@ -227,7 +227,7 @@ def __PARSE_OUT():
                 spo.append(ctrl, gen_msg('I', tmp, line))
     # end of main read loop
 
-    
+
 
     print '\nExternal Symbol Dictionary:'
     for key in sorted(asm_esd_id.iterkeys()):

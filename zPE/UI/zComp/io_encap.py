@@ -56,7 +56,7 @@ def new_file(fn_list):
         raise IOError('File name conflict with a folder.')
 
     open_file(fn_list, 'w')
-        
+
 
 def new_dir(fn_list):
     if is_file(fn_list):

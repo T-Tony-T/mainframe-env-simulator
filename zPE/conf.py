@@ -64,11 +64,11 @@ CONFIG_PATH = {
 def dump_ICH70001I(conf):
     __CK_CONFIG()
     __TOUCH_ICH70001I(conf)
-    
+
 def load_ICH70001I():
     __CK_CONFIG()
     return pickle.load(open(CONFIG_PATH['ICH70001I'], 'rb'))
-    
+
 
 def fetch_job_id():
     for line in open(CONFIG_PATH['rc'], 'r'):

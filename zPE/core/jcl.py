@@ -351,7 +351,7 @@ def finish_step(step):
         if 'STEPLIB' in step.dd.dict():
             path = step.dd['STEPLIB']['DSN']
             action = zPE.DISP_ACTION[step.dd.get_act('STEPLIB', step.rc)]
-            sp3.append(ctrl, 'IGD104I {0:<44} '.format(zPE.conv_back(path)), 
+            sp3.append(ctrl, 'IGD104I {0:<44} '.format(zPE.conv_back(path)),
                        '{0:<10} DDNAME=STEPLIB\n'.format(action + ','))
 
         for ddname in step.dd.list():

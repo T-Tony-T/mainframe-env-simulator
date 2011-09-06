@@ -58,7 +58,7 @@ def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
       resplit_sp ==> single pair of parentheses
 
 
-    Note: 
+    Note:
       - Only include the chars as they are in skip_l/r.
         do not escape special chars.
         (no '\' unless that is one of the boundary char)

@@ -1035,7 +1035,7 @@ class zStrokeListener(gobject.GObject):
     def __is_printable(self, stroke):
         return re.match(KEY_RE_PATTERN['printable'], stroke, re.X)
 
-    def __is_space(self, stroke): 
+    def __is_space(self, stroke):
         return is_func_key(stroke, 'Space')
 
 

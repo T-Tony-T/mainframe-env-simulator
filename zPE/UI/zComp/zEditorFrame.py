@@ -778,7 +778,7 @@ class zEdit(z_ABC, gtk.VBox):
                     if self.center.listener.handler_is_connected(handler):
                         self.center.listener.disconnect(handler)
 
-                self.exec_uninit_func()                
+                self.exec_uninit_func()
 
                 zTheme.unregister('update_font', self.center)
                 self.center.disconnect(self.sig_id['focus_in'])

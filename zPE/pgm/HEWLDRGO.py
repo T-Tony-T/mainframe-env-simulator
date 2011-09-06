@@ -17,7 +17,7 @@
 #     SYSLOUT   loader information and diagnostic message
 #
 # Return Code:
-#     
+#
 # Return Value:
 #     none
 ################################################################

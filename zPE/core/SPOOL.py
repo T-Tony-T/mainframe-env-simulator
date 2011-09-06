@@ -1,7 +1,7 @@
 # this is a simplification of the
 # "Simultaneous Peripheral Operations OnLine"
 
-# in future, may switch to "mmap" 
+# in future, may switch to "mmap"
 
 import zPE
 

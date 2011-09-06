@@ -20,7 +20,7 @@
 #     SYSPRINT  source listing and diagnostic message
 #
 # Return Code:
-#     
+#
 # Return Value:
 #     none
 ################################################################
@@ -181,7 +181,7 @@ def pass_1(amode = 31, rmode = 31):
             MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
             spt.append('{0:0>5}{1:<8}\n'.format(
                     line_num, field[0]
-                    ))                
+                    ))
 
         # parse CSECT
         elif field[1] == 'CSECT':
@@ -247,7 +247,7 @@ def pass_1(amode = 31, rmode = 31):
             spt.append('{0:0>5}{1:<8} CSECT\n'.format(
                     line_num, field[0]
                     ))
-                
+
         # parse USING
         elif field[1] == 'USING':
             # actual parsing in pass 2
@@ -891,7 +891,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                 break
 
                             if ( res[1][indx] == 'location_ptr' or
-                                 res[1][indx] == 'valid_symbol' 
+                                 res[1][indx] == 'valid_symbol'
                                  ):
                                 if res[1][indx] == 'location_ptr':
                                     pass # no special process required
@@ -1445,7 +1445,7 @@ def __MISSED_FILE(step):
     for fn in FILE:
         if fn not in zPE.core.SPOOL.list():
             sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
-                       '  IEC130I {0:<8}'.format(fn), 
+                       '  IEC130I {0:<8}'.format(fn),
                        ' DD STATEMENT MISSING\n')
             sp3.append(ctrl, 'IEC130I {0:<8}'.format(fn),
                        ' DD STATEMENT MISSING\n')

@@ -538,7 +538,7 @@ class zListing(gtk.TreeView):
             indx = self.column_list.index(base_column) + 1
             self.cell_list.insert(indx, cell)
             self.column_list.insert(indx, column)
-            
+
         super(zListing, self).move_column_after(column, base_column)
 
 
@@ -934,7 +934,7 @@ class zFileManager(gtk.VBox):
              ):
             self.treeview.cell_list[indx].set_property('text', '')
             return
-            
+
         filename = os.path.join(self.dirname, self.treeview.model.get_value(iterator, 0))
         filestat = os.stat(filename)
 

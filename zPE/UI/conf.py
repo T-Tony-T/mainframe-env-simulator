@@ -168,55 +168,55 @@ DEFAULT_FUNC_KEY_BIND = {
         'emacs' : 'Tab',
         'vi'    : '',
         'other' : 'Tab',
-        },    
+        },
     'complete_list'         : { # show completion list of the current typing;
                                 # whether set of not, two successive fail in complete will cause the list to show
         'emacs' : 'M-/',
         'vi'    : '',
         'other' : '',
-        },    
+        },
 
     'delete_char_backward'  : { # delete prev char
         'emacs' : 'BackSpace',
         'vi'    : '',
         'other' : 'BackSpace',
-        },    
+        },
     'delete_char_forward'   : { # delete next char
         'emacs' : 'Delete',
         'vi'    : '',
         'other' : 'Delete',
-        },    
+        },
     'delete_word_backward'  : { # delete to start of curr word, or delete prev word if not in one
         'emacs' : 'M-D',
         'vi'    : '',
         'other' : '',
-        },    
+        },
     'delete_word_forward'   : { # delete to end of curr word, or delete next word if not in one
         'emacs' : 'M-d',
         'vi'    : '',
         'other' : '',
-        },    
+        },
     'delete_line_backward'  : { # delete to start of curr line, or delete curr line if at line end
         'emacs' : 'C-K',
         'vi'    : '',
         'other' : '',
-        },    
+        },
     'delete_line_forward'   : { # delete to end of curr line, or delete curr line if at line start,
                                 # or delete '\n' if at line end
         'emacs' : 'C-k',
         'vi'    : '',
         'other' : '',
-        },    
+        },
     'delete_para_backward'  : { # delete to start of curr para, or delete prev para if not in one or at para start
         'emacs' : 'M-K',
         'vi'    : '',
         'other' : '',
-        },    
+        },
     'delete_para_forward'   : { # delete to end of curr para, or delete next para if not in one or at para end
         'emacs' : 'M-k',
         'vi'    : '',
         'other' : '',
-        },    
+        },
 
     'set_mark_command'      : { # set selection mark at current cursor position
         'emacs' : 'C-@',

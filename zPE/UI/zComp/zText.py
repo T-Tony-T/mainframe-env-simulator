@@ -140,7 +140,7 @@ class zEntry(gtk.Entry):
         self.default_func_callback = {
             'complete'              : lambda *arg: self.complete(),
             'complete_list'         : lambda *arg: self.complete_list(),
-        
+
             'delete_char_backward'  : lambda *arg: self.delete_backward('char'),
             'delete_char_forward'   : lambda *arg: self.delete_forward( 'char'),
             'delete_word_backward'  : lambda *arg: self.delete_backward('word'),
@@ -660,7 +660,7 @@ class zLastLine(gtk.HBox):
             self.__line_interactive.disconnect(sig_id)
 
         return self.__response_msg
-        
+
 
     def get_label(self):
         return self.__label.get_text()
@@ -925,7 +925,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         self.default_func_callback = {
             'complete'              : lambda *arg: self.complete(),
             'complete_list'         : lambda *arg: self.complete_list(),
-        
+
             'delete_char_backward'  : lambda *arg: self.delete_backward('char'),
             'delete_char_forward'   : lambda *arg: self.delete_forward( 'char'),
             'delete_word_backward'  : lambda *arg: self.delete_backward('word'),
@@ -1141,7 +1141,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         if self.true_buff and not dry_run:
             if self.true_buff.handler_is_connected(self.__true_buff_watcher):
                 self.true_buff.disconnect(self.__true_buff_watcher)
-            
+
         if buff.get_modified():           # mark true buff "synchronized"
             buff.set_modified(False)
 

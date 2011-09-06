@@ -452,7 +452,7 @@ class zPopupMenu(gtk.Menu):
             self.__w_y      = w_alloc[1]
             self.__w_width  = w_alloc[2]
             self.__w_height = w_alloc[3]
-        else:            
+        else:
             alloc = attached_widget.get_allocation()
             self.__w_x      = 0
             self.__w_y      = 0
@@ -480,7 +480,7 @@ class zPopupMenu(gtk.Menu):
         ( ptr_abs_x, ptr_abs_y ) = root.get_pointer()[:2] # absolute position to root
 
         ( top_x,  top_y  ) = (ptr_abs_x - ptr_rel_x,          ptr_abs_y - ptr_rel_y         ) # top-left coords of toplevel
-        ( base_x, base_y ) = (ptr_abs_x - ptr_x + self.__w_x, ptr_abs_y - ptr_y + self.__w_y) # top-left coords of widget 
+        ( base_x, base_y ) = (ptr_abs_x - ptr_x + self.__w_x, ptr_abs_y - ptr_y + self.__w_y) # top-left coords of widget
 
         # check room
         room_below = root.get_size()[1] - base_y - self.__w_height
@@ -991,7 +991,7 @@ class zTabbar(z_ABC, gtk.EventBox):
             self.scroll_right.set_property('sensitive', False)
         else:
             self.scroll_right.set_property('sensitive', True)
-        
+
         return valid, pos
 
 

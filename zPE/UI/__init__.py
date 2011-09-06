@@ -529,7 +529,7 @@ class BaseFrame(object):
             frame.disconnect(init_sig)
 
     def frame_split_dup(self, frame, alist):
-        if frame:               # active frame exists, 
+        if frame:               # active frame exists,
             new_argv = frame.get_buffer()
             for indx in range(len(new_argv)):
                 alist[indx] = new_argv[indx]
@@ -1133,8 +1133,8 @@ class ConfigWindow(gtk.Window):
                 except ValueError as (err_type, err_msg, err_func, err_stroke):
                     if err_type == 'override':
                         md = gtk.MessageDialog(
-                            self, 
-                            gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_QUESTION, 
+                            self,
+                            gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_QUESTION,
                             gtk.BUTTONS_NONE,
                             'Conflicted key binding!'
                             )

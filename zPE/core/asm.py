@@ -112,7 +112,7 @@ TYPE_OP = {     # M=modified, B=branch, U=USING, D=DROP, N=index
     'M' : ( 'FA', 'FD', 'DE', 'DF', 'FC', 'F2', 'FB', 'F0', 'F3', 'F8',
           # MVC   MVI   TR    TRT
             'D2', '92', 'DC', 'DD',
-          # ST    STC   STCM  STH   STM   
+          # ST    STC   STCM  STH   STM
             '50', '42', 'BE', '40', '90' ),
 
     #       BAL   BALR  BAS   BASR  BC    BCR   BCT   BCTR  BXH   BXLE
@@ -741,7 +741,7 @@ def update_sd(sd_list, sd_info):
         if sd_info[0] == 's':
             sd_list[indx].set(sd_info[4], sd_info[3])
         elif sd_info[0] == 'a':
-            sd_list[indx].set(sd_info[4][indx], sd_info[3])        
+            sd_list[indx].set(sd_info[4][indx], sd_info[3])
 
 
 # rv: ( const_type, multiplier, ch, length, init_val, has_L )
