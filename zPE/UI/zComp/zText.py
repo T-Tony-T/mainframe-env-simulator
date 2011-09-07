@@ -1000,7 +1000,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 # single click
                 self.place_cursor(new_iter)
 
-                self.set_mark(new_iter)
+                self.__mouse_motion_init_pos = new_iter # used to initiate selection mark
                 self.handler_unblock(self.mouse_motion_id)
 
             elif event.type == gtk.gdk._2BUTTON_PRESS:
@@ -1033,12 +1033,19 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
               )
         self.place_cursor(new_iter)
 
+        if ( not self.get_mark()  and                           # mark not set already
+             not new_iter.equal(self.__mouse_motion_init_pos)   # position changed
+             ):
+            self.set_mark(self.__mouse_motion_init_pos)
+
         return False
 
     def _sig_button_release(self, widget, event):
         if event.button == 1:
             # left click
             self.handler_block(self.mouse_motion_id)
+            self.__mouse_motion_init_pos = None
+
             self.place_cursor(self.last_cursor_loc)
 
         return False
@@ -1419,6 +1426,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         if not self.get_mark():
             self.disp_buff.create_mark('selection_start', where, False)
             self.disp_buff.create_mark('selection_end', where, False) # for internal usage
+
+            self.get_editor().get_last_line().set_text('', 'Mark set')
 
         # for set_mark_*
         if append:
