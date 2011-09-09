@@ -176,43 +176,86 @@ DEFAULT_FUNC_KEY_BIND = {
         'other' : '',
         },
 
-    'delete_char_backward'  : { # delete prev char
+    'backward_char'         : { # move cursor to prev char
+        'emacs' : 'C-b',
+        'vi'    : '',
+        'other' : '',
+        },
+    'backward_delete_char'  : { # delete prev char
         'emacs' : 'BackSpace',
         'vi'    : '',
         'other' : 'BackSpace',
         },
-    'delete_char_forward'   : { # delete next char
+    'forward_char'          : { # move cursor to next char
+        'emacs' : 'C-f',
+        'vi'    : '',
+        'other' : '',
+        },
+    'forward_delete_char'   : { # delete next char
         'emacs' : 'Delete',
         'vi'    : '',
         'other' : 'Delete',
         },
-    'delete_word_backward'  : { # delete to start of curr word, or delete prev word if not in one
+
+    'backward_word'         : { # move cursor to start of current word, or prev word if not currently inside one
+        'emacs' : 'M-b',
+        'vi'    : '',
+        'other' : '',
+        },
+    'backward_delete_word'  : { # delete to start of current word, or delete prev word if not currently inside one
         'emacs' : 'M-D',
         'vi'    : '',
         'other' : '',
         },
-    'delete_word_forward'   : { # delete to end of curr word, or delete next word if not in one
+    'forward_word'          : { # move cursor to end of current word, or next word if not currently inside one
+        'emacs' : 'M-f',
+        'vi'    : '',
+        'other' : '',
+        },
+    'forward_delete_word'   : { # delete to end of current word, or delete next word if not currently inside one
         'emacs' : 'M-d',
         'vi'    : '',
         'other' : '',
         },
-    'delete_line_backward'  : { # delete to start of curr line, or delete curr line if at line end
+
+    'backward_line'         : { # move cursor to start of current line
+        'emacs' : 'C-a',
+        'vi'    : '',
+        'other' : '',
+        },
+    'backward_delete_line'  : { # delete to start of current line
         'emacs' : 'C-K',
         'vi'    : '',
         'other' : '',
         },
-    'delete_line_forward'   : { # delete to end of curr line, or delete curr line if at line start,
+    'forward_line'          : { # move cursor to end of current line
+        'emacs' : 'C-e',
+        'vi'    : '',
+        'other' : '',
+        },
+    'forward_delete_line'   : { # delete to end of current line, or delete current line if at line start,
                                 # or delete '\n' if at line end
         'emacs' : 'C-k',
         'vi'    : '',
         'other' : '',
         },
-    'delete_para_backward'  : { # delete to start of curr para, or delete prev para if not in one or at para start
+
+    'backward_para'         : { # move cursor to start of current para, or prev para if not in one or at para start
+        'emacs' : 'M-{',
+        'vi'    : '',
+        'other' : '',
+        },
+    'backward_delete_para'  : { # delete to start of current para, or delete prev para if not in one or at para start
         'emacs' : 'M-K',
         'vi'    : '',
         'other' : '',
         },
-    'delete_para_forward'   : { # delete to end of curr para, or delete next para if not in one or at para end
+    'forward_para'          : { # move cursor to end of current para, or next para if not in one or at para end
+        'emacs' : 'M-}',
+        'vi'    : '',
+        'other' : '',
+        },
+    'forward_delete_para'   : { # delete to end of curr para, or delete next para if not in one or at para end
         'emacs' : 'M-k',
         'vi'    : '',
         'other' : '',

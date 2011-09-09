@@ -103,17 +103,26 @@ class zEntry(gtk.Entry):
         'complete_list',        # show completion list of the current typing;
                                 # whether set of not, two successive fail in complete will cause the list to show
 
-        'delete_char_backward', # delete prev char
-        'delete_char_forward',  # delete next char
+        'backward_char',        # move cursor to prev char
+        'backward_delete_char', # delete prev char
+        'forward_char',         # move cursor to next char
+        'forward_delete_char',  # delete next char
 
-        'delete_word_backward', # delete to start of curr word, or delete prev word if not in one
-        'delete_word_forward',  # delete to end of curr word, or delete next word if not in one
+        'backward_word',        # move cursor to start of current word, or prev word if not currently inside one
+        'backward_delete_word', # delete to start of current word, or delete prev word if not currently inside one
+        'forward_word',         # move cursor to end of current word, or next word if not currently inside one
+        'forward_delete_word',  # delete to end of current word, or delete next word if not currently inside one
 
-        'delete_line_backward', # delete to start of curr line, or delete curr line if at line end
-        'delete_line_forward',  # delete to end of curr line, or delete curr line if at line start,
+        'backward_line',        # move cursor to start of current line
+        'backward_delete_line', # delete to start of current line, or delete current line if at line end
+        'forward_line',         # move cursor to end of current line
+        'forward_delete_line',  # delete to end of current line, or delete current line if at line start,
+                                # or delete '\n' if at line end
 
-        'delete_para_backward', # delete to start of curr para, or delete prev para if not in one or at para start
-        'delete_para_forward',  # delete to end of curr para, or delete next para if not in one or at para end
+        'backward_para',        # move cursor to start of current para, or prev para if not in one or at para start
+        'backward_delete_para', # delete to start of current para, or delete prev para if not in one or at para start
+        'forward_para',         # move cursor to end of current para, or next para if not in one or at para end
+        'forward_delete_para',  # delete to end of curr para, or delete next para if not in one or at para end
 
         'set_mark_command',     # set selection mark at current cursor position
         'set_mark_prepend',     # set selection mark on initial stroke, prepend 1 char to selection on successive strokes
@@ -141,14 +150,25 @@ class zEntry(gtk.Entry):
             'complete'              : lambda *arg: self.complete(),
             'complete_list'         : lambda *arg: self.complete_list(),
 
-            'delete_char_backward'  : lambda *arg: self.delete_backward('char'),
-            'delete_char_forward'   : lambda *arg: self.delete_forward( 'char'),
-            'delete_word_backward'  : lambda *arg: self.delete_backward('word'),
-            'delete_word_forward'   : lambda *arg: self.delete_forward( 'word'),
-            'delete_line_backward'  : lambda *arg: self.delete_backward('line'),
-            'delete_line_forward'   : lambda *arg: self.delete_forward( 'line'),
-            'delete_para_backward'  : lambda *arg: self.delete_backward('para'),
-            'delete_para_forward'   : lambda *arg: self.delete_forward( 'para'),
+            'backward_char'         : lambda *arg: self.backward(       'char'),
+            'backward_delete_char'  : lambda *arg: self.backward_delete('char'),
+            'forward_char'          : lambda *arg: self.forward(        'char'),
+            'forward_delete_char'   : lambda *arg: self.forward_delete( 'char'),
+
+            'backward_word'         : lambda *arg: self.backward(       'word'),
+            'backward_delete_word'  : lambda *arg: self.backward_delete('word'),
+            'forward_word'          : lambda *arg: self.forward(        'word'),
+            'forward_delete_word'   : lambda *arg: self.forward_delete( 'word'),
+
+            'backward_line'         : lambda *arg: self.backward(       'line'),
+            'backward_delete_line'  : lambda *arg: self.backward_delete('line'),
+            'forward_line'          : lambda *arg: self.forward(        'line'),
+            'forward_delete_line'   : lambda *arg: self.forward_delete( 'line'),
+
+            'backward_para'         : lambda *arg: self.backward(       'para'),
+            'backward_delete_para'  : lambda *arg: self.backward_delete('para'),
+            'forward_para'          : lambda *arg: self.forward(        'para'),
+            'forward_delete_para'   : lambda *arg: self.forward_delete( 'para'),
 
             'set_mark_command'      : lambda *arg: self.set_mark(),
             'set_mark_prepend'      : lambda *arg: self.set_mark(append = 'left'),
@@ -237,70 +257,20 @@ class zEntry(gtk.Entry):
 
 
     ### editor related API
-    def delete_backward(self, task = 'char'):
-        sel = self.get_selection_bounds()
-        if sel:
-            start_pos = sel[1]
-            end_pos   = sel[1]
-            self.select_region(start_pos, end_pos)
-        else:
-            start_pos = self.get_position()
-            end_pos   = self.get_position()
+    def backward(self, task = 'char'):
+        self.set_position(self.__backward(task, extend_selection = True))
 
-        if task == 'char':
-            if sel:
-                start_pos = sel[0]
-            else:
-                start_pos -= 1
-
-        elif task == 'word':
-            letter = r'[a-zA-Z0-9]'
-            if self.is_out_word(letter) or self.is_word_start(letter):
-                # outside of a word, or at word start => move to prev work end
-                start_pos = self.__get_word_start(start_pos, r'[^a-zA-Z0-9]')
-            # move to word start
-            start_pos = self.__get_word_start(start_pos, letter)
-
-        elif task in [ 'line', 'para' ]:
-            start_pos = 0
-
-        else:
-            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
-
-        self.delete_text(start_pos, end_pos)
+    def backward_delete(self, task = 'char'):
+        target_pos = self.__backward(task)
+        self.delete_text(target_pos, self.get_position())
         self.unset_mark()
 
-    def delete_forward(self, task = 'char'):
-        sel = self.get_selection_bounds()
-        if sel:
-            start_pos = sel[0]
-            end_pos   = sel[0]
-            self.select_region(start_pos, end_pos)
-        else:
-            start_pos = self.get_position()
-            end_pos   = self.get_position()
+    def forward(self, task = 'char'):
+        self.set_position(self.__forward(task, extend_selection = True))
 
-        if task == 'char':
-            if sel:
-                end_pos = sel[1]
-            else:
-                end_pos += 1
-
-        elif task == 'word':
-            letter = r'[a-zA-Z0-9]'
-            if self.is_out_word(letter) or self.is_word_end(letter):
-                # outside of a word, or at word end => move to next work start
-                end_pos = self.__get_word_end(end_pos, r'[^a-zA-Z0-9]')
-            # move to word start
-            end_pos = self.__get_word_end(end_pos, letter)
-
-        elif task in [ 'line', 'para' ]:
-            end_pos = -1
-
-        else:
-            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
-
-        self.delete_text(start_pos, end_pos)
+    def forward_delete(self, task = 'char'):
+        target_pos = self.__forward(task)
+        self.delete_text(self.get_position(), target_pos)
         self.unset_mark()
 
 
@@ -382,6 +352,69 @@ class zEntry(gtk.Entry):
 
 
     ### supporting function
+    def __backward(self, task, extend_selection = False):
+        sel = self.get_selection_bounds()
+
+        if sel and not extend_selection:
+            target_pos = sel[1]
+            self.select_region(target_pos, target_pos)
+        else:
+            target_pos = self.get_position()
+
+        if task == 'char':
+            if sel and not extend_selection:
+                target_pos = sel[0]
+            else:
+                target_pos -= 1
+
+        elif task == 'word':
+            letter = r'[a-zA-Z0-9]'
+            if self.is_out_word(letter) or self.is_word_start(letter):
+                # outside of a word, or at word start => move to prev work end
+                target_pos = self.__get_word_start(target_pos, r'[^a-zA-Z0-9]')
+            # move to word start
+            target_pos = self.__get_word_start(target_pos, letter)
+
+        elif task in [ 'line', 'para' ]:
+            target_pos = 0
+
+        else:
+            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
+
+        return target_pos
+
+    def __forward(self, task, extend_selection = False):
+        sel = self.get_selection_bounds()
+
+        if sel and not extend_selection:
+            target_pos = sel[0]
+            self.select_region(target_pos, target_pos)
+        else:
+            target_pos = self.get_position()
+
+        if task == 'char':
+            if sel and not extend_selection:
+                target_pos = sel[1]
+            else:
+                target_pos += 1
+
+        elif task == 'word':
+            letter = r'[a-zA-Z0-9]'
+            if self.is_out_word(letter) or self.is_word_end(letter):
+                # outside of a word, or at word end => move to next work start
+                target_pos = self.__get_word_end(target_pos, r'[^a-zA-Z0-9]')
+            # move to word start
+            target_pos = self.__get_word_end(target_pos, letter)
+
+        elif task in [ 'line', 'para' ]:
+            target_pos = -1
+
+        else:
+            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
+
+        return target_pos
+
+
     def __get_word_start(self, pos, letter = r'\S'):
         if not pos:
             return 0            # at start of the entry
@@ -866,17 +899,26 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         'complete_list',        # show completion list of the current typing;
                                 # whether set of not, two successive fail in complete will cause the list to show
 
-        'delete_char_backward', # delete prev char
-        'delete_char_forward',  # delete next char
+        'backward_char',        # move cursor to prev char
+        'backward_delete_char', # delete prev char
+        'forward_char',         # move cursor to next char
+        'forward_delete_char',  # delete next char
 
-        'delete_word_backward', # delete to start of curr word, or delete prev word if not in one
-        'delete_word_forward',  # delete to end of curr word, or delete next word if not in one
+        'backward_word',        # move cursor to start of current word, or prev word if not currently inside one
+        'backward_delete_word', # delete to start of current word, or delete prev word if not currently inside one
+        'forward_word',         # move cursor to end of current word, or next word if not currently inside one
+        'forward_delete_word',  # delete to end of current word, or delete next word if not currently inside one
 
-        'delete_line_backward', # delete to start of curr line, or delete curr line if at line end
-        'delete_line_forward',  # delete to end of curr line, or delete curr line if at line start,
+        'backward_line',        # move cursor to start of current line
+        'backward_delete_line', # delete to start of current line, or delete current line if at line end
+        'forward_line',         # move cursor to end of current line
+        'forward_delete_line',  # delete to end of current line, or delete current line if at line start,
+                                # or delete '\n' if at line end
 
-        'delete_para_backward', # delete to start of curr para, or delete prev para if not in one or at para start
-        'delete_para_forward',  # delete to end of curr para, or delete next para if not in one or at para end
+        'backward_para',        # move cursor to start of current para, or prev para if not in one or at para start
+        'backward_delete_para', # delete to start of current para, or delete prev para if not in one or at para start
+        'forward_para',         # move cursor to end of current para, or next para if not in one or at para end
+        'forward_delete_para',  # delete to end of curr para, or delete next para if not in one or at para end
 
         'set_mark_command',     # set selection mark at current cursor position
         'set_mark_prepend',     # set selection mark on initial stroke, prepend 1 char to selection on successive strokes
@@ -926,14 +968,25 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             'complete'              : lambda *arg: self.complete(),
             'complete_list'         : lambda *arg: self.complete_list(),
 
-            'delete_char_backward'  : lambda *arg: self.delete_backward('char'),
-            'delete_char_forward'   : lambda *arg: self.delete_forward( 'char'),
-            'delete_word_backward'  : lambda *arg: self.delete_backward('word'),
-            'delete_word_forward'   : lambda *arg: self.delete_forward( 'word'),
-            'delete_line_backward'  : lambda *arg: self.delete_backward('line'),
-            'delete_line_forward'   : lambda *arg: self.delete_forward( 'line'),
-            'delete_para_backward'  : lambda *arg: self.delete_backward('para'),
-            'delete_para_forward'   : lambda *arg: self.delete_forward( 'para'),
+            'backward_char'         : lambda *arg: self.backward(       'char'),
+            'backward_delete_char'  : lambda *arg: self.backward_delete('char'),
+            'forward_char'          : lambda *arg: self.forward(        'char'),
+            'forward_delete_char'   : lambda *arg: self.forward_delete( 'char'),
+
+            'backward_word'         : lambda *arg: self.backward(       'word'),
+            'backward_delete_word'  : lambda *arg: self.backward_delete('word'),
+            'forward_word'          : lambda *arg: self.forward(        'word'),
+            'forward_delete_word'   : lambda *arg: self.forward_delete( 'word'),
+
+            'backward_line'         : lambda *arg: self.backward(       'line'),
+            'backward_delete_line'  : lambda *arg: self.backward_delete('line'),
+            'forward_line'          : lambda *arg: self.forward(        'line'),
+            'forward_delete_line'   : lambda *arg: self.forward_delete( 'line'),
+
+            'backward_para'         : lambda *arg: self.backward(       'para'),
+            'backward_delete_para'  : lambda *arg: self.backward_delete('para'),
+            'forward_para'          : lambda *arg: self.forward(        'para'),
+            'forward_delete_para'   : lambda *arg: self.forward_delete( 'para'),
 
             'set_mark_command'      : lambda *arg: self.set_mark(),
             'set_mark_prepend'      : lambda *arg: self.set_mark(append = 'left'),
@@ -1177,92 +1230,20 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### editor related API
-    def delete_backward(self, task = 'char'):
-        sel = self.get_selection_bounds()
+    def backward(self, task = 'char'):
+        self.place_cursor(self.__backward(task, extend_selection = True))
 
-        if sel:
-            start_iter = sel[1].copy()
-            end_iter   = sel[1].copy()
-            self.select_range(start_iter, end_iter)
-        else:
-            start_iter = self.get_cursor_iter()
-            end_iter   = self.get_cursor_iter()
-
-        if task == 'char':
-            if sel:
-                start_iter = sel[0]
-            else:
-                start_iter.backward_char()
-
-        elif task == 'word':
-            start_iter.backward_word_start()
-
-        elif task == 'line':
-            if start_iter.ends_line():
-                # is at line-end, remove the entire line
-                start_iter.backward_line()
-                self.forward_to_line_end(start_iter)
-            else:
-                # not at line-end, delete to the line-start
-                start_iter.set_line_offset(0)
-
-        elif task == 'para':
-            # check for para start
-            if not end_iter.is_start()  and  self.is_para_start(buff, start_iter):
-                # not at buffer start but at para start, move to prev line
-                start_iter.backward_line()
-
-            start_iter = self.get_para_start(buff, start_iter)
-
-        else:
-            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
-
-        self.disp_buff.delete(start_iter, end_iter)
+    def backward_delete(self, task = 'char'):
+        target_iter = self.__backward(task)
+        self.disp_buff.delete(target_iter, self.get_cursor_iter())
         self.unset_mark()
 
-    def delete_forward(self, task = 'char'):
-        sel = self.get_selection_bounds()
+    def forward(self, task = 'char'):
+        self.place_cursor(self.__forward(task, extend_selection = True))
 
-        if sel:
-            start_iter = sel[0].copy()
-            end_iter   = sel[0].copy()
-            self.select_range(start_iter, end_iter)
-        else:
-            start_iter = self.get_cursor_iter()
-            end_iter   = self.get_cursor_iter()
-
-        if task == 'char':
-            if sel:
-                end_iter = sel[1]
-            else:
-                end_iter.forward_char()
-
-        elif task == 'word':
-            end_iter.forward_word_end()
-
-        elif task == 'line':
-            if end_iter.starts_line():
-                # is at line-start, remove the entire line
-                end_iter.forward_line()
-            elif end_iter.ends_line():
-                # already at line-end, remove the new-line char
-                end_iter.forward_line()
-            else:
-                # not at line-end, delete to the line-end
-                self.forward_to_line_end(end_iter)
-
-        elif task == 'para':
-            # check for para end
-            if not end_iter.is_end()  and  self.is_para_end(buff, end_iter):
-                # not at buffer end but at para end, move to next line
-                end_iter.forward_line()
-
-            end_iter = self.get_para_end(buff, end_iter)
-
-        else:
-            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
-
-        self.disp_buff.delete(start_iter, end_iter)
+    def forward_delete(self, task = 'char'):
+        target_iter = self.__forward(task)
+        self.disp_buff.delete(self.get_cursor_iter(), target_iter)
         self.unset_mark()
 
 
@@ -1528,6 +1509,83 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### supporting function
+    def __backward(self, task, extend_selection = False):
+        sel = self.get_selection_bounds()
+
+        if sel and not extend_selection:
+            target_iter = sel[1]
+            self.select_range(target_iter, target_iter)
+        else:
+            target_iter = self.get_cursor_iter()
+
+        if task == 'char':
+            if sel and not extend_selection:
+                target_iter = sel[0]
+            else:
+                target_iter.backward_char()
+
+        elif task == 'word':
+            target_iter.backward_word_start()
+
+        elif task == 'line':
+                target_iter.set_line_offset(0)
+
+        elif task == 'para':
+            # check for para start
+            if not target_iter.is_start()  and  self.is_para_start(self.disp_buff, target_iter):
+                # not at buffer start but at para start, move to prev line
+                target_iter.backward_line()
+
+            target_iter = self.get_para_start(self.disp_buff, target_iter)
+
+        else:
+            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
+
+        return target_iter
+
+    def __forward(self, task, extend_selection = False):
+        sel = self.get_selection_bounds()
+
+        if sel and not extend_selection:
+            target_iter = sel[0]
+            self.select_range(target_iter, target_iter)
+        else:
+            target_iter = self.get_cursor_iter()
+
+        if task == 'char':
+            if sel and not extend_selection:
+                target_iter = sel[1]
+            else:
+                target_iter.forward_char()
+
+        elif task == 'word':
+            target_iter.forward_word_end()
+
+        elif task == 'line':
+            if not extend_selection and target_iter.starts_line():
+                # is at line-start (delete mode), return line-start of next line (curr line will be removed entirely)
+                target_iter.forward_line()
+            elif not extend_selection and target_iter.ends_line():
+                # already at line-end (delete mode), return line-start of next line (new-line char will be removed)
+                target_iter.forward_line()
+            else:
+                # not at line-end or in select mode, return line-end
+                self.forward_to_line_end(target_iter)
+
+        elif task == 'para':
+            # check for para end
+            if not target_iter.is_end()  and  self.is_para_end(self.disp_buff, target_iter):
+                # not at buffer end but at para end, move to next line
+                target_iter.forward_line()
+
+            target_iter = self.get_para_end(self.disp_buff, target_iter)
+
+        else:
+            raise KeyError('{0}: invalid task for delete pattern.'.format(task))
+
+        return target_iter
+
+
     def __sync_buff_from(self, src, debug_timestamp = 0):
         self.__on_sync = True   # start synchronizing
 
