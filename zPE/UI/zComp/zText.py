@@ -276,10 +276,14 @@ class zEntry(gtk.Entry):
 
     def get_current_word(self, letter = None):
         curr = self.get_position()
-
-        if letter:              # pattern is offered, use it
+        if curr == 0:
+            # at start of entry
+            start = 0
+        elif letter:
+            # pattern is offered, use it
             start = self.__get_word_start(curr, letter)
-        else:                   # pattern not offered, use unquoted-space as separater
+        else:
+            # pattern not offered, use unquoted-space as separater
             start = zSplitWords(self.get_chars(0, curr)).index_split()[-1][0]
 
         return self.get_chars(start, curr)
@@ -287,9 +291,14 @@ class zEntry(gtk.Entry):
     def set_current_word(self, word, letter = None):
         curr = self.get_position()
 
-        if letter:              # pattern is offered, use it
+        if curr == 0:
+            # at start of entry
+            start = 0
+        elif letter:
+            # pattern is offered, use it
             start = self.__get_word_start(curr, letter)
-        else:                   # pattern not offered, use unquoted-space as separater
+        else:
+            # pattern not offered, use unquoted-space as separater
             start = zSplitWords(self.get_chars(0, curr)).index_split()[-1][0]
 
         self.select_region(start, curr)

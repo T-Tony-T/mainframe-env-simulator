@@ -1322,15 +1322,19 @@ class zComplete(gobject.GObject):
         # complete it
         self.__complete(self.widget.get_text(), self.__task)
 
-    def __menu_listener_active(self, widget, msg):
+    def __menu_listener_active(self, listener, msg):
         curr_text = self.widget.get_text()
 
-        # check for function key
+        # check for function key for entry
         key_binding = zStrokeListener.get_key_binding()
-        if msg['stroke'] in key_binding:
+        if msg['stroke'] in key_binding  and  key_binding[msg['stroke']] in self.widget.global_func_list:
             func = key_binding[msg['stroke']]
 
-            if func in [ 'complete', 'complete_list' ] and not self.__try_completing:
+            if func in [ 'complete', 'complete_list' ]:
+                if self.__try_completing:
+                    # already completing, ignore
+                    return
+
                 # complete again
                 self.__popdown_complete_list()
                 self.__complete(curr_text, self.__task)
@@ -1341,12 +1345,11 @@ class zComplete(gobject.GObject):
                     # no matches, or there exists an exact match
                     self.__try_completing = 1 # menu just popdown, set it to stand-by mode
 
-            elif func == 'delete_char_backward':
-                # backspace
+            else:
                 self.__popdown_complete_list()
                 self.__reset_complete_list()
-                self.widget.delete_backward('char')
-                self.__try_completing = 1 # backspace => no exact match
+                self.widget.default_func_callback[func]() # invoke the action
+                self.__try_completing = 1 # menu just popdown, set it to stand-by mode
             return
 
         # not complete
@@ -1389,11 +1392,12 @@ class zComplete(gobject.GObject):
 
         # setup key listener
         self.widget.block_listenning() # temporarily disable the old listener
-        self.menu.register_popdown_cb(self.widget.unblock_listenning)
         self.menu.listener = zStrokeListener()
         self.menu.listener.listen_on(self.menu)
         self.menu.listener.listen_on(self.widget)
         self.menu.listener_sig = self.menu.listener.connect('z_activate', self.__menu_listener_active)
+
+        self.menu.register_popdown_cb(self.__on_popdown_callback)
 
         # fill the menu
         for indx in range(len(self.__comp_list)):
@@ -1413,10 +1417,15 @@ class zComplete(gobject.GObject):
 
     def __popdown_complete_list(self):
         self.menu.popdown()
+
+    def __on_popdown_callback(self):
         self.menu.listener.clear_all()
         if self.menu.listener.handler_is_connected(self.menu.listener_sig):
             self.menu.listener.disconnect(self.menu.listener_sig)
         self.menu = None
+
+        # restore old listener
+        self.widget.unblock_listenning()
 
 
     def __reset_complete_list(self):
