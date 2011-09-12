@@ -107,14 +107,14 @@ class zEdit(z_ABC, gtk.VBox):
         self.default_func_callback = {
             # although works in most cases, ugly behavior.
             # rebind (overrid) them by setting zEdit.func_callback_map beforehand
-            'buffer_open'    : lambda *arg: self.set_buffer(None, 'dir'),
-            'buffer_save'    : lambda *arg: self.save_buffer(self.active_buffer),
-            'buffer_save_as' : lambda *arg: self.save_buffer_as(self.active_buffer),
-            'buffer_close'   : lambda *arg: self.rm_buffer(self.active_buffer),
+            'buffer_open'    : lambda msg: self.set_buffer(None, 'dir'),
+            'buffer_save'    : lambda msg: self.save_buffer(self.active_buffer),
+            'buffer_save_as' : lambda msg: self.save_buffer_as(self.active_buffer),
+            'buffer_close'   : lambda msg: self.rm_buffer(self.active_buffer),
 
-            'tabbar_mode'    : lambda *arg: zEdit.toggle_tabbar_mode(),
-            'tabbar_prev'    : lambda *arg: self.switch_tab_to('prev'),
-            'tabbar_next'    : lambda *arg: self.switch_tab_to('next'),
+            'tabbar_mode'    : lambda msg: zEdit.toggle_tabbar_mode(),
+            'tabbar_prev'    : lambda msg: self.switch_tab_to('prev'),
+            'tabbar_next'    : lambda msg: self.switch_tab_to('next'),
             }
 
         if zEdit.func_callback_map:

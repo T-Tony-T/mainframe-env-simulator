@@ -141,7 +141,8 @@ class zEntry(gtk.Entry):
         super(zEntry, self).__init__()
 
         self.completer = zComplete(self)
-        self.listener = zStrokeListener()
+        self.__listener = zStrokeListener() # default listener
+        self.listener = self.__listener     # interface listener
 
         self.__selection_mark = None
         self.connect('move-cursor', self._sig_move_cursor)
@@ -151,42 +152,42 @@ class zEntry(gtk.Entry):
 
         # register callbacks for function bindings
         self.default_func_callback = {
-            'complete'              : lambda *arg: self.complete(),
-            'complete_list'         : lambda *arg: self.complete_list(),
+            'complete'              : lambda msg: self.complete(),
+            'complete_list'         : lambda msg: self.complete_list(),
 
-            'backward_char'         : lambda *arg: self.backward(       'char'),
-            'backward_delete_char'  : lambda *arg: self.backward_delete('char'),
-            'forward_char'          : lambda *arg: self.forward(        'char'),
-            'forward_delete_char'   : lambda *arg: self.forward_delete( 'char'),
+            'backward_char'         : lambda msg: self.backward(       'char'),
+            'backward_delete_char'  : lambda msg: self.backward_delete('char', msg),
+            'forward_char'          : lambda msg: self.forward(        'char'),
+            'forward_delete_char'   : lambda msg: self.forward_delete( 'char', msg),
 
-            'backward_word'         : lambda *arg: self.backward(       'word'),
-            'backward_delete_word'  : lambda *arg: self.backward_delete('word'),
-            'forward_word'          : lambda *arg: self.forward(        'word'),
-            'forward_delete_word'   : lambda *arg: self.forward_delete( 'word'),
+            'backward_word'         : lambda msg: self.backward(       'word'),
+            'backward_delete_word'  : lambda msg: self.backward_delete('word', msg),
+            'forward_word'          : lambda msg: self.forward(        'word'),
+            'forward_delete_word'   : lambda msg: self.forward_delete( 'word', msg),
 
-            'backward_line'         : lambda *arg: self.backward(       'line'),
-            'backward_delete_line'  : lambda *arg: self.backward_delete('line'),
-            'forward_line'          : lambda *arg: self.forward(        'line'),
-            'forward_delete_line'   : lambda *arg: self.forward_delete( 'line'),
+            'backward_line'         : lambda msg: self.backward(       'line'),
+            'backward_delete_line'  : lambda msg: self.backward_delete('line', msg),
+            'forward_line'          : lambda msg: self.forward(        'line'),
+            'forward_delete_line'   : lambda msg: self.forward_delete( 'line', msg),
 
-            'backward_para'         : lambda *arg: self.backward(       'para'),
-            'backward_delete_para'  : lambda *arg: self.backward_delete('para'),
-            'forward_para'          : lambda *arg: self.forward(        'para'),
-            'forward_delete_para'   : lambda *arg: self.forward_delete( 'para'),
+            'backward_para'         : lambda msg: self.backward(       'para'),
+            'backward_delete_para'  : lambda msg: self.backward_delete('para', msg),
+            'forward_para'          : lambda msg: self.forward(        'para'),
+            'forward_delete_para'   : lambda msg: self.forward_delete( 'para', msg),
 
-            'kill_region'           : lambda *arg: self.kill_ring_manip('kill'),
-            'kill_ring_save'        : lambda *arg: self.kill_ring_manip('save'),
-            'kill_ring_yank'        : lambda *arg: self.kill_ring_manip('yank'),
-            'kill_ring_yank_pop'    : lambda *arg: self.kill_ring_manip('ypop'),
+            'kill_region'           : lambda msg: self.kill_ring_manip('kill', msg),
+            'kill_ring_save'        : lambda msg: self.kill_ring_manip('save', msg),
+            'kill_ring_yank'        : lambda msg: self.kill_ring_manip('yank', msg),
+            'kill_ring_yank_pop'    : lambda msg: self.kill_ring_manip('ypop', msg),
 
-            'set_mark_command'      : lambda *arg: self.set_mark(),
-            'set_mark_prepend'      : lambda *arg: self.set_mark(append = 'left'),
-            'set_mark_prepend_line' : lambda *arg: self.set_mark(append = 'up'),
-            'set_mark_append'       : lambda *arg: self.set_mark(append = 'right'),
-            'set_mark_append_line'  : lambda *arg: self.set_mark(append = 'down'),
+            'set_mark_command'      : lambda msg: self.set_mark(),
+            'set_mark_prepend'      : lambda msg: self.set_mark(append = 'left'),
+            'set_mark_prepend_line' : lambda msg: self.set_mark(append = 'up'),
+            'set_mark_append'       : lambda msg: self.set_mark(append = 'right'),
+            'set_mark_append_line'  : lambda msg: self.set_mark(append = 'down'),
             }
         for (func, cb) in self.default_func_callback.iteritems():
-            self.listener.register_func_callback(func, cb)
+            self.__listener.register_func_callback(func, cb)
 
         self.connect('button-release-event', self._sig_button_release)
 
@@ -228,20 +229,23 @@ class zEntry(gtk.Entry):
             self.completer.set_completion_task(task)
 
 
+    def is_alternative_listenning(self):
+        return self.__listener != self.listener
+
     def is_listenning(self):
-        return self.listener.is_listenning_on(self)
+        return self.__listener.is_listenning_on(self)
 
     def block_listenning(self):
-        self.listener.block_listenning(self)
+        self.__listener.block_listenning(self)
 
     def unblock_listenning(self):
-        self.listener.unblock_listenning(self)
+        self.__listener.unblock_listenning(self)
 
     def listen_on_task(self, task = None, init_widget = None):
-        self.listener.listen_on(self, task, init_widget)
+        self.__listener.listen_on(self, task, init_widget)
 
     def listen_off(self):
-        self.listener.listen_off(self)
+        self.__listener.listen_off(self)
 
 
     def insert_text(self, text):
@@ -299,25 +303,25 @@ class zEntry(gtk.Entry):
 
         # enable/disable the editor related function bindings
         for func in zEntry.global_func_list:
-            self.listener.set_func_enabled(func, setting)
+            self.__listener.set_func_enabled(func, setting)
     ### end of overridden function definition
 
 
     ### editor related API
-    def backward(self, task = 'char'):
+    def backward(self, task):
         self.set_position(self.__backward(task, extend_selection = True))
 
-    def backward_delete(self, task = 'char'):
+    def backward_delete(self, task, msg):
         target_pos = self.__backward(task)
         if task != 'char':
             zKillRing.kill(self.get_chars(target_pos, self.get_position()))
         self.delete_text(                 target_pos, self.get_position())
         self.unset_mark()
 
-    def forward(self, task = 'char'):
+    def forward(self, task):
         self.set_position(self.__forward(task, extend_selection = True))
 
-    def forward_delete(self, task = 'char'):
+    def forward_delete(self, task, msg):
         target_pos = self.__forward(task)
         if task != 'char':
             zKillRing.kill(self.get_chars(self.get_position(), target_pos))
@@ -325,7 +329,7 @@ class zEntry(gtk.Entry):
         self.unset_mark()
 
 
-    def kill_ring_manip(self, task):
+    def kill_ring_manip(self, task, msg):
         kr = zKillRing()
 
         if task in [ 'kill', 'save' ]:
@@ -350,18 +354,21 @@ class zEntry(gtk.Entry):
             else:
                 self.__prev_yank_bounds = ( )
         else:
-            yanked_text = kr.circulate_resurrection()
+            if msg['prev_cmd'] in [ 'kill_ring_yank', 'kill_ring_yank_pop' ]:
+                yanked_text = kr.circulate_resurrection()
 
-            if yanked_text:
-                self.delete_text(* self.__prev_yank_bounds)
+                if yanked_text:
+                    self.delete_text(* self.__prev_yank_bounds)
 
-                start_pos = self.get_position()
-                self.insert_text(yanked_text)
-                end_pos   = self.get_position()
+                    start_pos = self.get_position()
+                    self.insert_text(yanked_text)
+                    end_pos   = self.get_position()
 
-                self.__prev_yank_bounds = ( start_pos, end_pos )
+                    self.__prev_yank_bounds = ( start_pos, end_pos )
+                else:
+                    self.__prev_yank_bounds = ( )
             else:
-                self.__prev_yank_bounds = ( )
+                self.__listener.invalidate_curr_cmd()
 
         self.unset_mark()
 
@@ -1062,49 +1069,50 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         # set up stroke listener
         self.completer = zComplete(self)
-        self.listener = zStrokeListener()
+        self.__listener = zStrokeListener() # default listener
+        self.listener = self.__listener     # interface listener
 
         # customize proporties
         self.set_editable(True) # default editable
 
         # register callbacks for function bindings
         self.default_func_callback = {
-            'complete'              : lambda *arg: self.complete(),
-            'complete_list'         : lambda *arg: self.complete_list(),
+            'complete'              : lambda msg: self.complete(),
+            'complete_list'         : lambda msg: self.complete_list(),
 
-            'backward_char'         : lambda *arg: self.backward(       'char'),
-            'backward_delete_char'  : lambda *arg: self.backward_delete('char'),
-            'forward_char'          : lambda *arg: self.forward(        'char'),
-            'forward_delete_char'   : lambda *arg: self.forward_delete( 'char'),
+            'backward_char'         : lambda msg: self.backward(       'char'),
+            'backward_delete_char'  : lambda msg: self.backward_delete('char', msg),
+            'forward_char'          : lambda msg: self.forward(        'char'),
+            'forward_delete_char'   : lambda msg: self.forward_delete( 'char', msg),
 
-            'backward_word'         : lambda *arg: self.backward(       'word'),
-            'backward_delete_word'  : lambda *arg: self.backward_delete('word'),
-            'forward_word'          : lambda *arg: self.forward(        'word'),
-            'forward_delete_word'   : lambda *arg: self.forward_delete( 'word'),
+            'backward_word'         : lambda msg: self.backward(       'word'),
+            'backward_delete_word'  : lambda msg: self.backward_delete('word', msg),
+            'forward_word'          : lambda msg: self.forward(        'word'),
+            'forward_delete_word'   : lambda msg: self.forward_delete( 'word', msg),
 
-            'backward_line'         : lambda *arg: self.backward(       'line'),
-            'backward_delete_line'  : lambda *arg: self.backward_delete('line'),
-            'forward_line'          : lambda *arg: self.forward(        'line'),
-            'forward_delete_line'   : lambda *arg: self.forward_delete( 'line'),
+            'backward_line'         : lambda msg: self.backward(       'line'),
+            'backward_delete_line'  : lambda msg: self.backward_delete('line', msg),
+            'forward_line'          : lambda msg: self.forward(        'line'),
+            'forward_delete_line'   : lambda msg: self.forward_delete( 'line', msg),
 
-            'backward_para'         : lambda *arg: self.backward(       'para'),
-            'backward_delete_para'  : lambda *arg: self.backward_delete('para'),
-            'forward_para'          : lambda *arg: self.forward(        'para'),
-            'forward_delete_para'   : lambda *arg: self.forward_delete( 'para'),
+            'backward_para'         : lambda msg: self.backward(       'para'),
+            'backward_delete_para'  : lambda msg: self.backward_delete('para', msg),
+            'forward_para'          : lambda msg: self.forward(        'para'),
+            'forward_delete_para'   : lambda msg: self.forward_delete( 'para', msg),
 
-            'kill_region'           : lambda *arg: self.kill_ring_manip('kill'),
-            'kill_ring_save'        : lambda *arg: self.kill_ring_manip('save'),
-            'kill_ring_yank'        : lambda *arg: self.kill_ring_manip('yank'),
-            'kill_ring_yank_pop'    : lambda *arg: self.kill_ring_manip('ypop'),
+            'kill_region'           : lambda msg: self.kill_ring_manip('kill', msg),
+            'kill_ring_save'        : lambda msg: self.kill_ring_manip('save', msg),
+            'kill_ring_yank'        : lambda msg: self.kill_ring_manip('yank', msg),
+            'kill_ring_yank_pop'    : lambda msg: self.kill_ring_manip('ypop', msg),
 
-            'set_mark_command'      : lambda *arg: self.set_mark(),
-            'set_mark_prepend'      : lambda *arg: self.set_mark(append = 'left'),
-            'set_mark_prepend_line' : lambda *arg: self.set_mark(append = 'up'),
-            'set_mark_append'       : lambda *arg: self.set_mark(append = 'right'),
-            'set_mark_append_line'  : lambda *arg: self.set_mark(append = 'down'),
+            'set_mark_command'      : lambda msg: self.set_mark(),
+            'set_mark_prepend'      : lambda msg: self.set_mark(append = 'left'),
+            'set_mark_prepend_line' : lambda msg: self.set_mark(append = 'up'),
+            'set_mark_append'       : lambda msg: self.set_mark(append = 'right'),
+            'set_mark_append_line'  : lambda msg: self.set_mark(append = 'down'),
             }
         for (func, cb) in self.default_func_callback.iteritems():
-            self.listener.register_func_callback(func, cb)
+            self.__listener.register_func_callback(func, cb)
 
         # connect overridden signals
         self.connect('button-press-event',   self._sig_button_press)
@@ -1228,20 +1236,23 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             self.completer.set_completion_task(task)
 
 
+    def is_alternative_listenning(self):
+        return self.__listener != self.listener
+
     def is_listenning(self):
-        return self.listener.is_listenning_on(self)
+        return self.__listener.is_listenning_on(self)
 
     def block_listenning(self):
-        self.listener.block_listenning(self)
+        self.__listener.block_listenning(self)
 
     def unblock_listenning(self):
-        self.listener.unblock_listenning(self)
+        self.__listener.unblock_listenning(self)
 
     def listen_on_task(self, task = None, init_widget = None):
-        self.listener.listen_on(self, task, init_widget)
+        self.__listener.listen_on(self, task, init_widget)
 
     def listen_off(self):
-        self.listener.listen_off(self)
+        self.__listener.listen_off(self)
 
 
     def insert_text(self, text):
@@ -1329,7 +1340,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         # enable/disable the editor related function bindings
         for func in zTextView.global_func_list:
-            self.listener.set_func_enabled(func, setting)
+            self.__listener.set_func_enabled(func, setting)
 
 
     def place_cursor(self, where):
@@ -1339,20 +1350,20 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### editor related API
-    def backward(self, task = 'char'):
+    def backward(self, task):
         self.place_cursor(self.__backward(task, extend_selection = True))
 
-    def backward_delete(self, task = 'char'):
+    def backward_delete(self, task, msg):
         target_iter = self.__backward(task)
         if task != 'char':
             zKillRing.kill(self.disp_buff.get_text(target_iter, self.get_cursor_iter()))
         self.disp_buff.delete(                     target_iter, self.get_cursor_iter())
         self.unset_mark()
 
-    def forward(self, task = 'char'):
+    def forward(self, task):
         self.place_cursor(self.__forward(task, extend_selection = True))
 
-    def forward_delete(self, task = 'char'):
+    def forward_delete(self, task, msg):
         target_iter = self.__forward(task)
         if task != 'char':
             zKillRing.kill(self.disp_buff.get_text(self.get_cursor_iter(), target_iter))
@@ -1367,7 +1378,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             iterator.forward_to_line_end()
 
 
-    def kill_ring_manip(self, task):
+    def kill_ring_manip(self, task, msg):
         kr = zKillRing()
 
         if task in [ 'kill', 'save' ]:
@@ -1377,6 +1388,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
                 if task == 'kill':
                     self.disp_buff.delete(* sel)
+            else:
+                self.get_editor().get_last_line().set_text('', '(mark is not set now)')
 
         elif task == 'yank':
             yanked_text = kr.resurrect()
@@ -1390,21 +1403,25 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             else:
                 self.__prev_yank_bounds = ( )
         else:
-            yanked_text = kr.circulate_resurrection()
+            if msg['prev_cmd'] in [ 'kill_ring_yank', 'kill_ring_yank_pop' ]:
+                yanked_text = kr.circulate_resurrection()
 
-            if yanked_text:
-                self.disp_buff.delete(
-                    self.disp_buff.get_iter_at_offset(self.__prev_yank_bounds[0]),
-                    self.disp_buff.get_iter_at_offset(self.__prev_yank_bounds[1])
-                    )
+                if yanked_text:
+                    self.disp_buff.delete(
+                        self.disp_buff.get_iter_at_offset(self.__prev_yank_bounds[0]),
+                        self.disp_buff.get_iter_at_offset(self.__prev_yank_bounds[1])
+                        )
 
-                start_pos = self.get_cursor_iter().get_offset()
-                self.insert_text(yanked_text)
-                end_pos   = self.get_cursor_iter().get_offset()
+                    start_pos = self.get_cursor_iter().get_offset()
+                    self.insert_text(yanked_text)
+                    end_pos   = self.get_cursor_iter().get_offset()
 
-                self.__prev_yank_bounds = ( start_pos, end_pos )
+                    self.__prev_yank_bounds = ( start_pos, end_pos )
+                else:
+                    self.__prev_yank_bounds = ( )
             else:
-                self.__prev_yank_bounds = ( )
+                self.get_editor().get_last_line().set_text('', '(previous command was not a yank)')
+                self.__listener.invalidate_curr_cmd()
 
         self.unset_mark()
 

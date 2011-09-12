@@ -32,10 +32,10 @@ class zSplitWindow(z_ABC, gtk.Frame):
 
     def func_callback_map_generator(self, frame):
         rv_dic = {
-            'window_split_horz'   : lambda *arg: self.window_split_horz(frame),
-            'window_split_vert'   : lambda *arg: self.window_split_vert(frame),
-            'window_delete'       : lambda *arg: self.window_delete(frame),
-            'window_delete_other' : lambda *arg: self.window_delete_other(frame),
+            'window_split_horz'   : lambda msg: self.window_split_horz(frame),
+            'window_split_vert'   : lambda msg: self.window_split_vert(frame),
+            'window_delete'       : lambda msg: self.window_delete(frame),
+            'window_delete_other' : lambda msg: self.window_delete_other(frame),
             }
         if zSplitWindow.func_callback_map:
             for (k, v) in zSplitWindow.func_callback_map.iteritems():

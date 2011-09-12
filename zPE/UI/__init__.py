@@ -18,12 +18,12 @@ class BaseFrame(object):
 
     def __init__(self):
         self.__global_key_binding_func = {
-            'prog_show_config'          : lambda *arg: ( self.config_window.open(), self.lastline.clear(), ),
-            'prog_show_error'           : lambda *arg: ( self.err_console.open(),   self.lastline.clear(), ),
-            'prog_quit'                 : lambda *arg: self._sig_quit(None),
+            'prog_show_config'          : lambda msg: ( self.config_window.open(), self.lastline.clear(), ),
+            'prog_show_error'           : lambda msg: ( self.err_console.open(),   self.lastline.clear(), ),
+            'prog_quit'                 : lambda msg: self._sig_quit(None),
 
-            'zPE_submit'                : lambda *arg: self._sig_submit(None, 'direct'),
-#            'zPE_submit_with_JCL'       : lambda *arg: self._sig_submit(None, 'wrap'),
+            'zPE_submit'                : lambda msg: self._sig_submit(None, 'direct'),
+#            'zPE_submit_with_JCL'       : lambda msg: self._sig_submit(None, 'wrap'),
             }
 
         # enable the global bindings for all listeners
@@ -37,17 +37,17 @@ class BaseFrame(object):
 
         # override the default behavior of the buffer manipulation
         zComp.zEdit.func_callback_map = {
-            'buffer_open'               : lambda *arg: self._sig_buff_manip(None, 'open'),
-            'buffer_save'               : lambda *arg: self._sig_buff_manip(None, 'save'),
-            'buffer_save_as'            : lambda *arg: self._sig_buff_manip(None, 'save-as'),
-            'buffer_close'              : lambda *arg: self._sig_buff_manip(None, 'close'),
+            'buffer_open'               : lambda msg: self._sig_buff_manip(None, 'open'),
+            'buffer_save'               : lambda msg: self._sig_buff_manip(None, 'save'),
+            'buffer_save_as'            : lambda msg: self._sig_buff_manip(None, 'save-as'),
+            'buffer_close'              : lambda msg: self._sig_buff_manip(None, 'close'),
             }
         # override the default behavior of the split-window manipulation
         zComp.zSplitWindow.func_callback_map = {
-            'window_split_horz'         : lambda *arg: self._sig_sw_manip(None, 'split_horz'),
-            'window_split_vert'         : lambda *arg: self._sig_sw_manip(None, 'split_vert'),
-            'window_delete'             : lambda *arg: self._sig_sw_manip(None, 'delete'),
-            'window_delete_other'       : lambda *arg: self._sig_sw_manip(None, 'delete_other'),
+            'window_split_horz'         : lambda msg: self._sig_sw_manip(None, 'split_horz'),
+            'window_split_vert'         : lambda msg: self._sig_sw_manip(None, 'split_vert'),
+            'window_delete'             : lambda msg: self._sig_sw_manip(None, 'delete'),
+            'window_delete_other'       : lambda msg: self._sig_sw_manip(None, 'delete_other'),
             }
 
         ### redirect STDOUT and STDERR to the error console

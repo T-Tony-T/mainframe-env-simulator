@@ -338,9 +338,9 @@ def parse_key_binding(key_sequence, style):
 class zStrokeListener(gobject.GObject):
     '''
     A stroke parser that listens all key stroke and process them
-    according to the pre-defined rules ()
+    according to the pre-defined rules.
 
-    lookup structure:
+    lookup strategy:
         0) listen on activate key and cancel key. if either is found, emit
            the corresponding signal with message 'Accept' / 'Quit'
 
@@ -369,16 +369,20 @@ class zStrokeListener(gobject.GObject):
               is considered "disabled"; emit 'z_cancel' with message
               'function is disabled'
 
-        either 'z_activate' or 'z_cancel' require the callback to be:
+        either 'z_activate' or 'z_cancel' require the (connected) callback to be:
             def callback(widget, msg, *data)
+        and the registered (binded) callback to be:
+            def callback(msg)
         where msg is a dict containing all messages generated during
-        the listenning process
+        the listenning process.
 
         keys in msg:
           'style'           : the current key-binding style
 
           'widget'          : the widget that cause the signal to be emitted
           'stroke'          : the stroke that cause the signal to be emitted
+
+          'prev_cmd'        : the immidiate precedent command of the current one
 
           'return_msg'      : the message the listener returned;
                               with 'z_cancel', it's usually a warn / err msg
@@ -408,7 +412,7 @@ class zStrokeListener(gobject.GObject):
     def do_z_activate(self, msg):
         '''register self.__z_activate_callback to be the callback before emit 'z_activate' signal'''
         if self.__z_activate_callback:
-            self.__z_activate_callback()
+            self.__z_activate_callback(msg)
 
 
     global_is_enabled_func = {
@@ -485,6 +489,8 @@ class zStrokeListener(gobject.GObject):
             }
 
         self.__z_activate_callback = None
+        self.__z_prev_activate_cmd = None # see obj.invalidate_cmd() for more info
+
 
         # local vars for the listener
         self.__escaping = False
@@ -617,6 +623,16 @@ class zStrokeListener(gobject.GObject):
             return False
 
 
+    def invalidate_curr_cmd(self):
+        self.__z_prev_activate_cmd = -1 # this value is not possible to occur under normal conditions
+
+    def __update_last_cmd(self, cmd):
+        if self.__z_prev_activate_cmd != -1:
+            self.__z_prev_activate_cmd = cmd
+        else:
+            self.__z_prev_activate_cmd = None
+
+
     # internal signals
     def _sig_kp_focus_out(self, widget, event):
         '''see _sig_key_pressed() [below] for more information'''
@@ -631,6 +647,7 @@ class zStrokeListener(gobject.GObject):
             self.__kp_focus_out_rm()
 
             self.emit('z_cancel', self.__build_msg(widget, 'focus', 'Quit'))
+            self.__update_last_cmd('Quit')
 
     def __kp_focus_out_rm(self):
         '''see _sig_key_pressed() [below] for more information'''
@@ -698,6 +715,7 @@ class zStrokeListener(gobject.GObject):
                 # init_widget not set, or in regular mode (non-mx-mode)
                 init_widget = widget
             self.emit('z_cancel', self.__build_msg(init_widget, stroke, 'Quit'))
+            self.__update_last_cmd('Quit')
 
             # on cancelling, reset all modes
             self.__combo_entering = False
@@ -748,6 +766,9 @@ class zStrokeListener(gobject.GObject):
                             init_widget, stroke, '({0}: no such function)'.format(self.__entry_content)
                             ))
 
+                # record the function the init_widget is trying to invoke
+                init_widget.listener.__update_last_cmd(self.__entry_content)
+
                 # M-x cmd emitted, reset entering mode
                 self.__entry_entering = False
                 self.__entry_content  = ''
@@ -768,6 +789,7 @@ class zStrokeListener(gobject.GObject):
                      (task == 'path')
                      ):
                     self.emit('z_activate', self.__build_msg(widget, stroke, 'Accept'))
+                    self.__update_last_cmd('Activate')
 
                 elif self.__is_enabled_func('complete_list'):
                     # list completion is enabled, execute it if mapped
@@ -887,6 +909,9 @@ class zStrokeListener(gobject.GObject):
                             widget, stroke, '(function `{0}` not implemented)'.format(key_binding[stroke])
                             ))
 
+                # record the function the widget is trying to invoke
+                self.__update_last_cmd(key_binding[stroke])
+
                 # cmd emitted, reset combo mode
                 self.__combo_entering = False
                 self.__combo_content  = ''
@@ -923,12 +948,14 @@ class zStrokeListener(gobject.GObject):
                             return True
                         else:
                             # not regular keypress nor space, pass it to the widget
+                            self.__update_last_cmd(None)
                             return False
                     else:
                         # has previous combo, eat the current combo
                         self.emit('z_cancel', self.__build_msg(
                                 widget, stroke, stroke + ' is undefined!'
                                 ))
+                        self.__update_last_cmd(None)
 
                         # cmd terminated, reset combo mode
                         self.__combo_entering = False
@@ -962,6 +989,9 @@ class zStrokeListener(gobject.GObject):
                     self.emit('z_cancel', self.__build_msg(
                             widget, stroke, '(function `{0}` not implemented)'.format(key_binding[stroke])
                             ))
+                # record the function the widget is trying to invoke
+                self.__update_last_cmd(key_binding[stroke])
+
                 return True
             else:
                 if self.__is_printable(stroke):
@@ -980,6 +1010,7 @@ class zStrokeListener(gobject.GObject):
                     return True
                 else:
                     # not regular keypress nor space, pass it to the widget
+                    self.__update_last_cmd(None)
                     return False
 
         raise LookupError('{0}: key stroke not captured or processed.\n\tPlease report this as a bug.'.format(stroke))
@@ -993,6 +1024,7 @@ class zStrokeListener(gobject.GObject):
 
             'widget'            : widget,
             'stroke'            : stroke,
+            'prev_cmd'          : self.__z_prev_activate_cmd,
 
             'return_msg'        : return_msg,
             }
@@ -1016,6 +1048,9 @@ class zStrokeListener(gobject.GObject):
         if self.__entry_entering:
             # update the content backup
             self.__entry_content = widget.get_text()
+
+        # update prev_cmd
+        self.__update_last_cmd(None)
 
 
     def __is_enabled_func(self, func, local_list = None):
