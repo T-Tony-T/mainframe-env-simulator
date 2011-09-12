@@ -337,6 +337,8 @@ class zEntry(gtk.Entry):
                     self.delete_text(* sel)
 
         elif task == 'yank':
+            if self.get_has_selection():
+                self.insert_text('')
             yanked_text = kr.resurrect()
 
             if yanked_text:

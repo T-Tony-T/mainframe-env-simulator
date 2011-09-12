@@ -483,7 +483,10 @@ class zKillRing(object):
                 # put clipboard text into kill-ring
                 cls.kill(cls.__cb_clipboard_text)
 
-        return cls.__kill_ring[cls.__curr_corpse]
+        if cls.is_empty():
+            return None
+        else:
+            return cls.__kill_ring[cls.__curr_corpse]
 
     @classmethod
     def circulate_resurrection(cls):
