@@ -147,141 +147,160 @@ DEFAULT_FUNC_KEY_BIND = {
         },
 
     # tab manipulation; required by zEdit
-    'tabbar_mode'           : { # on / grouped / off
+    'tabbar_mode'           : {
         'emacs' : 'F7',
         'vi'    : '',
         'other' : 'F7',
         },
-    'tabbar_prev'           : { # will turn on tabbar automatically
+    'tabbar_prev'           : {
         'emacs' : 'C-Left',
         'vi'    : '',
         'other' : 'C-Left',
         },
-    'tabbar_next'           : { # will turn on tabbar automatically
+    'tabbar_next'           : {
         'emacs' : 'C-Right',
         'vi'    : '',
         'other' : 'C-Right',
         },
 
     # editor related functions; required by zTextView and zEntry
-    'complete'              : { # complete the current typing
+    'complete'              : {
         'emacs' : 'Tab',
         'vi'    : '',
         'other' : 'Tab',
         },
-    'complete_list'         : { # show completion list of the current typing;
-                                # whether set of not, two successive fail in complete will cause the list to show
+    'complete_list'         : {
         'emacs' : 'M-/',
         'vi'    : '',
         'other' : '',
         },
 
-    'backward_char'         : { # move cursor to prev char
+    'backward_char'         : {
         'emacs' : 'C-b',
         'vi'    : '',
         'other' : '',
         },
-    'backward_delete_char'  : { # delete prev char
+    'backward_delete_char'  : {
         'emacs' : 'BackSpace',
         'vi'    : '',
         'other' : 'BackSpace',
         },
-    'forward_char'          : { # move cursor to next char
+    'forward_char'          : {
         'emacs' : 'C-f',
         'vi'    : '',
         'other' : '',
         },
-    'forward_delete_char'   : { # delete next char
+    'forward_delete_char'   : {
         'emacs' : 'Delete',
         'vi'    : '',
         'other' : 'Delete',
         },
 
-    'backward_word'         : { # move cursor to start of current word, or prev word if not currently inside one
+    'backward_word'         : {
         'emacs' : 'M-b',
         'vi'    : '',
         'other' : '',
         },
-    'backward_delete_word'  : { # delete to start of current word, or delete prev word if not currently inside one
+    'backward_delete_word'  : {
         'emacs' : 'M-D',
         'vi'    : '',
         'other' : '',
         },
-    'forward_word'          : { # move cursor to end of current word, or next word if not currently inside one
+    'forward_word'          : {
         'emacs' : 'M-f',
         'vi'    : '',
         'other' : '',
         },
-    'forward_delete_word'   : { # delete to end of current word, or delete next word if not currently inside one
+    'forward_delete_word'   : {
         'emacs' : 'M-d',
         'vi'    : '',
         'other' : '',
         },
 
-    'backward_line'         : { # move cursor to start of current line
+    'backward_line'         : {
         'emacs' : 'C-a',
         'vi'    : '',
         'other' : '',
         },
-    'backward_delete_line'  : { # delete to start of current line
+    'backward_delete_line'  : {
         'emacs' : 'C-K',
         'vi'    : '',
         'other' : '',
         },
-    'forward_line'          : { # move cursor to end of current line
+    'forward_line'          : {
         'emacs' : 'C-e',
         'vi'    : '',
         'other' : '',
         },
-    'forward_delete_line'   : { # delete to end of current line, or delete current line if at line start,
-                                # or delete '\n' if at line end
+    'forward_delete_line'   : {
         'emacs' : 'C-k',
         'vi'    : '',
         'other' : '',
         },
 
-    'backward_para'         : { # move cursor to start of current para, or prev para if not in one or at para start
+    'backward_para'         : {
         'emacs' : 'M-{',
         'vi'    : '',
         'other' : '',
         },
-    'backward_delete_para'  : { # delete to start of current para, or delete prev para if not in one or at para start
+    'backward_delete_para'  : {
         'emacs' : 'M-K',
         'vi'    : '',
         'other' : '',
         },
-    'forward_para'          : { # move cursor to end of current para, or next para if not in one or at para end
+    'forward_para'          : {
         'emacs' : 'M-}',
         'vi'    : '',
         'other' : '',
         },
-    'forward_delete_para'   : { # delete to end of curr para, or delete next para if not in one or at para end
+    'forward_delete_para'   : {
         'emacs' : 'M-k',
         'vi'    : '',
         'other' : '',
         },
 
-    'set_mark_command'      : { # set selection mark at current cursor position
+    'kill_region'           : {
+        'emacs' : 'C-w',
+        'vi'    : '',
+        'other' : 'C-x',
+        },
+    'kill_ring_save'        : {
+        'emacs' : 'M-w',
+        'vi'    : '',
+        'other' : 'C-c',
+        },
+    'kill_ring_yank'        : {
+        'emacs' : 'C-y',
+        'vi'    : '',
+        'other' : 'C-v',
+        },
+    'kill_ring_yank_pop'    : {
+        'emacs' : 'M-y',
+        'vi'    : '',
+        'other' : '',
+        },
+
+    'set_mark_command'      : {
         'emacs' : 'C-@',
         'vi'    : '',
         'other' : '',
         },
-    'set_mark_prepend'      : { # set selection mark on initial stroke, prepend 1 char to selection on successive strokes
+    'set_mark_prepend'      : {
         'emacs' : 'S-Left',
         'vi'    : '',
         'other' : 'S-Left',
         },
-    'set_mark_prepend_line' : { # set selection mark on initial stroke, prepend 1 line to selection on successive strokes
+    'set_mark_prepend_line' : {
         'emacs' : 'S-Up',
         'vi'    : '',
         'other' : 'S-Up',
         },
-    'set_mark_append'       : { # set selection mark on initial stroke, append 1 char to selection on successive strokes
+    'set_mark_append'       : {
         'emacs' : 'S-Right',
         'vi'    : '',
         'other' : 'S-Right',
         },
-    'set_mark_append_line'  : { # set selection mark on initial stroke, append 1 line to selection on successive strokes
+    'set_mark_append_line'  : {
         'emacs' : 'S-Down',
         'vi'    : '',
         'other' : 'S-Down',

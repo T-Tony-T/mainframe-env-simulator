@@ -401,6 +401,105 @@ class zColorPickerButton(gtk.Frame):
 
 
 ######## ######## ######## ######## ########
+########         zKillRing          ########
+######## ######## ######## ######## ########
+class zKillRing(object):
+    '''the kill-ring widget'''
+    @classmethod
+    def __init_kill_ring(cls):
+        cls.__curr_corpse = None # for pop (resurrect)
+        cls.__curr_grave  = 0    # for push (kill)
+
+        cls.__kill_ring = [ None ] * cls.__capacity
+
+
+    __capacity  = 16
+
+    # the following should be exactly the same as cls.__init_kill_ring()
+    __curr_corpse = None        # for pop (resurrect)
+    __curr_grave  = 0           # for push (kill)
+
+    __kill_ring = [ None ] * __capacity
+    # the above should be exactly the same as cls.__init_kill_ring()
+
+    __cb_primary   = gtk.clipboard_get('PRIMARY')
+    __cb_clipboard = gtk.clipboard_get('CLIPBOARD')
+
+    # record the current clipboards' content
+    __cb_primary_text   = __cb_primary.wait_for_text()
+    __cb_clipboard_text = __cb_clipboard.wait_for_text()
+
+
+    @classmethod
+    def is_empty(cls):
+        return None == cls.__curr_corpse
+
+
+    @classmethod
+    def get_kill_ring_length(cls):
+        return cls.__capacity
+
+    @classmethod
+    def set_kill_ring_length(cls, length):
+        cls.__capacity  = length
+        cls.__init_kill_ring()
+
+
+    @classmethod
+    def kill(cls, text):
+        if text:
+            cls.__kill_ring[cls.__curr_grave] = text
+
+            # update indices
+            cls.__curr_corpse = cls.__curr_grave
+            cls.__curr_grave  = (cls.__curr_grave + 1) % cls.__capacity
+
+    @classmethod
+    def resurrect(cls):
+        # check update for clipboards
+        cb_primary_text   = cls.__cb_primary.wait_for_text()
+        cb_clipboard_text = cls.__cb_clipboard.wait_for_text()
+
+        if cb_primary_text and cb_primary_text != cls.__cb_primary_text:
+            cls.__cb_primary_text = cb_primary_text
+            cb_primary_changed = True
+        else:
+            cb_primary_changed = False
+
+        if cb_clipboard_text and cb_clipboard_text != cls.__cb_clipboard_text:
+            cls.__cb_clipboard_text = cb_clipboard_text
+            cb_clipboard_changed = True
+        else:
+            cb_clipboard_changed = False
+
+        # fetch clipboards' content if needed
+        if cls.is_empty() or cb_primary_changed or cb_clipboard_changed:
+            # kill-ring is empty, or clipboards' content changed
+            if cls.__cb_primary_text and (cls.is_empty or cb_primary_changed):
+                # put primary clipboard text into kill-ring
+                cls.kill(cls.__cb_primary_text)
+
+            elif cls.__cb_clipboard_text and (cls.is_empty or cb_clipboard_changed):
+                # put clipboard text into kill-ring
+                cls.kill(cls.__cb_clipboard_text)
+
+        return cls.__kill_ring[cls.__curr_corpse]
+
+    @classmethod
+    def circulate_resurrection(cls):
+        if not cls.is_empty():
+            # only if kill-ring is not empty
+            cls.__curr_corpse = (cls.__curr_corpse - 1) % cls.__capacity
+            while not cls.__kill_ring[cls.__curr_corpse]:
+                # skip empty slot
+                cls.__curr_corpse = (cls.__curr_corpse - 1) % cls.__capacity
+
+            return cls.resurrect()  # ought to contain something from kill-ring, not from clipboard
+        else:
+            return None
+
+
+######## ######## ######## ######## ########
 ########         zPopupMenu         ########
 ######## ######## ######## ######## ########
 
