@@ -446,6 +446,15 @@ class zKillRing(object):
 
 
     @classmethod
+    def append_killing(cls, text):
+        if text:
+            cls.__kill_ring[cls.__curr_corpse] = cls.__kill_ring[cls.__curr_corpse] + text
+
+    def prepend_killing(cls, text):
+        if text:
+            cls.__kill_ring[cls.__curr_corpse] = text + cls.__kill_ring[cls.__curr_corpse]
+
+    @classmethod
     def kill(cls, text):
         if text:
             cls.__kill_ring[cls.__curr_grave] = text

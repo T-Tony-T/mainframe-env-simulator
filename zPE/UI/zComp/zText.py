@@ -314,8 +314,14 @@ class zEntry(gtk.Entry):
     def backward_delete(self, task, msg):
         target_pos = self.__backward(task)
         if task != 'char':
-            zKillRing.kill(self.get_chars(target_pos, self.get_position()))
-        self.delete_text(                 target_pos, self.get_position())
+            text_to_kill = self.get_chars(target_pos, self.get_position())
+
+            if msg['prev_cmd'] == 'backward_delete_{0}'.format(task):
+                zKillRing.prepend_killing(text_to_kill)
+            else:
+                zKillRing.kill(text_to_kill)
+
+        self.delete_text(target_pos, self.get_position())
         self.unset_mark()
 
     def forward(self, task):
@@ -324,8 +330,14 @@ class zEntry(gtk.Entry):
     def forward_delete(self, task, msg):
         target_pos = self.__forward(task)
         if task != 'char':
-            zKillRing.kill(self.get_chars(self.get_position(), target_pos))
-        self.delete_text(                 self.get_position(), target_pos)
+            text_to_kill = self.get_chars(self.get_position(), target_pos)
+
+            if msg['prev_cmd'] == 'forward_delete_{0}'.format(task):
+                zKillRing.append_killing(text_to_kill)
+            else:
+                zKillRing.kill(text_to_kill)
+
+        self.delete_text(self.get_position(), target_pos)
         self.unset_mark()
 
 
@@ -1356,8 +1368,14 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
     def backward_delete(self, task, msg):
         target_iter = self.__backward(task)
         if task != 'char':
-            zKillRing.kill(self.disp_buff.get_text(target_iter, self.get_cursor_iter()))
-        self.disp_buff.delete(                     target_iter, self.get_cursor_iter())
+            text_to_kill = self.disp_buff.get_text(target_iter, self.get_cursor_iter())
+
+            if msg['prev_cmd'] == 'backward_delete_{0}'.format(task):
+                zKillRing.prepend_killing(text_to_kill)
+            else:
+                zKillRing.kill(text_to_kill)
+
+        self.disp_buff.delete(target_iter, self.get_cursor_iter())
         self.unset_mark()
 
     def forward(self, task):
@@ -1366,8 +1384,14 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
     def forward_delete(self, task, msg):
         target_iter = self.__forward(task)
         if task != 'char':
-            zKillRing.kill(self.disp_buff.get_text(self.get_cursor_iter(), target_iter))
-        self.disp_buff.delete(                     self.get_cursor_iter(), target_iter)
+            text_to_kill = self.disp_buff.get_text(self.get_cursor_iter(), target_iter)
+
+            if msg['prev_cmd'] == 'forward_delete_{0}'.format(task):
+                zKillRing.append_killing(text_to_kill)
+            else:
+                zKillRing.kill(text_to_kill)
+
+        self.disp_buff.delete(self.get_cursor_iter(), target_iter)
         self.unset_mark()
 
 
