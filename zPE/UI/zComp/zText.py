@@ -1272,7 +1272,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         elif event.button == 3:
             # right click
-            self.place_cursor(clicked_iter)
+            if not self.get_has_selection():
+                self.place_cursor(clicked_iter)
             menu = zPopupMenu()
 
             mi_cut = gtk.MenuItem('Cu_t')
