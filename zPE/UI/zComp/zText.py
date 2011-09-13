@@ -9,7 +9,7 @@ import io_encap
 
 from zBase import z_ABC, zTheme
 from zStrokeParser import zStrokeListener, zComplete
-from zWidget import zKillRing
+from zWidget import zKillRing, zPopupMenu
 
 import os, sys, re
 import pygtk
@@ -189,6 +189,7 @@ class zEntry(gtk.Entry):
         for (func, cb) in self.default_func_callback.iteritems():
             self.__listener.register_func_callback(func, cb)
 
+        self.connect('button-press-event',   self._sig_button_press)
         self.connect('button-release-event', self._sig_button_release)
 
 
@@ -198,6 +199,63 @@ class zEntry(gtk.Entry):
         self.select_region(curr_pos, curr_pos) # move cursor to the actual cursor position
         return False           # pass the rest to the default handler
 
+
+    def _sig_button_press(self, widget, event):
+        if event.button == 1:
+            # left click
+            if event.type == gtk.gdk.BUTTON_PRESS:
+                # single click
+                return False    # pass to the default handler
+
+            elif event.type == gtk.gdk._2BUTTON_PRESS:
+                # double click, select word
+                self.unset_mark()
+                return False    # pass to the default handler
+
+            elif event.type == gtk.gdk._3BUTTON_PRESS:
+                # triple click, select line
+                self.unset_mark()
+                return False    # pass to the default handler
+
+        elif event.button == 2:
+            # middle click
+            self.kill_ring_manip('yank', None)
+
+        elif event.button == 3:
+            # right click
+            menu = zPopupMenu()
+
+            mi_cut = gtk.MenuItem('Cu_t')
+            menu.append(mi_cut)
+            if self.get_has_selection():
+                mi_cut.connect('activate', lambda *arg: self.kill_ring_manip('kill', None))
+            else:
+                mi_cut.set_property('sensitive', False)
+
+            mi_copy = gtk.MenuItem('_Copy')
+            menu.append(mi_copy)
+            if self.get_has_selection():
+                mi_copy.connect('activate', lambda *arg: self.kill_ring_manip('save', None))
+            else:
+                mi_copy.set_property('sensitive', False)
+
+            mi_paste = gtk.MenuItem('_Paste')
+            menu.append(mi_paste)
+            if zKillRing.resurrect():
+                mi_paste.connect('activate', lambda *arg: self.kill_ring_manip('yank', None))
+            else:
+                mi_paste.set_property('sensitive', False)
+
+            mi_select_all = gtk.MenuItem('Select _All')
+            menu.append(mi_select_all)
+            mi_select_all.connect('activate', lambda *arg: (self.set_mark(0), self.set_position(-1)))
+
+            menu.show_all()
+            menu.popup(None, None, None, event.button, event.time)
+
+            self.emit('populate_popup', menu)
+
+        return True             # stop the default handler
 
     def _sig_button_release(self, widget, event):
         if event.button == 1:
@@ -211,7 +269,7 @@ class zEntry(gtk.Entry):
                     self.set_mark(sel[0])
                     self.set_position(sel[1])
 
-        return False
+        self.__listener.invalidate_curr_cmd()
     ### end of overridden signal definition
 
 
@@ -438,10 +496,10 @@ class zEntry(gtk.Entry):
         if not append:
             self.unset_mark()
 
-        if not where:
+        if where == None:
             where = self.get_position()
 
-        if not self.get_mark():
+        if not self.get_has_selection():
             self.__selection_mark = where
 
         # for set_mark_*
@@ -460,7 +518,7 @@ class zEntry(gtk.Entry):
             self.set_position(where)
 
     def unset_mark(self):
-        if self.get_mark():
+        if self.get_has_selection():
             curr_pos = self.get_position()
             self.select_region(curr_pos, curr_pos)
             self.__selection_mark = None
@@ -567,7 +625,7 @@ class zEntry(gtk.Entry):
 
 
     def __watch_selection(self):
-        if self.get_mark():
+        if self.get_has_selection():
             self.select_region(self.get_mark(), self.get_position())
 
         return True             # keep watching until dead
@@ -1172,23 +1230,23 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     def _sig_button_press(self, widget, event):
+        clicked_iter = self.get_iter_at_location(
+            * self.window_to_buffer_coords(gtk.TEXT_WINDOW_TEXT, int(event.x), int(event.y))
+              )
+
         if event.button == 1:
             # left click
-            new_iter = self.get_iter_at_location(
-                * self.window_to_buffer_coords(gtk.TEXT_WINDOW_TEXT, int(event.x), int(event.y))
-                  )
-
             if event.type == gtk.gdk.BUTTON_PRESS:
                 # single click
-                self.place_cursor(new_iter)
+                self.place_cursor(clicked_iter)
 
-                self.__mouse_motion_init_pos = new_iter # used to initiate selection mark
+                self.__mouse_motion_init_pos = clicked_iter # used to initiate selection mark
                 self.handler_unblock(self.mouse_motion_id)
 
             elif event.type == gtk.gdk._2BUTTON_PRESS:
                 # double click, select word
-                start_iter = new_iter.copy()
-                end_iter   = new_iter.copy()
+                start_iter = clicked_iter.copy()
+                end_iter   = clicked_iter.copy()
 
                 start_iter.backward_word_start()
                 end_iter.forward_word_end()
@@ -1198,8 +1256,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
             elif event.type == gtk.gdk._3BUTTON_PRESS:
                 # triple click, select line
-                start_iter = new_iter.copy()
-                end_iter   = new_iter.copy()
+                start_iter = clicked_iter.copy()
+                end_iter   = clicked_iter.copy()
 
                 start_iter.set_line_offset(0)
                 self.forward_to_line_end(end_iter)
@@ -1207,7 +1265,50 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 self.set_mark(start_iter)
                 self.place_cursor(end_iter)
 
-        return False
+        elif event.button == 2:
+            # middle click
+            self.place_cursor(clicked_iter)
+            self.kill_ring_manip('yank', None)
+
+        elif event.button == 3:
+            # right click
+            self.place_cursor(clicked_iter)
+            menu = zPopupMenu()
+
+            mi_cut = gtk.MenuItem('Cu_t')
+            menu.append(mi_cut)
+            if self.get_has_selection():
+                mi_cut.connect('activate', lambda *arg: self.kill_ring_manip('kill', None))
+            else:
+                mi_cut.set_property('sensitive', False)
+
+            mi_copy = gtk.MenuItem('_Copy')
+            menu.append(mi_copy)
+            if self.get_has_selection():
+                mi_copy.connect('activate', lambda *arg: self.kill_ring_manip('save', None))
+            else:
+                mi_copy.set_property('sensitive', False)
+
+            mi_paste = gtk.MenuItem('_Paste')
+            menu.append(mi_paste)
+            if zKillRing.resurrect():
+                mi_paste.connect('activate', lambda *arg: self.kill_ring_manip('yank', None))
+            else:
+                mi_paste.set_property('sensitive', False)
+
+            mi_select_all = gtk.MenuItem('Select _All')
+            menu.append(mi_select_all)
+            mi_select_all.connect('activate', lambda *arg: (
+                    self.set_mark(self.disp_buff.get_end_iter()),
+                    self.place_cursor(self.disp_buff.get_start_iter()),
+                    ))
+
+            menu.show_all()
+            menu.popup(None, None, None, event.button, event.time)
+
+            self.emit('populate_popup', menu)
+
+        return True             # stop the default handler
 
     def _sig_mouse_motion(self, widget, event):
         new_iter = self.get_iter_at_location(
@@ -1215,12 +1316,10 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
               )
         self.place_cursor(new_iter)
 
-        if ( not self.get_mark()  and                           # mark not set already
+        if ( not self.get_has_selection()  and                  # no selection was set
              not new_iter.equal(self.__mouse_motion_init_pos)   # position changed
              ):
             self.set_mark(self.__mouse_motion_init_pos)
-
-        return False
 
     def _sig_button_release(self, widget, event):
         if event.button == 1:
@@ -1228,9 +1327,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             self.handler_block(self.mouse_motion_id)
             self.__mouse_motion_init_pos = None
 
-            self.place_cursor(self.last_cursor_loc)
-
-        return False
+        self.__listener.invalidate_curr_cmd()
     ### end of overridden signal definition
 
 
@@ -1357,7 +1454,6 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
     def place_cursor(self, where):
         self.disp_buff.place_cursor(where)
-        self.last_cursor_loc = where
     ### end of overridden function definition
 
 
@@ -1600,7 +1696,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         if not where:
             where = self.get_cursor_iter()
 
-        if not self.get_mark():
+        if not self.get_has_selection():
             self.disp_buff.create_mark('selection_start', where, False)
             self.disp_buff.create_mark('selection_end', where, False) # for internal usage
 
@@ -1627,7 +1723,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             self.place_cursor(where)
 
     def unset_mark(self):
-        if self.get_mark():
+        if self.get_has_selection():
             self.disp_buff.delete_mark_by_name('selection_start')
             self.disp_buff.delete_mark_by_name('selection_end') # for internal usage
             self.disp_buff.remove_tag_by_name('selected', self.disp_buff.get_start_iter(), self.disp_buff.get_end_iter())
@@ -1846,7 +1942,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     def __watch_selection(self):
-        if self.get_mark():
+        if self.get_has_selection():
             # clear previous selection
             iter_start = self.disp_buff.get_iter_at_mark(self.get_mark())
             iter_end   = self.disp_buff.get_iter_at_mark(self.disp_buff.get_mark('selection_end'))
