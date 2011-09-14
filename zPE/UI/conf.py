@@ -64,6 +64,8 @@ DEFAULT = {
         'KEY_BINDING'   : 'other',   # style ~ ( emacs, vi*, other )
                                      # note: vi mode not implemented
 
+        'KILL_RING_SZ'  : 16,
+
         'TAB_ON'        : 0,
         'TAB_GROUPED'   : 1,
         },
@@ -308,7 +310,6 @@ DEFAULT_FUNC_KEY_BIND = {
 
 
     # functions that are not required by any z* module
-
     # top-level functions
     'prog_show_config'      : {
         'emacs' : 'C-c c',
@@ -353,6 +354,8 @@ def init_rc_all():
 def init_rc():
     Config['MISC'] = {
         'key_binding'   : DEFAULT['MISC']['KEY_BINDING'],
+
+        'kill_ring_sz'  : DEFAULT['MISC']['KILL_RING_SZ'],
 
         'tab_on'        : DEFAULT['MISC']['TAB_ON'],
         'tab_grouped'   : DEFAULT['MISC']['TAB_GROUPED'],
@@ -435,6 +438,17 @@ def read_rc():
                 else:
                     Config[label][k] = DEFAULT['MISC']['KEY_BINDING']
                     sys.stderr.write('CONFIG WARNING: {0}: Invalid key binding style.\n'.format(v))
+
+            elif k == 'kill_ring_sz':
+                try:
+                    v = int(v)
+                    if v >= 1:
+                        Config[label][k] = v
+                    else:
+                        sys.stderr.write('CONFIG WARNING: {0}: Kill-ring size must be at least 1.\n'.format(v))
+                except ValueError:
+                    Config[label][k] = DEFAULT['MISC']['KILL_RING_SZ']
+                    sys.stderr.write('CONFIG WARNING: {0}: Invalid kill-ring size.\n'.format(v))
 
             elif k == 'tab_on':
                 if v and v not in STR_FALSE:

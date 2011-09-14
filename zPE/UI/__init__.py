@@ -702,7 +702,7 @@ class ConfigWindow(gtk.Window):
         ct_gui_env.set_label_widget(self.__label['FRAME'][-1])
         ct_gui.pack_start(ct_gui_env, False, False, 10)
 
-        ct_gui_env.add(gtk.Table(1, 2, False))
+        ct_gui_env.add(gtk.Table(len(conf.Config['ENV']), 2, False))
         ct_gui_env.child.set_col_spacings(5)
 
         self.env_bttn  = {}
@@ -858,7 +858,22 @@ class ConfigWindow(gtk.Window):
         self.__label['TAB'].append(gtk.Label('Editor'))
         center.append_page(ct_editor, self.__label['TAB'][-1])
 
-        # append this tab later
+        # KillRing
+        self.__label['FRAME'].append(gtk.Label('Kill Ring'))
+        ct_editor_kr = gtk.Frame()
+        ct_editor_kr.set_label_widget(self.__label['FRAME'][-1])
+        ct_editor.pack_start(ct_editor_kr, False, False, 10)
+
+        ct_editor_kr.add(gtk.Table(1, 2, False))
+        ct_editor_kr.child.set_col_spacings(5)
+
+        self.kill_ring_sz_entry = gtk.Entry()
+        self.__label['LABEL'].append(gtk.Label('Kill-Ring Size (maximum entries it can hold):'))
+
+        ct_editor_kr.child.attach(self.__label['LABEL'][-1], 0, 1, 1, 2, xoptions = gtk.SHRINK)
+        ct_editor_kr.child.attach(self.kill_ring_sz_entry,   1, 2, 1, 2, xoptions = gtk.FILL)
+
+        self.kill_ring_sz_entry.connect('activate', self._sig_kill_ring_sz_entered)
 
 
         ## System
@@ -1184,6 +1199,25 @@ class ConfigWindow(gtk.Window):
     ### end of signal for KeyBinding
 
 
+    ### signal for Editor
+    def _sig_kill_ring_sz_entered(self, entry):
+        try:
+            sz = int(entry.get_text())
+            if sz < 1:          # require size to be at least 1
+                raise ValueError('Kill-ring size must be at least 1.')
+        except:
+            entry.set_text(str(conf.Config['MISC']['kill_ring_sz']))
+            raise               # through the exception upwards
+
+        conf.Config['MISC']['kill_ring_sz'] = sz
+        zComp.zWidget.zKillRing.set_kill_ring_size(conf.Config['MISC']['kill_ring_sz'])
+
+        entry.set_property('sensitive', False) # remove focus
+        entry.set_text(str(conf.Config['MISC']['kill_ring_sz']))
+        entry.set_property('sensitive', True)  # retain edibility
+    ### end of signal for Editor
+
+
     ### signal for System
     def _sig_addr_mode_changed(self, combo):
         addr_val = combo.get_active_text()
@@ -1198,7 +1232,7 @@ class ConfigWindow(gtk.Window):
             sz = zPE.conf.parse_region(entry.get_text())
         except:
             entry.set_text(zPE.conf.Config['memory_sz'])
-            raise
+            raise               # through the exception upwards
 
         zPE.conf.Config['memory_sz'] = sz
         entry.set_property('sensitive', False) # remove focus
@@ -1255,6 +1289,10 @@ class ConfigWindow(gtk.Window):
 
         # KeyBinding->Binding
         self.load_binding()
+
+        # Editor->KillRing
+        self.kill_ring_sz_entry.set_text(str(conf.Config['MISC']['kill_ring_sz']))
+        zComp.zWidget.zKillRing.set_kill_ring_size(conf.Config['MISC']['kill_ring_sz'])
 
         # System->Architecture
         self.select_combo_item(self.addr_mode_sw, zPE.conf.Config['addr_mode'])

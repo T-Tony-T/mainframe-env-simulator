@@ -436,12 +436,12 @@ class zKillRing(object):
 
 
     @classmethod
-    def get_kill_ring_length(cls):
+    def get_kill_ring_size(cls):
         return cls.__capacity
 
     @classmethod
-    def set_kill_ring_length(cls, length):
-        cls.__capacity  = length
+    def set_kill_ring_size(cls, size):
+        cls.__capacity  = size
         cls.__init_kill_ring()
 
 
