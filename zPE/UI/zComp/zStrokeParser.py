@@ -1383,7 +1383,7 @@ class zComplete(gobject.GObject):
             else:
                 self.__popdown_complete_list()
                 self.__reset_complete_list()
-                self.widget.default_func_callback[func]() # invoke the action
+                self.widget.default_func_callback[func](msg) # invoke the action
                 self.__try_completing = 1 # menu just popdown, set it to stand-by mode
             return
 

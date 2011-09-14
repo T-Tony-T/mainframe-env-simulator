@@ -557,8 +557,8 @@ class ConfigWindow(gtk.Window):
         self.set_title('zPE Config')
 
         # retrive configs
+        zPE.conf.read_rc(dry_run = True) # this need to be done first to ensure config dir structure
         conf.read_rc_all()
-        zPE.conf.read_rc(dry_run = True)
 
         # lists for managing font
         self.__label = {
