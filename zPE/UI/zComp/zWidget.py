@@ -422,12 +422,35 @@ class zKillRing(object):
     __kill_ring = [ None ] * __capacity
     # the above should be exactly the same as cls.__init_kill_ring()
 
-    __cb_primary   = gtk.clipboard_get('PRIMARY')
-    __cb_clipboard = gtk.clipboard_get('CLIPBOARD')
+    __cb = {
+        'primary'   : gtk.clipboard_get('PRIMARY'),
+        'clipboard' : gtk.clipboard_get('CLIPBOARD'),
+        }
 
     # record the current clipboards' content
-    __cb_primary_text   = __cb_primary.wait_for_text()
-    __cb_clipboard_text = __cb_clipboard.wait_for_text()
+    __cb_text = {
+        'primary'               : __cb['primary'].wait_for_text(),
+        'primary_changed'       : False,
+        'clipboard'             : __cb['clipboard'].wait_for_text(),
+        'clipboard_changed'     : False,
+        }
+
+    # add a timer to watch changes in clipboards
+    def watch_clipboard(cb, text):
+        # check update for clipboards
+        p_text = cb['primary'].wait_for_text()
+        c_text = cb['clipboard'].wait_for_text()
+
+        if p_text != text['primary']:
+            text['primary']         = p_text
+            text['primary_changed'] = True
+
+        if c_text != text['clipboard']:
+            text['clipboard']         = c_text
+            text['clipboard_changed'] = True
+
+        return True             # keep watching until dead
+    gobject.timeout_add(20, watch_clipboard, __cb, __cb_text)
 
 
     @classmethod
@@ -447,50 +470,35 @@ class zKillRing(object):
 
     @classmethod
     def append_killing(cls, text):
-        if text:
+        if cls.__kill_cb():
+            cls.__kill(text)
+        else:
             cls.__kill_ring[cls.__curr_corpse] = cls.__kill_ring[cls.__curr_corpse] + text
 
     def prepend_killing(cls, text):
-        if text:
+        if cls.__kill_cb():
+            cls.__kill(text)
+        else:
             cls.__kill_ring[cls.__curr_corpse] = text + cls.__kill_ring[cls.__curr_corpse]
 
     @classmethod
     def kill(cls, text):
-        if text:
-            cls.__kill_ring[cls.__curr_grave] = text
-
-            # update indices
-            cls.__curr_corpse = cls.__curr_grave
-            cls.__curr_grave  = (cls.__curr_grave + 1) % cls.__capacity
+        cls.__kill_cb()
+        cls.__kill(text)
 
     @classmethod
     def resurrect(cls):
-        # check update for clipboards
-        cb_primary_text   = cls.__cb_primary.wait_for_text()
-        cb_clipboard_text = cls.__cb_clipboard.wait_for_text()
+        cls.__kill_cb()
 
-        if cb_primary_text and cb_primary_text != cls.__cb_primary_text:
-            cls.__cb_primary_text = cb_primary_text
-            cb_primary_changed = True
-        else:
-            cb_primary_changed = False
-
-        if cb_clipboard_text and cb_clipboard_text != cls.__cb_clipboard_text:
-            cls.__cb_clipboard_text = cb_clipboard_text
-            cb_clipboard_changed = True
-        else:
-            cb_clipboard_changed = False
-
-        # fetch clipboards' content if needed
-        if cls.is_empty() or cb_primary_changed or cb_clipboard_changed:
+        if cls.is_empty():
             # kill-ring is empty, or clipboards' content changed
-            if cls.__cb_primary_text and (cls.is_empty or cb_primary_changed):
+            if cls.__cb_text['primary']:
                 # put primary clipboard text into kill-ring
-                cls.kill(cls.__cb_primary_text)
+                cls.kill(cls.__cb_text['primary'])
 
-            elif cls.__cb_clipboard_text and (cls.is_empty or cb_clipboard_changed):
+            elif cls.__cb_text['clipboard']:
                 # put clipboard text into kill-ring
-                cls.kill(cls.__cb_clipboard_text)
+                cls.kill(cls.__cb_text['clipboard'])
 
         if cls.is_empty():
             return None
@@ -509,6 +517,36 @@ class zKillRing(object):
             return cls.resurrect()  # ought to contain something from kill-ring, not from clipboard
         else:
             return None
+
+
+    ### supporting functions
+    @classmethod
+    def __kill(cls, text):
+        if text:
+            cls.__kill_ring[cls.__curr_grave] = text
+
+            # update indices
+            cls.__curr_corpse = cls.__curr_grave
+            cls.__curr_grave  = (cls.__curr_grave + 1) % cls.__capacity
+
+            return True         # kill +1
+        else:
+            return False        # kill nothing
+
+    @classmethod
+    def __kill_cb(cls):
+        if cls.__cb_text['clipboard_changed']: # check clipboard first
+            killed = cls.__kill(cls.__cb_text['clipboard'])
+            cls.__cb_text['clipboard_changed'] = False
+        else:
+            killed = False
+
+        if not killed and cls.__cb_text['primary_changed']: # if no kill for clipboard, check primary
+            killed = cls.__kill(cls.__cb_text['primary'])
+            cls.__cb_text['primary_changed'] = False
+
+        return killed
+    ### end of supporting functions
 
 
 ######## ######## ######## ######## ########
