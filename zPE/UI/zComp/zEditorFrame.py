@@ -17,7 +17,7 @@ import io_encap
 from zBase import z_ABC, zTheme
 from zFileManager import zDisplayPanel, zFileManager
 from zStrokeParser import zStrokeListener
-from zText import zLastLine, zTextView
+from zText import zLastLine, zTextView, zUndoStack
 from zWidget import zToolButton, zComboBox, zTabbar
 
 import os, copy, re
@@ -37,6 +37,9 @@ class zEdit(z_ABC, gtk.VBox):
         'buffer_save',
         'buffer_save_as',
         'buffer_close',
+
+        'buffer_undo',
+        'buffer_redo',
 
         'tabbar_mode',
         'tabbar_prev',
@@ -108,9 +111,12 @@ class zEdit(z_ABC, gtk.VBox):
             # although works in most cases, ugly behavior.
             # rebind (overrid) them by setting zEdit.func_callback_map beforehand
             'buffer_open'    : lambda msg: self.set_buffer(None, 'dir'),
-            'buffer_save'    : lambda msg: self.save_buffer(self.active_buffer),
-            'buffer_save_as' : lambda msg: self.save_buffer_as(self.active_buffer),
-            'buffer_close'   : lambda msg: self.rm_buffer(self.active_buffer),
+            'buffer_save'    : lambda msg: self.save_buffer(None),
+            'buffer_save_as' : lambda msg: self.save_buffer_as(None),
+            'buffer_close'   : lambda msg: self.rm_buffer(None),
+
+            'buffer_undo'    : lambda msg: self.undo(),
+            'buffer_redo'    : lambda msg: self.redo(),
 
             'tabbar_mode'    : lambda msg: zEdit.toggle_tabbar_mode(),
             'tabbar_prev'    : lambda msg: self.switch_tab_to('prev'),
@@ -838,6 +844,9 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     def save_buffer(self, buff):
+        if not buff:
+            buff = self.active_buffer
+
         try:
             return self.center.buffer_save(buff)
         except:
@@ -849,6 +858,9 @@ class zEdit(z_ABC, gtk.VBox):
             return None
 
     def save_buffer_as(self, buff):
+        if not buff:
+            buff = self.active_buffer
+
         try:
             return self.center.buffer_save_as(buff)
         except:
@@ -860,6 +872,9 @@ class zEdit(z_ABC, gtk.VBox):
             return None
 
     def rm_buffer(self, buff, force = False):
+        if not buff:
+            buff = self.active_buffer
+
         try:
             return zEditBuffer.rm_buffer(buff, force)
         except:
@@ -869,6 +884,49 @@ class zEdit(z_ABC, gtk.VBox):
                 msg = '{0}: Fail to remove buffer!'.format(buff.name)
             self.__last_line.set_text('', msg)
             return None
+
+
+    def undo(self):
+        if self.active_buffer.editable:
+            text_buffer = self.active_buffer.buffer
+            state       = text_buffer.undo_stack.undo()
+
+            if state:
+                start_iter = text_buffer.get_iter_at_offset(state.offset)
+
+                if state.action == 'i':
+                    text_buffer.insert(start_iter, state.content)
+                else:
+                    text_buffer.delete(
+                        start_iter, text_buffer.get_iter_at_offset(state.offset + len(state.content))
+                        )
+
+                # call zTextView to place the cursor, since it has its own display buffer
+                self.center.place_cursor_at_offset(state.offset)
+
+                return True
+        return False
+
+    def redo(self):
+        if self.active_buffer.editable:
+            text_buffer = self.active_buffer.buffer
+            state       = text_buffer.undo_stack.redo()
+
+            if state:
+                start_iter = text_buffer.get_iter_at_offset(state.offset)
+
+                if state.action == 'i':
+                    text_buffer.insert(start_iter, state.content)
+                else:
+                    text_buffer.delete(
+                        start_iter, text_buffer.get_iter_at_offset(state.offset + len(state.content))
+                        )
+
+                # call zTextView to place the cursor, since it has its own display buffer
+                self.center.place_cursor_at_offset(state.offset)
+
+                return True
+        return False
 
 
     @staticmethod
@@ -1133,7 +1191,7 @@ class zEditBuffer(z_ABC):
         while zEditBuffer._on_restore:
             gtk.main_iteration(False)
 
-        zEditBuffer.__buff_list  = copy.copy(zEditBuffer.buff_list) # never deepcopy this
+        zEditBuffer.__buff_list  = copy.copy(zEditBuffer.buff_list) # never deepcopy this, for this stores all zEditBuffer
         zEditBuffer.__buff_group = copy.deepcopy(zEditBuffer.buff_group)
         zEditBuffer.__buff_rec   = copy.deepcopy(zEditBuffer.buff_rec)
 
@@ -1248,6 +1306,7 @@ class zEditBuffer(z_ABC):
             # system-opened buffer, cannot be closed
             if buff.name == '*scratch*':
                 # close the scratch means to reset its content
+                buff.buffer.undo_stack.clear() # clear the current undo-stack
                 buff.__reload_buffer()
                 return buff.name, 'buffer cleared'
             return buff.name, 'cannot close system buffer'
@@ -1267,6 +1326,7 @@ class zEditBuffer(z_ABC):
                     break
 
             # notify all registered editors
+            buff.buffer.undo_stack.clear() # user-opened buffer, must be a file
             zEditBuffer.reg_emit('buffer_removed', buff.name)
             return os.path.join(* buff.path), 'buffer closed'
 
@@ -1312,6 +1372,9 @@ class zEditBuffer(z_ABC):
             self.editable = True
             self.mtime = None
 
+        self.buffer.undo_stack = zUndoStack(
+            self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
+            )
         self.set_modified(False)
         self.buffer.reloading = False # notify zTextView to update
     ### end of supporting function

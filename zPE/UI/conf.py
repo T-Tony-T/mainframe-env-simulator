@@ -104,6 +104,8 @@ DEFAULT_FUNC_KEY_BIND_KEY = [
     ]
 
 DEFAULT_FUNC_KEY_BIND = {
+    # need to be sync with "GUI_Readme.html"
+
     # split window manipulation; required by zSplitWindow
     'window_split_horz'     : {
         'emacs' : 'C-x 3',
@@ -146,6 +148,17 @@ DEFAULT_FUNC_KEY_BIND = {
         'emacs' : 'C-x k',
         'vi'    : '',
         'other' : 'F4',
+        },
+
+    'buffer_undo'           : {
+        'emacs' : 'C-x u',
+        'vi'    : '',
+        'other' : 'C-z',
+        },
+    'buffer_redo'           : {
+        'emacs' : '',
+        'vi'    : '',
+        'other' : 'C-y',
         },
 
     # tab manipulation; required by zEdit

@@ -99,6 +99,11 @@ class zSplitWords(object):
 
 class zBufferState(object):
     '''a node keeps track of the change in a text buffer. this is used to implement undo / redo system'''
+    revert_action = {
+        'i' : 'd',
+        'd' : 'i',
+        }
+
     def __init__(self, content, offset, action):
         '''
         content
@@ -128,7 +133,6 @@ class zBufferState(object):
                 '{0}: action need to be "i" / "a" for insert / add, or "d" / "r" for delete / remove!'.format(action)
                 )
 
-
     def __str__(self):
         if self.action == 'i':
             action = 'INSERT'
@@ -137,24 +141,39 @@ class zBufferState(object):
         return '{0}: <<{1}>> AT offset {2}'.format(action, self.content, self.offset)
 
 
+    def revert(self):
+        return zBufferState(self.content, self.offset, zBufferState.revert_action[self.action])
+
+
 class zUndoStack(object):
     '''an modified Emacs-Style Undo / Redo System implemeted using Stack (List)'''
-    def __init__(self):
-        self.__stack = []
-        self.__top   = None     # top index (of the undo-stack)
-        self.__undo  = None     # current undo index
+    def __init__(self, init_content):
+        self.clear(init_content)
 
+    def __str__(self):
+        rv_list = [ '[\n' ]
+        for state in self.__stack:
+            rv_list.append('    {0}\n'.format(state))
+        rv_list.append(']\n')
+
+        return ''.join(rv_list)
+
+
+    def clear(self, init_content = ''):
+        self.__stack = [ zBufferState(init_content, 0, 'i') ]
+        self.__top   = 0        # top index (of the undo-stack)
+        self.__undo  = 0        # current undo index
 
     def new_state(self, new_state):
         self.__stack.append(new_state)
-        self.__top  = len(self.__stack) # update the top index
-        self.__undo = self.__top        # point the undo index to the top of the stack
+        self.__top  = len(self.__stack) - 1     # update the top index
+        self.__undo = self.__top                # point the undo index to the top of the stack
 
     def undo(self):
         if not self.__undo:
             return None # stack is empty (None), or at initial state (0)
 
-        self.__stack.append(self.__stack[self.__undo])
+        self.__stack.append(self.__stack[self.__undo].revert()) # push the reverted state of undo index onto the stack
         self.__undo -= 1        # decrement the undo index to the previous state
 
         return self.__stack[-1] # do not use self.__top, for it keeps track of the last "edit"
@@ -163,10 +182,8 @@ class zUndoStack(object):
         if self.__undo == self.__top:
             return None # no former undo(s), cannot redo in this case
 
-        self.__stack.pop()
         self.__undo += 1        # increment the undo index to the next state
-
-        return self.__stack[-1] # do not use self.__top, for it keeps track of the last "edit"
+        return self.__stack.pop().revert()      # pop the reverted last state out of the stack
 
 
 ######## ######## ######## ######## ########
@@ -1518,6 +1535,10 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
     def place_cursor(self, where):
         self.buff['disp'].place_cursor(where)
+        self.scroll_to_iter(where, 0)
+
+    def place_cursor_at_offset(self, offset):
+        self.place_cursor(self.buff['disp'].get_iter_at_offset(offset))
     ### end of overridden function definition
 
 
@@ -1959,7 +1980,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         if new_state and target == 'true':
             # new state applied on true buffer, record it
-            pass
+            self.buff['true'].undo_stack.new_state(new_state) # only true buffer has undo stack
 
         if new_state.action == 'i':
             self.buff[target].insert(
@@ -1969,7 +1990,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         else:
             self.buff[target].delete(
                 self.buff[target].get_iter_at_offset(new_state.offset),
-                self.buff[target].get_iter_at_offset(new_state.offset + len(new_state.content)),
+                self.buff[target].get_iter_at_offset(new_state.offset + len(new_state.content))
                 )
 
         self.__sync_buff_end(target) # synchronizing ended
