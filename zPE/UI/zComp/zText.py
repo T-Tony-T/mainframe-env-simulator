@@ -331,6 +331,8 @@ class zEntry(gtk.Entry):
 
             self.emit('populate_popup', menu)
 
+        if not self.is_focus():
+            self.grab_focus()
         return True             # stop the default handler
 
     def _sig_button_release(self, widget, event):
@@ -1360,6 +1362,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
             self.emit('populate_popup', menu)
 
+        if not self.is_focus():
+            self.grab_focus()
         return True             # stop the default handler
 
     def _sig_mouse_motion(self, widget, event):
