@@ -1,4 +1,4 @@
-# this is the text module of the zComponent package
+# this is the text module (and their supports) of the zComponent package
 
 import io_encap
 # this module requires io_encap to have the following APIs:
@@ -91,6 +91,71 @@ class zSplitWords(object):
                 self.indx -= 1  # back up and leave space unhandled
                 return
     ### end of supporting function
+
+
+######## ######## ######## ######## ########
+########         zUndoStack         ########
+######## ######## ######## ######## ########
+
+class zBufferState(object):
+    '''a node keeps track of the change in a text buffer. this is used to implement undo / redo system'''
+    def __init__(self, content, offset, action):
+        '''
+        content
+            the content that changed from the last recorded state.
+
+        offset
+            the offset into the buffer of the change above.
+
+        action
+            'a' : the indicated content is added to the buffer
+            'd' : the indicated content is deleted from the buffer
+        '''
+        if not isinstance(content, str):
+            raise ValueError('{0}: content need to be an string!'.format(content))
+        self.content = content
+
+        if not isinstance(offset, int) or offset < 0:
+            raise ValueError('{0}: offset need to be a non-negative integer!'.format(offset))
+        self.offset  = offset
+
+        if action not in [ 'a', 'd' ]:
+            raise ValueError('{0}: action need to be "a" for add or "d" for delete!'.format(action))
+        self.action  = action
+
+
+class zUndoStack(object):
+    '''an modified Emacs-Style Undo / Redo System implemeted using Stack (List)'''
+    def __init__(self):
+        self.__stack = []
+        self.__top   = None     # top index (of the undo-stack)
+        self.__undo  = None     # current undo index
+
+
+    def new_state(self, content, offset, action):
+        # try to create a new node for the new state
+        new_state = zBufferState(content, offset, action)
+
+        # push the new node onto the stack
+        self.__stack.append(new_state)
+        self.__top  = len(self.__stack) # update the top index
+        self.__undo = self.__top        # point the undo index to the top of the stack
+
+    def undo(self):
+        if not self.__undo:
+            return False # stack is empty (None), or at initial state (0)
+
+        self.__stack.append(self.__stack[self.__undo])
+        self.__undo -= 1        # decrement the undo index to the previous state
+        return True
+
+    def redo(self):
+        if self.__undo == self.__top:
+            return False # no former undo(s), cannot redo in this case
+
+        self.__stack.pop()
+        self.__undo += 1        # increment the undo index to the next state
+        return True
 
 
 ######## ######## ######## ######## ########
