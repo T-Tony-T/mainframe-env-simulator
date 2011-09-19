@@ -893,16 +893,22 @@ class zEdit(z_ABC, gtk.VBox):
 
             if state:
                 start_iter = text_buffer.get_iter_at_offset(state.offset)
+                end_offset = state.offset + len(state.content)
 
                 if state.action == 'i':
                     text_buffer.insert(start_iter, state.content)
                 else:
                     text_buffer.delete(
-                        start_iter, text_buffer.get_iter_at_offset(state.offset + len(state.content))
+                        start_iter, text_buffer.get_iter_at_offset(end_offset)
                         )
+                    end_offset = state.offset
 
                 # call zTextView to place the cursor, since it has its own display buffer
-                self.center.place_cursor_at_offset(state.offset)
+                self.center.place_cursor_at_offset(end_offset)
+
+                # test saved state
+                if text_buffer.undo_stack.is_saved():
+                    self.active_buffer.set_modified(False)
 
                 return True
         return False
@@ -914,16 +920,22 @@ class zEdit(z_ABC, gtk.VBox):
 
             if state:
                 start_iter = text_buffer.get_iter_at_offset(state.offset)
+                end_offset = state.offset + len(state.content)
 
                 if state.action == 'i':
                     text_buffer.insert(start_iter, state.content)
                 else:
                     text_buffer.delete(
-                        start_iter, text_buffer.get_iter_at_offset(state.offset + len(state.content))
+                        start_iter, text_buffer.get_iter_at_offset(end_offset)
                         )
+                    end_offset = state.offset
 
                 # call zTextView to place the cursor, since it has its own display buffer
-                self.center.place_cursor_at_offset(state.offset)
+                self.center.place_cursor_at_offset(end_offset)
+
+                # test saved state
+                if text_buffer.undo_stack.is_saved():
+                    self.active_buffer.set_modified(False)
 
                 return True
         return False
@@ -1233,6 +1245,8 @@ class zEditBuffer(z_ABC):
             elif io_encap.flush(self):
                 self.set_modified(False)
                 self.mtime = os.stat(fullpath).st_mtime
+
+                self.buffer.undo_stack.save_current_state()
                 return fullpath, 'buffer saved.'
             else:
                 self.mtime = os.stat(fullpath).st_mtime
@@ -1276,8 +1290,15 @@ class zEditBuffer(z_ABC):
         new_buff.buffer.set_text(
             self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
             )
-        new_buff.flush()           # write the new buffer
-        new_buff.__reload_buffer() # reload the new buffer to set all flags
+
+        # transfer undo-stack to the new buffer
+        dummy_undo_stack           = new_buff.buffer.undo_stack
+        new_buff.buffer.undo_stack = self.buffer.undo_stack
+        self.buffer.undo_stack     = dummy_undo_stack # this is for rm_buffer() to work correctly
+
+        # write the new buffer
+        new_buff.flush()
+        new_buff.__reload_buffer(dry_run = True) # reload the new buffer to set all flags
 
         # clean up
         if self.path:
@@ -1306,8 +1327,8 @@ class zEditBuffer(z_ABC):
             # system-opened buffer, cannot be closed
             if buff.name == '*scratch*':
                 # close the scratch means to reset its content
-                buff.buffer.undo_stack.clear() # clear the current undo-stack
-                buff.__reload_buffer()
+                buff.buffer.undo_stack.clear() # clear the undo-stack
+                buff.__reload_buffer(dry_run = True)
                 return buff.name, 'buffer cleared'
             return buff.name, 'cannot close system buffer'
         elif buff.modified and not force:
@@ -1332,7 +1353,7 @@ class zEditBuffer(z_ABC):
 
 
     ### supporting function
-    def __reload_buffer(self):
+    def __reload_buffer(self, dry_run = False):
         self.buffer.reloading = True # notify zTextView to wait for update
         if self.name == '*scratch*':
             # tmp buffer
@@ -1372,9 +1393,10 @@ class zEditBuffer(z_ABC):
             self.editable = True
             self.mtime = None
 
-        self.buffer.undo_stack = zUndoStack(
-            self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
-            )
+        if not dry_run:
+            self.buffer.undo_stack = zUndoStack(
+                self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
+                )
         self.set_modified(False)
         self.buffer.reloading = False # notify zTextView to update
     ### end of supporting function

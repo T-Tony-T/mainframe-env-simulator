@@ -153,37 +153,94 @@ class zUndoStack(object):
     def __str__(self):
         rv_list = [ '[\n' ]
         for state in self.__stack:
-            rv_list.append('    {0}\n'.format(state))
+            if self.is_saved(state):
+                saved_indicator = '*'
+            else:
+                saved_indicator = ' '
+
+            rv_list.append('{0}  {1:0>3}:  {2}\n'.format(saved_indicator, self.get_group_id(state), state))
         rv_list.append(']\n')
 
         return ''.join(rv_list)
 
 
     def clear(self, init_content = ''):
-        self.__stack = [ zBufferState(init_content, 0, 'i') ]
+        '''reset the entire undo-stack'''
+        init_state = zBufferState(init_content, 0, 'i')
+
+        self.__stack = [ init_state ]
         self.__top   = 0        # top index (of the undo-stack)
         self.__undo  = 0        # current undo index
 
+        self.__group = [        # any states within the same group are "equvilent"
+            [ init_state ],
+            ]
+        self.__group_saved = 0  # the index of the group that state(s) is equvilent to the saved state
+
+
+    def is_init(self):
+        '''test whether the current state is an initial-state (no former edit)'''
+        return self.__undo == 0
+
+    def is_last(self):
+        '''test whether the current state is an end-state (no former undo)'''
+        return self.__undo == self.__top
+
+
+    def is_saved(self, state = None):
+        '''test whether the given state (current state, if not specified) is saved'''
+        if not state:
+            state = self.get_current_state()
+        return state in self.__group[self.__group_saved]
+
+    def get_group_id(self, state):
+        '''retrive the group ID for a specific state'''
+        for indx in range(len(self.__group)):
+            if state in self.__group[indx]:
+                break
+        return indx
+
+
+    def get_current_state(self):
+        '''retrive the current state'''
+        return self.__stack[-1]
+
+    def save_current_state(self):
+        '''mark the group of the current state as "saved"'''
+        self.__group_saved = self.get_group_id(self.get_current_state())
+
+
     def new_state(self, new_state):
+        '''push a new edit onto the stack'''
         self.__stack.append(new_state)
         self.__top  = len(self.__stack) - 1     # update the top index
         self.__undo = self.__top                # point the undo index to the top of the stack
+        self.__group.append([ new_state ])      # add the new state into a new group
 
     def undo(self):
-        if not self.__undo:
-            return None # stack is empty (None), or at initial state (0)
+        '''push an "undo" onto the stack; this will *NOT* modified any buffer'''
+        if self.is_init():
+            return None # stack is at initial state, cannot undo
 
-        self.__stack.append(self.__stack[self.__undo].revert()) # push the reverted state of undo index onto the stack
+        undo_state = self.__stack[self.__undo].revert() # revert the state of undo index
+        self.__stack.append(undo_state)                 # push the reverted state onto the stack
+
         self.__undo -= 1        # decrement the undo index to the previous state
+        self.__group[self.get_group_id(self.__stack[self.__undo])].append(undo_state) # update group list
 
-        return self.__stack[-1] # do not use self.__top, for it keeps track of the last "edit"
+        return undo_state
 
     def redo(self):
-        if self.__undo == self.__top:
-            return None # no former undo(s), cannot redo in this case
+        '''pop an "undo" out of the stack; this will *NOT* modified any buffer'''
+        if self.is_last():
+            return None # no former undo(s), cannot redo
 
+        redo_state = self.__stack.pop() # pop the last state out of the stack
+
+        self.__group[self.get_group_id(self.__stack[self.__undo])].remove(redo_state) # update group list
         self.__undo += 1        # increment the undo index to the next state
-        return self.__stack.pop().revert()      # pop the reverted last state out of the stack
+
+        return redo_state.revert()      # pop the reverted last state out of the stack
 
 
 ######## ######## ######## ######## ########
