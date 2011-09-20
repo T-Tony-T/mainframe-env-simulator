@@ -1403,21 +1403,24 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 self.place_cursor(clicked_iter)
             menu = zPopupMenu()
 
-            undo_stack = self.buff['true'].undo_stack
+            if self.get_editable():
+                undo_stack = self.buff['true'].undo_stack
+            else:
+                undo_stack = None
 
             mi_undo = gtk.MenuItem('_Undo')
             menu.append(mi_undo)
-            if undo_stack.is_init():
-                mi_undo.set_property('sensitive', False)
-            else:
+            if undo_stack and not undo_stack.is_init():
                 mi_undo.connect('activate', lambda *arg: self.buffer_undo())
+            else:
+                mi_undo.set_property('sensitive', False)
 
             mi_redo = gtk.MenuItem('_Redo')
             menu.append(mi_redo)
-            if undo_stack.is_last():
-                mi_redo.set_property('sensitive', False)
-            else:
+            if undo_stack and not undo_stack.is_last():
                 mi_redo.connect('activate', lambda *arg: self.buffer_redo())
+            else:
+                mi_redo.set_property('sensitive', False)
 
             menu.append(gtk.SeparatorMenuItem())
 
@@ -2100,6 +2103,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 self.buff[target].handler_unblock(handler)
 
     def __sync_buff(self, target, new_state = None):
+        if not self.get_editable():
+            return              # no need for synchronizing, early return
+
         self.__sync_buff_start(target) # start synchronizing
 
         if new_state and target == 'true':
