@@ -1426,7 +1426,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
             mi_cut = gtk.MenuItem('Cu_t')
             menu.append(mi_cut)
-            if self.get_has_selection():
+            if self.get_editable() and self.get_has_selection():
                 mi_cut.connect('activate', lambda *arg: self.kill_ring_manip('kill', None))
             else:
                 mi_cut.set_property('sensitive', False)
@@ -1440,7 +1440,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
             mi_paste = gtk.MenuItem('_Paste')
             menu.append(mi_paste)
-            if zKillRing.resurrect():
+            if self.get_editable() and zKillRing.resurrect():
                 mi_paste.connect('activate', lambda *arg: self.kill_ring_manip('yank', None))
             else:
                 mi_paste.set_property('sensitive', False)
