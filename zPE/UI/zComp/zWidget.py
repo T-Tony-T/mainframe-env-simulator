@@ -438,8 +438,11 @@ class zKillRing(object):
     # add a timer to watch changes in clipboards
     def watch_clipboard(cb, text):
         # check update for clipboards
-        p_text = cb['primary'].wait_for_text()
-        c_text = cb['clipboard'].wait_for_text()
+        try:
+            p_text = cb['primary'].wait_for_text()
+            c_text = cb['clipboard'].wait_for_text()
+        except:
+            return True         # do not stop watching even when error occured
 
         if p_text != text['primary']:
             text['primary']         = p_text
@@ -449,7 +452,7 @@ class zKillRing(object):
             text['clipboard']         = c_text
             text['clipboard_changed'] = True
 
-        return True             # keep watching until dead
+        return True      # keep watching until the end of the universe
     gobject.timeout_add(20, watch_clipboard, __cb, __cb_text)
 
 
