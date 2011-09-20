@@ -96,6 +96,11 @@ class BaseFrame(object):
         self.tool_buff_close = gtk.ToolButton(gtk.STOCK_CLOSE)
         self.tool_buff_close.set_tooltip_text('Close Current Buffer')
         # ------------------------
+        self.tool_buff_undo = gtk.ToolButton(gtk.STOCK_UNDO)
+        self.tool_buff_undo.set_tooltip_text('Undo Last Change in Current Buffer')
+        self.tool_buff_redo = gtk.ToolButton(gtk.STOCK_REDO)
+        self.tool_buff_redo.set_tooltip_text('Redo Last "Undo" in Current Buffer')
+        # ------------------------
         bttn_icon = gtk.image_new_from_file(
             os.path.join(os.path.dirname(__file__), 'image', 'window_split_horz.png')
             )
@@ -143,27 +148,35 @@ class BaseFrame(object):
 
         self.toolbar.insert(gtk.SeparatorToolItem(), 4)
 
-        self.toolbar.insert(self.tool_win_split_horz, 5)
-        self.toolbar.insert(self.tool_win_split_vert, 6)
-        self.toolbar.insert(self.tool_win_delete, 7)
-        self.toolbar.insert(self.tool_win_delete_other, 8)
+        self.toolbar.insert(self.tool_buff_undo, 5)
+        self.toolbar.insert(self.tool_buff_redo, 6)
 
-        self.toolbar.insert(gtk.SeparatorToolItem(), 9)
+        self.toolbar.insert(gtk.SeparatorToolItem(), 7)
 
-        self.toolbar.insert(self.tool_submit, 10)
-        self.toolbar.insert(self.tool_submit_wrap, 11)
+        self.toolbar.insert(self.tool_win_split_horz, 8)
+        self.toolbar.insert(self.tool_win_split_vert, 9)
+        self.toolbar.insert(self.tool_win_delete, 10)
+        self.toolbar.insert(self.tool_win_delete_other, 11)
 
         self.toolbar.insert(gtk.SeparatorToolItem(), 12)
 
-        self.toolbar.insert(self.tool_config, 13)
-        self.toolbar.insert(self.tool_err_console, 14)
-        self.toolbar.insert(self.tool_quit, 15)
+        self.toolbar.insert(self.tool_submit, 13)
+        self.toolbar.insert(self.tool_submit_wrap, 14)
+
+        self.toolbar.insert(gtk.SeparatorToolItem(), 15)
+
+        self.toolbar.insert(self.tool_config, 16)
+        self.toolbar.insert(self.tool_err_console, 17)
+        self.toolbar.insert(self.tool_quit, 18)
 
         ## connect signals
         self.tool_buff_open.connect(   'clicked', self._sig_buff_manip, 'open')
         self.tool_buff_save.connect(   'clicked', self._sig_buff_manip, 'save')
         self.tool_buff_save_as.connect('clicked', self._sig_buff_manip, 'save-as')
         self.tool_buff_close.connect(  'clicked', self._sig_buff_manip, 'close')
+
+        self.tool_buff_undo.connect(   'clicked', self._sig_buff_manip, 'undo')
+        self.tool_buff_redo.connect(   'clicked', self._sig_buff_manip, 'redo')
 
         self.tool_win_split_horz.connect(  'clicked', self._sig_sw_manip, 'split_horz')
         self.tool_win_split_vert.connect(  'clicked', self._sig_sw_manip, 'split_vert')
@@ -185,8 +198,7 @@ class BaseFrame(object):
 
 
         ## connect auto-update items
-        zComp.zEdit.register(      'buffer_focus_in',     self._sig_buffer_focus_in,     None) # register globally
-        zComp.zEditBuffer.register('buffer_modified_set', self._sig_buffer_modified_set, None) # register globally
+        gobject.timeout_add(20, self.__watch_buffer_content)
 
         zComp.zSplitWindow.register('frame_removed', zComp.zEdit.reg_clean_up)
         zComp.zSplitWindow.register('frame_removed', zComp.zEditBuffer.reg_clean_up)
@@ -240,7 +252,7 @@ class BaseFrame(object):
         gobject.timeout_add(100, self.__watch_modified_on_disk)
 
 
-    ### modified-on-disk watcher for zEditBuffer
+    ### watcher definition
     def __watch_modified_on_disk(self):
         '''used with `timer`'''
         for name in zComp.zEditBuffer.buff_group['user']:
@@ -266,19 +278,21 @@ class BaseFrame(object):
                     self.mw.grab_focus()
 
         return True
-    ### end of modified-on-disk watcher for zEditBuffer
 
 
-    ### signal-like auto-update function
-    def _sig_buffer_focus_in(self, widget = None):
+    def __watch_buffer_content(self):
         # get current buffer
         try:
             buff = self.mw.active_frame().active_buffer
         except:
-            return
+            return True         # do not stop watching even when error occured
+
         is_file = (buff.type == 'file')
         is_dir  = (buff.type == 'dir')
         is_disp = (buff.type == 'disp')
+
+        can_undo = (buff.editable and not buff.buffer.undo_stack.is_init())
+        can_redo = (buff.editable and not buff.buffer.undo_stack.is_last())
 
         # update toolbar
         self.tool_buff_open.set_property(   'sensitive', not is_dir)
@@ -286,22 +300,14 @@ class BaseFrame(object):
         self.tool_buff_save_as.set_property('sensitive', is_file or is_disp)
         self.tool_buff_close.set_property(  'sensitive', is_file)
 
+        self.tool_buff_undo.set_property('sensitive', can_undo)
+        self.tool_buff_redo.set_property('sensitive', can_redo)
+
         self.tool_submit.set_property(     'sensitive', buff.path)
         self.tool_submit_wrap.set_property('sensitive', buff.path)
 
-    def _sig_buffer_modified_set(self, widget = None):
-        # get current buffer
-        frame = self.mw.active_frame()
-        if not frame:
-            return              # cannot get active frame, early return
-
-        buff = frame.active_buffer
-        is_file = (buff.type == 'file')
-        is_disp = (buff.type == 'disp')
-
-        self.tool_buff_save.set_property(   'sensitive', is_file and buff.modified)
-        self.tool_buff_save_as.set_property('sensitive', is_file or is_disp)
-    ### end of signal-like auto-update function
+        return True     # keep watching until the end of the universe
+    ### end of watcher definition
 
 
     ### top level signals
@@ -362,6 +368,14 @@ class BaseFrame(object):
 
         elif task == 'close':
             msg = self.remove_buffer(buff, frame)
+
+        elif task == 'undo':
+            frame.undo()
+            msg = ('', '')
+
+        elif task == 'redo':
+            frame.redo()
+            msg = ('', '')
         else:
             raise KeyError
 

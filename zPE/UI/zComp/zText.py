@@ -1403,6 +1403,24 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 self.place_cursor(clicked_iter)
             menu = zPopupMenu()
 
+            undo_stack = self.buff['true'].undo_stack
+
+            mi_undo = gtk.MenuItem('_Undo')
+            menu.append(mi_undo)
+            if undo_stack.is_init():
+                mi_undo.set_property('sensitive', False)
+            else:
+                mi_undo.connect('activate', lambda *arg: self.buffer_undo())
+
+            mi_redo = gtk.MenuItem('_Redo')
+            menu.append(mi_redo)
+            if undo_stack.is_last():
+                mi_redo.set_property('sensitive', False)
+            else:
+                mi_redo.connect('activate', lambda *arg: self.buffer_redo())
+
+            menu.append(gtk.SeparatorMenuItem())
+
             mi_cut = gtk.MenuItem('Cu_t')
             menu.append(mi_cut)
             if self.get_has_selection():
@@ -1600,6 +1618,55 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### editor related API
+    def buffer_undo(self):
+        state = self.buff['true'].undo_stack.undo()
+
+        if state:
+            start_iter = self.buff['true'].get_iter_at_offset(state.offset)
+            end_offset = state.offset + len(state.content)
+
+            if state.action == 'i':
+                self.buff['true'].insert(start_iter, state.content)
+            else:
+                self.buff['true'].delete(
+                    start_iter, self.buff['true'].get_iter_at_offset(end_offset)
+                    )
+                end_offset = state.offset
+
+            self.place_cursor_at_offset(end_offset)
+
+            # test saved state
+            if self.buff['true'].undo_stack.is_saved():
+                self.get_editor().active_buffer.set_modified(False)
+
+            return True
+        return False
+
+    def buffer_redo(self):
+        state = self.buff['true'].undo_stack.redo()
+
+        if state:
+            start_iter = self.buff['true'].get_iter_at_offset(state.offset)
+            end_offset = state.offset + len(state.content)
+
+            if state.action == 'i':
+                self.buff['true'].insert(start_iter, state.content)
+            else:
+                self.buff['true'].delete(
+                    start_iter, self.buff['true'].get_iter_at_offset(end_offset)
+                    )
+                end_offset = state.offset
+
+            self.place_cursor_at_offset(end_offset)
+
+            # test saved state
+            if self.buff['true'].undo_stack.is_saved():
+                self.get_editor().active_buffer.set_modified(False)
+
+            return True
+        return False
+
+
     def backward(self, task):
         self.place_cursor(self.__backward(task, extend_selection = True))
 

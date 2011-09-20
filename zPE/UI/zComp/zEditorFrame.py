@@ -888,56 +888,12 @@ class zEdit(z_ABC, gtk.VBox):
 
     def undo(self):
         if self.active_buffer.editable:
-            text_buffer = self.active_buffer.buffer
-            state       = text_buffer.undo_stack.undo()
-
-            if state:
-                start_iter = text_buffer.get_iter_at_offset(state.offset)
-                end_offset = state.offset + len(state.content)
-
-                if state.action == 'i':
-                    text_buffer.insert(start_iter, state.content)
-                else:
-                    text_buffer.delete(
-                        start_iter, text_buffer.get_iter_at_offset(end_offset)
-                        )
-                    end_offset = state.offset
-
-                # call zTextView to place the cursor, since it has its own display buffer
-                self.center.place_cursor_at_offset(end_offset)
-
-                # test saved state
-                if text_buffer.undo_stack.is_saved():
-                    self.active_buffer.set_modified(False)
-
-                return True
+            return self.center.buffer_undo()
         return False
 
     def redo(self):
         if self.active_buffer.editable:
-            text_buffer = self.active_buffer.buffer
-            state       = text_buffer.undo_stack.redo()
-
-            if state:
-                start_iter = text_buffer.get_iter_at_offset(state.offset)
-                end_offset = state.offset + len(state.content)
-
-                if state.action == 'i':
-                    text_buffer.insert(start_iter, state.content)
-                else:
-                    text_buffer.delete(
-                        start_iter, text_buffer.get_iter_at_offset(end_offset)
-                        )
-                    end_offset = state.offset
-
-                # call zTextView to place the cursor, since it has its own display buffer
-                self.center.place_cursor_at_offset(end_offset)
-
-                # test saved state
-                if text_buffer.undo_stack.is_saved():
-                    self.active_buffer.set_modified(False)
-
-                return True
+            return self.center.buffer_redo()
         return False
 
 
