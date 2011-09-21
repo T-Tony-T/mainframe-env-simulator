@@ -605,7 +605,7 @@
     </p>
     <p>
       <font  face="monospace"  size="+2">
-	<h3>set_mark_prepend</h3>
+	<h3>set_mark_move_left</h3>
       </font>
       <font  face="monospace"  size="+1">
         default bindings:<br />
@@ -615,29 +615,13 @@
       </font>
       <span>
         <br />
-        Set the selection mark on the initial invoke, prepend 1 character to the selection region on each initialized invokes.
+        Set the selection mark on the initial invoke, move the cursor 1 character left on each initialized invokes.
         <br />
       </span>
     </p>
     <p>
       <font  face="monospace"  size="+2">
-	<h3>set_mark_prepend_line</h3>
-      </font>
-      <font  face="monospace"  size="+1">
-        default bindings:<br />
-        &nbsp;&nbsp;Emacs : 'S-Up'<br />
-        &nbsp;&nbsp;Vi&nbsp;&nbsp;&nbsp; : ''<br />
-        &nbsp;&nbsp;Other : 'S-Up'<br />
-      </font>
-      <span>
-        <br />
-        Set the selection mark on the initial invoke, prepend 1 line to the selection region on each initialized invokes.
-        <br />
-      </span>
-    </p>
-    <p>
-      <font  face="monospace"  size="+2">
-	<h3>set_mark_append</h3>
+	<h3>set_mark_move_right</h3>
       </font>
       <font  face="monospace"  size="+1">
         default bindings:<br />
@@ -647,13 +631,29 @@
       </font>
       <span>
         <br />
-        Set the selection mark on the initial invoke, append 1 character to the selection region on each initialized invokes.
+        Set the selection mark on the initial invoke, move the cursor 1 character right on each initialized invokes.
         <br />
       </span>
     </p>
     <p>
       <font  face="monospace"  size="+2">
-	<h3>set_mark_append_line</h3>
+	<h3>set_mark_move_up</h3>
+      </font>
+      <font  face="monospace"  size="+1">
+        default bindings:<br />
+        &nbsp;&nbsp;Emacs : 'S-Up'<br />
+        &nbsp;&nbsp;Vi&nbsp;&nbsp;&nbsp; : ''<br />
+        &nbsp;&nbsp;Other : 'S-Up'<br />
+      </font>
+      <span>
+        <br />
+        Set the selection mark on the initial invoke, move the cursor 1 char up (if not first line) on each initialized invokes.
+        <br />
+      </span>
+    </p>
+    <p>
+      <font  face="monospace"  size="+2">
+	<h3>set_mark_move_down</h3>
       </font>
       <font  face="monospace"  size="+1">
         default bindings:<br />
@@ -663,7 +663,39 @@
       </font>
       <span>
         <br />
-        Set the selection mark on the initial invoke, append 1 line to the selection region on each initialized invokes.
+        Set the selection mark on the initial invoke, move the cursor 1 char down (if not last line) on each initialized invokes.
+        <br />
+      </span>
+    </p>
+    <p>
+      <font  face="monospace"  size="+2">
+	<h3>set_mark_move_start</h3>
+      </font>
+      <font  face="monospace"  size="+1">
+        default bindings:<br />
+        &nbsp;&nbsp;Emacs : 'S-Home<br />
+        &nbsp;&nbsp;Vi&nbsp;&nbsp;&nbsp; : ''<br />
+        &nbsp;&nbsp;Other : 'S-Home<br />
+      </font>
+      <span>
+        <br />
+        Set the selection mark on the initial invoke, move the cursor to the start of the buffer on each initialized invokes.
+        <br />
+      </span>
+    </p>
+    <p>
+      <font  face="monospace"  size="+2">
+	<h3>set_mark_move_end</h3>
+      </font>
+      <font  face="monospace"  size="+1">
+        default bindings:<br />
+        &nbsp;&nbsp;Emacs : 'S-End<br />
+        &nbsp;&nbsp;Vi&nbsp;&nbsp;&nbsp; : ''<br />
+        &nbsp;&nbsp;Other : 'S-End<br />
+      </font>
+      <span>
+        <br />
+        Set the selection mark on the initial invoke, move the cursor to the end of the buffer on each initialized invokes.
         <br />
       </span>
     </p>

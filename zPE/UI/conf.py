@@ -300,25 +300,35 @@ DEFAULT_FUNC_KEY_BIND = {
         'vi'    : '',
         'other' : '',
         },
-    'set_mark_prepend'      : {
+    'set_mark_move_left'    : {
         'emacs' : 'S-Left',
         'vi'    : '',
         'other' : 'S-Left',
         },
-    'set_mark_prepend_line' : {
-        'emacs' : 'S-Up',
-        'vi'    : '',
-        'other' : 'S-Up',
-        },
-    'set_mark_append'       : {
+    'set_mark_move_right'   : {
         'emacs' : 'S-Right',
         'vi'    : '',
         'other' : 'S-Right',
         },
-    'set_mark_append_line'  : {
+    'set_mark_move_up'      : {
+        'emacs' : 'S-Up',
+        'vi'    : '',
+        'other' : 'S-Up',
+        },
+    'set_mark_move_down'    : {
         'emacs' : 'S-Down',
         'vi'    : '',
         'other' : 'S-Down',
+        },
+    'set_mark_move_start'   : {
+        'emacs' : 'S-Home',
+        'vi'    : '',
+        'other' : 'S-Home',
+        },
+    'set_mark_move_end'     : {
+        'emacs' : 'S-End',
+        'vi'    : '',
+        'other' : 'S-End',
         },
 
 

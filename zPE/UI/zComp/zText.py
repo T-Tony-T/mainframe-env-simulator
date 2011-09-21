@@ -279,10 +279,12 @@ class zEntry(gtk.Entry):
         'kill_ring_yank_pop',
 
         'set_mark_command',
-        'set_mark_prepend',
-        'set_mark_prepend_line',
-        'set_mark_append',
-        'set_mark_append_line',
+        'set_mark_move_left',
+        'set_mark_move_right',
+        'set_mark_move_up',
+        'set_mark_move_down',
+        'set_mark_move_start',
+        'set_mark_move_end',
         ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -331,10 +333,12 @@ class zEntry(gtk.Entry):
             'kill_ring_yank_pop'    : lambda msg: self.kill_ring_manip('ypop', msg),
 
             'set_mark_command'      : lambda msg: self.set_mark(),
-            'set_mark_prepend'      : lambda msg: self.set_mark(append = 'left'),
-            'set_mark_prepend_line' : lambda msg: self.set_mark(append = 'up'),
-            'set_mark_append'       : lambda msg: self.set_mark(append = 'right'),
-            'set_mark_append_line'  : lambda msg: self.set_mark(append = 'down'),
+            'set_mark_move_left'    : lambda msg: self.set_mark(append = 'left'),
+            'set_mark_move_right'   : lambda msg: self.set_mark(append = 'right'),
+            'set_mark_move_up'      : lambda msg: self.set_mark(append = 'up'),
+            'set_mark_move_down'    : lambda msg: self.set_mark(append = 'down'),
+            'set_mark_move_start'   : lambda msg: self.set_mark(append = 'start'),
+            'set_mark_move_end'     : lambda msg: self.set_mark(append = 'end'),
             }
         for (func, cb) in self.default_func_callback.iteritems():
             self.__listener.register_func_callback(func, cb)
@@ -723,7 +727,7 @@ class zEntry(gtk.Entry):
                 where -= 1
             elif append == 'right' and where < max_pos:
                 where += 1
-            elif append == 'up':
+            elif append in [ 'up', 'start' ]:
                 where = 0
             else:
                 where = max_pos
@@ -1314,11 +1318,13 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         'kill_ring_yank_pop',
 
         'set_mark_command',
-        'set_mark_prepend',
-        'set_mark_prepend_line',
-        'set_mark_append',
-        'set_mark_append_line',
-        ]
+        'set_mark_move_left',
+        'set_mark_move_right',
+        'set_mark_move_up',
+        'set_mark_move_down',
+        'set_mark_move_start',
+        'set_mark_move_end', 
+       ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
 
@@ -1391,10 +1397,12 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             'kill_ring_yank_pop'    : lambda msg: self.kill_ring_manip('ypop', msg),
 
             'set_mark_command'      : lambda msg: self.set_mark(),
-            'set_mark_prepend'      : lambda msg: self.set_mark(append = 'left'),
-            'set_mark_prepend_line' : lambda msg: self.set_mark(append = 'up'),
-            'set_mark_append'       : lambda msg: self.set_mark(append = 'right'),
-            'set_mark_append_line'  : lambda msg: self.set_mark(append = 'down'),
+            'set_mark_move_left'    : lambda msg: self.set_mark(append = 'left'),
+            'set_mark_move_right'   : lambda msg: self.set_mark(append = 'right'),
+            'set_mark_move_up'      : lambda msg: self.set_mark(append = 'up'),
+            'set_mark_move_down'    : lambda msg: self.set_mark(append = 'down'),
+            'set_mark_move_start'   : lambda msg: self.set_mark(append = 'start'),
+            'set_mark_move_end'     : lambda msg: self.set_mark(append = 'end'),
             }
         for (func, cb) in self.default_func_callback.iteritems():
             self.__listener.register_func_callback(func, cb)
@@ -1973,23 +1981,34 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             self.buff['disp'].create_mark('selection_start', where, False)
             self.buff['disp'].create_mark('selection_end', where, False) # for internal usage
 
+            self.__mark_move_vert_offset = self.get_cursor_iter().get_line_offset()
+
             self.get_editor().get_last_line().set_text('', 'Mark set')
 
         # for set_mark_*
         if append:
             if append == 'left':
                 where.backward_char()
+                self.__mark_move_vert_offset = where.get_line_offset()
+
             elif append == 'right':
                 where.forward_char()
+                self.__mark_move_vert_offset = where.get_line_offset()
+
+            elif append == 'start':
+                where = self.buff['disp'].get_start_iter()
+
+            elif append == 'end':
+                where = self.buff['disp'].get_end_iter()
+
             else:
-                line_offset = self.buff['disp'].get_iter_at_mark(self.get_mark()).get_line_offset()
                 if append == 'up':
                     where.backward_line()
                 else:
                     where.forward_line()
-                max_offset = where.get_chars_in_line()
-                if line_offset < max_offset:
-                    where.set_line_offset(line_offset)
+                if self.__mark_move_vert_offset < where.get_chars_in_line():
+                    # move the cursor to the recorded offset, as long as its valid
+                    where.set_line_offset(self.__mark_move_vert_offset)
                 else:
                     self.forward_to_line_end(where)
 
@@ -1999,6 +2018,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         if self.get_has_selection():
             self.buff['disp'].delete_mark_by_name('selection_start')
             self.buff['disp'].delete_mark_by_name('selection_end') # for internal usage
+
+            self.__mark_move_vert_offset = None
+
             self.buff['disp'].remove_tag_by_name(
                 'selected', self.buff['disp'].get_start_iter(), self.buff['disp'].get_end_iter()
                 )
