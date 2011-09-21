@@ -429,31 +429,9 @@ class zKillRing(object):
 
     # record the current clipboards' content
     __cb_text = {
-        'primary'               : __cb['primary'].wait_for_text(),
-        'primary_changed'       : False,
-        'clipboard'             : __cb['clipboard'].wait_for_text(),
-        'clipboard_changed'     : False,
+        'primary'   : __cb['primary'].wait_for_text(),
+        'clipboard' : __cb['clipboard'].wait_for_text(),
         }
-
-    # add a timer to watch changes in clipboards
-    def watch_clipboard(cb, text):
-        # check update for clipboards
-        try:
-            p_text = cb['primary'].wait_for_text()
-            c_text = cb['clipboard'].wait_for_text()
-        except:
-            return True         # do not stop watching even when error occured
-
-        if p_text != text['primary']:
-            text['primary']         = p_text
-            text['primary_changed'] = True
-
-        if c_text != text['clipboard']:
-            text['clipboard']         = c_text
-            text['clipboard_changed'] = True
-
-        return True      # keep watching until the end of the universe
-    gobject.timeout_add(20, watch_clipboard, __cb, __cb_text)
 
 
     @classmethod
@@ -473,25 +451,30 @@ class zKillRing(object):
 
     @classmethod
     def append_killing(cls, text):
-        if cls.__kill_cb():
-            cls.__kill(text)
+        if cls.__kill_cb():     # successfully pushed whatever in the clipboard into the kill ring
+            cls.kill(text)      # chain has been broken, no appending occur
         else:
-            cls.__kill_ring[cls.__curr_corpse] = cls.__kill_ring[cls.__curr_corpse] + text
+            cls.__curr_grave = cls.__curr_corpse # kick out the last corpse
+            cls.kill(cls.__kill_ring[cls.__curr_corpse] + text) # kill the appended version
 
     def prepend_killing(cls, text):
-        if cls.__kill_cb():
-            cls.__kill(text)
+        if cls.__kill_cb():     # successfully pushed whatever in the clipboard into the kill ring
+            cls.kill(text)      # chain has been broken, no prepending occur
         else:
-            cls.__kill_ring[cls.__curr_corpse] = text + cls.__kill_ring[cls.__curr_corpse]
+            cls.__curr_grave = cls.__curr_corpse # kick out the last corpse
+            cls.kill(text + cls.__kill_ring[cls.__curr_corpse]) # kill the prepended version
 
     @classmethod
     def kill(cls, text):
-        cls.__kill_cb()
-        cls.__kill(text)
+        cls.__kill_cb()                      # push whatever in the clipboard if the content has been changed
+        cls.__cb['clipboard'].set_text(text) # push the text into system clipboard
+        while cls.__cb['clipboard'].wait_for_text() != text:
+            continue            # wait for system clipboard to sync
+        cls.__kill_cb()         # push the just-added clipboard content into the kill ring
 
     @classmethod
     def resurrect(cls):
-        cls.__kill_cb()
+        cls.__kill_cb()                      # push whatever in the clipboard if the content has been changed
 
         if cls.is_empty():
             # kill-ring is empty, or clipboards' content changed
@@ -524,7 +507,7 @@ class zKillRing(object):
 
     ### supporting functions
     @classmethod
-    def __kill(cls, text):
+    def __really_kill(cls, text):
         if text:
             cls.__kill_ring[cls.__curr_grave] = text
 
@@ -538,15 +521,21 @@ class zKillRing(object):
 
     @classmethod
     def __kill_cb(cls):
-        if cls.__cb_text['clipboard_changed']: # check clipboard first
-            killed = cls.__kill(cls.__cb_text['clipboard'])
-            cls.__cb_text['clipboard_changed'] = False
+        c_text = cls.__cb['clipboard'].wait_for_text()
+
+        if cls.__cb_text['clipboard'] != c_text:
+            # check clipboard first
+            killed = cls.__really_kill(c_text)  # try killing the new content
+            cls.__cb_text['clipboard'] = c_text # synchronize the backup
         else:
             killed = False
 
-        if not killed and cls.__cb_text['primary_changed']: # if no kill for clipboard, check primary
-            killed = cls.__kill(cls.__cb_text['primary'])
-            cls.__cb_text['primary_changed'] = False
+        p_text = cls.__cb['primary'].wait_for_text()
+
+        if not killed and cls.__cb_text['primary'] != p_text:
+            # if no kill for clipboard, check primary
+            killed = cls.__really_kill(p_text)  # try killing the new content
+            cls.__cb_text['primary'] = p_text   # synchronize the backup
 
         return killed
     ### end of supporting functions
