@@ -362,11 +362,11 @@ class zEdit(z_ABC, gtk.VBox):
 
         # center
         self.center.modify_text(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))
-        self.center.modify_text(gtk.STATE_ACTIVE,   gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.center.modify_text(gtk.STATE_ACTIVE,   gtk.gdk.color_parse(zTheme.color_map['text_selected']))
         self.center.modify_text(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['text_selected']))
 
         self.center.modify_base(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['base']))
-        self.center.modify_base(gtk.STATE_ACTIVE,   gtk.gdk.color_parse(zTheme.color_map['base']))
+        self.center.modify_base(gtk.STATE_ACTIVE,   gtk.gdk.color_parse(zTheme.color_map['base_selected']))
         self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
 
         # bottom

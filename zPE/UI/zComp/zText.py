@@ -375,6 +375,7 @@ class zEntry(gtk.Entry):
             # left click
             if event.type == gtk.gdk.BUTTON_PRESS:
                 # single click
+                self.unset_mark()
                 self.set_position(clicked_pos)
 
                 self.__mouse_motion_init_pos = clicked_pos # used to initiate selection mark
@@ -1434,6 +1435,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             # left click
             if event.type == gtk.gdk.BUTTON_PRESS:
                 # single click
+                self.unset_mark()
                 self.place_cursor(clicked_iter)
 
                 self.__mouse_motion_init_pos = clicked_iter # used to initiate selection mark
