@@ -15,7 +15,7 @@ import os, sys, re
 import pygtk
 pygtk.require('2.0')
 import gtk
-import gobject
+import gobject, pango
 
 
 ######## ######## ######## ######## ########
@@ -342,6 +342,9 @@ class zEntry(gtk.Entry):
         self.connect('button-press-event',   self._sig_button_press)
         self.connect('button-release-event', self._sig_button_release)
 
+        self.mouse_motion_id = self.connect('motion_notify_event', self._sig_mouse_motion)
+        self.handler_block(self.mouse_motion_id)
+
 
     ### overridden signal definition
     def _sig_move_cursor(self, entry, step, count, extend_selection):
@@ -351,24 +354,61 @@ class zEntry(gtk.Entry):
 
 
     def _sig_button_press(self, widget, event):
+        clicked_pos = self.get_layout().get_line(0).x_to_index(int(
+                ( event.x - self.get_layout_offsets()[0] ) * pango.SCALE
+                ))
+        max_pos = self.get_text_length()
+
+        if clicked_pos[0]:
+            clicked_pos = clicked_pos[1] + 1 # +1 to move to end of the char
+        else:
+            if clicked_pos[1]:
+                clicked_pos = max_pos # at end
+            else:
+                clicked_pos = 0 # at beginning
+
         if event.button == 1:
             # left click
             if event.type == gtk.gdk.BUTTON_PRESS:
                 # single click
-                return False    # pass to the default handler
+                self.set_position(clicked_pos)
+
+                self.__mouse_motion_init_pos = clicked_pos # used to initiate selection mark
+                self.handler_unblock(self.mouse_motion_id)
 
             elif event.type == gtk.gdk._2BUTTON_PRESS:
                 # double click, select word
-                self.unset_mark()
-                return False    # pass to the default handler
+                start_pos = clicked_pos
+                end_pos   = clicked_pos
+                letter = r'[a-zA-Z0-9_]'
+
+                while start_pos > 0 and ( self.is_word_start(start_pos, letter) or self.is_out_word(start_pos, letter) ):
+                    # if is at word-start or out of any word (but not the start of buffer), move to previous char
+                    start_pos -= 1
+                else:
+                    if start_pos > 0 and start_pos == clicked_pos:
+                        # if not at the start of buffer, and the loop never executed
+                        start_pos = self.__get_word_start(clicked_pos, letter)
+
+                while end_pos < max_pos and ( self.is_word_end(end_pos, letter) or self.is_out_word(end_pos, letter) ):
+                    # if is at word-end or out of any word (but not the start of buffer), move to next char
+                    end_pos += 1
+                else:
+                    if end_pos < max_pos and end_pos == clicked_pos:
+                        # if not at the end of buffer, and the loop never executed
+                        end_pos = self.__get_word_end(clicked_pos, letter)
+
+                self.set_mark(start_pos)
+                self.set_position(end_pos)
 
             elif event.type == gtk.gdk._3BUTTON_PRESS:
                 # triple click, select line
-                self.unset_mark()
-                return False    # pass to the default handler
+                self.set_mark(0)
+                self.set_position(max_pos)
 
         elif event.button == 2:
             # middle click
+            self.set_position(clicked_pos)
             self.kill_ring_manip('yank', None)
 
         elif event.button == 3:
@@ -377,7 +417,7 @@ class zEntry(gtk.Entry):
 
             mi_cut = gtk.MenuItem('Cu_t')
             menu.append(mi_cut)
-            if self.get_has_selection():
+            if self.get_editable() and self.get_has_selection():
                 mi_cut.connect('activate', lambda *arg: self.kill_ring_manip('kill', None))
             else:
                 mi_cut.set_property('sensitive', False)
@@ -391,7 +431,7 @@ class zEntry(gtk.Entry):
 
             mi_paste = gtk.MenuItem('_Paste')
             menu.append(mi_paste)
-            if zKillRing.resurrect():
+            if self.get_editable() and zKillRing.resurrect():
                 mi_paste.connect('activate', lambda *arg: self.kill_ring_manip('yank', None))
             else:
                 mi_paste.set_property('sensitive', False)
@@ -409,17 +449,30 @@ class zEntry(gtk.Entry):
             self.grab_focus()
         return True             # stop the default handler
 
+    def _sig_mouse_motion(self, widget, event):
+        new_pos = self.get_layout().get_line(0).x_to_index(int(
+                ( event.x - self.get_layout_offsets()[0] ) * pango.SCALE
+                ))
+        if new_pos[0]:
+            new_pos = new_pos[1] + 1 # +1 to move to end of the char
+        else:
+            if new_pos[1]:
+                new_pos = new_pos[1] + 2 # at end
+            else:
+                new_pos = 0     # at beginning
+
+        self.set_position(new_pos)
+
+        if ( not self.get_has_selection()  and          # no selection was set
+             new_pos != self.__mouse_motion_init_pos    # position changed
+             ):
+            self.set_mark(self.__mouse_motion_init_pos)
+
     def _sig_button_release(self, widget, event):
         if event.button == 1:
             # left click
-            sel = super(zEntry, self).get_selection_bounds()
-            if sel:
-                if sel[0] == self.get_position():
-                    self.set_mark(sel[1])
-                    self.set_position(sel[0])
-                else:
-                    self.set_mark(sel[0])
-                    self.set_position(sel[1])
+            self.handler_block(self.mouse_motion_id)
+            self.__mouse_motion_init_pos = None
 
         self.__listener.invalidate_curr_cmd()
     ### end of overridden signal definition
@@ -628,17 +681,25 @@ class zEntry(gtk.Entry):
         self.insert_text(word)
 
 
-    def is_word_start(self, letter = r'\S'):
-        return self.__test_cursor_anchor(self.get_position(), False, True, letter)
+    def is_word_start(self, pos = None, letter = r'\S'):
+        if pos == None:
+            pos = self.get_position()
+        return self.__test_cursor_anchor(pos, False, True, letter)
 
-    def is_in_word(self, letter = r'\S'):
-        return self.__test_cursor_anchor(self.get_position(), True, True, letter)
+    def is_in_word(self, pos = None, letter = r'\S'):
+        if pos == None:
+            pos = self.get_position()
+        return self.__test_cursor_anchor(pos, True, True, letter)
 
-    def is_word_end(self, letter = r'\S'):
-        return self.__test_cursor_anchor(self.get_position(), True, False, letter)
+    def is_word_end(self, pos = None, letter = r'\S'):
+        if pos == None:
+            pos = self.get_position()
+        return self.__test_cursor_anchor(pos, True, False, letter)
 
-    def is_out_word(self, letter = r'\S'):
-        return self.__test_cursor_anchor(self.get_position(), False, False, letter)
+    def is_out_word(self, pos = None, letter = r'\S'):
+        if pos == None:
+            pos = self.get_position()
+        return self.__test_cursor_anchor(pos, False, False, letter)
 
 
     def get_mark(self):
