@@ -650,9 +650,6 @@ def pass_1(amode = 31, rmode = 31):
     else:
         rc_err = zPE.RC['NORMAL']
 
-    for line in spt:
-        print line[:-1]
-
     return max(rc_symbol, rc_err)
 # end of pass 1
 
@@ -1300,7 +1297,27 @@ def pass_2(rc, amode = 31, rmode = 31):
 
     spi.rmline(0)               # undo the align of line No.
 
-    return zPE.RC['NORMAL']
+
+    # check error messages
+    if len(INFO['S']):
+        rc_err = zPE.RC['SERIOUS']
+    elif len(INFO['E']):
+        rc_err = zPE.RC['ERROR']
+    elif len(INFO['W']):
+        rc_err = zPE.RC['WARNING']
+    else:
+        rc_err = zPE.RC['NORMAL']
+
+    # generate object module if no error occured
+    if rc_err <= zPE.RC['WARNING']:
+        obj_mod_gen()      # this process itself should cause no error
+
+    return rc_err
+
+
+def obj_mod_gen():
+    spo = zPE.core.SPOOL.retrive('SYSLIN')   # output SPOOL (object module)
+
 
 
 ### Supporting Functions
@@ -1556,6 +1573,7 @@ def __PARSE_OUT():
     pln_cnt = 0                 # printed line counter of the current page
     page_cnt = 1                # page counter
 
+    ### header portion of the report
     ctrl = '1'
     spo.append(ctrl, '{0:>40} High Level Assembler Option Summary                   (PTF UK28644)   Page {1:>4}\n'.format(' ', 1))
     ctrl = '-'
@@ -1564,6 +1582,15 @@ def __PARSE_OUT():
             ))
     pln_cnt += 2
     ctrl = '0'
+
+
+    ### main read loop, op code portion of the report
+    ### end of main read loop
+
+
+    ### summary portion of the report
+
+
 
 # note: work only for B-const
 def __REDUCE_EXP(exp):

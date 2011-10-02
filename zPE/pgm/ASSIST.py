@@ -131,8 +131,9 @@ def __PARSE_OUT():
 
     pln_cnt = 0                 # printed line counter of the current page
     page_cnt = 1                # page counter
-    ctrl = '1'
 
+    ### header portion of the report
+    ctrl = '1'
     spo.append(ctrl, '*** ASSIST 4.0/A2-05/15/82  470/V7A/0:OS/VS2  INS=SDFP7/X=BGHO, CHECK/TRC/=1180, OPTS=CDKMPR FROM PENN ST*NIU COMPSCI*LT\n')
     pln_cnt += 1
     ctrl = '0'
@@ -144,7 +145,8 @@ def __PARSE_OUT():
     spo.append(ctrl, '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
     pln_cnt += 2
 
-    # main read loop
+
+    ### main read loop, op code portion of the report
     cnt = 0                     # line number
     eojob = False               # end of job indicater
     for line in spi:
@@ -225,9 +227,16 @@ def __PARSE_OUT():
         if cnt in asm_info:
             for tmp in asm_info[cnt]:
                 spo.append(ctrl, gen_msg('I', tmp, line))
-    # end of main read loop
+    ### end of main read loop
 
 
+    ### summary portion of the report
+
+
+
+    #
+    # debugging information
+    #
 
     print '\nExternal Symbol Dictionary:'
     for key in sorted(asm_esd_id.iterkeys()):

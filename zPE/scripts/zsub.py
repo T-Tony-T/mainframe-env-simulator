@@ -52,7 +52,7 @@ def submit(job):
                 if 'STEPLIB' in step.dd:
                     rv = zPE.core.jcl.init_step(step)
                     if rv == 'ok':
-                        step.rc = zPE.core.asm.run(step)
+                        step.rc = zPE.pgm.HEWLDRGO.run(step)
                         overall_rc = max(overall_rc, step.rc)
                         if step.rc != 0:
                             rv = 'steprun'
