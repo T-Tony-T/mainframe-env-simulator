@@ -30,7 +30,7 @@ import zPE
 
 import os, sys
 import re
-from time import localtime, mktime, strftime, strptime
+from time import strftime
 
 from asma90_err_code_rc import * # read recourse file for err msg
 
@@ -765,9 +765,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                 # check following arguments
                 tmp = []
                 for indx in range(1, len(args)):
-                    if ( (not args[indx].isdigit())  or # mark
-                         (int(args[indx]) >= zPE.core.reg.GPR_NUM)
-                         ):
+                    if not zPE.core.reg.is_valid_GPR(args[indx]):
                         indx_s = spi[line_num].index(args[indx])
                         __INFO('E', line_num,
                                ( 29, indx_s, indx_s + len(args[indx]), )
@@ -1292,7 +1290,7 @@ def pass_2(rc, amode = 31, rmode = 31):
 
         # unrecognized op-code
         else:
-            pass # mark
+            pass # mark; flag error here
     # end of main read loop
 
     spi.rmline(0)               # undo the align of line No.

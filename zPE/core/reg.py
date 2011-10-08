@@ -189,6 +189,16 @@ GPR = [                         # general purpose registers
     GPR(0), GPR(0), GPR(0), GPR(0)  # R12 ~ R15
     ]
 
+def is_valid_GPR(reg_str):
+    if reg_str.isdigit():
+        reg_num = int(reg_str)
+    else:
+        # check reg alias here
+        reg_num = GPR_NUM + 1   # invalidate reg_str
+
+    return ( 0 <= reg_num  and  reg_num < zPE.core.reg.GPR_NUM )
+
+
 SPR = {                         # special purpose registers
     'PSW' : PSW(PSW_MODE['BC']),
     }

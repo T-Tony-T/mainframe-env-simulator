@@ -126,6 +126,7 @@ JCL = {
     'pgmer'     : None,         # the name of the programmer
     'regoin'    : None,         # the regoin of the entire job
     'jobid'     : None,         # 'JOB*****'
+    'spool_path': '',           # the path that all tmp files are allocated
     'jobstat'   : None,         # the status of the job
     'jobstart'  : None,         # time object
     'jobend'    : None,         # time object
@@ -255,12 +256,13 @@ class Step(object):             # for JCL['step'][*]
         # end of inner class definition
 
         self.name = name        # 'step_name'
-        self.pgm = pgm          # PGM='pgm_name'
+        self.pgm  = pgm         # PGM='pgm_name'
         self.proc = proc        # [PROG=]'prog_name'
         self.procname = ''      # not applied now
         self.region = region    # REGION=xxxx[K|M]
         self.parm = parm        # PARM='parm_list'
         self.start = None       # time object
+        self.end   = None       # time object
         self.rc = None          # return code
         self.dd = DDlist()
 # end of Step Definition

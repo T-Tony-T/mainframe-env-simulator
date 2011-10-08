@@ -29,7 +29,7 @@ import zPE
 
 import os, sys
 import re
-from time import localtime, mktime, strftime, strptime
+from time import localtime, mktime, strftime
 
 from assist_err_code_rc import * # read recourse file for err msg
 
@@ -46,21 +46,22 @@ def init(step):
 
     __LOAD_PSEUDO()             # load in all the pseudo instructions
 
+    limit = 0 # error tolerance limit; currently hard coded. need info
+
     # invoke parser from ASMA90 to assemble the source code
     objmod = zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '')
     sketch = zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '')
 
-    rc1 = zPE.pgm.ASMA90.pass_1(24, 24)
-    rc2 = zPE.pgm.ASMA90.pass_2(rc1, 24, 24)
+    rc      = zPE.pgm.ASMA90.pass_1(24, 24)
+    err_cnt = zPE.pgm.ASMA90.pass_2(rc, 24, 24)
 
-    __PARSE_OUT()
+    __PARSE_OUT(step, limit)
 
     zPE.core.SPOOL.remove('SYSLIN')
     zPE.core.SPOOL.remove('SYSUT1')
 
-    max_rc = max(rc1, rc2)
-    if max_rc > zPE.RC['WARNING']:
-        return max_rc
+    if err_cnt > limit:
+        return zPE.RC['NORMAL'] # skip exec, return with "CC = 0"
 
     # invoke HEWLDRGO to link-edit and execute the object module
     zPE.core.SPOOL.replace('SYSLIN', objmod)
@@ -105,7 +106,7 @@ def __MISSED_FILE(step, i):
 
     return cnt
 
-def __PARSE_OUT():
+def __PARSE_OUT(step, limit):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
@@ -231,8 +232,30 @@ def __PARSE_OUT():
 
 
     ### summary portion of the report
+    cnt_warn = len(asm_warn)
+    cnt_err  = len(asm_err) + len(asm_ser)
+    cnt_all  = cnt_warn + cnt_err
+    def format_cnt(cnt):
+        if cnt:
+            return '{0:>5}'.format(cnt)
+        else:
+            return ' NO  '
 
-
+    ctrl = '0'
+    spo.append(ctrl, '*** ', format_cnt(cnt_all), ' STATEMENTS FLAGGED - ',
+               format_cnt(cnt_warn), ' WARNINGS, ',
+               format_cnt(cnt_err), ' ERRORS\n')
+    if cnt_err > limit:
+        spo.append(ctrl, '***** NUMBER OF ERRORS EXCEEDS LIMIT OF ',
+                   format_cnt(limit),
+                   ' ERRORS - PROGRAM EXECUTION DELETED *****\n')
+    spo.append(ctrl, '*** DYNAMIC CORE AREA USED: ',
+               ' LOW: {0:>7} HIGH: {1:>7}'.format('###', '###'), # need info
+               ' LEAVING: {0:>7} FREE BYTES.'.format('#######'), # need info
+               ' AVERAGE: {0:>8} BYTES/STMT ***\n'.format('##')) # need info
+    diff = mktime(localtime()) - mktime(step.start)
+    spo.append(ctrl, '*** ASSEMBLY TIME = {0:>8.3f} SECS,'.format(diff),
+               ' {0:>8} STATEMENT/SEC ***\n'.format('#####')) # need info
 
     #
     # debugging information

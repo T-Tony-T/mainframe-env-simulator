@@ -52,6 +52,12 @@ def parse(job):
     zPE.JCL['class'] = zPE.JCL['jobname'][-1]
     zPE.JCL['jobid'] = 'JOB{0:0>5}'.format(zPE.conf.Config['job_id'])
 
+    zPE.JCL['spool_path'] = '{0}.{1}.{2}'.format(
+        zPE.JCL['owner'],
+        zPE.JCL['jobname'],
+        zPE.JCL['jobid']
+        )
+
     # args_0,args_1,args_2
     # AccInfo,'pgmer'[,parameters]
     args = zPE.resplit_sq(',', field[2], 2)
@@ -240,7 +246,7 @@ def init_job():
 
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  $HASP373 {0:<8} STARTED'.format(zPE.JCL['jobname']),
-               ' - INIT {0:<4}'.format(1),                      # mark
+               ' - INIT {0:<4}'.format(1),                      # need info
                ' - CLASS {0}'.format(zPE.JCL['class']),
                ' - SYS {0}\n'.format(zPE.SYSTEM['SYS']))
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
@@ -253,6 +259,12 @@ def init_job():
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  -STEPNAME PROCSTEP    RC',
                '   EXCP   CONN    TCB    SRB  CLOCK   SERV',
+               # TCB: Task Control Block CPU time
+               #      total amount of time spent by the CPU in the execution of
+               #      the job step, including the vector facility time, if used
+               #
+               # SRB: System Request Block CPU time
+               #      time spent on behalf of the step by the system
                '  WORKLOAD  PAGE  SWAP   VIO SWAPS\n')
 
 
@@ -329,16 +341,21 @@ def init_step(step):
 def finish_step(step):
     sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
     sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
-    ctrl = ' '
 
+    step.end = localtime()
+    diff = mktime(step.end) - mktime(step.start)
+    diff_min = diff / 60
+    diff_sec = diff % 60
+
+    ctrl = ' '
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  -{0:<8} {1:<8}'.format(step.name, step.procname),
-               ' {0:>5}  {1:>5}  {2:>5}'.format(step.rc, 0, 0), # mark
-               '  {0:>5}  {1:>5}'.format('.00', '.00'),         # mark
-               '  {0:>5}  {1:>5}'.format('.0', 0),              # mark
-               '  {0:<8}'.format('BATCH'),                      # mark
-               '  {0:>4}  {1:>4}'.format(0, 0),                 # mark
-               '  {0:>4}  {1:>4}\n'.format(0, 0))               # mark
+               ' {0:>5}  {1:>5}  {2:>5}'.format(step.rc, 0, 0), # need info
+               '  {0:>5.2f}  {1:>5.2f}'.format(diff_min, diff_min),
+               '  {0:>5.1f}  {1:>5}'.format(diff_min, 0),       # need info
+               '  {0:<8}'.format('BATCH'),                      # need info
+               '  {0:>4}  {1:>4}'.format(0, 0),                 # need info
+               '  {0:>4}  {1:>4}\n'.format(0, 0))               # need info
 
     if step.rc == 'FLUSH':
         sp3.append(ctrl, 'IEF272I {0:<8} '.format(zPE.JCL['jobname']),
@@ -393,10 +410,10 @@ def finish_step(step):
                strftime('%Y%j.%H%M\n', step.start))
     sp3.append(' ', 'IEF373I STEP/{0:<8}/STOP  '.format(step.name),
                strftime('%Y%j.%H%M'),
-               ' CPU {0:>4}MIN {1}SEC'.format(0, '00.00'),      # mark
-               ' SRB {0:>4}MIN {1}SEC'.format(0, '00.00'),      # mark
-               ' VIRT {0:>5}K SYS {1:>5}K'.format(0, 0),        # mark
-               ' EXT {0:>7}K SYS {1:>7}K\n'.format(0, 0))       # mark
+               ' CPU {0:>4}MIN {1:05.2f}SEC'.format(int(diff_min), diff_sec),   
+               ' SRB {0:>4}MIN {1:05.2f}SEC'.format(int(diff_min), diff_sec),
+               ' VIRT {0:>5}K SYS {1:>5}K'.format('#', '#'), # need info
+               ' EXT {0:>7}K SYS {1:>7}K\n'.format(0, '#'))  # need info
 
 
 def finish_job(msg):
@@ -406,6 +423,9 @@ def finish_job(msg):
     if msg in ['ok', 'steprun']: # step was executed
         zPE.JCL['jobstat'] = 'ENDED'
     zPE.JCL['jobend'] = localtime()
+    diff = mktime(zPE.JCL['jobend']) - mktime(zPE.JCL['jobstart'])
+    diff_min = diff / 60
+    diff_sec = diff % 60
 
     ctrl = ' '
 
@@ -416,7 +436,8 @@ def finish_job(msg):
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  -{0:<8} ENDED.'.format(zPE.JCL['jobname']),
                '  NAME-{0:<20}'.format(zPE.JCL['pgmer']),
-               ' TOTAL TCB CPU TIME=    .00 TOTAL ELAPSED TIME=    .0\n')
+               ' TOTAL TCB CPU TIME=  {0:5.2f}'.format(diff_min),
+               ' TOTAL ELAPSED TIME=  {0:4.1f}\n'.format(diff_min))
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  $HASP395 {0:<8} ENDED\n'.format(zPE.JCL['jobname']))
 
@@ -424,8 +445,8 @@ def finish_job(msg):
                strftime('%Y%j.%H%M', zPE.JCL['jobstart']), '\n')
     sp3.append(ctrl, 'IEF376I  JOB/{0:<8}/STOP  '.format(zPE.JCL['jobname']),
                strftime('%Y%j.%H%M', zPE.JCL['jobend']),
-               ' CPU {0:>4}MIN {1}SEC'.format(0, '00.00'),      # mark
-               ' SRB {0:>4}MIN {1}SEC\n'.format(0, '00.00'))    # mark
+               ' CPU {0:>4}MIN {1:05.2f}SEC'.format(int(diff_min), diff_sec),
+               ' SRB {0:>4}MIN {1:05.2f}SEC\n'.format(int(diff_min), diff_sec))
 
     if msg == 'ok':
         ctrl_new = '1'          # the control character to update
@@ -444,7 +465,7 @@ def finish_job(msg):
         if key == 'JESYSMSG' and msg != 'ok':
             sp.rmline(0)
 
-    __JES2_STAT(msg)
+    __JES2_STAT(msg, diff)
     __WRITE_OUT(zPE.core.SPOOL.DEFAULT_OUT) # write out all registered SPOOLs
 
 
@@ -458,7 +479,7 @@ def __COND_FAIL(step):
     return False
 
 
-def __JES2_STAT(msg):
+def __JES2_STAT(msg, job_time):
     # vvv JCL not executed vvv
     if msg in [ 'label' ]:
         ctrl = '0'
@@ -494,8 +515,7 @@ def __JES2_STAT(msg):
     cnt = (cnt + 72) / 1024 + 1 # 72 more characters include this line
     sp1.append(ctrl, '{0:>13}'.format(cnt), ' SYSOUT SPOOL KBYTES\n')
 
-    diff = mktime(zPE.JCL['jobend']) - mktime(zPE.JCL['jobstart'])
-    h_mm = '{0}.{1:0>2}'.format(str(int(diff / 3600)), str(int(diff / 60)))
+    h_mm = '{0}.{1:0>2}'.format(int(job_time / 3600), int(job_time / 60) % 60)
     sp1.append(ctrl, '{0:>13}'.format(h_mm), ' MINUTES EXECUTION TIME\n')
 
 def __READ_UNTIL(fp, fn, dsn, dlm):
@@ -508,6 +528,8 @@ def __READ_UNTIL(fp, fn, dsn, dlm):
 
         # check end of stream
         if line[:2] == dlm:
+            if len(dsn) == 0:
+                zPE.JCL['read_cnt'] += 1 # in-stream data, update counter
             return ''           # the return value of readline() on EOF
 
         # check in-stream data

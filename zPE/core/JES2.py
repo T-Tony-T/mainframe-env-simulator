@@ -25,14 +25,19 @@ class JES_DB(object):
 
         # connect db
         self.__db = sqlite3.connect(zPE.conf.CONFIG_PATH['SPOOL'])
-        self.__db.create_function("append", 2, JES_DB.append) # register `append(src, dest)` to SQLite
-        self.__db.text_factory = str                          # map TEXT to str instead of unicode
+        self.__db.create_function(   # register `append(src, dest)` to SQLite
+            "append", 2, JES_DB.append
+            )
+        self.__db.text_factory = str # map TEXT to str instead of unicode
         self.__db_opened = True
 
         self.__c  = self.__db.cursor()
 
         # insert JOB information
-        self.__c.execute('''SELECT Job_ID FROM JOB WHERE Job_ID = ?''', (self.__job_id,))
+        self.__c.execute(
+            '''SELECT Job_ID FROM JOB WHERE Job_ID = ?''',
+            (self.__job_id,)
+            )
         if not self.__c.fetchone():
             self.__c.execute(
                 '''INSERT INTO JOB VALUES (?, ?, ?)''',
@@ -66,7 +71,12 @@ class JES_DB(object):
             return              # no need to flush, early return
 
         self.__c.execute(
-            '''UPDATE SPOOL set Content = append(Content, ?) where Job_id = ? AND Spool_key = ?''',
+            '''
+UPDATE  SPOOL
+   SET  Content = append(Content, ?)
+ WHERE  Job_id = ?
+   AND  Spool_key = ?
+''',
             ( self.__buffer, self.__job_id, self.__spool_key )
             )
 
@@ -83,4 +93,9 @@ class JES_DB(object):
 
 # open the target file in regardless of the existance
 def open_file(dsn, mode):
-    return JES_DB(zPE.JCL['jobid'], zPE.JCL['jobname'], zPE.JCL['owner'], os.path.join(* dsn))
+    return JES_DB(
+        zPE.JCL['jobid'],
+        zPE.JCL['jobname'],
+        zPE.JCL['owner'],
+        os.path.join(* dsn)
+        )
