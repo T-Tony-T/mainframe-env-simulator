@@ -192,8 +192,8 @@ def __PARSE_OUT(step, limit):
             if len(tmp_str) > 16:
                 tmp_str = tmp_str[:16]
         elif len(asm_mnem[cnt]) == 5: # type 5
-            op = asm_mnem[cnt][2]
-            code = zPE.core.asm.prnt_op(op)
+            # breaking up the op-mnemonic field
+            code = zPE.core.asm.prnt_op(asm_mnem[cnt][2])
             if len(code) == 12:
                 field_3 = code[8:12]
             else:
@@ -206,18 +206,24 @@ def __PARSE_OUT(step, limit):
             tmp_str = '{0} {1} {2} '.format(
                 field_1, field_2, field_3
                 )
+            # appending to it the "ADDR1" and "ADDR2" fields, if applied
             if asm_mnem[cnt][3]:
-                addr_1 = asm_mnem[cnt][3]
+                if asm_mnem[cnt][3].valid:
+                    addr_1 = hex(asm_mnem[cnt][3].get()[2])[2:].upper()
+                else:
+                    addr_1 = '0'
             else:
                 addr_1 = '     '
             if asm_mnem[cnt][4]:
-                addr_2 = asm_mnem[cnt][4]
+                if asm_mnem[cnt][4].valid:
+                    addr_2 = hex(asm_mnem[cnt][4].get()[2])[2:].upper()
+                else:
+                    addr_2 = '0'
             else:
                 addr_2 = '     '
             tmp_str += '{0:0>5} {1:0>5}'.format(
                 addr_1, addr_2
                 )
-            # mark; add addr here
 
         spo.append(ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
                    '{0:>5} {1}'.format(cnt, line))
@@ -336,11 +342,17 @@ def __PARSE_OUT(step, limit):
                 field_1, field_2, field_3
                 )
             if asm_mnem[key][3]:
-                addr_1 = asm_mnem[key][3]
+                if asm_mnem[key][3].valid:
+                    addr_1 = hex(asm_mnem[key][3].get()[2])[2:].upper()
+                else:
+                    addr_1 = '0'
             else:
                 addr_1 = '     '
             if asm_mnem[key][4]:
-                addr_2 = asm_mnem[key][4]
+                if asm_mnem[key][4].valid:
+                    addr_2 = hex(asm_mnem[key][4].get()[2])[2:].upper()
+                else:
+                    addr_2 = '0'
             else:
                 addr_2 = '     '
             tmp_str += '{0:0>5} {1:0>5}'.format(

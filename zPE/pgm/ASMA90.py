@@ -608,8 +608,16 @@ def pass_1(amode = 31, rmode = 31):
                         )
             # fi
 
+            if op_indx <= 1 and op_code[1].type in 'X':
+                op_addr1 = op_code[1]
+            else:
+                op_addr1 = None
+            if op_indx <= 2 and op_code[2].type in 'X':
+                op_addr2 = op_code[2]
+            else:
+                op_addr2 = None
             MNEMONIC[line_num] = [ scope_id, addr,              # type 5
-                                   op_code, '', '',
+                                   op_code, op_addr1, op_addr2,
                                    ]
             spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
                     line_num, field[0], field[1], arg_list
@@ -1290,8 +1298,11 @@ def pass_2(rc, amode = 31, rmode = 31):
                                )
                 elif reloc_cnt == 1:    # one relocatable symbol
                     if reloc_arg == '*':
+                        # current location ptr
                         lbl_8 = '*{0}'.format(line_num)
+                        reg_indx = '0'
                     else:
+                        # label
                         tmp = zPE.resplit_sq('[()]', reloc_arg)
                         if reloc_arg[0] == '=':
                             lbl_8 = tmp[0]
