@@ -37,6 +37,10 @@ from asma90_err_code_rc import * # read recourse file for err msg
 
 FILE = [ 'SYSIN', 'SYSLIB', 'SYSPRINT', 'SYSLIN', 'SYSUT1' ]
 
+LOCAL_CONFIG = {
+    'LN_P_PAGE' : 60,           # line per page for output
+    }
+
 INFO = {  # '[IWES]' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ...] }
     'I' : {},           # informational messages
     'W' : {},           # warning messages
@@ -560,7 +564,7 @@ def pass_1(amode = 31, rmode = 31):
                                 sd_info = (sd_info[0], sd_info[1], sd_info[2],
                                            0, sd_info[4], sd_info[3]
                                            )
-                            if sd_info[2] in 'XCB': # variable length const
+                            if sd_info[2] in 'BCX': # variable length const
                                 ( arg_val, arg_len ) = zPE.core.asm.value_sd(
                                     sd_info
                                     )
@@ -575,6 +579,7 @@ def pass_1(amode = 31, rmode = 31):
                                 arg_list += lbl
                             parsed = True
                         except:
+                            print line[:-1]
                             pass
 
                     if not parsed: # get the leftover label

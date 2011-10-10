@@ -39,6 +39,10 @@ FILE = [
     ('SYSPRINT', 'AM001 ASSIST COULD NOT OPEN PRINTER FT06F001:ABORT'),
     ]
 
+LOCAL_CONFIG = {
+    'LN_P_PAGE' : 56,           # line per page for output
+    }
+
 def init(step):
     # check for file requirement
     if __MISSED_FILE(step, 0) != 0:
@@ -152,10 +156,10 @@ def __PARSE_OUT(step, limit):
     eojob = False               # end of job indicater
     for line in spi:
         cnt += 1                # start at line No. 1
-        if pln_cnt >= zPE.conf.DEFAULT['LN_P_PAGE']:
+        if pln_cnt >= LOCAL_CONFIG['LN_P_PAGE']:
             page_cnt += 1
             spo.append('1', '{0:>111}PAGE {1:>4}\n'.format(' ', page_cnt))
-            spo.append(ctrl, '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
+            spo.append('0', '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
             pln_cnt = 2
         ctrl = ' '
 
@@ -168,6 +172,7 @@ def __PARSE_OUT(step, limit):
             # comments
             spo.append(ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
                        '{0:>5} {1}'.format(cnt, line))
+            pln_cnt += 1
             continue
 
         # instructions
@@ -214,20 +219,25 @@ def __PARSE_OUT(step, limit):
 
         spo.append(ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
                    '{0:>5} {1}'.format(cnt, line))
+        pln_cnt += 1
 
         # process error msg, if any
         if cnt in asm_ser:
             for tmp in asm_ser[cnt]:
                 spo.append(ctrl, gen_msg('S', tmp, line))
+                pln_cnt += 1
         if cnt in asm_err:
             for tmp in asm_err[cnt]:
                 spo.append(ctrl, gen_msg('E', tmp, line))
+                pln_cnt += 1
         if cnt in asm_warn:
             for tmp in asm_warn[cnt]:
                 spo.append(ctrl, gen_msg('W', tmp, line))
+                pln_cnt += 1
         if cnt in asm_info:
             for tmp in asm_info[cnt]:
                 spo.append(ctrl, gen_msg('I', tmp, line))
+                pln_cnt += 1
     ### end of main read loop
 
 

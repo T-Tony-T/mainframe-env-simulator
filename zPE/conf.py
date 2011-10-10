@@ -31,8 +31,6 @@ DEFAULT = {
 
     'MEMORY_SZ' : '1024K',      # memory size: 1024 KB
 
-    'LN_P_PAGE' : 60,           # line per page for output
-
     'ICH70001I' : {             # config list for ICH70001I
         'atime' : '00:00:00 ON THURSDAY, JANUARY 18, 2011',
                                 # the start time of this project

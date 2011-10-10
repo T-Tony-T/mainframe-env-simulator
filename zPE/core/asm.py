@@ -305,7 +305,7 @@ class C_(object):
     def get(self):
         return self.tr(self.dump())
     def value(self):
-        return None             # should not be evaluated
+        return int(X_.tr(self.dump()), 16)
     def set(self, ch_str, length = 0):
         ch_len = len(ch_str)
         if not length:
