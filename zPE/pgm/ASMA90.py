@@ -344,7 +344,7 @@ def pass_1(amode = 31, rmode = 31):
             spt.append('{0:0>5}{1:<8} LTORG\n'.format(line_num, ''))
 
         # parse DC/DS/=constant
-        elif field[1] in ['DC', 'DS'] or field[1][0] == '=':
+        elif field[1] in [ 'DC', 'DS' ] or field[1][0] == '=':
             if field[1][0] == '=':
                 tmp = field[1][1:]
             else:
@@ -481,11 +481,21 @@ def pass_1(amode = 31, rmode = 31):
                 arg_list = field[2]
             else:
                 # check reference
-                arg_list = ''   # the final argument list
-                pattern = '[,()*/+-]'   # separator list
-                sept = ''               # tmp separator holder
-                reminder = field[2]     # tmp reminder holder
+                arg_list = ''         # the final argument list
+                pattern = '[,()*/+-]' # separator list
+                sept = ''             # tmp separator holder
+                reminder = field[2]   # tmp reminder holder
                 while True:
+                    if ( sept == ')'  and # preceding argument required
+                         last_arg == None # not offered
+                         ):
+                        indx_e = ( line.index(field[2])
+                                   + len(field[2]) # move to end of arg_list
+                                   - len(reminder) # move back to error pos
+                                   )
+                        __INFO('E', line_num, (
+                                41, indx_e - 1, indx_e,
+                                ))
                     arg_list += sept # append leftover separator
 
                     if reminder == '':
@@ -503,7 +513,10 @@ def pass_1(amode = 31, rmode = 31):
                     parsed = False # reset the flag
 
                     if lbl == '':
+                        last_arg = None
                         continue # if no label, continue
+                    else:
+                        last_arg = lbl
 
                     if not parsed and lbl.isdigit():
                         # parse integer string
@@ -533,7 +546,7 @@ def pass_1(amode = 31, rmode = 31):
                                     ]
                                 )
                         else:
-                            indx_e = line.index(lbl) + 1
+                            indx_s = line.index(lbl) + 1
                             __INFO('E', line_num,
                                    ( 65, indx_s, indx_s - 1 + len(lbl), )
                                    )
@@ -547,11 +560,19 @@ def pass_1(amode = 31, rmode = 31):
                                 sd_info = (sd_info[0], sd_info[1], sd_info[2],
                                            0, sd_info[4], sd_info[3]
                                            )
-                            (arg_val, arg_len) = zPE.core.asm.value_sd(sd_info)
-
-                            arg_list += "B'{0:0>{1}}'".format(
-                                bin(arg_val)[2:], arg_len
-                                )
+                            if sd_info[2] in 'XCB': # variable length const
+                                ( arg_val, arg_len ) = zPE.core.asm.value_sd(
+                                    sd_info
+                                    )
+                                arg_list += "B'{0:0>{1}}'".format(
+                                    bin(arg_val)[2:], arg_len
+                                    )
+                            else:
+                                indx_s = line.index(lbl)
+                                __INFO('E', line_num,
+                                       ( 41, indx_s, indx_s - 1 + len(lbl), )
+                                       )
+                                arg_list += lbl
                             parsed = True
                         except:
                             pass
@@ -841,7 +862,7 @@ def pass_2(rc, amode = 31, rmode = 31):
             pass                # all constants should be allocated by now
 
         # parse DC/DS
-        elif field[1] in ['DC', 'DS']:
+        elif field[1] in [ 'DC', 'DS' ]:
             try:
                 sd_info = zPE.core.asm.parse_sd(field[2])
             except:
@@ -931,7 +952,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                 reloc_cnt += 1
                             elif res[1][indx] == 'inline_const':
                                 tmp = zPE.core.asm.parse_sd(res[0][indx])
-                                if tmp[2] not in 'BCX': # DC only allow these
+                                if tmp[2] not in 'BCX': # variable length const
                                     indx_s = spi[line_num].index(
                                         res[0][indx]
                                         )
@@ -1048,6 +1069,9 @@ def pass_2(rc, amode = 31, rmode = 31):
             # check reference
             arg_indx = 0    # index used for op_code
             for lbl_i in range(len(args)):
+                if __INFO_GE(line_num, 'E'): # could be flagged in pass 1
+                    break # if has error, stop processing
+
                 lbl = args[lbl_i]
                 p1_lbl = p1_args[lbl_i]
                 arg_indx += 1 # start at 1, since op_code = ('xx', ...)
@@ -1056,6 +1080,7 @@ def pass_2(rc, amode = 31, rmode = 31):
 
                 if op_code[lbl_i + 1].type in 'X' and res != None:
                     abs_addr = True  # is absolute address
+
                     # check length
                     if len(res[0][2:-1]) > 12: # 12 bit displacement
                         indx_s = spi[line_num].index(p1_lbl)
@@ -1074,7 +1099,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                 else:
                     abs_addr = False # no absolute address
 
-                    res = __PARSE_ARG(lbl)
+                    res    = __PARSE_ARG(lbl)
                     p1_res = __PARSE_ARG(p1_lbl)
 
                     if isinstance(res, int):
@@ -1368,13 +1393,13 @@ def __IS_ABS_ADDR(addr_arg):
     # parse displacement
     res = re.search('\(', reminder)
     if res != None:     # search succeed
-        disp = reminder[:res.start()]
+        disp     = reminder[:res.start()]
         reminder = reminder[res.end():]
     else:
-        disp = reminder
+        disp     = reminder
         reminder = ''
     disp = __REDUCE_EXP(disp)
-    if disp == None:
+    if disp == None:            # disp cannot be reduced
         return None
 
     # parse index
@@ -1391,19 +1416,19 @@ def __IS_ABS_ADDR(addr_arg):
         indx = "B'0'"
         reminder = ''
     indx = __REDUCE_EXP(indx)
-    if indx == None:
+    if indx == None:            # indx cannot be reduced
         return None
 
     # parse base
     res = re.search('\)', reminder)
     if res != None:     # search succeed
-        base = reminder[:res.start()]
+        base     = reminder[:res.start()]
         reminder = reminder[res.end():]
     else:
-        base = "B'0'"
+        base     = "B'0'"
         reminder = ''
     base = __REDUCE_EXP(base)
-    if base == None:
+    if base == None:            # base cannot be reduced
         return None
 
     # check reminder
