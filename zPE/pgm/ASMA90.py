@@ -319,6 +319,9 @@ def pass_1(amode = 31, rmode = 31):
 
         # parse LTORG
         elif field[1] == 'LTORG':
+            # align boundary
+            addr = (addr + 7) / 8 * 8
+
             curr_pool = [
                 [],     # pool for constant with double-word alignment
                 [],     # pool for constant with full-word alignment
@@ -469,17 +472,20 @@ def pass_1(amode = 31, rmode = 31):
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
             op_code = zPE.core.asm.get_op(field[1])
+            op_indx = zPE.core.asm.op_arg_indx(op_code)
+            op_args = len(op_code) - op_indx
+
             args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
 
-            if len(op_code) > len(args) + 1:
+            if op_args > len(args):
                 indx_s = line.index(args[-1])
                 __INFO('S', line_num, ( 175, indx_s, indx_s, ))
                 arg_list = field[2]
-            elif len(op_code) < len(args) + 1:
+            elif op_args < len(args):
                 indx_e = line.index(field[2]) + len(field[2])
                 __INFO('S', line_num, (
                         173,
-                        indx_e - len(args[len(op_code)-1]) - 1, # -1 for ','
+                        indx_e - len(args[op_args]) - 1, # -1 for ','
                         indx_e,
                         ))
                 arg_list = field[2]
@@ -579,7 +585,6 @@ def pass_1(amode = 31, rmode = 31):
                                 arg_list += lbl
                             parsed = True
                         except:
-                            print line[:-1]
                             pass
 
                     if not parsed: # get the leftover label
@@ -1063,27 +1068,28 @@ def pass_2(rc, amode = 31, rmode = 31):
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
             op_code = MNEMONIC[line_num][2]
+            op_indx = zPE.core.asm.op_arg_indx(op_code)
+            op_args = len(op_code) - op_indx
+
             args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
 
-            if len(op_code) != len(args) + 1:
+            if op_args != len(args):
                 continue        # should be processed in pass 1
 
             p1_field = zPE.resplit_sq('\s+', spi[line_num], 3)
             p1_args = zPE.resplit(',', p1_field[2], ['(',"'"], [')',"'"])
 
             # check reference
-            arg_indx = 0    # index used for op_code
             for lbl_i in range(len(args)):
                 if __INFO_GE(line_num, 'E'): # could be flagged in pass 1
                     break # if has error, stop processing args
 
                 lbl = args[lbl_i]
                 p1_lbl = p1_args[lbl_i]
-                arg_indx += 1 # start at 1, since op_code = ('xx', ...)
 
                 res = __IS_ABS_ADDR(lbl)
 
-                if op_code[lbl_i + 1].type in 'X' and res != None:
+                if op_code[lbl_i + op_indx].type in 'X' and res != None:
                     abs_addr = True  # is absolute address
 
                     # check length
@@ -1133,7 +1139,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                              res[1][indx] == 'valid_symbol'
                              ):
                             if res[1][indx] == 'eq_constant':
-                                if op_code[lbl_i + 1].for_write:
+                                if op_code[lbl_i + op_indx].for_write:
                                     indx_s = spi[line_num].index(res[0][indx])
                                     __INFO('E', line_num, (
                                             30,
@@ -1167,12 +1173,13 @@ def pass_2(rc, amode = 31, rmode = 31):
                                               ': symbol not allocated.\n')
                             elif res[1][indx] == 'location_ptr':
                                 pass # no special process required
-                            else:
+                            else: # valid_symbol
                                 tmp = zPE.resplit_sq('[()]', res[0][indx])
                                 bad_lbl = zPE.bad_label(tmp[0])
                                 lbl_8 = '{0:<8}'.format(tmp[0])
 
                                 if len(tmp) > 1 and indx != len(res[0]) - 1:
+                                    # complex symbol must be last node of exp
                                     indx_s = (
                                         spi[line_num].index(p1_res[0][indx]) +
                                         len(p1_res[0][indx])
@@ -1272,10 +1279,10 @@ def pass_2(rc, amode = 31, rmode = 31):
 
                 # evaluate expression
                 if abs_addr:    # absolute address
-                    op_code[lbl_i + 1].set(*res)
+                    op_code[lbl_i + op_indx].set(*res)
                 elif reloc_cnt == 0:    # no relocatable symbol
                     try:
-                        op_code[lbl_i + 1].set(tmp_val)
+                        op_code[lbl_i + op_indx].set(tmp_val)
                     except:
                         indx_s = spi[line_num].index(p1_lbl)
                         __INFO('E', line_num,
@@ -1291,13 +1298,15 @@ def pass_2(rc, amode = 31, rmode = 31):
                         else:
                             lbl_8 = '{0:<8}'.format(tmp[0])
                         if len(tmp) > 1:
+                            # [ symbol, indx, '' ]
                             sd_info = zPE.core.asm.parse_sd(tmp[1])
                             sd_info = (sd_info[0], sd_info[1], sd_info[2],
                                        0, sd_info[4], sd_info[3]
                                        ) # all are auto-generated, no 'L' at all
-                            (tmp_val, dummy) = zPE.core.asm.value_sd(sd_info)
-                            reg_indx = str(tmp_val)
+                            (reg_indx, dummy) = zPE.core.asm.value_sd(sd_info)
+                            reg_indx = str(reg_indx)
                         else:
+                            # [ symbol ]
                             reg_indx = '0'
 
                     if __IS_ADDRESSABLE(lbl_8, csect_lbl, tmp_val):
@@ -1321,7 +1330,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                             symbol.references.append(
                                 '{0:>4}{1}'.format(line_num, '')
                                 )
-                        op_code[lbl_i + 1].set(
+                        op_code[lbl_i + op_indx].set(
                             int(addr_res[0]), int(reg_indx), int(addr_res[1][1])
                             )
                     else:

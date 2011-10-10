@@ -192,7 +192,8 @@ def __PARSE_OUT(step, limit):
             if len(tmp_str) > 16:
                 tmp_str = tmp_str[:16]
         elif len(asm_mnem[cnt]) == 5: # type 5
-            code = zPE.core.asm.prnt_op(asm_mnem[cnt][2])
+            op = asm_mnem[cnt][2]
+            code = zPE.core.asm.prnt_op(op)
             if len(code) == 12:
                 field_3 = code[8:12]
             else:
@@ -216,6 +217,7 @@ def __PARSE_OUT(step, limit):
             tmp_str += '{0:0>5} {1:0>5}'.format(
                 addr_1, addr_2
                 )
+            # mark; add addr here
 
         spo.append(ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
                    '{0:>5} {1}'.format(cnt, line))

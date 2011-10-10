@@ -179,8 +179,8 @@ pseudo = { }        # should only be filled by other modules (e.g. ASSIST)
 
 # Extended Mnemonic
 ext_mnem = {
-    'B'    : lambda: ('47F', X().ro()),
-    'BR'   : lambda: ('07F', R().ro()),
+    'B'    : lambda: ('47', 'F', X().ro()),
+    'BR'   : lambda: ('07', 'F', R().ro()),
     }
 # Basic Instruction
 op_code = {
@@ -257,22 +257,31 @@ def len_op(op_code):
     else:
         return 4
 
+def op_arg_indx(op_code):
+    indx = 0
+    while isinstance(op_code[indx], str):
+        indx += 1
+    return indx
 
 def prnt_op(op_code):
-    code = op_code[0]
+    # zero-th pass
+    arg_indx = op_arg_indx(op_code)
+    code = ''
+    for indx in range(arg_indx):
+        code += op_code[indx]
     # first pass
-    for indx in range(1, len(op_code)):
+    for indx in range(arg_indx, len(op_code)):
         code += op_code[indx].prnt()[0]
     # second pass
-    for indx in range(1, len(op_code)):
+    for indx in range(arg_indx, len(op_code)):
         code += op_code[indx].prnt()[1]
     return code
 
 
 def type_op(op_code):
-    if op_code[0][:2] in TYPE_OP['B']:
+    if op_code[0] in TYPE_OP['B']:
         return 'B'
-    elif op_code[0][:2] in TYPE_OP['M']:
+    elif op_code[0] in TYPE_OP['M']:
         return 'M'
     else:
         return ' '
@@ -287,7 +296,6 @@ def valid_op(instruction):
         return True
     else:
         return False
-
 ### end of Operation Code Definition
 
 
