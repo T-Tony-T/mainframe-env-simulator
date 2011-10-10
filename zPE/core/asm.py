@@ -9,12 +9,65 @@ import re
 ### Valid Operation Code
 
 ## basic instruction format type
-# self.prnt() should return ( first_str, second_str ) where either can be ''
+class InstructionType(object):
+    '''this is an abstract base class'''
+    def __init__(self, ins_type):
+        self.type = ins_type
+
+        # default to no access permission; see ro() / wo() / rw() for more info
+        self.for_read  = False
+        self.for_write = False
+
+    def __len__(self):
+        '''return number of half-bytes / hex-digits'''
+        raise AssertionError('require overridden')
+
+    def get(self):
+        '''return the internal value'''
+        raise AssertionError('require overridden')
+
+    def prnt(self):
+        '''
+        return ( first_str, second_str ) where either can be ''
+
+        when connecting multiple types, 'first_str's are concatenate
+        before 'second_str's
+        '''
+        raise AssertionError('require overridden')
+
+    def value(self):
+        '''return the logical value'''
+        raise AssertionError('require overridden')
+
+    def set(self, val):
+        '''store the value'''
+        raise AssertionError('require overridden')
+
+
+    def ro(self):
+        '''invoke this like a modifier. e.g. r = R().ro()'''
+        self.for_read  = True
+        self.for_write = False
+        return self
+
+    def wo(self):
+        '''invoke this like a modifier. e.g. r = R().wo()'''
+        self.for_read  = False
+        self.for_write = True
+        return self
+
+    def rw(self):
+        '''invoke this like a modifier. e.g. r = R().rw()'''
+        self.for_read  = True
+        self.for_write = True
+        return self
+
 
 # int_4 => ( 'r', '' )
-class R(object):
+class R(InstructionType):
     def __init__(self, val = None):
-        self.type = 'R'
+        super(R, self).__init__('R')
+
         if val == None:
             self.valid = False
             self.__val = None
@@ -51,9 +104,10 @@ class R(object):
         self.valid = True
 
 # int_12(int_4, int_4) => ( 'xbddd', '' )
-class X(object):
+class X(InstructionType):
     def __init__(self, dsplc = None, indx = 0, base = 0):
-        self.type = 'X'
+        super(X, self).__init__('X')
+
         if dsplc == None:
             self.valid = False
             self.__dsplc = None
@@ -125,55 +179,56 @@ pseudo = { }        # should only be filled by other modules (e.g. ASSIST)
 
 # Extended Mnemonic
 ext_mnem = {
-    'B'    : lambda: ('47F', X()),
-    'BR'   : lambda: ('07F', R()),
+    'B'    : lambda: ('47F', X().ro()),
+    'BR'   : lambda: ('07F', R().ro()),
     }
 # Basic Instruction
 op_code = {
-    'A'    : lambda: ('5A', R(), X()),
-    'AR'   : lambda: ('1A', R(), R()),
+    'A'    : lambda: ('5A', R().rw(), X().ro()),
+    'AR'   : lambda: ('1A', R().rw(), R().ro()),
 
-    'BAL'  : lambda: ('45', R(), X()),
-    'BALR' : lambda: ('05', R(), R()),
-    'BC'   : lambda: ('47', R(), X()),
-    'BCR'  : lambda: ('07', R(), R()),
-    'BCT'  : lambda: ('46', R(), X()),
-    'BCTR' : lambda: ('06', R(), R()),
+    'BAL'  : lambda: ('45', R().ro(), X().ro()),
+    'BALR' : lambda: ('05', R().ro(), R().ro()),
+    'BC'   : lambda: ('47', R().ro(), X().ro()),
+    'BCR'  : lambda: ('07', R().ro(), R().ro()),
+    'BCT'  : lambda: ('46', R().rw(), X().ro()),
+    'BCTR' : lambda: ('06', R().rw(), R().ro()),
 
-    'C'    : lambda: ('59', R(), X()),
-    'CL'   : lambda: ('55', R(), X()),
-    'CLR'  : lambda: ('15', R(), R()),
-    'CR'   : lambda: ('19', R(), R()),
+    'C'    : lambda: ('59', R().ro(), X().ro()),
+    'CL'   : lambda: ('55', R().ro(), X().ro()),
+    'CLR'  : lambda: ('15', R().ro(), R().ro()),
+    'CR'   : lambda: ('19', R().ro(), R().ro()),
 
-    'D'    : lambda: ('5D', R(), X()),
-    'DR'   : lambda: ('1D', R(), R()),
+    'D'    : lambda: ('5D', R().rw(), X().ro()),
+    'DR'   : lambda: ('1D', R().rw(), R().ro()),
 
-    'EX'   : lambda: ('44', R(), X()),
+    'EX'   : lambda: ('44', R().ro(), X().ro()),
 
-    'IC'   : lambda: ('43', R(), X()),
-    'L'    : lambda: ('58', R(), X()),
-    'LA'   : lambda: ('41', R(), X()),
-    'LCR'  : lambda: ('13', R(), R()),
-    'LR'   : lambda: ('18', R(), R()),
-    'LTR'  : lambda: ('12', R(), R()),
+    'IC'   : lambda: ('43', R().rw(), X().ro()),
 
-    'M'    : lambda: ('5C', R(), X()),
-    'MR'   : lambda: ('1C', R(), R()),
+    'L'    : lambda: ('58', R().wo(), X().ro()),
+    'LA'   : lambda: ('41', R().wo(), X().ro()),
+    'LCR'  : lambda: ('13', R().rw(), R().ro()),
+    'LR'   : lambda: ('18', R().wo(), R().ro()),
+    'LTR'  : lambda: ('12', R().wo(), R().ro()),
 
-    'N'    : lambda: ('54', R(), X()),
-    'NR'   : lambda: ('14', R(), R()),
+    'M'    : lambda: ('5C', R().rw(), X().ro()),
+    'MR'   : lambda: ('1C', R().rw(), R().ro()),
 
-    'O'    : lambda: ('56', R(), X()),
-    'OR'   : lambda: ('16', R(), R()),
+    'N'    : lambda: ('54', R().rw(), X().ro()),
+    'NR'   : lambda: ('14', R().rw(), R().ro()),
 
-    'S'    : lambda: ('5B', R(), X()),
-    'SR'   : lambda: ('1B', R(), R()),
+    'O'    : lambda: ('56', R().rw(), X().ro()),
+    'OR'   : lambda: ('16', R().rw(), R().ro()),
 
-    'ST'   : lambda: ('50', R(), X()),
-    'STC'  : lambda: ('42', R(), X()),
+    'S'    : lambda: ('5B', R().rw(), X().ro()),
+    'SR'   : lambda: ('1B', R().rw(), R().ro()),
 
-    'X'    : lambda: ('57', R(), X()),
-    'XR'   : lambda: ('17', R(), R()),
+    'ST'   : lambda: ('50', R().ro(), X().wo()),
+    'STC'  : lambda: ('42', R().ro(), X().rw()),
+
+    'X'    : lambda: ('57', R().rw(), X().ro()),
+    'XR'   : lambda: ('17', R().rw(), R().ro()),
     }
 
 

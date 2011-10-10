@@ -1070,7 +1070,7 @@ def pass_2(rc, amode = 31, rmode = 31):
             arg_indx = 0    # index used for op_code
             for lbl_i in range(len(args)):
                 if __INFO_GE(line_num, 'E'): # could be flagged in pass 1
-                    break # if has error, stop processing
+                    break # if has error, stop processing args
 
                 lbl = args[lbl_i]
                 p1_lbl = p1_args[lbl_i]
@@ -1091,7 +1091,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                         __INFO('E', line_num,
                                ( 28, indx_s, indx_s + tmp, )
                                )
-                        break
+                        break   # stop processing current res
                     res = [
                         zPE.core.asm.value_sd(zPE.core.asm.parse_sd(x))[0]
                         for x in res
@@ -1109,7 +1109,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                 indx_s + p1_res,
                                 indx_s + len(p1_args[lbl_i]),
                                 ))
-                        break
+                        break   # stop processing current res
 
                     reloc_cnt = 0    # number of relocatable symbol
                     reloc_arg = None # backup of the relocatable symbol
@@ -1121,13 +1121,22 @@ def pass_2(rc, amode = 31, rmode = 31):
                             __INFO('E', line_num,
                                    ( 78, indx_s, indx_s + len(lbl), )
                                    )
-                            break
+                            break   # stop processing current res
 
                         if ( res[1][indx] == 'eq_constant'  or
                              res[1][indx] == 'location_ptr' or
                              res[1][indx] == 'valid_symbol'
                              ):
                             if res[1][indx] == 'eq_constant':
+                                if op_code[lbl_i + 1].for_write:
+                                    indx_s = spi[line_num].index(res[0][indx])
+                                    __INFO('E', line_num, (
+                                            30,
+                                            indx_s,
+                                            indx_s + len(res[0][indx]),
+                                            ))
+                                    break   # stop processing current res
+
                                 tmp = zPE.resplit_sq('[()]', lbl)
                                 symbol = __HAS_EQ(tmp[0], scope_id)
 
@@ -1143,6 +1152,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                     __INFO('S', line_num,
                                            ( 173, indx_s, indx_e, )
                                            )
+                                    break   # stop processing current res
                                 elif symbol == None:
                                     if not __INFO_GE(line_num, 'E'):
                                         zPE.abort(90, 'Error: ', p1_lbl,
@@ -1169,6 +1179,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                     __INFO('S', line_num,
                                            ( 173, indx_s, indx_e, )
                                            )
+                                    break   # stop processing current res
                                 elif bad_lbl:
                                     indx_s = (
                                         spi[line_num].index(p1_res[0][indx])
@@ -1178,6 +1189,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                             indx_s,
                                             indx_s + len(p1_res[0][indx]),
                                             ))
+                                    break   # stop processing current res
                                 elif lbl_8 not in SYMBOL:
                                     indx_s = (
                                         spi[line_num].index(p1_res[0][indx])
@@ -1187,6 +1199,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                             indx_s,
                                             indx_s + len(p1_res[0][indx]),
                                             ))
+                                    break   # stop processing current res
                             # check complex addressing
                             if ( ( indx-1 >= 0  and
                                    res[0][indx-1] in '*/()'
@@ -1200,7 +1213,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                         indx_s,
                                         indx_s + len(p1_lbl),
                                         ))
-                                break
+                                break   # stop processing current res
                             reloc_arg = res[0][indx]
                             res[0][indx] = "B'0'"
                             reloc_cnt += 1
@@ -1215,7 +1228,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                         indx_s,
                                         indx_s + len(p1_res[0][indx]),
                                         ))
-                                break
+                                break   # stop processing current res
                             elif res[0][indx][1] != "'": # e.g. BL2'1'
                                 indx_s = (
                                     spi[line_num].index(p1_res[0][indx])
@@ -1225,7 +1238,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                         indx_s,
                                         indx_s + len(p1_res[0][indx]),
                                         ))
-                                break
+                                break   # stop processing current res
 
                             if not sd_info[5]:
                                 sd_info = (sd_info[0], sd_info[1], sd_info[2],
@@ -1238,7 +1251,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                                 )
                 # end of processing res
                 if __INFO_GE(line_num, 'E'):
-                    break # if has error, stop processing
+                    break # if has error, stop processing args
 
                 # calculate constant part
                 if not abs_addr and reloc_cnt < 2:

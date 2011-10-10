@@ -24,7 +24,7 @@ __W_MSG = {                     # ASMAxxxW
 __E_MSG = {                     # ASMAxxxE
     28  : lambda info, line: __format('INVALID DISPLACEMENT', info[1]),
     29  : lambda info, line: __format('INVALID REGISTER', info[1]),
-    30  : lambda info, line: __format('INVALID DELIMITER', info[1]),
+    30  : lambda info, line: __format('ILLEGAL USE OF LITERAL', info[1]),
     32  : lambda info, line: __format('RELOCATABLE EXPRESSION REQUIRED', info[1]),
     34  : lambda info, line: __format('ADDRESSIBILITY ERROR', info[1]),
     43  : lambda info, line: __format('PREVIOUSLY DEFINED SYMBOL', info[1]),
