@@ -1023,23 +1023,23 @@ def pass_2(rc, amode = 31, rmode = 31):
                         # calculate constant part
                         if reloc_cnt < 2:
                             try:
-                                tmp_val = eval(''.join(res[0]))
+                                ex_disp = eval(''.join(res[0]))
                             except:
                                 zPE.abort(92, 'Error: ', ''.join(res[0]),
                                           ': Invalid expression.\n')
                         # evaluate expression
                         if reloc_cnt == 0:      # no relocatable symbol
-                            sd_info[4][lbl_i] = str(tmp_val)
+                            sd_info[4][lbl_i] = str(ex_disp)
                         elif reloc_cnt == 1:    # one relocatable symbol
                             if reloc_arg == '*':
                                 lbl_8 = '*{0}'.format(line_num)
                             else:
                                 lbl_8 = '{0:<8}'.format(reloc_arg)
 
-                            if __IS_ADDRESSABLE(lbl_8, csect_lbl, tmp_val):
+                            if __IS_ADDRESSABLE(lbl_8, csect_lbl, ex_disp):
                                 # update Using Map
                                 addr_res = __ADDRESSING(
-                                    lbl_8, csect_lbl, tmp_val
+                                    lbl_8, csect_lbl, ex_disp
                                     )
                                 using = USING_MAP[addr_res[1]]
                                 using.max_disp = max(
@@ -1267,22 +1267,22 @@ def pass_2(rc, amode = 31, rmode = 31):
 
                 # calculate constant part
                 if not abs_addr and reloc_cnt < 2:
-                    tmp_val = __REDUCE_EXP(''.join(res[0]))
-                    if tmp_val == None:
+                    ex_disp = __REDUCE_EXP(''.join(res[0]))
+                    if ex_disp == None:
                         zPE.abort(92, 'Error: ', ''.join(res[0]),
                                   ': Invalid expression.\n')
-                    sd_info = zPE.core.asm.parse_sd(tmp_val)
+                    sd_info = zPE.core.asm.parse_sd(ex_disp)
                     sd_info = (sd_info[0], sd_info[1], sd_info[2],
                                0, sd_info[4], sd_info[3]
                                ) # all are auto-generated, no 'L' at all
-                    (tmp_val, dummy) = zPE.core.asm.value_sd(sd_info)
+                    (ex_disp, dummy) = zPE.core.asm.value_sd(sd_info)
 
                 # evaluate expression
                 if abs_addr:    # absolute address
                     op_code[lbl_i + op_indx].set(*res)
                 elif reloc_cnt == 0:    # no relocatable symbol
                     try:
-                        op_code[lbl_i + op_indx].set(tmp_val)
+                        op_code[lbl_i + op_indx].set(ex_disp)
                     except:
                         indx_s = spi[line_num].index(p1_lbl)
                         __INFO('E', line_num,
@@ -1309,10 +1309,10 @@ def pass_2(rc, amode = 31, rmode = 31):
                             # [ symbol ]
                             reg_indx = '0'
 
-                    if __IS_ADDRESSABLE(lbl_8, csect_lbl, tmp_val):
+                    if __IS_ADDRESSABLE(lbl_8, csect_lbl, ex_disp):
                         # update Using Map
                         addr_res = __ADDRESSING(
-                            lbl_8, csect_lbl, tmp_val
+                            lbl_8, csect_lbl, ex_disp
                             )
                         using = USING_MAP[addr_res[1]]
                         using.max_disp = max(
@@ -1403,13 +1403,13 @@ def __HAS_EQ(lbl, scope_id):
             return symbol
     return None                 # nor found
 
-def __IS_ADDRESSABLE(lbl, csect_lbl, ex_dis = 0):
+def __IS_ADDRESSABLE(lbl, csect_lbl, ex_disp = 0):
     if (lbl[0] != '*') and (lbl not in SYMBOL) and (lbl not in SYMBOL_EQ):
         return False            # not an *, a symbol, nor a =constant
     if len(ACTIVE_USING) == 0:
         return False            # not in the domain of any USING
     for k,v in ACTIVE_USING.iteritems():
-        if __IS_IN_RANGE(lbl, ex_dis, USING_MAP[v,k], ESD[csect_lbl][0]):
+        if __IS_IN_RANGE(lbl, ex_disp, USING_MAP[v,k], ESD[csect_lbl][0]):
             return True
     return False                # not in the range of any USING
 
@@ -1463,19 +1463,19 @@ def __IS_ABS_ADDR(addr_arg):
         return None
     return ( disp, indx, base, )
 
-def __IS_IN_RANGE(lbl, ex_dis, using, csect):
+def __IS_IN_RANGE(lbl, ex_disp, using, csect):
     u_range = min(
         using.u_value + using.u_range, # ending addr of the USING
         csect.addr + csect.length      # ending addr of the CSECT
         )
     eq_const = __HAS_EQ(lbl, csect.id)
     if ( ( (lbl[0] == '*') and  # is loc_ptr
-           (int(lbl[1:]) + ex_dis < u_range)
+           (int(lbl[1:]) + ex_disp < u_range)
            )  or
          ( (lbl[0] == '=') and  # is =constant
-           (MNEMONIC[eq_const.defn][1] + ex_dis < u_range)
+           (MNEMONIC[eq_const.defn][1] + ex_disp < u_range)
            )  or
-         ( (MNEMONIC[SYMBOL[lbl].defn][1] + ex_dis < u_range) # must be symbol
+         ( (MNEMONIC[SYMBOL[lbl].defn][1] + ex_disp < u_range) # must be symbol
            )):
         return True
     else:
