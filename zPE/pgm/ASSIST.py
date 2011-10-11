@@ -141,28 +141,19 @@ def __PARSE_OUT(step, limit):
     ctrl = '1'
     spo.append(ctrl, '*** ASSIST 4.0/A2-05/15/82  470/V7A/0:OS/VS2  INS=SDFP7/X=BGHO, CHECK/TRC/=1180, OPTS=CDKMPR FROM PENN ST*NIU COMPSCI*LT\n')
     pln_cnt += 1
-    ctrl = '0'
 
+    ctrl = '0'
     spo.append(ctrl, '\n')
     pln_cnt += 1
 
-    spo.append(ctrl, '{0:>111}PAGE {1:>4}\n'.format(' ', page_cnt))
-    spo.append(ctrl, '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
-    pln_cnt += 2
-
+    pln_cnt = __PRINT_HEADER(spo, pln_cnt, page_cnt, ctrl)
 
     ### main read loop, op code portion of the report
     cnt = 0                     # line number
     eojob = False               # end of job indicater
     for line in spi:
         cnt += 1                # start at line No. 1
-        if pln_cnt >= LOCAL_CONFIG['LN_P_PAGE']:
-            page_cnt += 1
-            spo.append('1', '{0:>111}PAGE {1:>4}\n'.format(' ', page_cnt))
-            spo.append('0', '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
-            pln_cnt = 2
         ctrl = ' '
-
 
         if eojob:
             # inline inputs
@@ -170,9 +161,9 @@ def __PARSE_OUT(step, limit):
 
         elif line[0] == '*':
             # comments
-            spo.append(ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
-                       '{0:>5} {1}'.format(cnt, line))
-            pln_cnt += 1
+            pln = [ ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
+                    '{0:>5} {1}'.format(cnt, line) ]
+            ( pln_cnt, page_cnt ) = __PRINT_LINE(spo, pln, pln_cnt, page_cnt)
             continue
 
         # instructions
@@ -181,7 +172,7 @@ def __PARSE_OUT(step, limit):
         elif asm_mnem[cnt][0] != 0: # CSECT or DSECT
             loc = hex(asm_mnem[cnt][1])[2:].upper()
         else:                       # END
-            loc = hex(asm_mnem[cnt][1])[2:].upper()
+            loc = '      '
             eojob = True
 
         tmp_str = ''
@@ -225,27 +216,31 @@ def __PARSE_OUT(step, limit):
                 addr_1, addr_2
                 )
 
-        spo.append(ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
-                   '{0:>5} {1}'.format(cnt, line))
-        pln_cnt += 1
+        pln = [ ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
+                '{0:>5} {1}'.format(cnt, line) ]
+        ( pln_cnt, page_cnt ) = __PRINT_LINE(spo, pln, pln_cnt, page_cnt)
 
         # process error msg, if any
         if cnt in asm_ser:
             for tmp in asm_ser[cnt]:
-                spo.append(ctrl, gen_msg('S', tmp, line))
-                pln_cnt += 1
+                ( pln_cnt, page_cnt ) = __PRINT_LINE(
+                    spo, [ ctrl, gen_msg('S', tmp, line) ], pln_cnt, page_cnt
+                    )
         if cnt in asm_err:
             for tmp in asm_err[cnt]:
-                spo.append(ctrl, gen_msg('E', tmp, line))
-                pln_cnt += 1
+                ( pln_cnt, page_cnt ) = __PRINT_LINE(
+                    spo, [ ctrl, gen_msg('E', tmp, line) ], pln_cnt, page_cnt
+                    )
         if cnt in asm_warn:
             for tmp in asm_warn[cnt]:
-                spo.append(ctrl, gen_msg('W', tmp, line))
-                pln_cnt += 1
+                ( pln_cnt, page_cnt ) = __PRINT_LINE(
+                    spo, [ ctrl, gen_msg('W', tmp, line) ], pln_cnt, page_cnt
+                    )
         if cnt in asm_info:
             for tmp in asm_info[cnt]:
-                spo.append(ctrl, gen_msg('I', tmp, line))
-                pln_cnt += 1
+                ( pln_cnt, page_cnt ) = __PRINT_LINE(
+                    spo, [ ctrl, gen_msg('I', tmp, line) ], pln_cnt, page_cnt
+                    )
     ### end of main read loop
 
 
@@ -377,3 +372,45 @@ def __PARSE_OUT(step, limit):
     print '\nUsing Map:'
     for k,v in asm_using.iteritems():
         print k, v.__dict__
+
+
+def __PRINT_LINE(spool_out, line_words, line_num, page_num):
+    '''
+    spool_out
+        the spool that the header is written to
+    line_words
+        the tuple/list that consist a line
+    line_num
+        the current line number
+    page_num
+        the current page number
+
+    return value
+        a two-tuple containing the new line number
+        and the new page number after the line is
+        inserted
+    '''
+    if line_num >= LOCAL_CONFIG['LN_P_PAGE']:
+        line_num = __PRINT_HEADER(spool_out, 0, page_num + 1)
+    spool_out.append(* line_words)
+
+    return ( line_num + 1, page_num )
+
+
+def __PRINT_HEADER(spool_out, line_num, page_num, ctrl = '1'):
+    '''
+    spool_out
+        the spool that the header is written to
+    line_num
+        the current line number
+    page_num
+        the current page number
+    ctrl = '1'
+        the control char for the header
+
+    return value
+        the new line number after header is inserted
+    '''
+    spool_out.append(ctrl, '{0:>111}PAGE {1:>4}\n'.format(' ', page_num))
+    spool_out.append('0',  '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
+    return line_num + 2
