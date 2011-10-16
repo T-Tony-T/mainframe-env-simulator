@@ -562,10 +562,10 @@ def read_key_binding():
 
         if __TRACE_KEY_SCAN:
             sys.stderr.write('   Func => Key:\n')
-            for k,v in Config['FUNC_BINDING'].iteritems():
+            for (k, v) in Config['FUNC_BINDING'].iteritems():
                 sys.stderr.write('       {0} : {1}\n'.format(k, v))
             sys.stderr.write('   Key => Func:\n')
-            for k,v in Config['KEY_BINDING'].iteritems():
+            for (k, v) in Config['KEY_BINDING'].iteritems():
                 sys.stderr.write('       {0} : {1}\n'.format(k, v))
 
     write_key_binding()

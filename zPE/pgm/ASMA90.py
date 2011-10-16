@@ -43,15 +43,17 @@ LOCAL_CONFIG = {
 
 INFO = {  # '[IWES]' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ...] }
     'I' : {},           # informational messages
+    'N' : {},           # notification messages
     'W' : {},           # warning messages
     'E' : {},           # error messages
-    'S' : {},           # serious messages
+    'S' : {},           # severe error messages
     }
 # check __INFO() for more information
 
 MNEMONIC = {
     # Line_Num : [ scope, ]                                     // type (len) 1
     # Line_Num : [ scope, LOC, ]                                // type (len) 2
+    # Line_Num : [ scope,-LOC, ]                                // type      -2
     # Line_Num : [ scope, LOC, [ CONST_OBJECT, ... ], ]         // type (len) 3
     # Line_Num : [ scope, LOC, (OBJECT_CODE), ADDR1, ADDR2, ]   // type (len) 5
     }
@@ -80,16 +82,19 @@ ESD_ID = {              # External Symbol Dictionary ID Table
 
 class Symbol(object):
     def __init__(self, length, addr, scope_id,
-                 r_type, asm, program,
+                 reloc, sym_type, asm, program,
                  line_cnt, references
                  ):
-        self.length = length
-        self.value = addr
-        self.id = scope_id
-        self.r_type = r_type
-        self.asm = asm
-        self.program = program
-        self.defn = line_cnt
+        self.length     = length
+        self.value      = addr
+        self.id         = scope_id
+
+        self.reloc      = reloc
+        self.type       = sym_type
+        self.asm        = asm
+        self.program    = program
+
+        self.defn       = line_cnt
         self.references = references
 SYMBOL = {              # Cross Reference Table; build during pass 1
     # 'Symbol  ' : Symbol()
@@ -130,7 +135,7 @@ ACTIVE_USING = {
 def init(step):
     # check for file requirement
     if __MISSED_FILE(step) != 0:
-        return zPE.RC['SEVERE']
+        return zPE.RC['CRITICAL']
 
     rc1 = pass_1()
     rc2 = pass_2(rc1)
@@ -243,7 +248,7 @@ def pass_1(amode = 31, rmode = 31):
 
                     SYMBOL[csect_lbl] = Symbol(
                         1, addr, scope_id,
-                        'J', '', '',
+                        '', 'J', '', '',
                         line_num, []
                         )
 
@@ -350,6 +355,42 @@ def pass_1(amode = 31, rmode = 31):
             MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
             spt.append('{0:0>5}{1:<8} LTORG\n'.format(line_num, ''))
 
+        # parse EQU
+        elif field[1] == 'EQU':
+            if field[2].isdigit():
+                # simple equater expression
+                equ_reloc = 'A' # absolute symbol
+
+                equ_addr = int(field[2]) # exp_1
+                equ_len  = 1             # exp_2 [omitted, default length]
+            else:
+                # complex equater expression(s)
+                equ_reloc = 'C' # complexly relocatable symbol
+
+                zPE.mark4future('complex EQUater exp')
+
+            # check label
+            bad_lbl = zPE.bad_label(field[0])
+            lbl_8 = '{0:<8}'.format(field[0])
+            if bad_lbl == None:
+                pass        # no label detected
+            elif bad_lbl:
+                __INFO('E', line_num, ( 143, bad_lbl, len(field[0]), ))
+            elif lbl_8 in SYMBOL:
+                __INFO('E', line_num, ( 43, 0, len(field[0]), ))
+            else:
+                SYMBOL[lbl_8] = Symbol(
+                    equ_len, equ_addr, scope_id,
+                    equ_reloc, 'U', '', '',
+                    line_num, []
+                    )
+
+            MNEMONIC[line_num] = [ scope_id, - equ_addr, ]      # type -2
+            spt.append('{0:0>5}{1:<8} EQU   {2}\n'.format(
+                    line_num, field[0], field[2]
+                    ))
+
+
         # parse DC/DS/=constant
         elif field[1] in [ 'DC', 'DS' ] or field[1][0] == '=':
             if field[1][0] == '=':
@@ -380,9 +421,9 @@ def pass_1(amode = 31, rmode = 31):
                     else:       # found successfully
                         const_left -= 1
                         symbol.length = sd_info[3]
-                        symbol.value = addr
-                        symbol.r_type = sd_info[2]
-                        symbol.defn = line_num
+                        symbol.value  = addr
+                        symbol.type   = sd_info[2]
+                        symbol.defn   = line_num
                 else:
                     zPE.abort(90, 'Error: ', field[1],
                               ': Fail to allocate the constant.\n')
@@ -399,7 +440,7 @@ def pass_1(amode = 31, rmode = 31):
                         if lbl_8 not in SYMBOL_V:
                             SYMBOL_V[lbl_8] = Symbol(
                                 1, 0, scope_id,
-                                'T', '', '',
+                                '', 'T', '', '',
                                 line_num, [ ]
                                 )
                         SYMBOL_V[lbl_8].references.append(
@@ -448,7 +489,7 @@ def pass_1(amode = 31, rmode = 31):
             else:
                 SYMBOL[lbl_8] = Symbol(
                     sd_info[3], addr, scope_id,
-                    sd_info[2], sd_info[2], '',
+                    '', sd_info[2], sd_info[2], '',
                     line_num, []
                     )
 
@@ -477,11 +518,12 @@ def pass_1(amode = 31, rmode = 31):
 
             args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
 
-            if op_args > len(args):
+            # check arguments
+            if op_args > len(args):     # too few args
                 indx_s = line.index(args[-1])
                 __INFO('S', line_num, ( 175, indx_s, indx_s, ))
                 arg_list = field[2]
-            elif op_args < len(args):
+            elif op_args < len(args):   # too many args
                 indx_e = line.index(field[2]) + len(field[2])
                 __INFO('S', line_num, (
                         173,
@@ -489,13 +531,14 @@ def pass_1(amode = 31, rmode = 31):
                         indx_e,
                         ))
                 arg_list = field[2]
-            else:
-                # check reference
+            else:                       # correct number of args
+                # normalize arguments
                 arg_list = ''         # the final argument list
                 pattern = '[,()*/+-]' # separator list
                 sept = ''             # tmp separator holder
                 reminder = field[2]   # tmp reminder holder
                 while True:
+                    # process leftover separator
                     if ( sept == ')'  and # preceding argument required
                          last_arg == None # not offered
                          ):
@@ -508,9 +551,11 @@ def pass_1(amode = 31, rmode = 31):
                                 ))
                     arg_list += sept # append leftover separator
 
+                    # check end of arg_list
                     if reminder == '':
                         break   # end if there is no more reminder
 
+                    # split next argument
                     res = re.search(pattern, reminder)
                     if res:
                         lbl = reminder[:res.start()]
@@ -522,6 +567,7 @@ def pass_1(amode = 31, rmode = 31):
                         reminder = ''
                     parsed = False # reset the flag
 
+                    # validate and normalize splitted argument (lbl)
                     if lbl == '':
                         last_arg = None
                         continue # if no label, continue
@@ -550,7 +596,7 @@ def pass_1(amode = 31, rmode = 31):
                         elif zPE.core.asm.valid_sd(lbl[1:]):
                             const_pool[lbl] = Symbol(
                                 None, None, const_plid,
-                                lbl[1], '', '',
+                                '', lbl[1], '', '',
                                 None, [
                                     '{0:>4}{1}'.format(line_num, ''),
                                     ]
@@ -589,7 +635,7 @@ def pass_1(amode = 31, rmode = 31):
 
                     if not parsed: # get the leftover label
                         arg_list += lbl
-                ## end of checking references
+                ## end of normalizing arguments
 
                 # check lable
                 bad_lbl = zPE.bad_label(field[0])
@@ -603,10 +649,10 @@ def pass_1(amode = 31, rmode = 31):
                 else:
                     SYMBOL[lbl_8] = Symbol(
                         zPE.core.asm.len_op(op_code), addr, scope_id,
-                        'I', '', '',
+                        '', 'I', '', '',
                         line_num, []
                         )
-            # fi
+            # end of checking arguments
 
             if op_indx <= 1 and op_code[1].type in 'X':
                 op_addr1 = op_code[1]
@@ -667,13 +713,10 @@ def pass_1(amode = 31, rmode = 31):
                 MNEMONIC[line_num][1] += RELOCATE_OFFSET[scope_id]
 
     # check cross references table integrality
-    for k,v in SYMBOL.iteritems():
+    for (k, v) in SYMBOL.iteritems():
         if v.defn == None:
             # symbol not defined
             INVALID_SYMBOL.append(k)
-        if len(v.references) == 0:
-            # symbol not referenced
-            NON_REF_SYMBOL.append(k)
     if len(INVALID_SYMBOL):
         rc_symbol = zPE.RC['ERROR']
     else:
@@ -681,11 +724,13 @@ def pass_1(amode = 31, rmode = 31):
 
     # check error messages
     if len(INFO['S']):
-        rc_err = zPE.RC['SERIOUS']
+        rc_err = zPE.RC['SEVERE']
     elif len(INFO['E']):
         rc_err = zPE.RC['ERROR']
     elif len(INFO['W']):
         rc_err = zPE.RC['WARNING']
+    elif len(INFO['N']):
+        rc_err = zPE.RC['NOTIFY']
     else:
         rc_err = zPE.RC['NORMAL']
 
@@ -713,7 +758,8 @@ def pass_2(rc, amode = 31, rmode = 31):
         scope_id = MNEMONIC[line_num][0]        # retrive scope ID
         if scope_id:
             csect_lbl = ESD_ID[scope_id]        # retrive CSECT label
-            if len(MNEMONIC[line_num]) > 1:     # update & retrive address
+            if len(MNEMONIC[line_num]) > 1  and  MNEMONIC[line_num][1] > 0:
+                # update & retrive address
                 prev_addr = addr
                 addr = MNEMONIC[line_num][1]
         else:
@@ -802,15 +848,16 @@ def pass_2(rc, amode = 31, rmode = 31):
                     __INFO('S', line_num, ( 174, indx_s, indx_s, ))
 
                 # check following arguments
-                tmp = []
+                parsed_args = [ None ] * len(args)
                 for indx in range(1, len(args)):
-                    if not zPE.core.reg.is_valid_GPR(args[indx]):
+                    reg_info = zPE.core.reg.parse_GPR(args[indx])
+                    if reg_info[0] < 0:
                         indx_s = spi[line_num].index(args[indx])
                         __INFO('E', line_num,
                                ( 29, indx_s, indx_s + len(args[indx]), )
                                )
                         break
-                    if args[indx] in tmp:
+                    if reg_info[0] in parsed_args:
                         indx_s = ( spi[line_num].index(args[indx-1]) +
                                    len(args[indx-1]) + 1 # +1 for ','
                                    )
@@ -818,47 +865,60 @@ def pass_2(rc, amode = 31, rmode = 31):
                                ( 308, indx_s, indx_s + len(args[indx]), )
                                )
                         break
-                    tmp.append(args[indx])
+                    # register OK, record it
+                    parsed_args[indx] = reg_info[0]
+                    if reg_info[1]:
+                        # a reference to a symbol
+                        reg_info[1].references.append(
+                            '{0:>4}{1}'.format(line_num, 'U')
+                            )
 
             if not __INFO_GE(line_num, 'E'):
                 # update using map
-                USING_MAP[line_num, args[1]] = Using(
+                USING_MAP[line_num, parsed_args[1]] = Using(
                     addr, scope_id,
                     'USING',
                     'ORDINARY', SYMBOL[lbl_8].value,
                     range_limit, SYMBOL[lbl_8].id,
                     0, '{0:>5}'.format(''), field[2]
                     )
-                ACTIVE_USING[args[1]] = line_num # start the domain of the USING
+                ACTIVE_USING[parsed_args[1]] = line_num # start domain of USING
+
                 for indx in range(2, len(args)):
-                    USING_MAP[line_num, args[indx]] = Using(
+                    USING_MAP[line_num, parsed_args[indx]] = Using(
                         addr, scope_id,
                         'USING',
                         'ORDINARY', SYMBOL[lbl_8].value + 4096 * (indx - 1),
                         range_limit, SYMBOL[lbl_8].id,
                         0, '{0:>5}'.format(''), ''
                         )
-                    ACTIVE_USING[args[indx]] = line_num
+                    ACTIVE_USING[parsed_args[indx]] = line_num
 
 
         # parse DROP
         elif field[1] == 'DROP':
             # update using map
             args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
-            for arg in args:
-                if ( (not arg.isdigit())  or
-                     (int(arg) >= zPE.core.reg.GPR_NUM)
-                     ):
+            for indx in range(len(args)):
+                reg_info = zPE.core.reg.parse_GPR(args[indx])
+                if reg_info[0] < 0:
                     indx_s = spi[line_num].index(args[indx])
                     __INFO('E', line_num,
                            ( 29, indx_s, indx_s + len(args[indx]), )
                            )
                     continue
-                if arg in ACTIVE_USING:
-                    del ACTIVE_USING[arg] # end the domain of the USING
+                if reg_info[0] in ACTIVE_USING:
+                    del ACTIVE_USING[reg_info[0]] # end domain of USING
+                    if reg_info[1]:
+                        # a reference to a symbol
+                        reg_info[1].references.append(
+                            '{0:>4}{1}'.format(line_num, 'D')
+                            )
                 else:
-                    indx_s = spi[line_num].index(arg)
-                    __INFO('W', line_num, ( 45, indx_s, indx_s + len(arg), ))
+                    indx_s = spi[line_num].index(args[indx])
+                    __INFO('W', line_num,
+                           ( 45, indx_s, indx_s + len(args[indx]), )
+                           )
 
 
         # parse END
@@ -872,12 +932,13 @@ def pass_2(rc, amode = 31, rmode = 31):
                 indx_s = spi[line_num].index(field[2])
                 __INFO('E', line_num, ( 44, indx_s, indx_s + len(field[2]), ))
             # update using map
-            ACTIVE_USING.clear() # end the domain of all USINGs
+            ACTIVE_USING.clear() # end domain of all USINGs
 
 
-        # parse LTORG
-        elif field[1] == 'LTORG':
-            pass                # all constants should be allocated by now
+        # skip any line that do not need second pass
+        elif field[1] in [ 'LTORG', 'EQU', ]:
+            pass
+
 
         # parse DC/DS
         elif field[1] in [ 'DC', 'DS' ]:
@@ -1091,17 +1152,18 @@ def pass_2(rc, amode = 31, rmode = 31):
             for lbl_i in range(len(args)):
                 if __INFO_GE(line_num, 'E'): # could be flagged in pass 1
                     break # if has error, stop processing args
+                abs_values = False # assume no absolute values
 
                 lbl = args[lbl_i]
                 p1_lbl = p1_args[lbl_i]
 
                 res = __IS_ABS_ADDR(lbl)
-
                 if op_code[lbl_i + op_indx].type in 'X' and res != None:
-                    abs_addr = True  # is absolute address
+                    # absolute address found
+                    abs_values = True
 
                     # check length
-                    if len(res[0][2:-1]) > 12: # 12 bit displacement
+                    if len(res[0][2:-1]) > 12: # B'<12 bit displacement>'
                         indx_s = spi[line_num].index(p1_lbl)
                         if '(' in p1_lbl:
                             tmp = p1_lbl.index('(')
@@ -1111,13 +1173,76 @@ def pass_2(rc, amode = 31, rmode = 31):
                                ( 28, indx_s, indx_s + tmp, )
                                )
                         break   # stop processing current res
-                    res = [
-                        zPE.core.asm.value_sd(zPE.core.asm.parse_sd(x))[0]
-                        for x in res
-                        ]
-                else:
-                    abs_addr = False # no absolute address
+                    res[0] = zPE.core.asm.value_sd(
+                        zPE.core.asm.parse_sd(res[0])
+                        )[0]    # convert displacement back to int
 
+                    # validate registers
+                    if ',' in p1_lbl:
+                        indx_os = [ # index offset for error msg generation
+                            None,
+                            ( p1_lbl.index('('), p1_lbl.index(',') ),
+                            ( p1_lbl.index(','), p1_lbl.index(')') ),
+                            ]
+                    else:
+                        indx_os = [
+                            None,
+                            ( p1_lbl.index('('), p1_lbl.index(')') ),
+                            None, # no base offered
+                            ]
+                    for i in [ 1, 2 ]: # loop through indx and base
+                        # validate register
+                        reg_info = zPE.core.reg.parse_GPR(res[i])
+                        if reg_info[0] >= 0:
+                            res[i] = reg_info[0]
+                            if reg_info[1]:
+                                reg_info[1].references.append(
+                                    '{0:>4}{1}'.format(line_num, '')
+                                    )
+                        else:
+                            indx_s = spi[line_num].index(p1_lbl) + 1
+                            __INFO('E', line_num,
+                                   ( 29,
+                                     indx_s + indx_os[i][0],
+                                     indx_s + indx_os[i][1],
+                                     )
+                                   )
+                            break   # stop processing current res
+
+                elif op_code[lbl_i + op_indx].type in 'R':
+                    # register found
+                    abs_values = True
+
+                    res = [ lbl ]
+                    if lbl.startswith("B'"):
+                        res[0] = __REDUCE_EXP(lbl)
+                        if res[0] == None: # label cannot be reduced
+                            res[0] = lbl
+                        else:
+                            try:
+                                res[0] = zPE.core.asm.value_sd(
+                                    zPE.core.asm.parse_sd(indx)
+                                    )[0]
+                            except: # cannot evaluate B-const
+                                res[0] = lbl
+                    # validate register
+                    reg_info = zPE.core.reg.parse_GPR(res[0])
+                    if reg_info[0] >= 0:
+                        res[0] = reg_info[0]
+                        if reg_info[1]:
+                            reg_info[1].references.append(
+                                '{0:>4}{1}'.format(
+                                    line_num,
+                                    op_code[lbl_i + op_indx].flag()
+                                    )
+                                )
+                    else:
+                        indx_s = spi[line_num].index(p1_lbl) + 1
+                        __INFO('E', line_num,
+                               ( 29, indx_s, indx_s + len(p1_lbl), )
+                               )
+                        break   # stop processing current res
+                else:
                     res    = __PARSE_ARG(lbl)
                     p1_res = __PARSE_ARG(p1_lbl)
 
@@ -1274,7 +1399,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                     break # if has error, stop processing args
 
                 # calculate constant part
-                if not abs_addr and reloc_cnt < 2:
+                if not abs_values and reloc_cnt < 2:
                     ex_disp = __REDUCE_EXP(''.join(res[0]))
                     if ex_disp == None:
                         zPE.abort(92, 'Error: ', ''.join(res[0]),
@@ -1286,7 +1411,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                     (ex_disp, dummy) = zPE.core.asm.value_sd(sd_info)
 
                 # evaluate expression
-                if abs_addr:    # absolute address
+                if abs_values:    # absolute values
                     op_code[lbl_i + op_indx].set(*res)
                 elif reloc_cnt == 0:    # no relocatable symbol
                     try:
@@ -1339,10 +1464,13 @@ def pass_2(rc, amode = 31, rmode = 31):
                             else:
                                 symbol = SYMBOL[lbl_8]
                             symbol.references.append(
-                                '{0:>4}{1}'.format(line_num, '')
+                                '{0:>4}{1}'.format(
+                                    line_num,
+                                    op_code[lbl_i + op_indx].flag()
+                                    )
                                 )
                         op_code[lbl_i + op_indx].set(
-                            int(addr_res[0]), int(reg_indx), int(addr_res[1][1])
+                            addr_res[0], int(reg_indx), addr_res[1][1]
                             )
                     else:
                         indx_s = spi[line_num].index(p1_lbl)
@@ -1359,46 +1487,56 @@ def pass_2(rc, amode = 31, rmode = 31):
     spi.rmline(0)               # undo the align of line No.
 
 
+    # check cross references table integrality
+    for (k, v) in SYMBOL.iteritems():
+        if len(v.references) == 0:
+            # symbol not referenced
+            NON_REF_SYMBOL.append((v.defn, k, ))
+
+
     # check error messages
     if len(INFO['S']):
-        rc_err = zPE.RC['SERIOUS']
+        rc_err = zPE.RC['SEVERE']
     elif len(INFO['E']):
         rc_err = zPE.RC['ERROR']
     elif len(INFO['W']):
         rc_err = zPE.RC['WARNING']
+    elif len(INFO['N']):
+        rc_err = zPE.RC['NOTIFY']
     else:
         rc_err = zPE.RC['NORMAL']
 
     # generate object module if no error occured
     if rc_err <= zPE.RC['WARNING']:
-        obj_mod_gen()      # this process itself should cause no error
+        rc_err = max(rc_err, obj_mod_gen(amode, rmode))
 
     return rc_err
 
 
-def obj_mod_gen():
+def obj_mod_gen(amode, rmode):
     spo = zPE.core.SPOOL.retrive('SYSLIN')   # output SPOOL (object module)
 
+    return zPE.RC['NORMAL']
 
 
 ### Supporting Functions
-def __ADDRESSING(lbl, csect_lbl, ex_dis = 0):
-    rv = [ 4096, None, '-1', ]  # init to least priority USING (non-exsit)
+def __ADDRESSING(lbl, csect_lbl, ex_disp = 0):
+    rv = [ 4096, (None, -1), ]  # init to least priority USING (non-exsit)
     eq_const = __HAS_EQ(lbl, ESD[csect_lbl][0].id)
 
-    for k,v in ACTIVE_USING.iteritems():
-        if __IS_IN_RANGE(lbl, ex_dis, USING_MAP[v,k], ESD[csect_lbl][0]):
+    for (k, v) in ACTIVE_USING.iteritems():
+        if __IS_IN_RANGE(lbl, ex_disp, USING_MAP[v,k], ESD[csect_lbl][0]):
             if lbl[0] == '*':
-                dis = MNEMONIC[ int( lbl[1:] ) ][1] - USING_MAP[v,k].u_value
+                disp = MNEMONIC[ int( lbl[1:] ) ][1] - USING_MAP[v,k].u_value
             elif lbl[0] == '=':
-                dis = MNEMONIC[ eq_const.defn  ][1] - USING_MAP[v,k].u_value
+                disp = MNEMONIC[ eq_const.defn  ][1] - USING_MAP[v,k].u_value
             else:
-                dis = MNEMONIC[SYMBOL[lbl].defn][1] - USING_MAP[v,k].u_value
-            dis += ex_dis
-            if ( (dis < rv[0])  or                  # minimal displacement rule
-                 (dis == rv[0] and int(k) > int(rv[2])) # maximal register rule
+                disp = MNEMONIC[SYMBOL[lbl].defn][1] - USING_MAP[v,k].u_value
+            disp += ex_disp
+            if ( ( disp < rv[0] )  or              # minimal displacement rule
+                 ( disp == rv[0] and k > rv[1][1]) # maximal register rule
                  ):
-                rv = [ dis, (v, k), ]
+                rv = [ disp, (v, k), ]
     return rv
 
 def __ALLOC_EQ(lbl, symbol):
@@ -1418,13 +1556,17 @@ def __IS_ADDRESSABLE(lbl, csect_lbl, ex_disp = 0):
     if (lbl[0] != '*') and (lbl not in SYMBOL) and (lbl not in SYMBOL_EQ):
         return False            # not an *, a symbol, nor a =constant
     if len(ACTIVE_USING) == 0:
-        return False            # not in the domain of any USING
-    for k,v in ACTIVE_USING.iteritems():
+        return False            # not in domain of any USING
+    for (k, v) in ACTIVE_USING.iteritems():
         if __IS_IN_RANGE(lbl, ex_disp, USING_MAP[v,k], ESD[csect_lbl][0]):
             return True
     return False                # not in the range of any USING
 
-# note: no length check involved
+# rv:
+#   [ disp_B_const, indx_num, base_num ]
+#   None    if error happened during parsing
+#
+# Note: no length check nor register validating involved
 def __IS_ABS_ADDR(addr_arg):
     reminder = addr_arg
 
@@ -1444,35 +1586,50 @@ def __IS_ABS_ADDR(addr_arg):
     res = re.search('[,)]', reminder)
     if res != None:     # search succeed
         indx = reminder[:res.start()]
-        if reminder[res.start():res.end()] == ',':
-            reminder = reminder[res.end():]
-        else: # reach ')', need to check existance and push another ')'
-            if indx == '':
-                return None
-            reminder = reminder[res.start():]
+        reminder = reminder[res.end():]
+        if not indx:
+            indx = '0'
     else:
-        indx = "B'0'"
+        indx = '0'
         reminder = ''
-    indx = __REDUCE_EXP(indx)
-    if indx == None:            # indx cannot be reduced
-        return None
+    # check B-const
+    if indx.startswith("B'"):
+        indx = __REDUCE_EXP(indx)
+        if indx == None:        # indx cannot be reduced
+            return None
+        try:
+            indx = zPE.core.asm.value_sd(
+                zPE.core.asm.parse_sd(indx)
+                )[0]
+        except:                 # cannot evaluate B-const
+            return None
 
     # parse base
     res = re.search('\)', reminder)
     if res != None:     # search succeed
         base     = reminder[:res.start()]
         reminder = reminder[res.end():]
+        if not base:
+            base = '0'
     else:
-        base     = "B'0'"
+        base = '0'
         reminder = ''
-    base = __REDUCE_EXP(base)
-    if base == None:            # base cannot be reduced
-        return None
+    # check B-const
+    if indx.startswith("B'"):
+        base = __REDUCE_EXP(base)
+        if base == None:        # base cannot be reduced
+            return None
+        try:
+            base = zPE.core.asm.value_sd(
+                zPE.core.asm.parse_sd(base)
+                )[0]
+        except:                 # cannot evaluate B-const
+            return None
 
     # check reminder
     if reminder != '':
         return None
-    return ( disp, indx, base, )
+    return [ disp, indx, base ]
 
 def __IS_IN_RANGE(lbl, ex_disp, using, csect):
     u_range = min(
@@ -1480,13 +1637,15 @@ def __IS_IN_RANGE(lbl, ex_disp, using, csect):
         csect.addr + csect.length      # ending addr of the CSECT
         )
     eq_const = __HAS_EQ(lbl, csect.id)
-    if ( ( (lbl[0] == '*') and  # is loc_ptr
+
+    if ( ( (lbl[0] == '*')              and # is loc_ptr
            (int(lbl[1:]) + ex_disp < u_range)
            )  or
-         ( (lbl[0] == '=') and  # is =constant
+         ( (lbl[0] == '=')              and # is =constant
            (MNEMONIC[eq_const.defn][1] + ex_disp < u_range)
            )  or
-         ( (MNEMONIC[SYMBOL[lbl].defn][1] + ex_disp < u_range) # must be symbol
+         ( (SYMBOL[lbl].type != 'U')    and # is symbol
+           (MNEMONIC[SYMBOL[lbl].defn][1] + ex_disp < u_range)
            )):
         return True
     else:
@@ -1500,15 +1659,19 @@ def __INFO(err_level, line, item):
 def __INFO_GE(line_num, err_level):
     if line_num in INFO['S']:
         return True
-    if err_level == 'S':        # >= S, ignore E,W,I
+    if err_level == 'S':        # >= S, ignore E,W,N,I
         return False
     if line_num in INFO['E']:
         return True
-    if err_level == 'E':        # >= E, ignore W,I
+    if err_level == 'E':        # >= E, ignore W,N,I
         return False
     if line_num in INFO['W']:
         return True
-    if err_level == 'W':        # >= W, ignore I
+    if err_level == 'W':        # >= W, ignore N,I
+        return False
+    if line_num in INFO['N']:
+        return True
+    if err_level == 'N':        # >= N, ignore I
         return False
     if line_num in INFO['I']:
         return True

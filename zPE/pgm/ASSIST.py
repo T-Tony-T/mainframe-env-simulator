@@ -46,7 +46,7 @@ LOCAL_CONFIG = {
 def init(step):
     # check for file requirement
     if __MISSED_FILE(step, 0) != 0:
-        return zPE.RC['SEVERE']
+        return zPE.RC['CRITICAL']
 
     __LOAD_PSEUDO()             # load in all the pseudo instructions
 
@@ -116,9 +116,10 @@ def __PARSE_OUT(step, limit):
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
 
     asm_info    = zPE.pgm.ASMA90.INFO['I']
+    asm_msg     = zPE.pgm.ASMA90.INFO['N']
     asm_warn    = zPE.pgm.ASMA90.INFO['W']
     asm_err     = zPE.pgm.ASMA90.INFO['E']
-    asm_ser     = zPE.pgm.ASMA90.INFO['S']
+    asm_sev     = zPE.pgm.ASMA90.INFO['S']
 
     asm_mnem    = zPE.pgm.ASMA90.MNEMONIC
 
@@ -127,6 +128,8 @@ def __PARSE_OUT(step, limit):
     asm_symb    = zPE.pgm.ASMA90.SYMBOL
     asm_symb_v  = zPE.pgm.ASMA90.SYMBOL_V
     asm_symb_eq = zPE.pgm.ASMA90.SYMBOL_EQ
+    asm_symb_nr = zPE.pgm.ASMA90.NON_REF_SYMBOL
+    asm_symb_iv = zPE.pgm.ASMA90.INVALID_SYMBOL
 
     asm_using   = zPE.pgm.ASMA90.USING_MAP
 
@@ -167,17 +170,23 @@ def __PARSE_OUT(step, limit):
             continue
 
         # instructions
-        if len(asm_mnem[cnt]) == 1: # type 1
+        if len(asm_mnem[cnt]) == 1: # type 1, no info to print
             loc = '      '
-        elif asm_mnem[cnt][0] != 0: # CSECT or DSECT
-            loc = hex(asm_mnem[cnt][1])[2:].upper()
-        else:                       # END
+        elif asm_mnem[cnt][0] == 0: # no scope ==> END (type 2)
             loc = '      '
             eojob = True
+        elif asm_mnem[cnt][1] < 0:  # type < 0
+            loc = hex(- asm_mnem[cnt][1])[2:].upper()
+        else:                       # type >= 2, inside CSECT or DSECT
+            loc = hex(asm_mnem[cnt][1])[2:].upper()
 
         tmp_str = ''
 
-        if len(asm_mnem[cnt]) == 3: # type 3
+        if len(asm_mnem[cnt]) == 2  and  asm_mnem[cnt][1] < 0: # type -2 (EQU)
+            tmp_str = '{0:<14} {1:0>5} {0:>5}'.format(
+                '', loc
+                )
+        elif len(asm_mnem[cnt]) == 3: # type 3
             for val in asm_mnem[cnt][2]:
                 tmp_str += zPE.core.asm.X_.tr(val.dump())
             if len(tmp_str) > 16:
@@ -188,11 +197,11 @@ def __PARSE_OUT(step, limit):
             if len(code) == 12:
                 field_3 = code[8:12]
             else:
-                field_3 = '    '
+                field_3 = '    ' # 4 spaces
             if len(code) >= 8:
                 field_2 = code[4:8]
             else:
-                field_2 = '    '
+                field_2 = '    ' # 4 spaces
             field_1 = code[0:4]
             tmp_str = '{0} {1} {2} '.format(
                 field_1, field_2, field_3
@@ -221,8 +230,8 @@ def __PARSE_OUT(step, limit):
         ( pln_cnt, page_cnt ) = __PRINT_LINE(spo, pln, pln_cnt, page_cnt)
 
         # process error msg, if any
-        if cnt in asm_ser:
-            for tmp in asm_ser[cnt]:
+        if cnt in asm_sev:
+            for tmp in asm_sev[cnt]:
                 ( pln_cnt, page_cnt ) = __PRINT_LINE(
                     spo, [ ctrl, gen_msg('S', tmp, line) ], pln_cnt, page_cnt
                     )
@@ -236,6 +245,11 @@ def __PARSE_OUT(step, limit):
                 ( pln_cnt, page_cnt ) = __PRINT_LINE(
                     spo, [ ctrl, gen_msg('W', tmp, line) ], pln_cnt, page_cnt
                     )
+        if cnt in asm_msg:
+            for tmp in asm_msg[cnt]:
+                ( pln_cnt, page_cnt ) = __PRINT_LINE(
+                    spo, [ ctrl, gen_msg('N', tmp, line) ], pln_cnt, page_cnt
+                    )
         if cnt in asm_info:
             for tmp in asm_info[cnt]:
                 ( pln_cnt, page_cnt ) = __PRINT_LINE(
@@ -246,7 +260,7 @@ def __PARSE_OUT(step, limit):
 
     ### summary portion of the report
     cnt_warn = len(asm_warn)
-    cnt_err  = len(asm_err) + len(asm_ser)
+    cnt_err  = len(asm_err) + len(asm_sev)
     cnt_all  = cnt_warn + cnt_err
     def format_cnt(cnt):
         if cnt:
@@ -311,6 +325,10 @@ def __PARSE_OUT(step, limit):
             print '{0} (0x{1:0>6}) => {2}'.format(
                 key, hex(addr)[2:].upper(), asm_symb_eq[key][indx].__dict__
                 )
+    print '\nUnreferenced Symbol Defined in CSECTs:'
+    for (ln, key) in sorted(asm_symb_nr, key = lambda t: t[1]):
+        print '{0:>4} {1}'.format(ln, key)
+
 
     print '\nMnemonic:'
     for key in sorted(asm_mnem.iterkeys()):
@@ -360,17 +378,19 @@ def __PARSE_OUT(step, limit):
             tmp_str
             )
 
-    print '\nInfo:'
+    print '\nInfomation:'
     print asm_info
+    print '\nNotification:'
+    print asm_msg
     print '\nWarning:'
     print asm_warn
     print '\nError:'
     print asm_err
-    print '\nSerious:'
-    print asm_ser
+    print '\nSevere Error:'
+    print asm_sev
 
     print '\nUsing Map:'
-    for k,v in asm_using.iteritems():
+    for (k, v) in asm_using.iteritems():
         print k, v.__dict__
 
 

@@ -144,7 +144,7 @@ def new(key, mode, f_type, path = [], real_path = []):
                      ]
             zPE.conf.Config['tmp_id'] += 1
             # check for file conflict
-            for k,v in dict():
+            for (k, v) in dict():
                 if v.virtual_path == path:
                     conflict = True
                     break

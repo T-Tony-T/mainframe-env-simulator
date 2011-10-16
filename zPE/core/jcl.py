@@ -498,7 +498,7 @@ def __JES2_STAT(msg, job_time):
     sp1.append(ctrl, '{0:>13}'.format(zPE.JCL['read_cnt']), ' CARDS READ\n')
 
     cnt = 0
-    for k,v in zPE.core.SPOOL.dict():
+    for (k, v) in zPE.core.SPOOL.dict():
         if v.mode == 'o':
             cnt += len(v.spool)
     cnt += 4                    # 4 more lines include this line
@@ -508,7 +508,7 @@ def __JES2_STAT(msg, job_time):
     sp1.append(ctrl, '{0:>13}'.format(cnt), ' SYSOUT PUNCH RECORDS\n')
 
     cnt = 0
-    for k,v in zPE.core.SPOOL.dict():
+    for (k, v) in zPE.core.SPOOL.dict():
         if v.mode == 'o':
             for line in v.spool:
                 cnt = cnt + len(line)

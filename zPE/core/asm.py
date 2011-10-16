@@ -14,9 +14,14 @@ class InstructionType(object):
     def __init__(self, ins_type):
         self.type = ins_type
 
-        # default to no access permission; see ro() / wo() / rw() for more info
-        self.for_read  = False
-        self.for_write = False
+        # default to no access permission
+        # see flag() / ro() / wo() / rw() / br() / ex() for more info
+        self.for_read   = False # flag  ; able to retrive value
+        self.for_write  = False # flag M; able to set new value
+        self.for_branch = False # flag B; able to jump to value
+        self.for_exec   = False # flag X; able to exec at value
+        # these flag affects the corresponding flag in the CR table
+        # see flag() for more info
 
     def __len__(self):
         '''return number of half-bytes / hex-digits'''
@@ -44,22 +49,62 @@ class InstructionType(object):
         raise AssertionError('require overridden')
 
 
+    def flag(self):
+        '''
+        available CR table flags are:
+          M = modified  contents may be modified by action of instruction
+          B = branch    used as operands of branch instructions
+          U = USING     [ not handled here ]
+          D = DROP      [ not handled here ]
+          N = index     [ not handled currently ]
+          X = EXecute   targets of execute (EX) instruction
+        '''
+        if self.for_exec:
+            return 'X'
+        if self.for_branch:
+            return 'B'
+        if self.for_write:
+            return 'M'
+        return ' '
+
     def ro(self):
         '''invoke this like a modifier. e.g. r = R().ro()'''
-        self.for_read  = True
-        self.for_write = False
+        self.for_read   = True
+        self.for_write  = False
+        self.for_branch = False
+        self.for_exec   = False
         return self
 
     def wo(self):
         '''invoke this like a modifier. e.g. r = R().wo()'''
-        self.for_read  = False
-        self.for_write = True
+        self.for_read   = False
+        self.for_write  = True
+        self.for_branch = False
+        self.for_exec   = False
         return self
 
     def rw(self):
         '''invoke this like a modifier. e.g. r = R().rw()'''
-        self.for_read  = True
-        self.for_write = True
+        self.for_read   = True
+        self.for_write  = True
+        self.for_branch = False
+        self.for_exec   = False
+        return self
+
+    def br(self):
+        '''invoke this like a modifier. e.g. r = R().br()'''
+        self.for_read   = True
+        self.for_write  = False
+        self.for_branch = True
+        self.for_exec   = False
+        return self
+
+    def ex(self):
+        '''invoke this like a modifier. e.g. r = R().ex()'''
+        self.for_read   = True
+        self.for_write  = False
+        self.for_branch = False
+        self.for_exec   = True
         return self
 
 
@@ -160,39 +205,26 @@ class X(InstructionType):
         self.valid = True
 
 
-## Op-Code Type Map
-TYPE_OP = {     # M=modified, B=branch, U=USING, D=DROP, N=index
-    #       AP    DP    ED    EDMK  MP    PACK  SP    SRP   UNPK  ZAP
-    'M' : ( 'FA', 'FD', 'DE', 'DF', 'FC', 'F2', 'FB', 'F0', 'F3', 'F8',
-          # MVC   MVI   TR    TRT
-            'D2', '92', 'DC', 'DD',
-          # ST    STC   STCM  STH   STM
-            '50', '42', 'BE', '40', '90' ),
-
-    #       BAL   BALR  BAS   BASR  BC    BCR   BCT   BCTR  BXH   BXLE
-    'B' : ( '45', '05', '4D', '0D', '47', '07', '46', '06', '86', '87' ),
-    }
-
 ## Op-Code Look-Up Table
 # Pseudo-Instruction
 pseudo = { }        # should only be filled by other modules (e.g. ASSIST)
 
 # Extended Mnemonic
 ext_mnem = {
-    'B'    : lambda: ('47', 'F', X().ro()),
-    'BR'   : lambda: ('07', 'F', R().ro()),
+    'B'    : lambda: ('47', 'F', X().br()),
+    'BR'   : lambda: ('07', 'F', R().br()),
     }
 # Basic Instruction
 op_code = {
     'A'    : lambda: ('5A', R().rw(), X().ro()),
     'AR'   : lambda: ('1A', R().rw(), R().ro()),
 
-    'BAL'  : lambda: ('45', R().ro(), X().ro()),
-    'BALR' : lambda: ('05', R().ro(), R().ro()),
-    'BC'   : lambda: ('47', R().ro(), X().ro()),
-    'BCR'  : lambda: ('07', R().ro(), R().ro()),
-    'BCT'  : lambda: ('46', R().rw(), X().ro()),
-    'BCTR' : lambda: ('06', R().rw(), R().ro()),
+    'BAL'  : lambda: ('45', R().wo(), X().br()),
+    'BALR' : lambda: ('05', R().wo(), R().br()),
+    'BC'   : lambda: ('47', R().ro(), X().br()),
+    'BCR'  : lambda: ('07', R().ro(), R().br()),
+    'BCT'  : lambda: ('46', R().rw(), X().br()),
+    'BCTR' : lambda: ('06', R().rw(), R().br()),
 
     'C'    : lambda: ('59', R().ro(), X().ro()),
     'CL'   : lambda: ('55', R().ro(), X().ro()),
@@ -202,7 +234,7 @@ op_code = {
     'D'    : lambda: ('5D', R().rw(), X().ro()),
     'DR'   : lambda: ('1D', R().rw(), R().ro()),
 
-    'EX'   : lambda: ('44', R().ro(), X().ro()),
+    'EX'   : lambda: ('44', R().ro(), X().ex()),
 
     'IC'   : lambda: ('43', R().rw(), X().ro()),
 
@@ -276,15 +308,6 @@ def prnt_op(op_code):
     for indx in range(arg_indx, len(op_code)):
         code += op_code[indx].prnt()[1]
     return code
-
-
-def type_op(op_code):
-    if op_code[0] in TYPE_OP['B']:
-        return 'B'
-    elif op_code[0] in TYPE_OP['M']:
-        return 'M'
-    else:
-        return ' '
 
 
 def valid_op(instruction):

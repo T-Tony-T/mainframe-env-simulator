@@ -15,11 +15,13 @@ TMP_FILE_ID = 101               # the smallest tmp file identifier
 
 ## Return Code
 RC = {
-    'NORMAL'    : 0,
-    'WARNING'   : 4,
-    'ERROR'     : 8,
-    'SERIOUS'   : 12,
-    'SEVERE'    : 16,
+    'NORMAL'	: 0,            # Information
+    'NOTIFY'    : 2,            # Notification
+    'WARNING'	: 4,            # Warning
+    'ERROR'	: 8,            # Error
+    'SEVERE'	: 12,           # Severe Error
+    'CRITICAL'	: 16,           # Critical Error
+    'UNABLE'	: 20,           # Unable to Preceed
     }
 
 

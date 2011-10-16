@@ -33,7 +33,7 @@ def mark4future(feature):
 ### Utility Function Definition
 def dic_find_key(dic, val):
     '''Return the (first) key of the dic that has the given val'''
-    return [k for k, v in dic.iteritems() if v == val][0]
+    return [k for (k, v) in dic.iteritems() if v == val][0]
 
 def resplit_sq(pattern, string, maxsplit = 0):
     '''See resplit() for detials'''
@@ -175,7 +175,7 @@ class Step(object):             # for JCL['step'][*]
                     abort(9, 'Error: ', ddname, ': Invalid DD name.\n')
                 if ddname in self.__items:
                     abort(9, 'Error: ', ddname, ': Duplicated DD names.\n')
-                for k,v in ddcard.iteritems():
+                for (k, v) in ddcard.iteritems():
                     if k not in ['SYSOUT', 'DSN', 'DISP']:
                         abort(9, 'Error: ', k, '=', v,
                               ': Un-recognized option\n')
