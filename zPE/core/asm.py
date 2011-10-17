@@ -11,8 +11,9 @@ import re
 ## basic instruction format type
 class InstructionType(object):
     '''this is an abstract base class'''
-    def __init__(self, ins_type):
+    def __init__(self, ins_type, pos):
         self.type = ins_type
+        self.pos  = pos
 
         # default to no access permission
         # see flag() / ro() / wo() / rw() / br() / ex() for more info
@@ -68,7 +69,7 @@ class InstructionType(object):
         return ' '
 
     def ro(self):
-        '''invoke this like a modifier. e.g. r = R().ro()'''
+        '''invoke this like a modifier. e.g. r = R(x).ro()'''
         self.for_read   = True
         self.for_write  = False
         self.for_branch = False
@@ -76,7 +77,7 @@ class InstructionType(object):
         return self
 
     def wo(self):
-        '''invoke this like a modifier. e.g. r = R().wo()'''
+        '''invoke this like a modifier. e.g. r = R(x).wo()'''
         self.for_read   = False
         self.for_write  = True
         self.for_branch = False
@@ -84,7 +85,7 @@ class InstructionType(object):
         return self
 
     def rw(self):
-        '''invoke this like a modifier. e.g. r = R().rw()'''
+        '''invoke this like a modifier. e.g. r = R(x).rw()'''
         self.for_read   = True
         self.for_write  = True
         self.for_branch = False
@@ -92,7 +93,7 @@ class InstructionType(object):
         return self
 
     def br(self):
-        '''invoke this like a modifier. e.g. r = R().br()'''
+        '''invoke this like a modifier. e.g. r = R(x).br()'''
         self.for_read   = True
         self.for_write  = False
         self.for_branch = True
@@ -100,7 +101,7 @@ class InstructionType(object):
         return self
 
     def ex(self):
-        '''invoke this like a modifier. e.g. r = R().ex()'''
+        '''invoke this like a modifier. e.g. r = R(x).ex()'''
         self.for_read   = True
         self.for_write  = False
         self.for_branch = False
@@ -110,8 +111,8 @@ class InstructionType(object):
 
 # int_4 => ( 'r', '' )
 class R(InstructionType):
-    def __init__(self, val = None):
-        super(R, self).__init__('R')
+    def __init__(self, arg_pos, val = None):
+        super(R, self).__init__('R', arg_pos)
 
         if val == None:
             self.valid = False
@@ -148,26 +149,24 @@ class R(InstructionType):
         self.__val = val
         self.valid = True
 
-# int_12(int_4, int_4) => ( 'xbddd', '' )
-class X(InstructionType):
-    def __init__(self, dsplc = None, indx = 0, base = 0):
-        super(X, self).__init__('X')
+# int_12(int_4) => ( '', 'bddd' )
+class S(InstructionType):
+    def __init__(self, arg_pos, dsplc = None, base = 0):
+        super(S, self).__init__('S', arg_pos)
 
         if dsplc == None:
             self.valid = False
             self.__dsplc = None
-            self.__indx = None
             self.__base = None
         else:
-            self.set(dsplc, indx, base)
+            self.set(dsplc, base)
 
     def __len__(self):
-        return 5
+        return 4
 
     def get(self):
         if self.valid:
             return (
-                self.__indx,
                 self.__base,
                 self.__dsplc
                 )
@@ -176,14 +175,56 @@ class X(InstructionType):
 
     def prnt(self):
         if self.valid:
-            rv = '{0}{1}{2:0>3}'.format(
-                hex(self.__indx)[-1].upper(),
+            rv = '{0}{1:0>3}'.format(
                 hex(self.__base)[-1].upper(),
                 hex(self.__dsplc)[2:].upper()
                 )
         else:
-            rv = '-----'
-        return ( rv, '', )
+            rv = '----'
+        return ( '', rv, )
+
+    def value(self):
+        if self.valid:
+            rv = int(self.prnt()[0], 16)
+        else:
+            rv = None
+        return rv
+
+    def set(self, dsplc, base = 0):
+        if dsplc < 0 or dsplc > 4095:
+            raise ValueError
+        if base < 0 or base > 15:
+            raise ValueError
+        self.__base = base
+        self.__dsplc = dsplc
+        self.valid = True
+
+# int_12(int_4, int_4) => ( 'x', 'bddd' )
+class X(S):
+    def __init__(self, arg_pos, dsplc = None, indx = 0, base = 0):
+        super(X, self).__init__(arg_pos, dsplc, base)
+        self.type = 'X'         # override type
+
+        if dsplc == None:
+            self.__indx = None
+        else:
+            self.set(dsplc, indx, base)
+
+    def __len__(self):
+        return 5
+
+    def get(self):
+        if self.valid:
+            return ( self.__indx, ) + super(X, self).get()
+        else:
+            raise ValueError
+
+    def prnt(self):
+        if self.valid:
+            rv = str(hex(self.__indx)[-1].upper())
+        else:
+            rv = '-'
+        return ( rv, super(X, self).prnt()[1], )
 
     def value(self):
         if self.valid:
@@ -193,16 +234,10 @@ class X(InstructionType):
         return rv
 
     def set(self, dsplc, indx = 0, base = 0):
-        if dsplc < 0 or dsplc > 4095:
-            raise ValueError
         if indx < 0 or indx > 15:
             raise ValueError
-        if base < 0 or base > 15:
-            raise ValueError
         self.__indx = indx
-        self.__base = base
-        self.__dsplc = dsplc
-        self.valid = True
+        super(X, self).set(dsplc, base)
 
 
 ## Op-Code Look-Up Table
@@ -211,56 +246,58 @@ pseudo = { }        # should only be filled by other modules (e.g. ASSIST)
 
 # Extended Mnemonic
 ext_mnem = {
-    'B'    : lambda: ('47', 'F', X().br()),
-    'BR'   : lambda: ('07', 'F', R().br()),
+    'B'    : lambda: ('47', 'F', X(2).br()),
+    'BR'   : lambda: ('07', 'F', R(2).br()),
     }
 # Basic Instruction
 op_code = {
-    'A'    : lambda: ('5A', R().rw(), X().ro()),
-    'AR'   : lambda: ('1A', R().rw(), R().ro()),
+    'A'    : lambda: ('5A', R(1).rw(), X(2).ro(2)),
+    'AR'   : lambda: ('1A', R(1).rw(), R(2).ro(2)),
 
-    'BAL'  : lambda: ('45', R().wo(), X().br()),
-    'BALR' : lambda: ('05', R().wo(), R().br()),
-    'BC'   : lambda: ('47', R().ro(), X().br()),
-    'BCR'  : lambda: ('07', R().ro(), R().br()),
-    'BCT'  : lambda: ('46', R().rw(), X().br()),
-    'BCTR' : lambda: ('06', R().rw(), R().br()),
+    'BAL'  : lambda: ('45', R(1).wo(), X(2).br()),
+    'BALR' : lambda: ('05', R(1).wo(), R(2).br()),
+    'BC'   : lambda: ('47', R(1).ro(), X(2).br()),
+    'BCR'  : lambda: ('07', R(1).ro(), R(2).br()),
+    'BCT'  : lambda: ('46', R(1).rw(), X(2).br()),
+    'BCTR' : lambda: ('06', R(1).rw(), R(2).br()),
 
-    'C'    : lambda: ('59', R().ro(), X().ro()),
-    'CL'   : lambda: ('55', R().ro(), X().ro()),
-    'CLR'  : lambda: ('15', R().ro(), R().ro()),
-    'CR'   : lambda: ('19', R().ro(), R().ro()),
+    'C'    : lambda: ('59', R(1).ro(), X(2).ro()),
+    'CL'   : lambda: ('55', R(1).ro(), X(2).ro()),
+    'CLR'  : lambda: ('15', R(1).ro(), R(2).ro()),
+    'CR'   : lambda: ('19', R(1).ro(), R(2).ro()),
 
-    'D'    : lambda: ('5D', R().rw(), X().ro()),
-    'DR'   : lambda: ('1D', R().rw(), R().ro()),
+    'D'    : lambda: ('5D', R(1).rw(), X(2).ro()),
+    'DR'   : lambda: ('1D', R(1).rw(), R(2).ro()),
 
-    'EX'   : lambda: ('44', R().ro(), X().ex()),
+    'EX'   : lambda: ('44', R(1).ro(), X(2).ex()),
 
-    'IC'   : lambda: ('43', R().rw(), X().ro()),
+    'IC'   : lambda: ('43', R(1).rw(), X(2).ro()),
 
-    'L'    : lambda: ('58', R().wo(), X().ro()),
-    'LA'   : lambda: ('41', R().wo(), X().ro()),
-    'LCR'  : lambda: ('13', R().rw(), R().ro()),
-    'LR'   : lambda: ('18', R().wo(), R().ro()),
-    'LTR'  : lambda: ('12', R().wo(), R().ro()),
+    'L'    : lambda: ('58', R(1).wo(), X(2).ro()),
+    'LA'   : lambda: ('41', R(1).wo(), X(2).ro()),
+    'LCR'  : lambda: ('13', R(1).rw(), R(2).ro()),
+    'LM'   : lambda: ('98', R(1).wo(), R(3).wo(), S(2).ro()),
+    'LR'   : lambda: ('18', R(1).wo(), R(2).ro()),
+    'LTR'  : lambda: ('12', R(1).wo(), R(2).ro()),
 
-    'M'    : lambda: ('5C', R().rw(), X().ro()),
-    'MR'   : lambda: ('1C', R().rw(), R().ro()),
+    'M'    : lambda: ('5C', R(1).rw(), X(2).ro()),
+    'MR'   : lambda: ('1C', R(1).rw(), R(2).ro()),
 
-    'N'    : lambda: ('54', R().rw(), X().ro()),
-    'NR'   : lambda: ('14', R().rw(), R().ro()),
+    'N'    : lambda: ('54', R(1).rw(), X(2).ro()),
+    'NR'   : lambda: ('14', R(1).rw(), R(2).ro()),
 
-    'O'    : lambda: ('56', R().rw(), X().ro()),
-    'OR'   : lambda: ('16', R().rw(), R().ro()),
+    'O'    : lambda: ('56', R(1).rw(), X(2).ro()),
+    'OR'   : lambda: ('16', R(1).rw(), R(2).ro()),
 
-    'S'    : lambda: ('5B', R().rw(), X().ro()),
-    'SR'   : lambda: ('1B', R().rw(), R().ro()),
+    'S'    : lambda: ('5B', R(1).rw(), X(2).ro()),
+    'SR'   : lambda: ('1B', R(1).rw(), R(2).ro()),
 
-    'ST'   : lambda: ('50', R().ro(), X().wo()),
-    'STC'  : lambda: ('42', R().ro(), X().rw()),
+    'ST'   : lambda: ('50', R(1).ro(), X(2).wo()),
+    'STC'  : lambda: ('42', R(1).ro(), X(2).rw()),
+    'STM'  : lambda: ('90', R(1).ro(), R(3).ro(), S(2).wo()),
 
-    'X'    : lambda: ('57', R().rw(), X().ro()),
-    'XR'   : lambda: ('17', R().rw(), R().ro()),
+    'X'    : lambda: ('57', R(1).rw(), X(2).ro()),
+    'XR'   : lambda: ('17', R(1).rw(), R(2).ro()),
     }
 
 

@@ -171,26 +171,26 @@ def __PARSE_OUT(step, limit):
 
         # instructions
         if len(asm_mnem[cnt]) == 1: # type 1, no info to print
-            loc = '      '
+            loc = ''
         elif asm_mnem[cnt][0] == 0: # no scope ==> END (type 2)
-            loc = '      '
+            loc = ''
             eojob = True
-        elif asm_mnem[cnt][1] < 0:  # type < 0
-            loc = hex(- asm_mnem[cnt][1])[2:].upper()
-        else:                       # type >= 2, inside CSECT or DSECT
+        elif len(asm_mnem[cnt]) == 4: # type 4, EQU
+            loc = hex(asm_mnem[cnt][3])[2:].upper()
+        else:                       # type 2/3/5, inside CSECT or DSECT
             loc = hex(asm_mnem[cnt][1])[2:].upper()
 
         tmp_str = ''
 
-        if len(asm_mnem[cnt]) == 2  and  asm_mnem[cnt][1] < 0: # type -2 (EQU)
-            tmp_str = '{0:<14} {1:0>5} {0:>5}'.format(
-                '', loc
-                )
-        elif len(asm_mnem[cnt]) == 3: # type 3
+        if len(asm_mnem[cnt]) == 3:   # type 3
             for val in asm_mnem[cnt][2]:
                 tmp_str += zPE.core.asm.X_.tr(val.dump())
             if len(tmp_str) > 16:
                 tmp_str = tmp_str[:16]
+        elif len(asm_mnem[cnt]) == 4: # type 4
+            tmp_str = '{0:<14} {1:0>5} {0:>5}'.format(
+                '', loc
+                )
         elif len(asm_mnem[cnt]) == 5: # type 5
             # breaking up the op-mnemonic field
             code = zPE.core.asm.prnt_op(asm_mnem[cnt][2])
@@ -209,14 +209,14 @@ def __PARSE_OUT(step, limit):
             # appending to it the "ADDR1" and "ADDR2" fields, if applied
             if asm_mnem[cnt][3]:
                 if asm_mnem[cnt][3].valid:
-                    addr_1 = hex(asm_mnem[cnt][3].get()[2])[2:].upper()
+                    addr_1 = hex(asm_mnem[cnt][3].get()[-1])[2:].upper()
                 else:
                     addr_1 = '0'
             else:
                 addr_1 = '     '
             if asm_mnem[cnt][4]:
                 if asm_mnem[cnt][4].valid:
-                    addr_2 = hex(asm_mnem[cnt][4].get()[2])[2:].upper()
+                    addr_2 = hex(asm_mnem[cnt][4].get()[-1])[2:].upper()
                 else:
                     addr_2 = '0'
             else:
@@ -333,13 +333,19 @@ def __PARSE_OUT(step, limit):
     print '\nMnemonic:'
     for key in sorted(asm_mnem.iterkeys()):
         if len(asm_mnem[key]) == 1: # type 1
-            loc = '      '
+            loc = ''
+        elif len(asm_mnem[key]) == 4: # type 4
+            loc = hex(asm_mnem[key][3])[2:].upper()
         else:
             loc = hex(asm_mnem[key][1])[2:]
         tmp_str = ''
         if len(asm_mnem[key]) == 3: # type 3
             for val in asm_mnem[key][2]:
                 tmp_str += zPE.core.asm.X_.tr(val.dump())
+        elif len(asm_mnem[key]) == 4: # type 4
+            tmp_str += '{0:<14} {1:0>5} {0:>5}'.format(
+                '', loc
+                )            
         elif len(asm_mnem[key]) == 5: # type 5
             code = zPE.core.asm.prnt_op(asm_mnem[key][2])
             if len(code) == 12:
@@ -356,14 +362,14 @@ def __PARSE_OUT(step, limit):
                 )
             if asm_mnem[key][3]:
                 if asm_mnem[key][3].valid:
-                    addr_1 = hex(asm_mnem[key][3].get()[2])[2:].upper()
+                    addr_1 = hex(asm_mnem[key][3].get()[-1])[2:].upper()
                 else:
                     addr_1 = '0'
             else:
                 addr_1 = '     '
             if asm_mnem[key][4]:
                 if asm_mnem[key][4].valid:
-                    addr_2 = hex(asm_mnem[key][4].get()[2])[2:].upper()
+                    addr_2 = hex(asm_mnem[key][4].get()[-1])[2:].upper()
                 else:
                     addr_2 = '0'
             else:

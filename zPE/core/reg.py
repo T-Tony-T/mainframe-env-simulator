@@ -194,7 +194,7 @@ def parse_GPR(reg_str):
     if reg_str.isdigit():
         reg_num = int(reg_str)
     else:
-        # check reg equater
+        # check reg equates
         lbl_8 = '{0:<8}'.format(reg_str)
         sym_map = zPE.pgm.ASMA90.SYMBOL
         if lbl_8 in sym_map  and  sym_map[lbl_8].type == 'U':

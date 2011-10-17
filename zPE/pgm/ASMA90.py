@@ -53,8 +53,8 @@ INFO = {  # '[IWES]' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ...] }
 MNEMONIC = {
     # Line_Num : [ scope, ]                                     // type (len) 1
     # Line_Num : [ scope, LOC, ]                                // type (len) 2
-    # Line_Num : [ scope,-LOC, ]                                // type      -2
     # Line_Num : [ scope, LOC, [ CONST_OBJECT, ... ], ]         // type (len) 3
+    # Line_Num : [ scope,  ,  , equates, ]                      // type (len) 4
     # Line_Num : [ scope, LOC, (OBJECT_CODE), ADDR1, ADDR2, ]   // type (len) 5
     }
 
@@ -358,16 +358,16 @@ def pass_1(amode = 31, rmode = 31):
         # parse EQU
         elif field[1] == 'EQU':
             if field[2].isdigit():
-                # simple equater expression
+                # simple equates expression
                 equ_reloc = 'A' # absolute symbol
 
                 equ_addr = int(field[2]) # exp_1
                 equ_len  = 1             # exp_2 [omitted, default length]
             else:
-                # complex equater expression(s)
+                # complex equates expression(s)
                 equ_reloc = 'C' # complexly relocatable symbol
 
-                zPE.mark4future('complex EQUater exp')
+                zPE.mark4future('complex EQUates exp')
 
             # check label
             bad_lbl = zPE.bad_label(field[0])
@@ -385,7 +385,11 @@ def pass_1(amode = 31, rmode = 31):
                     line_num, []
                     )
 
-            MNEMONIC[line_num] = [ scope_id, - equ_addr, ]      # type -2
+            MNEMONIC[line_num] = [ scope_id,                    # type 4
+                                   None, # need info
+                                   None, # need info
+                                   equ_addr,
+                                   ]
             spt.append('{0:0>5}{1:<8} EQU   {2}\n'.format(
                     line_num, field[0], field[2]
                     ))
@@ -513,8 +517,9 @@ def pass_1(amode = 31, rmode = 31):
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
             op_code = zPE.core.asm.get_op(field[1])
+            op_len  = len(op_code)
             op_indx = zPE.core.asm.op_arg_indx(op_code)
-            op_args = len(op_code) - op_indx
+            op_args = op_len - op_indx
 
             args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
 
@@ -537,18 +542,21 @@ def pass_1(amode = 31, rmode = 31):
                 pattern = '[,()*/+-]' # separator list
                 sept = ''             # tmp separator holder
                 reminder = field[2]   # tmp reminder holder
+
                 while True:
                     # process leftover separator
-                    if ( sept == ')'  and # preceding argument required
-                         last_arg == None # not offered
-                         ):
-                        indx_e = ( line.index(field[2])
-                                   + len(field[2]) # move to end of arg_list
-                                   - len(reminder) # move back to error pos
-                                   )
-                        __INFO('E', line_num, (
-                                41, indx_e - 1, indx_e,
-                                ))
+                    if sept == ')':
+#                        if op_code[lbl_i + op_indx].type in 'S':
+
+                        # preceding argument required
+                        if not last_arg: # not offered
+                            indx_e = ( line.index(field[2])
+                                       + len(field[2]) # move to end of arg_list
+                                       - len(reminder) # move back to error pos
+                                       )
+                            __INFO('E', line_num, (
+                                    41, indx_e - 1, indx_e,
+                                    ))
                     arg_list += sept # append leftover separator
 
                     # check end of arg_list
@@ -568,11 +576,9 @@ def pass_1(amode = 31, rmode = 31):
                     parsed = False # reset the flag
 
                     # validate and normalize splitted argument (lbl)
+                    last_arg = lbl
                     if lbl == '':
-                        last_arg = None
                         continue # if no label, continue
-                    else:
-                        last_arg = lbl
 
                     if not parsed and lbl.isdigit():
                         # parse integer string
@@ -654,16 +660,14 @@ def pass_1(amode = 31, rmode = 31):
                         )
             # end of checking arguments
 
-            if op_indx <= 1 and op_code[1].type in 'X':
-                op_addr1 = op_code[1]
-            else:
-                op_addr1 = None
-            if op_indx <= 2 and op_code[2].type in 'X':
-                op_addr2 = op_code[2]
-            else:
-                op_addr2 = None
+            # parsing addr1 and addr2
+            op_addr = [ 'pos 0', None, None ]
+            for i in range(op_indx, op_len):
+                if op_code[i].type in 'XS': # address type
+                    op_addr[op_code[i].pos] = op_code[i]
+
             MNEMONIC[line_num] = [ scope_id, addr,              # type 5
-                                   op_code, op_addr1, op_addr2,
+                                   op_code, op_addr[1], op_addr[2],
                                    ]
             spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
                     line_num, field[0], field[1], arg_list
@@ -709,7 +713,7 @@ def pass_1(amode = 31, rmode = 31):
         line_num = int(line[:5])                # retrive line No.
         scope_id = MNEMONIC[line_num][0]        # retrive scope ID
         if scope_id:
-            if len(MNEMONIC[line_num]) > 1:     # update & retrive address
+            if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]: # type 2/3/5
                 MNEMONIC[line_num][1] += RELOCATE_OFFSET[scope_id]
 
     # check cross references table integrality
@@ -758,7 +762,7 @@ def pass_2(rc, amode = 31, rmode = 31):
         scope_id = MNEMONIC[line_num][0]        # retrive scope ID
         if scope_id:
             csect_lbl = ESD_ID[scope_id]        # retrive CSECT label
-            if len(MNEMONIC[line_num]) > 1  and  MNEMONIC[line_num][1] > 0:
+            if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]:
                 # update & retrive address
                 prev_addr = addr
                 addr = MNEMONIC[line_num][1]
@@ -1158,7 +1162,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                 p1_lbl = p1_args[lbl_i]
 
                 res = __IS_ABS_ADDR(lbl)
-                if op_code[lbl_i + op_indx].type in 'X' and res != None:
+                if op_code[lbl_i + op_indx].type in 'XS' and res != None:
                     # absolute address found
                     abs_values = True
 
@@ -1179,18 +1183,27 @@ def pass_2(rc, amode = 31, rmode = 31):
 
                     # validate registers
                     if ',' in p1_lbl:
+                        indx_range = [ 1, 2 ]
                         indx_os = [ # index offset for error msg generation
                             None,
                             ( p1_lbl.index('('), p1_lbl.index(',') ),
                             ( p1_lbl.index(','), p1_lbl.index(')') ),
                             ]
+                    elif op_code[lbl_i + op_indx].type in 'S':
+                        indx_range = [ 1 ]
+                        del res[2] # remove the extra item (fake base)
+                        indx_os = [
+                            None,
+                            ( p1_lbl.index('('), p1_lbl.index(')') ),
+                            ]
                     else:
+                        indx_range = [ 1, 2 ]
                         indx_os = [
                             None,
                             ( p1_lbl.index('('), p1_lbl.index(')') ),
                             None, # no base offered
                             ]
-                    for i in [ 1, 2 ]: # loop through indx and base
+                    for i in indx_range:
                         # validate register
                         reg_info = zPE.core.reg.parse_GPR(res[i])
                         if reg_info[0] >= 0:
