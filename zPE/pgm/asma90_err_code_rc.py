@@ -1,4 +1,8 @@
 __I_MSG = {                     # ASMAxxxI
+    33  : lambda info, line: 'Storage alignment for {0} unfavorable'.format(line[info[1]:info[2]]),
+    }
+
+__N_MSG = {                     # ASMAxxxN
     }
 
 __W_MSG = {                     # ASMAxxxW
@@ -50,6 +54,7 @@ __MSG = {
     'S' : __S_MSG,
     'E' : __E_MSG,
     'W' : __W_MSG,
+    'N' : __N_MSG,
     'I' : __I_MSG,
     }
 

@@ -11,9 +11,21 @@ import re
 ## basic instruction format type
 class InstructionType(object):
     '''this is an abstract base class'''
+
+    align_map = {              # see al() and is_aligned() for details
+        'ch' : 1,
+        'hw' : 2,
+        'fw' : 4,
+        'dw' : 8,
+        }
+
     def __init__(self, ins_type, pos):
-        self.type = ins_type
-        self.pos  = pos
+        self.type  = ins_type
+        self.pos   = pos
+
+        # default to no alignment
+        # see al() and is_aligned() for more info
+        self.align = 1
 
         # default to no access permission
         # see flag() / ro() / wo() / rw() / br() / ex() for more info
@@ -50,6 +62,22 @@ class InstructionType(object):
         raise AssertionError('require overridden')
 
 
+    def al(self, alignment):
+        '''
+        invoke this like a modifier. e.g. r = X(2).al(fw)
+        argument should be one of the follows:
+          ch = character alignment (no alignment)
+          hw = align on halfword boundary
+          fw = align on fullword boundary
+          dw = align on doubleword boundary
+        '''
+        self.align = InstructionType.align_map[alignment]
+        return self
+
+    def is_aligned(self, loc):
+        return loc % self.align == 0
+
+
     def flag(self):
         '''
         available CR table flags are:
@@ -69,7 +97,7 @@ class InstructionType(object):
         return ' '
 
     def ro(self):
-        '''invoke this like a modifier. e.g. r = R(x).ro()'''
+        '''invoke this like a modifier. e.g. r = R(3).ro()'''
         self.for_read   = True
         self.for_write  = False
         self.for_branch = False
@@ -77,7 +105,7 @@ class InstructionType(object):
         return self
 
     def wo(self):
-        '''invoke this like a modifier. e.g. r = R(x).wo()'''
+        '''invoke this like a modifier. e.g. r = R(1).wo()'''
         self.for_read   = False
         self.for_write  = True
         self.for_branch = False
@@ -85,7 +113,7 @@ class InstructionType(object):
         return self
 
     def rw(self):
-        '''invoke this like a modifier. e.g. r = R(x).rw()'''
+        '''invoke this like a modifier. e.g. r = R(1).rw()'''
         self.for_read   = True
         self.for_write  = True
         self.for_branch = False
@@ -93,7 +121,7 @@ class InstructionType(object):
         return self
 
     def br(self):
-        '''invoke this like a modifier. e.g. r = R(x).br()'''
+        '''invoke this like a modifier. e.g. r = R(2).br()'''
         self.for_read   = True
         self.for_write  = False
         self.for_branch = True
@@ -101,7 +129,7 @@ class InstructionType(object):
         return self
 
     def ex(self):
-        '''invoke this like a modifier. e.g. r = R(x).ex()'''
+        '''invoke this like a modifier. e.g. r = X(2).ex()'''
         self.for_read   = True
         self.for_write  = False
         self.for_branch = False
@@ -246,57 +274,57 @@ pseudo = { }        # should only be filled by other modules (e.g. ASSIST)
 
 # Extended Mnemonic
 ext_mnem = {
-    'B'    : lambda: ('47', 'F', X(2).br()),
+    'B'    : lambda: ('47', 'F', X(2).br().al('hw')),
     'BR'   : lambda: ('07', 'F', R(2).br()),
     }
 # Basic Instruction
 op_code = {
-    'A'    : lambda: ('5A', R(1).rw(), X(2).ro(2)),
-    'AR'   : lambda: ('1A', R(1).rw(), R(2).ro(2)),
+    'A'    : lambda: ('5A', R(1).rw(), X(2).ro().al('fw')),
+    'AR'   : lambda: ('1A', R(1).rw(), R(2).ro()),
 
-    'BAL'  : lambda: ('45', R(1).wo(), X(2).br()),
+    'BAL'  : lambda: ('45', R(1).wo(), X(2).br().al('hw')),
     'BALR' : lambda: ('05', R(1).wo(), R(2).br()),
-    'BC'   : lambda: ('47', R(1).ro(), X(2).br()),
+    'BC'   : lambda: ('47', R(1).ro(), X(2).br().al('hw')),
     'BCR'  : lambda: ('07', R(1).ro(), R(2).br()),
-    'BCT'  : lambda: ('46', R(1).rw(), X(2).br()),
+    'BCT'  : lambda: ('46', R(1).rw(), X(2).br().al('hw')),
     'BCTR' : lambda: ('06', R(1).rw(), R(2).br()),
 
-    'C'    : lambda: ('59', R(1).ro(), X(2).ro()),
-    'CL'   : lambda: ('55', R(1).ro(), X(2).ro()),
+    'C'    : lambda: ('59', R(1).ro(), X(2).ro().al('fw')),
+    'CL'   : lambda: ('55', R(1).ro(), X(2).ro().al('fw')),
     'CLR'  : lambda: ('15', R(1).ro(), R(2).ro()),
     'CR'   : lambda: ('19', R(1).ro(), R(2).ro()),
 
-    'D'    : lambda: ('5D', R(1).rw(), X(2).ro()),
+    'D'    : lambda: ('5D', R(1).rw(), X(2).ro().al('fw')),
     'DR'   : lambda: ('1D', R(1).rw(), R(2).ro()),
 
     'EX'   : lambda: ('44', R(1).ro(), X(2).ex()),
 
     'IC'   : lambda: ('43', R(1).rw(), X(2).ro()),
 
-    'L'    : lambda: ('58', R(1).wo(), X(2).ro()),
-    'LA'   : lambda: ('41', R(1).wo(), X(2).ro()),
+    'L'    : lambda: ('58', R(1).wo(), X(2).ro().al('fw')),
+    'LA'   : lambda: ('41', R(1).wo(), X(2).ro().al('fw')),
     'LCR'  : lambda: ('13', R(1).rw(), R(2).ro()),
-    'LM'   : lambda: ('98', R(1).wo(), R(3).wo(), S(2).ro()),
+    'LM'   : lambda: ('98', R(1).wo(), R(3).wo(), S(2).ro().al('fw')),
     'LR'   : lambda: ('18', R(1).wo(), R(2).ro()),
     'LTR'  : lambda: ('12', R(1).wo(), R(2).ro()),
 
-    'M'    : lambda: ('5C', R(1).rw(), X(2).ro()),
+    'M'    : lambda: ('5C', R(1).rw(), X(2).ro().al('fw')),
     'MR'   : lambda: ('1C', R(1).rw(), R(2).ro()),
 
-    'N'    : lambda: ('54', R(1).rw(), X(2).ro()),
+    'N'    : lambda: ('54', R(1).rw(), X(2).ro().al('fw')),
     'NR'   : lambda: ('14', R(1).rw(), R(2).ro()),
 
-    'O'    : lambda: ('56', R(1).rw(), X(2).ro()),
+    'O'    : lambda: ('56', R(1).rw(), X(2).ro().al('fw')),
     'OR'   : lambda: ('16', R(1).rw(), R(2).ro()),
 
-    'S'    : lambda: ('5B', R(1).rw(), X(2).ro()),
+    'S'    : lambda: ('5B', R(1).rw(), X(2).ro().al('fw')),
     'SR'   : lambda: ('1B', R(1).rw(), R(2).ro()),
 
-    'ST'   : lambda: ('50', R(1).ro(), X(2).wo()),
+    'ST'   : lambda: ('50', R(1).ro(), X(2).wo().al('fw')),
     'STC'  : lambda: ('42', R(1).ro(), X(2).rw()),
-    'STM'  : lambda: ('90', R(1).ro(), R(3).ro(), S(2).wo()),
+    'STM'  : lambda: ('90', R(1).ro(), R(3).ro(), S(2).wo().al('fw')),
 
-    'X'    : lambda: ('57', R(1).rw(), X(2).ro()),
+    'X'    : lambda: ('57', R(1).rw(), X(2).ro().al('fw')),
     'XR'   : lambda: ('17', R(1).rw(), R(2).ro()),
     }
 
@@ -874,7 +902,7 @@ def update_sd(sd_list, sd_info):
 #   SyntaxError: any syntax error in parsing the arguments
 def parse_sd(sd_arg):
     # split into ( [mul]ch[Llen], val )
-    L = re.split('\(', sd_arg)  # split according to '\('
+    L = zPE.resplit_sq('\(', sd_arg)  # split according to '\('
     sz = len(L)
     if sz == 2 and L[1][-1] == ')':
         # A(label) ==> [ 'A', 'label)' ]

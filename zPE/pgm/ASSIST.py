@@ -259,7 +259,7 @@ def __PARSE_OUT(step, limit):
 
 
     ### summary portion of the report
-    cnt_warn = len(asm_warn)
+    cnt_warn = len(asm_info) + len(asm_msg) + len(asm_warn)
     cnt_err  = len(asm_err) + len(asm_sev)
     cnt_all  = cnt_warn + cnt_err
     def format_cnt(cnt):

@@ -546,10 +546,8 @@ def pass_1(amode = 31, rmode = 31):
                 while True:
                     # process leftover separator
                     if sept == ')':
-#                        if op_code[lbl_i + op_indx].type in 'S':
-
                         # preceding argument required
-                        if not last_arg: # not offered
+                        if not last_lbl: # not offered
                             indx_e = ( line.index(field[2])
                                        + len(field[2]) # move to end of arg_list
                                        - len(reminder) # move back to error pos
@@ -573,10 +571,28 @@ def pass_1(amode = 31, rmode = 31):
                         lbl = reminder
                         sept = ''
                         reminder = ''
+                    if lbl.count("'") % 2 == 1: # quoted literal
+                        indx_s = reminder.index("'") + 1
+                        if indx_s == len(reminder):
+                            indx_e = indx_s
+                        else:
+                            indx_e = indx_s + 1
+                        lbl += sept + reminder[:indx_s]
+                        sept = reminder[indx_s:indx_e]
+                        reminder = reminder[indx_e:]
+                        if sept  and  not re.search(pattern, sept):
+                            # invalid separator
+                            indx_e = ( line.index(field[2])
+                                       + len(field[2]) # move to end of arg_list
+                                       - len(reminder) # move back to error pos
+                                       )
+                            __INFO('E', line_num, (
+                                    41, indx_e - 1, indx_e,
+                                    ))
                     parsed = False # reset the flag
 
                     # validate and normalize splitted argument (lbl)
-                    last_arg = lbl
+                    last_lbl = lbl
                     if lbl == '':
                         continue # if no label, continue
 
@@ -1182,19 +1198,27 @@ def pass_2(rc, amode = 31, rmode = 31):
                         )[0]    # convert displacement back to int
 
                     # validate registers
-                    if ',' in p1_lbl:
-                        indx_range = [ 1, 2 ]
-                        indx_os = [ # index offset for error msg generation
-                            None,
-                            ( p1_lbl.index('('), p1_lbl.index(',') ),
-                            ( p1_lbl.index(','), p1_lbl.index(')') ),
-                            ]
-                    elif op_code[lbl_i + op_indx].type in 'S':
+                    if op_code[lbl_i + op_indx].type in 'S':
+                        if ',' in p1_lbl:
+                            indx_s = spi[line_num].index(p1_lbl)
+                            __INFO('S', line_num, (
+                                179,
+                                indx_s + p1_lbl.index(','),
+                                indx_s + len(p1_lbl) + 1,
+                                ))
+                            break   # stop processing current res
                         indx_range = [ 1 ]
                         del res[2] # remove the extra item (fake base)
                         indx_os = [
                             None,
                             ( p1_lbl.index('('), p1_lbl.index(')') ),
+                            ]
+                    elif ',' in p1_lbl:
+                        indx_range = [ 1, 2 ]
+                        indx_os = [ # index offset for error msg generation
+                            None,
+                            ( p1_lbl.index('('), p1_lbl.index(',') ),
+                            ( p1_lbl.index(','), p1_lbl.index(')') ),
                             ]
                     else:
                         indx_range = [ 1, 2 ]
@@ -1234,7 +1258,7 @@ def pass_2(rc, amode = 31, rmode = 31):
                         else:
                             try:
                                 res[0] = zPE.core.asm.value_sd(
-                                    zPE.core.asm.parse_sd(indx)
+                                    zPE.core.asm.parse_sd(res[0])
                                     )[0]
                             except: # cannot evaluate B-const
                                 res[0] = lbl
@@ -1260,9 +1284,17 @@ def pass_2(rc, amode = 31, rmode = 31):
                     p1_res = __PARSE_ARG(p1_lbl)
 
                     if isinstance(res, int):
+                        # delimiter error, S035, S173-175, S178-179
                         indx_s = spi[line_num].index(p1_args[lbl_i])
+                        if spi[line_num][indx_s + p1_res - 1] in ')':
+                            if lbl_i + op_indx < op_args:
+                                err_num = 175 # expect comma
+                            else:
+                                err_num = 173 # expect blank
+                        else:
+                            err_num = 35 # cannot determine
                         __INFO('S', line_num, (
-                                35,
+                                err_num,
                                 indx_s + p1_res,
                                 indx_s + len(p1_args[lbl_i]),
                                 ))
@@ -1272,7 +1304,6 @@ def pass_2(rc, amode = 31, rmode = 31):
                     reloc_arg = None # backup of the relocatable symbol
                     for indx in range(len(res[0])):
                         # for each element in the exp, try to envaluate
-
                         if reloc_cnt > 1: # more than one relocatable symbol
                             indx_s = spi[line_num].index(lbl)
                             __INFO('E', line_num,
@@ -1324,7 +1355,17 @@ def pass_2(rc, amode = 31, rmode = 31):
                                 bad_lbl = zPE.bad_label(tmp[0])
                                 lbl_8 = '{0:<8}'.format(tmp[0])
 
-                                if len(tmp) > 1 and indx != len(res[0]) - 1:
+                                if ( len(tmp) > 1 and
+                                     op_code[lbl_i + op_indx].type in 'S'
+                                     ):
+                                    indx_s = spi[line_num].index(p1_lbl)
+                                    __INFO('S', line_num, (
+                                        173,
+                                        indx_s + p1_lbl.index('('),
+                                        indx_s + len(p1_lbl) + 1,
+                                        ))
+                                    break   # stop processing current res
+                                elif len(tmp) > 1 and indx != len(res[0]) - 1:
                                     # complex symbol must be last node of exp
                                     indx_s = (
                                         spi[line_num].index(p1_res[0][indx]) +
@@ -1422,6 +1463,11 @@ def pass_2(rc, amode = 31, rmode = 31):
                                0, sd_info[4], sd_info[3]
                                ) # all are auto-generated, no 'L' at all
                     (ex_disp, dummy) = zPE.core.asm.value_sd(sd_info)
+                    if not op_code[lbl_i + op_indx].is_aligned(ex_disp):
+                        indx_s = spi[line_num].index(p1_lbl)
+                        __INFO('I', line_num,
+                               ( 33, indx_s, indx_s + len(p1_lbl), )
+                               )
 
                 # evaluate expression
                 if abs_values:    # absolute values
@@ -1598,13 +1644,17 @@ def __IS_ABS_ADDR(addr_arg):
     # parse index
     res = re.search('[,)]', reminder)
     if res != None:     # search succeed
+        matched_ch = reminder[res.start():res.end()]
+
         indx = reminder[:res.start()]
         reminder = reminder[res.end():]
         if not indx:
-            indx = '0'
+            if matched_ch == ',': # omitted indx
+                indx = '0'
+            else:                 # nothing in parenthesis
+                return None
     else:
         indx = '0'
-        reminder = ''
     # check B-const
     if indx.startswith("B'"):
         indx = __REDUCE_EXP(indx)
@@ -1626,9 +1676,8 @@ def __IS_ABS_ADDR(addr_arg):
             base = '0'
     else:
         base = '0'
-        reminder = ''
     # check B-const
-    if indx.startswith("B'"):
+    if base.startswith("B'"):
         base = __REDUCE_EXP(base)
         if base == None:        # base cannot be reduced
             return None
@@ -1738,6 +1787,8 @@ def __PARSE_ARG(arg_str):
                 if res.isdigit(): # pure number
                     parts.append(res)
                     descs.append('regular_num')
+                elif len(zPE.resplit_sq('\)', res)) > 1: # abs addr + something
+                    return res.index(')') + 1
                 elif sd_info:   # inline constant
                     try:
                         if sd_info[0] == 'a':
@@ -1767,6 +1818,10 @@ def __PARSE_ARG(arg_str):
                                  )
                     tmp = zPE.resplit_sq('\)', tmp[0]) # search for ')'
                     arg_val = tmp[0]
+                    if not arg_val:                   # no value
+                        return ( len(arg_str) - len(reminder) +
+                                 len(zPE.resplit_sq('\(', res)[0])
+                                 )
                     if len(tmp) != 2 or tmp[1] != '': # not end with ')'
                         return ( len(arg_str) - len(reminder) +
                                  len(zPE.resplit_sq('\)', res)[0])

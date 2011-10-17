@@ -191,7 +191,9 @@ GPR = [                         # general purpose registers
 
 def parse_GPR(reg_str):
     equ = None
-    if reg_str.isdigit():
+    if isinstance(reg_str, int):
+        reg_num = reg_str
+    elif reg_str.isdigit():
         reg_num = int(reg_str)
     else:
         # check reg equates

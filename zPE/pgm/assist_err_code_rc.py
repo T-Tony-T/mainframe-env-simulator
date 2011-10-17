@@ -9,6 +9,10 @@ def __format(msg, pos):
         return '{0:<28}${1:->71} <-ERROR'.format(msg, '-')
 
 __I_MSG = {                     # ASMAxxxI
+    33  : lambda info, line: __format('W-ALIGNMENT ERROR-IMPROPER BOUNDARY', info[1]),
+    }
+
+__N_MSG = {                     # ASMAxxxN
     }
 
 __W_MSG = {                     # ASMAxxxW
@@ -60,8 +64,9 @@ __MSG = {
     'S' : __S_MSG,
     'E' : __E_MSG,
     'W' : __W_MSG,
+    'N' : __N_MSG,
     'I' : __I_MSG,
     }
 
 def gen_msg(msg_type, info, line):
-    return '----->AS{0:0>3} {1}\n'.format(info[0], __MSG[msg_type][info[0]](info, line))
+    return '----->{0}:{1:0>3} {2}\n'.format(msg_type, info[0], __MSG[msg_type][info[0]](info, line))
