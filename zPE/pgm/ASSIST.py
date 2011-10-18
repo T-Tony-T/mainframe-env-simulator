@@ -399,6 +399,11 @@ def __PARSE_OUT(step, limit):
     for (k, v) in asm_using.iteritems():
         print k, v.__dict__
 
+    print '\n\nObject Deck:'
+    for line in zPE.core.SPOOL.retrive('SYSLIN'):
+        print line
+
+
 
 def __PRINT_LINE(spool_out, line_words, line_num, page_num):
     '''

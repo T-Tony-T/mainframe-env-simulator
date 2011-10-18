@@ -13,10 +13,10 @@ class InstructionType(object):
     '''this is an abstract base class'''
 
     align_map = {              # see al() and is_aligned() for details
-        'ch' : 1,
-        'hw' : 2,
-        'fw' : 4,
-        'dw' : 8,
+        'bw' : 1, # byte-word
+        'hw' : 2, # half-word
+        'fw' : 4, # full-word
+        'dw' : 8, # double-word
         }
 
     def __init__(self, ins_type, pos):
@@ -66,7 +66,7 @@ class InstructionType(object):
         '''
         invoke this like a modifier. e.g. r = X(2).al(fw)
         argument should be one of the follows:
-          ch = character alignment (no alignment)
+          bw = byteword (character) alignment (no alignment)
           hw = align on halfword boundary
           fw = align on fullword boundary
           dw = align on doubleword boundary
@@ -488,7 +488,7 @@ class B_(object):
         if not self.natual_len: # for bin, natual length = len(str)
             self.natual_len = bin_len
         # align to byte
-        bin_len += 8 - bin_len % 8
+        bin_len += (8 - bin_len % 8) % 8
         bin_str = '{0:0>{1}}'.format(bin_str, bin_len)
         if not length:
             length = bin_len

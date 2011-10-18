@@ -34,6 +34,9 @@ from time import strftime
 
 from asma90_err_code_rc import * # read recourse file for err msg
 
+# read recourse file for objmod specification
+from asma90_objmod_spec import REC_FMT as OBJMOD_REC
+
 
 FILE = [ 'SYSIN', 'SYSLIB', 'SYSPRINT', 'SYSLIN', 'SYSUT1' ]
 
@@ -49,6 +52,10 @@ INFO = {  # '[IWES]' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ...] }
     'S' : {},           # severe error messages
     }
 # check __INFO() for more information
+
+TITLE = [       # TITLE (Deck ID) list
+    # ( title_string, line_num )
+    ]
 
 MNEMONIC = {
     # Line_Num : [ scope, ]                                     // type (len) 1
@@ -73,6 +80,22 @@ class ExternalSymbol(object):
         self.owner = owner
         self.flags = flags
         self.alias = alias
+
+    def type_code(self):
+        return {
+            'SD'   : '00',
+            'LD'   : '01',
+            'ER'   : '02',
+            'PC'   : '04',
+            'CM'   : '05',
+            'XD'   : '06',
+            'PR'   : '06', # (another name for 'XD'?)
+            'WX'   : '0A',
+            'qaSD' : '0D', # Quad-aligned SD
+            'qaPC' : '0E', # Quad-aligned PC
+            'qaCM' : '0F', # Quad-aligned CM
+            }[self.type]
+
 ESD = {                 # External Symbol Dictionary; build during pass 1
     # 'Symbol  ' : ( ExternalSymbol(SD/PC), ExternalSymbol(ER), )
     }
@@ -1528,9 +1551,14 @@ def pass_2(rc, amode = 31, rmode = 31):
                                     op_code[lbl_i + op_indx].flag()
                                     )
                                 )
-                        op_code[lbl_i + op_indx].set(
-                            addr_res[0], int(reg_indx), addr_res[1][1]
-                            )
+                        if op_code[lbl_i + op_indx].type in 'S':
+                            op_code[lbl_i + op_indx].set(
+                                addr_res[0], addr_res[2]
+                                )
+                        else:
+                            op_code[lbl_i + op_indx].set(
+                                addr_res[0], int(reg_indx), addr_res[2]
+                                )
                     else:
                         indx_s = spi[line_num].index(p1_lbl)
                         __INFO('E', line_num,
@@ -1575,12 +1603,41 @@ def pass_2(rc, amode = 31, rmode = 31):
 def obj_mod_gen(amode, rmode):
     spo = zPE.core.SPOOL.retrive('SYSLIN')   # output SPOOL (object module)
 
+    # prepare variable field
+    variable_field = []
+    for key in sorted(ESD_ID.iterkeys()):
+        k = ESD_ID[key]
+        if ESD[k][0] and ESD[k][0].id == key:
+            v = ESD[k][0]
+        else:
+            v = ESD[k][1]
+        variable_field.append([ k, v ])
+    # prepare title
+    if TITLE:
+        title = TITLE[0][0]
+    else:
+        title = ''
+
+    # generate ESD records
+    last_group_indx = len(variable_field) / 3
+    for i in range(last_group_indx): # for every 3 variable fields
+        spo.append(OBJMOD_REC['ESD'](
+                variable_field[i * 3 : (i+1) * 3],
+                amode, rmode,
+                title, len(spo) + 1
+                ))
+    spo.append(OBJMOD_REC['ESD'](
+            variable_field[last_group_indx : ],
+            amode, rmode,
+            title, len(spo) + 1
+            ))
+
     return zPE.RC['NORMAL']
 
 
 ### Supporting Functions
 def __ADDRESSING(lbl, csect_lbl, ex_disp = 0):
-    rv = [ 4096, (None, -1), ]  # init to least priority USING (non-exsit)
+    rv = [ 4096, None, -1, ]  # init to least priority USING (non-exsit)
     eq_const = __HAS_EQ(lbl, ESD[csect_lbl][0].id)
 
     for (k, v) in ACTIVE_USING.iteritems():
@@ -1592,10 +1649,10 @@ def __ADDRESSING(lbl, csect_lbl, ex_disp = 0):
             else:
                 disp = MNEMONIC[SYMBOL[lbl].defn][1] - USING_MAP[v,k].u_value
             disp += ex_disp
-            if ( ( disp < rv[0] )  or              # minimal displacement rule
-                 ( disp == rv[0] and k > rv[1][1]) # maximal register rule
+            if ( ( disp < rv[0] )  or           # minimal displacement rule
+                 ( disp == rv[0] and k > rv[2]) # maximal register rule
                  ):
-                rv = [ disp, (v, k), ]
+                rv = [ disp, (v, k), k, ]
     return rv
 
 def __ALLOC_EQ(lbl, symbol):
