@@ -40,7 +40,9 @@ from asma90_objmod_spec import REC_FMT as OBJMOD_REC
 
 FILE = [ 'SYSIN', 'SYSLIB', 'SYSPRINT', 'SYSLIN', 'SYSUT1' ]
 
-LOCAL_CONFIG = {
+PARM = {
+    'AMODE'     : 31,
+    'RMODE'     : 31,
     'LN_P_PAGE' : 60,           # line per page for output
     }
 
@@ -160,15 +162,17 @@ def init(step):
     if __MISSED_FILE(step) != 0:
         return zPE.RC['CRITICAL']
 
-    rc1 = pass_1()
-    rc2 = pass_2(rc1)
+    # check PARM here
+
+    rc1 = pass_1(PARM['AMODE'], PARM['RMODE'])
+    rc2 = pass_2(step, PARM['AMODE'], PARM['RMODE'])
 
     __PARSE_OUT()
 
     return max(rc1, rc2)
 
 
-def pass_1(amode = 31, rmode = 31):
+def pass_1(amode, rmode):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
 
@@ -781,7 +785,7 @@ def pass_1(amode = 31, rmode = 31):
 # end of pass 1
 
 
-def pass_2(rc, amode = 31, rmode = 31):
+def pass_2(step, amode, rmode):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # original input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL (main input)
 
@@ -810,14 +814,11 @@ def pass_2(rc, amode = 31, rmode = 31):
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
 
-        # (skip) OP code detection
-        if rc and not len(field[1]):
-            if ( 142, 9, None, ) not in INFO['E'][line_num]:
-                zPE.abort(92, 'Error: OP-Code detection error in pass 1.\n')
-            continue            # no op code; detected in the first pass
-        # skip =constant
+        # skip lines that handled in the first pass
+        if len(field) < 2 or len(field[1]) == 0:
+            continue            # no op code
         elif field[1][0] == '=':
-            continue
+            continue            # =constant
 
         # update symbol address
         lbl_8 = '{0:<8}'.format(field[0])
@@ -1595,12 +1596,12 @@ def pass_2(rc, amode = 31, rmode = 31):
 
     # generate object module if no error occured
     if rc_err <= zPE.RC['WARNING']:
-        rc_err = max(rc_err, obj_mod_gen(amode, rmode))
+        rc_err = max(rc_err, obj_mod_gen(step, amode, rmode))
 
     return rc_err
 
 
-def obj_mod_gen(amode, rmode):
+def obj_mod_gen(step, amode, rmode):
     spo = zPE.core.SPOOL.retrive('SYSLIN')   # output SPOOL (object module)
 
     # prepare variable field
@@ -1631,6 +1632,9 @@ def obj_mod_gen(amode, rmode):
             amode, rmode,
             title, len(spo) + 1
             ))
+
+    # generate TXT records
+    mem = zPE.core.mem.Memory('101K', step.region) # assume start at "0x000000"
 
     return zPE.RC['NORMAL']
 

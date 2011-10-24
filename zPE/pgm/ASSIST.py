@@ -39,7 +39,9 @@ FILE = [
     ('SYSPRINT', 'AM001 ASSIST COULD NOT OPEN PRINTER FT06F001:ABORT'),
     ]
 
-LOCAL_CONFIG = {
+PARM = {
+    'AMODE'     : 24,
+    'RMODE'     : 24,
     'LN_P_PAGE' : 56,           # line per page for output
     }
 
@@ -56,8 +58,8 @@ def init(step):
     objmod = zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '')
     sketch = zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '')
 
-    rc      = zPE.pgm.ASMA90.pass_1(24, 24)
-    err_cnt = zPE.pgm.ASMA90.pass_2(rc, 24, 24)
+    rc      = zPE.pgm.ASMA90.pass_1(PARM['AMODE'], PARM['RMODE'])
+    err_cnt = zPE.pgm.ASMA90.pass_2(step, PARM['AMODE'], PARM['RMODE'])
 
     __PARSE_OUT(step, limit)
 
@@ -421,7 +423,7 @@ def __PRINT_LINE(spool_out, line_words, line_num, page_num):
         and the new page number after the line is
         inserted
     '''
-    if line_num >= LOCAL_CONFIG['LN_P_PAGE']:
+    if line_num >= PARM['LN_P_PAGE']:
         line_num = __PRINT_HEADER(spool_out, 0, page_num + 1)
     spool_out.append(* line_words)
 

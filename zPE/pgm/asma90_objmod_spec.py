@@ -99,13 +99,16 @@ REC_FMT = {                 # record formatter
             esd_vf(vf, am, rm, 1),      # 33-48 : Variable field item 2
             esd_vf(vf, am, rm, 2),      # 49-64 : Variable field item 3
             chs('{0:8}'.format('')),    # 65-72 : Space
-            rec_id(tt, cnt),            # 73-80 : Deck ID, sequence number, or both
+            rec_id(tt, cnt),            # 73-80 : Deck ID, sequence number
             ]),
     # Text records describe object code generated
     'TXT' : lambda : ''.join([
             '02',                       # 01    : X'02'
             chs('TXT'),                 # 02-04 : TXT
             chs(' '),                   # 05    : Space
+
+            chs('{0:2}'.format('')),    # 09-10 : Space
+            rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     # Relocation dictionary provide information required to relocate
     # address constants within the object module
@@ -113,6 +116,7 @@ REC_FMT = {                 # record formatter
             '02',                       # 01    : X'02'
             chs('RLD'),                 # 02-04 : RLD
             chs('{0:6}'.format('')),    # 05-10 : Space
+            rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     # End records terminate the object module and optionally provide
     # the entry point
@@ -120,11 +124,13 @@ REC_FMT = {                 # record formatter
             '02',                       # 01    : X'02'
             chs('END'),                 # 02-04 : END
             chs(' '),                   # 05    : Space
+            rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     # Symbol table records provide symbol information for TSO TEST
     'SYM' : lambda : ''.join([
             '02',                       # 01    : X'02'
             chs('SYM'),                 # 02-04 : SYM
             chs('{0:6}'.format('')),    # 05-10 : Space
+            rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     }
