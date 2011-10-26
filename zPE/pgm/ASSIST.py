@@ -39,12 +39,6 @@ FILE = [
     ('SYSPRINT', 'AM001 ASSIST COULD NOT OPEN PRINTER FT06F001:ABORT'),
     ]
 
-PARM = {
-    'AMODE'     : 24,
-    'RMODE'     : 24,
-    'LN_P_PAGE' : 56,           # line per page for output
-    }
-
 def init(step):
     # check for file requirement
     if __MISSED_FILE(step, 0) != 0:
@@ -58,10 +52,21 @@ def init(step):
     objmod = zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '')
     sketch = zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '')
 
-    rc      = zPE.pgm.ASMA90.pass_1(PARM['AMODE'], PARM['RMODE'])
-    err_cnt = zPE.pgm.ASMA90.pass_2(step, PARM['AMODE'], PARM['RMODE'])
+    # load the user-supplied PARM and config into the default configuration
+    zPE.pgm.ASMA90.load_parm({
+            'AMODE'     : 24,
+            'RMODE'     : 24,
+            })
+    zPE.pgm.ASMA90.load_local_conf({
+            'MEM_POS'   : 0,    # always start at 0x000000 for ASSIST
+            'REGION'    : step.region,
+            'LN_P_PAGE' : 56,
+            })
 
-    __PARSE_OUT(step, limit)
+    zPE.pgm.ASMA90.pass_1()
+    zPE.pgm.ASMA90.pass_2()
+
+    err_cnt = __PARSE_OUT(step, limit, False)
 
     zPE.core.SPOOL.remove('SYSLIN')
     zPE.core.SPOOL.remove('SYSUT1')
@@ -80,7 +85,6 @@ def init(step):
     zPE.core.SPOOL.remove('SYSLOUT')
 
     return zPE.RC['NORMAL']
-
 
 
 ### Supporting Functions
@@ -112,7 +116,7 @@ def __MISSED_FILE(step, i):
 
     return cnt
 
-def __PARSE_OUT(step, limit):
+def __PARSE_OUT(step, limit, debug = True):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
@@ -184,8 +188,10 @@ def __PARSE_OUT(step, limit):
 
         tmp_str = ''
 
-        if len(asm_mnem[cnt]) == 3:   # type 3
-            for val in asm_mnem[cnt][2]:
+        if ( len(asm_mnem[cnt]) == 3  and # type 3
+             zPE.core.asm.can_get_sd(asm_mnem[cnt][2]) # DC/=const
+             ):
+            for val in zPE.core.asm.get_sd(asm_mnem[cnt][2]):
                 tmp_str += zPE.core.asm.X_.tr(val.dump())
             if len(tmp_str) > 16:
                 tmp_str = tmp_str[:16]
@@ -286,10 +292,11 @@ def __PARSE_OUT(step, limit):
     spo.append(ctrl, '*** ASSEMBLY TIME = {0:>8.3f} SECS,'.format(diff),
                ' {0:>8} STATEMENT/SEC ***\n'.format('#####')) # need info
 
+    if not debug:
+        return cnt_err          # regular process end here
     #
     # debugging information
     #
-
     print '\nExternal Symbol Dictionary:'
     for key in sorted(asm_esd_id.iterkeys()):
         k = asm_esd_id[key]
@@ -341,8 +348,10 @@ def __PARSE_OUT(step, limit):
         else:
             loc = hex(asm_mnem[key][1])[2:]
         tmp_str = ''
-        if len(asm_mnem[key]) == 3: # type 3
-            for val in asm_mnem[key][2]:
+        if ( len(asm_mnem[cnt]) == 3  and # type 3
+             zPE.core.asm.can_get_sd(asm_mnem[cnt][2]) # DC/=const
+             ):
+            for val in zPE.core.asm.get_sd(asm_mnem[cnt][2]):
                 tmp_str += zPE.core.asm.X_.tr(val.dump())
         elif len(asm_mnem[key]) == 4: # type 4
             tmp_str += '{0:<14} {1:0>5} {0:>5}'.format(
@@ -404,7 +413,8 @@ def __PARSE_OUT(step, limit):
     print '\n\nObject Deck:'
     for line in zPE.core.SPOOL.retrive('SYSLIN'):
         print line
-
+    # end of debugging
+    return cnt_err
 
 
 def __PRINT_LINE(spool_out, line_words, line_num, page_num):
@@ -423,7 +433,7 @@ def __PRINT_LINE(spool_out, line_words, line_num, page_num):
         and the new page number after the line is
         inserted
     '''
-    if line_num >= PARM['LN_P_PAGE']:
+    if line_num >= zPE.pgm.ASMA90.LOCAL_CONF['LN_P_PAGE']:
         line_num = __PRINT_HEADER(spool_out, 0, page_num + 1)
     spool_out.append(* line_words)
 

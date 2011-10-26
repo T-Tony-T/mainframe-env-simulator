@@ -64,7 +64,7 @@ def main(argv = sys.argv):
             job_id = job_listing_pttn[0][0]
             job_pttn = None
 
-
+    need_new_line = True # make request of a new-line char after the last print
     # start processing
     if job_id:
         # JOB ID offered, try to process it
@@ -77,6 +77,7 @@ def main(argv = sys.argv):
             else:
                 for row in fetch_content(conn, job_id, dd_pttn):
                     fetch_out.write(row[0])
+                need_new_line = False # fetch into an out-file, no need for \n
         else:
             # JOB ID is invalid
             sys.stderr.write(''.join([
@@ -106,7 +107,8 @@ def main(argv = sys.argv):
                         ]))
             return -1
 
-    sys.stdout.write('\n')
+    if need_new_line:
+        sys.stdout.write('\n')
     check_n_jobs(conn)
 
     conn.commit()

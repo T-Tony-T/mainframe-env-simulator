@@ -75,6 +75,46 @@ def esd_vf(vf, am, rm, indx):
                 ),
             ])
 
+# for TXT record
+def txt_ds(ds):
+    rv = ds
+    rv_len = len(ds) / 2
+    if rv_len < 56:       # fill with tailing spaces
+        rv += chs('{0:{1}}'.format('', 56 - rv_len))
+    return rv
+
+# for RLD record
+def rld_df(df):
+    return chs('{0:56}'.format('Need Information')) # need info
+
+# for END record
+def end_fill(src, length):
+    if isinstance(src, int):
+        return '{0:0>{1}}'.format(hex(src)[2:].upper(), length * 2)
+    else:
+        return chs('{0:<{1}}'.format(src, length))
+
+def end_cnt_idr(idr):
+    if len(idr):
+        return chs('{0}'.format(len(idr))) # EBCDIC 1 or 2
+    else:
+        return chs(' ')         # blank if not present
+
+def end_idr(idr, indx):
+    if indx >= len(idr):
+        return chs('{0:19}'.format('')) # 19 spaces
+
+    return ''.join([
+            chs(idr[indx]['translator id']), # 01-09 : Translator identification
+            chs(' '),                        # 10    : Space
+            chs(idr[indx]['ver + release']), # 11-14 : Version and release level
+            chs(idr[indx]['assembly date']), # 15-19 : date of assembly (yyddd)
+            ])
+
+# for SYM record
+def sym_vf(vf):
+    return chs('{0:56}'.format('Need Information')) # need info
+
 
 REC_FMT = {                 # record formatter
     # External symbol dictionary records describe external symbols
@@ -102,35 +142,88 @@ REC_FMT = {                 # record formatter
             rec_id(tt, cnt),            # 73-80 : Deck ID, sequence number
             ]),
     # Text records describe object code generated
-    'TXT' : lambda : ''.join([
+    'TXT' : lambda scp, loc, ds, tt, cnt : ''.join([
+            # scp : ESDID (scope id)
+            # loc : location of the first instruction
+            # ds  : Data stream
+            # tt  : Deck ID (first TITLE)
+            # cnt : sequence number
             '02',                       # 01    : X'02'
             chs('TXT'),                 # 02-04 : TXT
             chs(' '),                   # 05    : Space
-
+            '{0:0>6}'.format(           # 06-08 : Relative address of instrction
+                hex(loc)[2:]
+                ),
             chs('{0:2}'.format('')),    # 09-10 : Space
+            '{0:0>4}'.format(           # 11-12 : Byte count
+                hex(len(ds) / 2)[2:]
+                ),
+            chs('{0:2}'.format('')),    # 13-14 : Space
+            '{0:0>4}'.format(           # 15-16 : ESDID (scope id)
+                hex(scp)[2:]
+                ),
+            txt_ds(ds),                 # 17-72 : Data Stream
             rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     # Relocation dictionary provide information required to relocate
     # address constants within the object module
-    'RLD' : lambda : ''.join([
+    'RLD' : lambda df, tt, cnt : ''.join([
+            # df  : data field (1~7 [ Symbol, <need info> ])
+            # tt  : Deck ID (first TITLE)
+            # cnt : sequence number
             '02',                       # 01    : X'02'
             chs('RLD'),                 # 02-04 : RLD
             chs('{0:6}'.format('')),    # 05-10 : Space
+            '{0:0>4}'.format(           # 11-12 : Data field count
+                hex(len(df) * 8)[2:]    #         (number of bytes of df)
+                ),
+            chs('{0:4}'.format('')),    # 13-16 : Space
+            rld_df(df),                 # 17-72 : Data fields
             rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     # End records terminate the object module and optionally provide
     # the entry point
-    'END' : lambda : ''.join([
+    'END' : lambda enty, scp, sym, csl, idr, tt, cnt : ''.join([
+            # enty: Entry address from operand of END record in source deck
+            # scp : ESDID of entry point (blank if no END operand)
+            # sym : Symbolic entry point if specified and no END operand
+            # csl : Control section length for a CSECT whose length was not
+            #       specified on its SD ESD item.
+            # idr : 0~2 IDR items contains translator identification,
+            #       version and release level (e.g. 0101), and date of
+            #       the assembly (yyddd)
+            # tt  : Deck ID (first TITLE)
+            # cnt : sequence number
             '02',                       # 01    : X'02'
             chs('END'),                 # 02-04 : END
             chs(' '),                   # 05    : Space
+            end_fill(enty, 3),          # 06-08 : Entry address from END
+            chs('{0:6}'.format('')),    # 09-14 : Space
+            end_fill(scp, 2),           # 15-16 : Type 1: ESDID of entry point
+                                        #         Type 2: Blank
+            end_fill(sym, 8),           # 17-24 : Type 1: Blank
+                                        #         Type 2: Symbolic name or blank
+            chs('{0:4}'.format('')),    # 25-28 : Blank
+            end_fill(csl, 4),           # 29-32 : Control section length
+            end_cnt_idr(idr),           # 33    : Number of IDR items
+            end_idr(idr, 0),            # 34-52 : IDR item 1
+            end_idr(idr, 1),            # 53-71 : IDR item 2
+            chs(' '),                   # 72    : Space 
             rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     # Symbol table records provide symbol information for TSO TEST
-    'SYM' : lambda : ''.join([
+    'SYM' : lambda vf, tt, cnt : ''.join([
+            # vf  : variable field - need info
+            # tt  : Deck ID (first TITLE)
+            # cnt : sequence number
             '02',                       # 01    : X'02'
             chs('SYM'),                 # 02-04 : SYM
             chs('{0:6}'.format('')),    # 05-10 : Space
+            '{0:0>4}'.format(           # 11-12 : Variable field byte count
+                hex(len(vf) * 8)[2:]    #         (number of bytes of text)
+                ),
+            chs('{0:4}'.format('')),    # 13-16 : Space
+            sym_vf(vf),                 # 17-72 : Variable fields
             rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     }

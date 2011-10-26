@@ -31,31 +31,39 @@ class _BYTE_(Union):
 # ValueError:  invalid value
 # SyntaxError: invalid formatter
 class Page(Structure):
-    '''mainly for internal usage'''
+    '''
+    C-style Structure class
+    mainly for internal usage
+    '''
     _fields_ = [                # each page is 4K in size
-        ('bytes', c_ubyte * 4096)
+        ('bytes', c_ubyte * 4096) # C-style array
         ]
 
     def __getitem__(self, key):
-        if isinstance(key, int):
+        if isinstance(key, int) or isinstance(key, long):
             rv = '{0:0>2}'.format(hex(self.bytes[key])[2:])
             return rv.upper()
-        else:                   # slice
+        else: # slice
             (in_s, in_e, step) = key.indices(len(self.bytes))
-            rv = ''
+            rv = []
             for indx in range(in_s, in_e):
-                rv = '{0}{1:0>2}'.format(rv, hex(self.bytes[indx])[2:])
-            return rv.upper()
+                rv.append('{0:0>2}'.format(hex(self.bytes[indx])[2:]))
+            return ''.join(rv).upper()
 
     def __setitem__(self, key, val):
-        if not isinstance(key, int):
-            raise KeyError
-        self.__set_char(key, val)
+        if isinstance(key, int) or isinstance(key, long):
+            self.__set_char(key, val)
+        else:
+            raise KeyError('{0}: Invalid key.'.format(key))
 
 
     def store(self, pos, val, fmt = 'fw'):
         if not isinstance(pos, int):
-            raise KeyError
+            raise KeyError('{0}: Position must be an integer.'.format(pos))
+        if pos < 0:             # handle nagetive index
+            pos += 4096
+        if pos >= 4096:
+            raise KeyError('{0}: Position must be less than 4K.'.format(pos))
 
         # if storing a single byte, no need to bit-reverse
         if fmt == 'bw':
@@ -72,13 +80,17 @@ class Page(Structure):
         self.__set_slice(key, val_list)
 
 
-    def retrive(self, pos, fmt = 'fw'):
+    def retrieve(self, pos, fmt = 'fw'):
         if not isinstance(pos, int):
-            raise KeyError
+            raise KeyError('{0}: Position must be an integer.'.format(pos))
+        if pos < 0:             # handle nagetive index
+            pos += 4096
+        if pos >= 4096:
+            raise KeyError('{0}: Position must be less than 4K.'.format(pos))
 
-        # if retriving a single byte, no need to bit-reverse
+        # if retrieving a single byte, no need to bit-reverse
         if fmt == 'bw':
-            return self.__get_char(pos, val) # early return
+            return self.__get_char(pos) # early return
 
         # otherwise, alignment checking is performed first
         key = self.__range_of(pos, fmt)
@@ -136,18 +148,27 @@ class Page(Structure):
     def __range_of(self, pos, fmt):
         if fmt == 'hw':
             if pos % 2 != 0:
-                raise IndexError
+                raise IndexError('{0}: {1}'.format(
+                        pos,
+                        'Position not aligned on halfword boundary.'
+                        ))
             key = slice(pos, pos+2)
         elif fmt == 'fw':
             if pos % 4 != 0:
-                raise IndexError
+                raise IndexError('{0}: {1}'.format(
+                        pos,
+                        'Position not aligned on fullword boundary.'
+                        ))
             key = slice(pos, pos+4)
         elif fmt == 'dw':
             if pos % 8 != 0:
-                raise IndexError
+                raise IndexError('{0}: {1}'.format(
+                        pos,
+                        'Position not aligned on doubleword boundary.'
+                        ))
             key = slice(pos, pos+8)
         else:
-            raise SyntaxError
+            raise SyntaxError('{0}: Invalid format.'.format(fmt))
         return key
 
     # key:       int
@@ -169,7 +190,7 @@ class Page(Structure):
         (in_s, in_e, step) = key.indices(len(self.bytes))
 
         if len(val) != in_e - in_s:
-            raise ValueError
+            raise ValueError('{0}: Length not match with the key.'.format(val))
 
         for indx in range(in_s, in_e):
             self.bytes[indx] = val[indx - in_s]
@@ -199,15 +220,26 @@ class Page(Structure):
 # MemoryError:   addressing exception
 class Memory(object):
     def __init__(self, pos_str, sz_str):
-        self.min_pos = parse_sz_from(pos_str)
-        self.max_pos = self.min_pos + parse_sz_from(sz_str)
+        if isinstance(pos_str, int) or isinstance(pos_str, long):
+            self.min_pos = pos_str
+        else:
+            self.min_pos = parse_sz_from(pos_str)
+        if isinstance(sz_str, int) or isinstance(sz_str, long):
+            self.max_pos = sz_str
+        else:
+            self.max_pos = self.min_pos + parse_sz_from(sz_str)
 
         self.l_bound =      self.min_pos     / 4096 * 4096 # align to page
         self.h_bound = (self.max_pos + 4095) / 4096 * 4096 # align to page
 
         if self.l_bound < 0 or self.h_bound >= zPE.conf.Config['addr_max']:
-            raise MemoryError   # addressing exception
+            raise MemoryError('{0} 0x{1:0>6} ~ 0x{2:0>6}'.format(
+                    'Addressing Exception: Valid address range is:',
+                    0,
+                    hex(zPE.conf.Config['addr_max'])[2:].upper()
+                    ))
 
+        # self.memory is a C-style array of array
         self.memory = ( Page * ((self.h_bound - self.l_bound) / 4096) )()
 
 
@@ -220,6 +252,61 @@ class Memory(object):
             self.memory
             )
 
+    def __getitem__(self, key):
+        if isinstance(key, int) or isinstance(key, long):
+            addr_s = key
+            if addr_s < 0:      # handle negative index
+                addr_s += self.h_bound
+            if addr_s < self.l_bound or addr_s >= self.h_bound:
+                raise IndexError('address out of boundary!')
+            addr_e = addr_s + 1
+        else: # slice
+            addr_s = key.start
+            addr_e = key.stop
+            if addr_s == None:  # handle missing index
+                addr_s = self.l_bound
+            elif addr_s < 0:    # handle negative index
+                addr_s += self.h_bound
+            if addr_e == None:  # handle missing index
+                addr_e = self.h_bound
+            elif addr_e < 0:    # handle negative index
+                addr_e += self.h_bound
+            if addr_s < self.l_bound or addr_s > self.h_bound:
+                raise IndexError('starting address out of boundary!')
+            if addr_e < self.l_bound or addr_e > self.h_bound:
+                raise IndexError('ending address out of boundary!')
+
+        rv_list = self.__access(
+            addr_s,
+            addr_e,
+            with_func = lambda page_indx, pos, length, data:
+                self.memory[page_indx][pos : pos + length],
+            against_data = None
+            )
+        return ''.join(rv_list)
+
+    def __setitem__(self, key, hex_str):
+        if not isinstance(key, int) and not isinstance(key, long):
+            raise KeyError('{0}: Invalid key.'.format(key))
+        if len(hex_str) % 2 != 0:
+            raise ValueError('Invalid hex string length.')
+        addr_s = key
+        if addr_s < 0:      # handle negative index
+            addr_s += self.h_bound
+        if addr_s < self.l_bound or addr_s >= self.h_bound:
+            raise IndexError('address out of boundary!')
+        addr_e = addr_s + len(hex_str) / 2
+
+        def setter(page_indx, pos, length, data):
+            for i in range(pos, pos + length):
+                self.memory[page_indx][i] = int(data.pop(0), 16)
+        self.__access(
+            addr_s,
+            addr_e,
+            with_func = setter,
+            against_data = [ hex_str[i:i+2] for i in range(0, len(hex_str), 2) ]
+            )
+
 
     def dump(self, addr_s, length = 32):
         if addr_s < self.l_bound or addr_s >= self.h_bound:
@@ -228,42 +315,20 @@ class Memory(object):
             raise OverflowError('length should be positive!')
         addr_e = min(addr_s + length, self.h_bound)
 
-        page_indx_s = (addr_s     - self.l_bound) / 4096 # index of start page
-        page_indx_e = (addr_e - 1 - self.l_bound) / 4096 # index of end page
-
-        head_pos_s = (addr_s     - self.l_bound) % 4096
-        tail_pos_e = (addr_e - 1 - self.l_bound) % 4096 + 1
-
-        if page_indx_e == page_indx_s:  # all dumping in one page
-            rv = self.__normalize(
-                self.memory[page_indx_s].dump(
-                    head_pos_s,
-                    tail_pos_e - head_pos_s
+        rv_list = self.__access(
+            addr_s,
+            addr_e,
+            lambda page_indx, pos, length, data:
+                self.__normalize(
+                    self.memory[page_indx].dump(pos, length),
+                    self.l_bound + page_indx * 4096
                     ),
-                self.l_bound + page_indx_s * 4096
-                )
-        else:                           # at least two pages
-            # dump first page
-            rv = self.__normalize(
-                self.memory[page_indx_s].dump(head_pos_s),
-                self.l_bound + page_indx_s * 4096
-                )
+            against_data = None
+            )
+        rv = rv_list.pop()
+        while len(rv_list):
+            self.__concat(rv, rv_list.pop())
 
-            # dumping full-page pages { [2,n) }, if any
-            for indx in range(page_indx_s + 1, page_indx_e):
-                self.__concat(rv, self.__normalize(
-                        self.memory[indx].dump(),
-                        self.l_bound + indx * 4096
-                        ))
-
-            # dump last page
-            self.__concat(rv, self.__normalize(
-                    self.memory[page_indx_e].dump(
-                        0,
-                        tail_pos_e
-                        ),
-                    self.l_bound + page_indx_e * 4096
-                    ))
         return '{0}{1:0>6} TO {2:0>6}\n{3}'.format(
             '                             CORE ADDRESSES SPECIFIED-     ',
             hex(addr_s)[2:].upper(),
@@ -273,6 +338,78 @@ class Memory(object):
 
     def dump_all(self):
         return self.dump(self.l_bound, self.h_bound - self.l_bound)
+
+
+    def __concat(self, dump1, dump2):
+        if dump1[-1][0] == ' ':
+            last_start = dump1[-2]
+        else:
+            last_start = dump1[-1]
+        if last_start[6:] == dump2[0][6:]:
+            # has cross-page duplication
+            if len(dump2) > 1 and dump2[0][6:] == dump2[1][6:]:
+                # 1 duplicated line in 2nd page
+                dup_end = dump2[1][:6]
+                dump2.pop(1) # remove duplicated line
+            elif len(dump2) > 1 and dump2[1][0] == ' ':
+                # more than 1 duplicated line in 2nd page
+                dup_end = dump2[1][20:26] # 2nd (end) addr
+                dump2.pop(1) # remove abbr
+            else:
+                dup_end = dump2[0][:6]
+            dump2.pop(0)
+            dump1[-1] = ''.join([ dump1[-1][:20], dup_end, dump1[-1][26:] ])
+
+        dump1.extend(dump2)
+        return dump1
+
+    def __access(self, addr_s, addr_e, with_func, against_data):
+        '''
+        access the memory ranged from addr_s to (but not include) addr_e
+        using `with_func` against "against_data"
+
+        with_func(page_indx, pos, length, data):
+            page_indx : index of the current page
+            pos       : starting position of the current page
+            length    : length to be processed within the current page
+            data      : the against_data (possibly None) described below
+
+        against_data: the data the the with_func is running against
+
+        return a list of what the with_func returns
+        '''
+        page_indx_s = (addr_s     - self.l_bound) / 4096 # index of start page
+        page_indx_e = (addr_e - 1 - self.l_bound) / 4096 # index of end page
+
+        head_pos_s = (addr_s     - self.l_bound) % 4096
+        tail_pos_e = (addr_e - 1 - self.l_bound) % 4096 + 1
+
+        rv = []
+        if page_indx_s > page_indx_e:    # nothing need to be retrieved
+            pass
+        elif page_indx_s == page_indx_e: # all retrieving done in one page
+            rv.append(with_func(
+                    page_indx_s,
+                    head_pos_s,
+                    tail_pos_e - head_pos_s,
+                    against_data
+                    ))
+        else:                            # at least two pages
+            # retrieve first page
+            rv.append(with_func(
+                    page_indx_s,
+                    head_pos_s,
+                    4096 - head_pos_s,
+                    against_data
+                    ))
+
+            # retrieving full-page pages { [2,n) }, if any
+            for indx in range(page_indx_s + 1, page_indx_e):
+                rv.append(with_func(indx, 0, 4096, against_data))
+
+            # retrieve last page
+            rv.append(with_func(page_indx_e, 0, tail_pos_e, against_data))
+        return rv
 
 
     def __normalize(self, dump, addr_offset):
@@ -299,29 +436,6 @@ class Memory(object):
                 rv.append(line)
         rv.pop()                # remove dummy line
         return rv
-
-    def __concat(self, dump1, dump2):
-        if dump1[-1][0] == ' ':
-            last_start = dump1[-2]
-        else:
-            last_start = dump1[-1]
-        if last_start[6:] == dump2[0][6:]:
-            # has cross-page duplication
-            if len(dump2) > 1 and dump2[0][6:] == dump2[1][6:]:
-                # 1 duplicated line in 2nd page
-                dup_end = dump2[1][:6]
-                dump2.pop(1) # remove duplicated line
-            elif len(dump2) > 1 and dump2[1][0] == ' ':
-                # more than 1 duplicated line in 2nd page
-                dup_end = dump2[1][20:26] # 2nd (end) addr
-                dump2.pop(1) # remove abbr
-            else:
-                dup_end = dump2[0][:6]
-            dump2.pop(0)
-            dump1[-1] = ''.join([ dump1[-1][:20], dup_end, dump1[-1][26:] ])
-
-        dump1.extend(dump2)
-        return dump1
 # end of Memory class definition
 
 

@@ -873,6 +873,13 @@ def align_at(sd_ch):
     return 0
 
 
+def can_get_sd(sd_info):
+    try:
+        get_sd(sd_info)
+    except:
+        return False
+    return True
+
 def get_sd(sd_info):
     if sd_info[0] == 's':
         rv = [None] * sd_info[1]

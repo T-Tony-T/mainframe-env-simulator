@@ -299,7 +299,13 @@ def flush(sp):
     if sp.mode == 'i':
         return -1
 
-    fp = open_file(sp.real_path, 'w', sp.f_type)
+    mode = 'w'
+    for line in sp.spool:
+        if '\0' in line:        # is binary file
+            mode = 'wb'
+            break
+    fp = open_file(sp.real_path, mode, sp.f_type)
+
     cnt = 0
     for line in sp.spool:
         fp.write(line)

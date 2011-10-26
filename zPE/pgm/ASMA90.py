@@ -30,7 +30,9 @@ import zPE
 
 import os, sys
 import re
-from time import strftime
+from time import localtime, strftime
+from random import randint
+from binascii import a2b_hex
 
 from asma90_err_code_rc import * # read recourse file for err msg
 
@@ -38,13 +40,34 @@ from asma90_err_code_rc import * # read recourse file for err msg
 from asma90_objmod_spec import REC_FMT as OBJMOD_REC
 
 
-FILE = [ 'SYSIN', 'SYSLIB', 'SYSPRINT', 'SYSLIN', 'SYSUT1' ]
+FILE = [ 'SYSIN', 'SYSPRINT', 'SYSLIN', 'SYSUT1' ] # SYSLIB not required
 
 PARM = {
     'AMODE'     : 31,
     'RMODE'     : 31,
+    'ENTRY'     : '',           # need info
+}
+def load_parm(parm_dic):
+    for key in parm_dic:
+        if key in PARM:
+            PARM[key] = parm_dic[key]
+        else:
+            raise KeyError('{0}: Invalid PARM key.'.format(key))
+
+LOCAL_CONF = {
+    'MEM_POS'   : None,         # required; first available memory location
+    'MEM_LEN'   : None,         # required; length of memory required
+    'REGION'    : None,         # required; maximum length allowed
+    'ENTRY_PT'  : None,         # entry point (specified by END)
     'LN_P_PAGE' : 60,           # line per page for output
     }
+def load_local_conf(conf_dic):
+    for key in conf_dic:
+        if key in LOCAL_CONF:
+            LOCAL_CONF[key] = conf_dic[key]
+        else:
+            raise KeyError('{0}: Invalid configuration key.'.format(key))
+
 
 INFO = {  # '[IWES]' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ...] }
     'I' : {},           # informational messages
@@ -62,7 +85,7 @@ TITLE = [       # TITLE (Deck ID) list
 MNEMONIC = {
     # Line_Num : [ scope, ]                                     // type (len) 1
     # Line_Num : [ scope, LOC, ]                                // type (len) 2
-    # Line_Num : [ scope, LOC, [ CONST_OBJECT, ... ], ]         // type (len) 3
+    # Line_Num : [ scope, LOC, sd_info, ]                       // type (len) 3
     # Line_Num : [ scope,  ,  , equates, ]                      // type (len) 4
     # Line_Num : [ scope, LOC, (OBJECT_CODE), ADDR1, ADDR2, ]   // type (len) 5
     }
@@ -162,17 +185,23 @@ def init(step):
     if __MISSED_FILE(step) != 0:
         return zPE.RC['CRITICAL']
 
-    # check PARM here
+    # load the user-supplied PARM and config into the default configuration
+    # load_parm({
+    #         })
+    load_local_conf({
+            'MEM_POS'   : randint(512*1024, 4096*1024), # random from 512K to 4M
+            'REGION'    : step.region,
+            })
 
-    rc1 = pass_1(PARM['AMODE'], PARM['RMODE'])
-    rc2 = pass_2(step, PARM['AMODE'], PARM['RMODE'])
+    rc1 = pass_1()
+    rc2 = pass_2()
 
     __PARSE_OUT()
 
     return max(rc1, rc2)
 
 
-def pass_1(amode, rmode):
+def pass_1():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
 
@@ -327,6 +356,7 @@ def pass_1(amode, rmode):
 
                 if len(field) == 3: # has label
                     lbl_8 = '{0:<8}'.format(field[2])
+                    LOCAL_CONF['ENTRY_PT'] = lbl_8 # set entry point
                 else:               # has no label; default to 1st CSECT
                     lbl_8 = ESD_ID[1]
 
@@ -524,12 +554,11 @@ def pass_1(amode, rmode):
                     line_num, []
                     )
 
-            if field[1] == 'DS':
-                MNEMONIC[line_num] = [ scope_id, addr, ]        # type 2
-            else:
-                MNEMONIC[line_num] = [ scope_id, addr,          # type 3
-                                       zPE.core.asm.get_sd(sd_info),
-                                       ]
+            if field[1] == 'DC' and not zPE.core.asm.can_get_sd(sd_info):
+                zPE.abort(90, 'Error: ', field[2],
+                          ': Cannot evaluate the constant.\n')
+            MNEMONIC[line_num] = [ scope_id, addr, sd_info, ]   # type 3
+
             if field[1][0] == '=':
                 spt.append('{0:0>5}{1}'.format(line_num, line))
             else:
@@ -759,6 +788,32 @@ def pass_1(amode, rmode):
             if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]: # type 2/3/5
                 MNEMONIC[line_num][1] += RELOCATE_OFFSET[scope_id]
 
+    # update memory requirement for generating OBJECT MODULE
+    sz_required = max(
+        # get maximum of size from:
+        [ # the constant set
+            MNEMONIC[ln][1] +   # starting loc  +
+            sum([ len(const)    # sum of length of each constant
+                  for const in zPE.core.asm.get_sd(MNEMONIC[ln][2])
+                  ])
+            for ln in MNEMONIC
+            if ( len(MNEMONIC[ln]) == 3  and # type 3
+                 zPE.core.asm.can_get_sd(MNEMONIC[ln][2])
+                 )
+            ] + # and
+        [ # the instruction set
+            MNEMONIC[ln][1] + len(zPE.core.asm.prnt_op(MNEMONIC[ln][2])) / 2
+            # starting loc  + length of the mathine code
+            for ln in MNEMONIC
+            if len(MNEMONIC[ln]) == 5 # type 5
+            ]
+        )
+    if sz_required > zPE.core.mem.max_sz_of(LOCAL_CONF['REGION']):
+        zPE.abort(9, 'Error: ', LOCAL_CONF['REGION'],
+                  ': RIGEON is not big enough.\n')
+    else:
+        LOCAL_CONF['MEM_LEN'] = sz_required
+
     # check cross references table integrality
     for (k, v) in SYMBOL.iteritems():
         if v.defn == None:
@@ -785,7 +840,7 @@ def pass_1(amode, rmode):
 # end of pass 1
 
 
-def pass_2(step, amode, rmode):
+def pass_2():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # original input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL (main input)
 
@@ -989,7 +1044,7 @@ def pass_2(step, amode, rmode):
             try:
                 sd_info = zPE.core.asm.parse_sd(field[2])
             except:
-                zPE.abort(90,'Error: {0}: Invalid constant.\n'.format(field[2]))
+                zPE.abort(90,'Error: ', field[2], ': Invalid constant.\n')
 
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
@@ -1111,7 +1166,9 @@ def pass_2(step, amode, rmode):
                                     sd = zPE.core.asm.get_sd(tmp)[0]
                                     parsed_addr = zPE.core.asm.X_.tr(sd.dump())
                                     if len(parsed_addr) <= len(
-                                        re.split('[xL]', hex(2 ** amode - 1))[1]
+                                        re.split(
+                                            '[xL]', hex(2 ** PARM['AMODE'] - 1)
+                                            )[1] # (0)x(.+)L() => \1
                                         ):
                                         res[0][indx] = str(int(parsed_addr, 16))
                                     else:
@@ -1596,12 +1653,12 @@ def pass_2(step, amode, rmode):
 
     # generate object module if no error occured
     if rc_err <= zPE.RC['WARNING']:
-        rc_err = max(rc_err, obj_mod_gen(step, amode, rmode))
+        obj_mod_gen() # this process itself should not produce any error
 
     return rc_err
 
 
-def obj_mod_gen(step, amode, rmode):
+def obj_mod_gen():
     spo = zPE.core.SPOOL.retrive('SYSLIN')   # output SPOOL (object module)
 
     # prepare variable field
@@ -1624,19 +1681,88 @@ def obj_mod_gen(step, amode, rmode):
     for i in range(last_group_indx): # for every 3 variable fields
         spo.append(OBJMOD_REC['ESD'](
                 variable_field[i * 3 : (i+1) * 3],
-                amode, rmode,
+                PARM['AMODE'], PARM['RMODE'],
                 title, len(spo) + 1
                 ))
     spo.append(OBJMOD_REC['ESD'](
             variable_field[last_group_indx : ],
-            amode, rmode,
+            PARM['AMODE'], PARM['RMODE'],
             title, len(spo) + 1
             ))
 
     # generate TXT records
-    mem = zPE.core.mem.Memory('101K', step.region) # assume start at "0x000000"
+    mem = zPE.core.mem.Memory(LOCAL_CONF['MEM_POS'], LOCAL_CONF['MEM_LEN'])
 
-    return zPE.RC['NORMAL']
+    # push each contiguous mathine code into TXT using memory image (dump)
+    contiguous = False
+    for ln in sorted(MNEMONIC.iterkeys()):
+        if contiguous and scope != MNEMONIC[ln][0]:
+            # swiching scope, print
+            __APPEND_TXT(spo, mem, scope, pos_start, pos_end, title)
+            contiguous = False
+
+        if len(MNEMONIC[ln]) == 3: # type 3
+            if zPE.core.asm.can_get_sd(MNEMONIC[ln][2]):
+                # DC / =const
+                if not contiguous:
+                    # reset "buffer"
+                    contiguous = True
+                    scope      = MNEMONIC[ln][0]
+                    pos_start  = MNEMONIC[ln][1]
+                content = ''.join([
+                        zPE.core.asm.X_.tr(val.dump())
+                        for val in zPE.core.asm.get_sd(MNEMONIC[ln][2])
+                        ])
+                mem[MNEMONIC[ln][1]] = content
+                pos_end = MNEMONIC[ln][1] + len(content) / 2
+            elif contiguous:
+                # DS and have content in "buffer", print
+                __APPEND_TXT(spo, mem, scope, pos_start, pos_end, title)
+                contiguous = False
+
+        elif len(MNEMONIC[ln]) == 5: # type 5
+            if not contiguous:
+                # reset "buffer"
+                contiguous = True
+                scope      = MNEMONIC[ln][0]
+                pos_start  = MNEMONIC[ln][1]
+            content = zPE.core.asm.prnt_op(MNEMONIC[ln][2])
+            mem[MNEMONIC[ln][1]] = content
+            pos_end = MNEMONIC[ln][1] + len(content) / 2
+    # end of processing MNEMONIC
+    if contiguous:
+        # have leftover content in "buffer", print
+        __APPEND_TXT(spo, mem, scope, pos_start, pos_end, title)
+
+    # generate END records
+    if LOCAL_CONF['ENTRY_PT']:  # type 1 END
+        entry = ESD[LOCAL_CONF['ENTRY_PT']][0]
+        entry_pt = entry.addr
+        entry_id = entry.id
+        entry_sb = ''
+    else:                       # type 2 END
+        entry_pt = ''
+        entry_id = ''
+        entry_sb = PARM['ENTRY']
+
+    asm_time = localtime()
+    spo.append(OBJMOD_REC['END'](
+            entry_pt, entry_id, entry_sb,
+            '',                 # need info
+            [ {                 # need info
+                    'translator id' : '569623400', # need info
+                    'ver + release' : '0105',      # need info
+                    'assembly date' : '{0}{1}'.format(
+                        asm_time.tm_year, asm_time.tm_yday
+                        )[-5:]  # yy[yyddd]
+                    },
+              ],
+            title, len(spo) + 1
+            ))
+
+    # compress object module into binary format
+    for indx in range(len(spo)):
+        spo[indx] = a2b_hex(spo[indx])
 
 
 ### Supporting Functions
@@ -2005,3 +2131,16 @@ def __REDUCE_EXP(exp):
     else:
         sd_val = eval(''.join(exp_list))
     return "B'{0:0>{1}}'".format(bin(sd_val)[2:], sd_len)
+
+
+def __APPEND_TXT(spo, mem, scope, pos_start, pos_end, title):
+    p_s = pos_start
+    p_e = min(pos_end, p_s + 56 * 2) # 56 Byte per TXT
+    while p_s < p_e:
+        spo.append(OBJMOD_REC['TXT'](
+                scope, p_s,
+                mem[mem.min_pos + p_s : p_e],
+                title, len(spo) + 1
+                ))
+        p_s = p_e
+        p_e = min(pos_end, p_s + 56 * 2)
