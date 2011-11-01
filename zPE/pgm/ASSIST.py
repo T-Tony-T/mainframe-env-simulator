@@ -178,7 +178,9 @@ def __PARSE_OUT(step, limit, debug = True):
             continue
 
         # instructions
-        if len(asm_mnem[cnt]) == 1: # type 1, no info to print
+        if len(asm_mnem[cnt]) == 0: # type 0, no info to print
+            loc = ''
+        elif len(asm_mnem[cnt]) == 1: # type 1, no info to print
             loc = ''
         elif asm_mnem[cnt][0] == 0: # no scope ==> END (type 2)
             loc = ''
@@ -343,7 +345,9 @@ def __PARSE_OUT(step, limit, debug = True):
 
     print '\nMnemonic:'
     for key in sorted(asm_mnem.iterkeys()):
-        if len(asm_mnem[key]) == 1: # type 1
+        if len(asm_mnem[cnt]) == 0: # type 0
+            loc = ''
+        elif len(asm_mnem[key]) == 1: # type 1
             loc = ''
         elif len(asm_mnem[key]) == 4: # type 4
             loc = hex(asm_mnem[key][3])[2:].upper()

@@ -842,6 +842,8 @@ def pass_1():
     # update the address in MNEMONIC table
     for line in spt:
         line_num = int(line[:5])                # retrive line No.
+        if len(MNEMONIC[line_num]) == 0:
+            continue                     # TITLE statement
         scope_id = MNEMONIC[line_num][0]        # retrive scope ID
         if scope_id:
             if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]: # type 2/3/5
@@ -924,6 +926,8 @@ def pass_2():
     for line in spt:
         line_num = int(line[:5])                # retrive line No.
         line = line[5:]                         # retrive line
+        if len(MNEMONIC[line_num]) == 0:
+            continue                     # TITLE statement
         scope_id = MNEMONIC[line_num][0]        # retrive scope ID
         if scope_id:
             csect_lbl = ESD_ID[scope_id]        # retrive CSECT label
