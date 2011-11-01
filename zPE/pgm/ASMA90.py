@@ -82,6 +82,7 @@ TITLE = [                       # TITLE (Deck ID) list
     ]
 
 MNEMONIC = {
+    # Line_Num : [  ]                                           // type (len) 0
     # Line_Num : [ scope, ]                                     // type (len) 1
     # Line_Num : [ scope, LOC, ]                                // type (len) 2
     # Line_Num : [ scope, LOC, sd_info, ]                       // type (len) 3
@@ -289,6 +290,11 @@ def pass_1():
         # parse TITLE
         elif field[1] == 'TITLE':
             TITLE.append([ field[2], line_num ])
+
+            MNEMONIC[line_num] = [  ]                           # type 0
+            spt.append('{0:0>5}{1:<8} TITLE {2}\n'.format(
+                    line_num , '', field[2]
+                    ))
 
         # parse CSECT
         elif field[1] == 'CSECT':

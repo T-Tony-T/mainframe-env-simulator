@@ -125,7 +125,7 @@ def parse(job):
         field = re.split('\s+', line)
 
         # check end of JCL
-        if field[1] == '':
+        if len(field) == 1:
             zPE.JCL['read_cnt'] -= 1 # "//" does not count
             break
 
