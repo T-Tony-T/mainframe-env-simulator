@@ -4,11 +4,17 @@ def chs(s):
     return X_.tr(C_(s).dump())
 
 # general
-def rec_id(tt, cnt):
-    if len(tt) > 8:             # normalize the length of Deck ID
-        tt = tt[:8]
-    cnt_len = 8 - len(tt)       # room for sequence number
-    return chs('{0}{1:0>{2}}'.format(tt, cnt, cnt_len))
+def deck_id(title, sequence):# 73-80 : Deck ID + sequence number
+    '''
+    title
+        Deck ID (first TITLE)
+    sequence
+        Deck sequence number
+    '''
+    if len(title) > 8:          # normalize the length of Deck ID
+        title = title[:8]
+    seq_len = 8 - len(title)    # room for sequence number
+    return chs('{0}{1:0>{2}}'.format(title, sequence, seq_len))
 
 
 # for ESD record
@@ -119,12 +125,10 @@ def sym_vf(vf):
 REC_FMT = {                 # record formatter
     # External symbol dictionary records describe external symbols
     # used in the program
-    'ESD' : lambda vf, am, rm, tt, cnt : ''.join([
-            # vf  : variable field (1~3 [ Symbol, ExternalSymbol object ] pair(s))
+    'ESD' : lambda vf, am, rm : ''.join([
+            # vf  : variable field (1~3 [ Symbol, ExternalSymbol ] pair(s))
             # am  : AMODE (24, 31, or 64)
             # rm  : RMODE (24, 31, or 64)
-            # tt  : Deck ID (first TITLE)
-            # cnt : sequence number
             '02',                       # 01    : X'02'
             chs('ESD'),                 # 02-04 : ESD
             chs('{0:6}'.format('')),    # 05-10 : Space
@@ -139,15 +143,12 @@ REC_FMT = {                 # record formatter
             esd_vf(vf, am, rm, 1),      # 33-48 : Variable field item 2
             esd_vf(vf, am, rm, 2),      # 49-64 : Variable field item 3
             chs('{0:8}'.format('')),    # 65-72 : Space
-            rec_id(tt, cnt),            # 73-80 : Deck ID, sequence number
             ]),
     # Text records describe object code generated
-    'TXT' : lambda scp, loc, ds, tt, cnt : ''.join([
+    'TXT' : lambda scp, loc, ds : ''.join([
             # scp : ESDID (scope id)
             # loc : location of the first instruction
             # ds  : Data stream
-            # tt  : Deck ID (first TITLE)
-            # cnt : sequence number
             '02',                       # 01    : X'02'
             chs('TXT'),                 # 02-04 : TXT
             chs(' '),                   # 05    : Space
@@ -163,14 +164,11 @@ REC_FMT = {                 # record formatter
                 hex(scp)[2:]
                 ),
             txt_ds(ds),                 # 17-72 : Data Stream
-            rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     # Relocation dictionary provide information required to relocate
     # address constants within the object module
-    'RLD' : lambda df, tt, cnt : ''.join([
+    'RLD' : lambda df : ''.join([
             # df  : data field (1~7 [ Symbol, <need info> ])
-            # tt  : Deck ID (first TITLE)
-            # cnt : sequence number
             '02',                       # 01    : X'02'
             chs('RLD'),                 # 02-04 : RLD
             chs('{0:6}'.format('')),    # 05-10 : Space
@@ -179,11 +177,10 @@ REC_FMT = {                 # record formatter
                 ),
             chs('{0:4}'.format('')),    # 13-16 : Space
             rld_df(df),                 # 17-72 : Data fields
-            rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     # End records terminate the object module and optionally provide
     # the entry point
-    'END' : lambda enty, scp, sym, csl, idr, tt, cnt : ''.join([
+    'END' : lambda enty, scp, sym, csl, idr : ''.join([
             # enty: Entry address from operand of END record in source deck
             # scp : ESDID of entry point (blank if no END operand)
             # sym : Symbolic entry point if specified and no END operand
@@ -192,8 +189,6 @@ REC_FMT = {                 # record formatter
             # idr : 0~2 IDR items contains translator identification,
             #       version and release level (e.g. 0101), and date of
             #       the assembly (yyddd)
-            # tt  : Deck ID (first TITLE)
-            # cnt : sequence number
             '02',                       # 01    : X'02'
             chs('END'),                 # 02-04 : END
             chs(' '),                   # 05    : Space
@@ -209,13 +204,10 @@ REC_FMT = {                 # record formatter
             end_idr(idr, 0),            # 34-52 : IDR item 1
             end_idr(idr, 1),            # 53-71 : IDR item 2
             chs(' '),                   # 72    : Space 
-            rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     # Symbol table records provide symbol information for TSO TEST
-    'SYM' : lambda vf, tt, cnt : ''.join([
+    'SYM' : lambda vf : ''.join([
             # vf  : variable field - need info
-            # tt  : Deck ID (first TITLE)
-            # cnt : sequence number
             '02',                       # 01    : X'02'
             chs('SYM'),                 # 02-04 : SYM
             chs('{0:6}'.format('')),    # 05-10 : Space
@@ -224,6 +216,5 @@ REC_FMT = {                 # record formatter
                 ),
             chs('{0:4}'.format('')),    # 13-16 : Space
             sym_vf(vf),                 # 17-72 : Variable fields
-            rec_id(tt, cnt),            # 73-80 : Deck ID + sequence number
             ]),
     }

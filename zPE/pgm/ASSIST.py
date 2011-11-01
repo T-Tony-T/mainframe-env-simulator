@@ -68,6 +68,8 @@ def init(step):
 
     err_cnt = __PARSE_OUT(step, limit, False)
 
+    zPE.pgm.ASMA90.init_res()   # release resources
+
     zPE.core.SPOOL.remove('SYSLIN')
     zPE.core.SPOOL.remove('SYSUT1')
 

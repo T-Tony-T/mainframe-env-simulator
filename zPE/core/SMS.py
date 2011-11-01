@@ -20,7 +20,7 @@ def open_file(dsn, mode):
 
 # creates (recursively) the target directory if not exists
 def __CREATE_DIR(path):
-    if os.path.isdir(path):
+    if not path or os.path.isdir(path):
         return None
     else:
         os.makedirs(path)

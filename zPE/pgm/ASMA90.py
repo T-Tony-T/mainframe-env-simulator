@@ -38,6 +38,7 @@ from asma90_err_code_rc import * # read recourse file for err msg
 
 # read recourse file for objmod specification
 from asma90_objmod_spec import REC_FMT as OBJMOD_REC
+from asma90_objmod_spec import deck_id as OBJMOD_SEQ
 
 
 FILE = [ 'SYSIN', 'SYSPRINT', 'SYSLIN', 'SYSUT1' ] # SYSLIB not required
@@ -69,17 +70,15 @@ def load_local_conf(conf_dic):
             raise KeyError('{0}: Invalid configuration key.'.format(key))
 
 
-INFO = {  # '[IWES]' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ...] }
-    'I' : {},           # informational messages
-    'N' : {},           # notification messages
-    'W' : {},           # warning messages
-    'E' : {},           # error messages
-    'S' : {},           # severe error messages
-    }
-# check __INFO() for more information
+### resource definition
 
-TITLE = [       # TITLE (Deck ID) list
-    # ( title_string, line_num )
+INFO = { # see init_res() for possible message levels
+    # 'level' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ...] }
+    }
+# check __INFO() and __INFO_GE for internal API
+
+TITLE = [                       # TITLE (Deck ID) list
+    # [ title_string, line_num ]
     ]
 
 MNEMONIC = {
@@ -91,7 +90,11 @@ MNEMONIC = {
     }
 
 RELOCATE_OFFSET = {
-    1 : 0,                      # { scope_id : offset }
+    # scope_id : offset
+    }
+
+OBJMOD = { # see init_res() for possible record types
+    # 'record type' : [ lines ]
     }
 
 class ExternalSymbol(object):
@@ -178,6 +181,37 @@ USING_MAP = {           # Using Map
 ACTIVE_USING = {
     # reg : Stmt
     }
+### end of resource definition
+
+def init_res():
+    INFO['I'] = { }             # informational messages
+    INFO['N'] = { }             # notification messages
+    INFO['W'] = { }             # warning messages
+    INFO['E'] = { }             # error messages
+    INFO['S'] = { }             # severe error messages
+
+    del TITLE[:]                # clear a list
+    MNEMONIC.clear()            # clear a dictionary
+
+    OBJMOD['ESD'] = [ ]         # External symbol dictionary records
+    OBJMOD['TXT'] = [ ]         # Text records
+    OBJMOD['RLD'] = [ ]         # Relocation dictionary records
+    OBJMOD['END'] = [ ]         # End records
+    OBJMOD['SYM'] = [ ]         # Symbol table records
+
+    RELOCATE_OFFSET[1] = 0   # the main scope always start at 0x000000
+
+    ESD.clear()
+    ESD_ID.clear()
+
+    SYMBOL.clear()
+    SYMBOL_V.clear()
+    SYMBOL_EQ.clear()
+    del INVALID_SYMBOL[:]
+    del NON_REF_SYMBOL[:]
+
+    USING_MAP.clear()
+    ACTIVE_USING.clear()
 
 
 def init(step):
@@ -198,12 +232,16 @@ def init(step):
 
     __PARSE_OUT()
 
+    init_res() # release resources (by releasing their refs to enable gc)
+
     return max(rc1, rc2)
 
 
 def pass_1():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
+
+    init_res()                  # initialize resources
 
     addr = 0                    # program counter
     prev_addr = None            # previous program counter
@@ -247,6 +285,10 @@ def pass_1():
             spt.append('{0:0>5}{1:<8}\n'.format(
                     line_num, field[0]
                     ))
+
+        # parse TITLE
+        elif field[1] == 'TITLE':
+            TITLE.append([ field[2], line_num ])
 
         # parse CSECT
         elif field[1] == 'CSECT':
@@ -451,7 +493,6 @@ def pass_1():
                     line_num, field[0], field[2]
                     ))
 
-
         # parse DC/DS/=constant
         elif field[1] in [ 'DC', 'DS' ] or field[1][0] == '=':
             if field[1][0] == '=':
@@ -492,44 +533,56 @@ def pass_1():
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
                 if sd_info[2] == 'V':
+                    # check external reference
                     for lbl in sd_info[4]:
-                        # check external reference
                         bad_lbl = zPE.bad_label(lbl)
                         lbl_8 = '{0:<8}'.format(lbl)
 
-                        # update the Cross-References ER Sub-Table
-                        if lbl_8 not in SYMBOL_V:
-                            SYMBOL_V[lbl_8] = Symbol(
-                                1, 0, scope_id,
-                                '', 'T', '', '',
-                                line_num, [ ]
+                        if bad_lbl == None:
+                            zPE.abort(
+                                90, 'wrong value in sd:{0}.\n'.format(sd_info)
                                 )
-                        SYMBOL_V[lbl_8].references.append(
-                            '{0:>4}{1}'.format(line_num, '')
-                            )
-
-                        # update the External Symbol Dictionary
-                        if lbl_8 not in ESD:
-                            ESD[lbl_8] = (
-                                ExternalSymbol(
-                                    None, None, None, None,
-                                    None, None, None,
-                                    ),
-                                ExternalSymbol(
-                                    None, None, None, None,
-                                    None, None, None,
-                                    ),
+                        elif bad_lbl:
+                            indx_s = line.index(lbl) + bad_lbl
+                            __INFO( 'E', line_num,
+                                    ( 143, indx_s, indx_s + len(lbl), )
+                                    )
+                        else:
+                            # update the Cross-References ER Sub-Table
+                            if lbl_8 not in SYMBOL_V:
+                                SYMBOL_V[lbl_8] = Symbol(
+                                    1, 0, scope_id,
+                                    '', 'T', '', '',
+                                    line_num, [ ]
+                                    )
+                            SYMBOL_V[lbl_8].references.append(
+                                '{0:>4}{1}'.format(line_num, '')
                                 )
-                        if ESD[lbl_8][1].id == None:
-                            ESD[lbl_8][1].type = 'ER'
-                            ESD[lbl_8][1].id = scope_new
 
-                            ESD_ID[scope_new] = lbl_8
-                            scope_new += 1 # update the next scope_id ptr
+                            # update the External Symbol Dictionary
+                            if lbl_8 not in ESD:
+                                ESD[lbl_8] = (
+                                    ExternalSymbol(
+                                        None, None, None, None,
+                                        None, None, None,
+                                        ),
+                                    ExternalSymbol(
+                                        None, None, None, None,
+                                        None, None, None,
+                                        ),
+                                    )
+                            if ESD[lbl_8][1].id == None:
+                                ESD[lbl_8][1].type = 'ER'
+                                ESD[lbl_8][1].id = scope_new
+
+                                ESD_ID[scope_new] = lbl_8
+                                scope_new += 1 # update the next scope_id ptr
+
                 elif sd_info[2] == 'A':
+                    # check internal reference
                     for lbl_i in range(len(sd_info[4])):
                         sd_info[4][lbl_i] = '0' # fool the paser
-                    pass        # check internal reference in pass 2
+                    pass        # hand check to pass 2
                 else:
                     zPE.abort(90, 'Error: ', sd_info[2],
                               ': Invalid address type.\n')
@@ -844,12 +897,20 @@ def pass_2():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # original input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL (main input)
 
-    addr = 0                    # program counter
-    prev_addr = None            # previous program counter
+    # obtain memory for generating Object Module
+    mem = zPE.core.mem.Memory(LOCAL_CONF['MEM_POS'], LOCAL_CONF['MEM_LEN'])
 
     # memory heap for constant allocation
     const_pool = {}             # same format as SYMBOL
     const_plid = None
+
+    addr = 0                    # program counter
+    prev_addr = None            # previous program counter
+
+    scope_id = 0                # scope id for current line
+    prev_scope = None           # scope id for last statement
+    pos_start = None            # starting addr for last contiguous machine code
+    pos_end   = None            # ending addr for last contiguous machine code
 
     spi.insert(0, '')           # align the line index with line No.
 
@@ -867,13 +928,20 @@ def pass_2():
         else:
             csect_lbl = None
 
+        if scope_id != prev_scope: # swiching scope, append to TXT records
+            __APPEND_TXT(mem, prev_scope, pos_start, pos_end)
+            # update to new scope (reset "buffer")
+            prev_scope = scope_id
+            pos_start  = addr
+            pos_end    = None
+
         field = zPE.resplit_sq('\s+', line[:-1], 3)
 
         # skip lines that handled in the first pass
         if len(field) < 2 or len(field[1]) == 0:
             continue            # no op code
-        elif field[1][0] == '=':
-            continue            # =constant
+        elif field[1] == 'TITLE':
+            continue            # TITLE statement
 
         # update symbol address
         lbl_8 = '{0:<8}'.format(field[0])
@@ -891,7 +959,8 @@ def pass_2():
 
             # update symbol address
             ESD[csect_lbl][0].addr = addr
-
+            # append it to ESD records
+            __APPEND_ESD([ csect_lbl, ESD[csect_lbl][0] ])
 
         # parse USING
         elif field[1] == 'USING':
@@ -993,7 +1062,6 @@ def pass_2():
                         )
                     ACTIVE_USING[parsed_args[indx]] = line_num
 
-
         # parse DROP
         elif field[1] == 'DROP':
             # update using map
@@ -1019,7 +1087,6 @@ def pass_2():
                            ( 45, indx_s, indx_s + len(args[indx]), )
                            )
 
-
         # parse END
         elif field[1] == 'END':
             lbl_8 = '{0:<8}'.format(field[2])
@@ -1032,24 +1099,36 @@ def pass_2():
                 __INFO('E', line_num, ( 44, indx_s, indx_s + len(field[2]), ))
             # update using map
             ACTIVE_USING.clear() # end domain of all USINGs
-
+            # generate END records
+            __APPEND_END()
 
         # skip any line that do not need second pass
         elif field[1] in [ 'LTORG', 'EQU', ]:
             pass
 
-
-        # parse DC/DS
-        elif field[1] in [ 'DC', 'DS' ]:
+        # parse DC/DS/=constant
+        elif field[1] in [ 'DC', 'DS' ] or field[1][0] == '=':
+            if field[1][0] == '=':
+                tmp = field[1][1:]
+            else:
+                tmp = field[2]
             try:
-                sd_info = zPE.core.asm.parse_sd(field[2])
+                sd_info = zPE.core.asm.parse_sd(tmp)
             except:
-                zPE.abort(90,'Error: ', field[2], ': Invalid constant.\n')
+                zPE.abort(90,'Error: ', tmp, ': Invalid constant.\n')
 
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
-                # check internal reference
-                if sd_info[2] == 'A':
+                if sd_info[2] == 'V':
+                    # check internal reference
+                    for lbl in sd_info[4]:
+                        lbl_8 = '{0:<8}'.format(lbl)
+                        if lbl_8 in SYMBOL_V: # fully processed in pass 1
+                            # append it to ESD records
+                            __APPEND_ESD([ csect_lbl, ESD[csect_lbl][0] ])
+
+                elif sd_info[2] == 'A':
+                    # check internal reference
                     for lbl_i in range(len(sd_info[4])):
                         # for each 'SYMBOL', try to resolve an address
                         lbl = sd_info[4][lbl_i]
@@ -1231,9 +1310,27 @@ def pass_2():
                                        )
                     # end of processing args
 
-                    # update the constant information
+                    # update the A-const information
                     if not __INFO_GE(line_num, 'E'):
                         zPE.core.asm.update_sd(MNEMONIC[line_num][2], sd_info)
+                # end of parsing A-const
+
+            if __INFO_GE(line_num, 'E'):
+                # has error(s), skip
+                pass
+            elif field[1] == 'DC' or field[1][0] == '=':
+                # DC/=const, push to memory
+                content = ''.join([
+                        zPE.core.asm.X_.tr(val.dump())
+                        for val in zPE.core.asm.get_sd(MNEMONIC[line_num][2])
+                        ])
+                mem[addr] = content
+                pos_end = addr + len(content) / 2
+            else:
+                if MNEMONIC[line_num][2][1] * MNEMONIC[line_num][2][3]:
+                    # effective DS, append to TXT records
+                    __APPEND_TXT(mem, prev_scope, pos_start, pos_end)
+                    prev_scope = None # virtually switch scope to reset "buffer"
 
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
@@ -1624,12 +1721,19 @@ def pass_2():
                                )
             # end of processing args
 
+            content = zPE.core.asm.prnt_op(MNEMONIC[line_num][2])
+            mem[addr] = content
+            pos_end = addr + len(content) / 2
+
         # unrecognized op-code
         else:
-            pass # mark; flag error here
+            pass                # already handled in pass 1
     # end of main read loop
 
     spi.rmline(0)               # undo the align of line No.
+
+    # append leftover variable fields to ESD records
+    __APPEND_ESD()
 
 
     # check cross references table integrality
@@ -1653,118 +1757,38 @@ def pass_2():
 
     # generate object module if no error occured
     if rc_err <= zPE.RC['WARNING']:
-        obj_mod_gen() # this process itself should not produce any error
+        obj_mod_gen() # write the object module into the corresponding SPOOL
 
     return rc_err
 
 
 def obj_mod_gen():
-    spo = zPE.core.SPOOL.retrive('SYSLIN')   # output SPOOL (object module)
-
-    # prepare variable field
-    variable_field = []
-    for key in sorted(ESD_ID.iterkeys()):
-        k = ESD_ID[key]
-        if ESD[k][0] and ESD[k][0].id == key:
-            v = ESD[k][0]
-        else:
-            v = ESD[k][1]
-        variable_field.append([ k, v ])
-    # prepare title
-    if TITLE:
+    if len(TITLE):              # has at least 1 title
         title = TITLE[0][0]
     else:
         title = ''
 
-    # generate ESD records
-    last_group_indx = len(variable_field) / 3
-    for i in range(last_group_indx): # for every 3 variable fields
-        spo.append(OBJMOD_REC['ESD'](
-                variable_field[i * 3 : (i+1) * 3],
-                PARM['AMODE'], PARM['RMODE'],
-                title, len(spo) + 1
+    spo = zPE.core.SPOOL.retrive('SYSLIN')   # output SPOOL (object module)
+    deck = []
+    for rec_type in [ 'ESD', 'TXT', 'RLD', 'END', 'SYM' ]:
+        deck.extend(OBJMOD[rec_type])
+
+    for rec in deck:
+        spo.append(a2b_hex( # compress object module into binary format
+                rec + OBJMOD_SEQ(title, len(spo) + 1)
                 ))
-    spo.append(OBJMOD_REC['ESD'](
-            variable_field[last_group_indx : ],
-            PARM['AMODE'], PARM['RMODE'],
-            title, len(spo) + 1
-            ))
 
-    # generate TXT records
-    mem = zPE.core.mem.Memory(LOCAL_CONF['MEM_POS'], LOCAL_CONF['MEM_LEN'])
+    # for debug only
+    obj_dump = zPE.core.SPOOL.new(
+        'OBJMOD', 'o', 'file',
+        [ 'KC03I6E', 'TONY', 'OBJMOD' ],
+        [ 'objmod' ]
+        )
+    obj_dump.spool = spo.spool
+    zPE.flush(obj_dump)
+    # for debug only
 
-    # push each contiguous mathine code into TXT using memory image (dump)
-    contiguous = False
-    for ln in sorted(MNEMONIC.iterkeys()):
-        if contiguous and scope != MNEMONIC[ln][0]:
-            # swiching scope, print
-            __APPEND_TXT(spo, mem, scope, pos_start, pos_end, title)
-            contiguous = False
-
-        if len(MNEMONIC[ln]) == 3: # type 3
-            if zPE.core.asm.can_get_sd(MNEMONIC[ln][2]):
-                # DC / =const
-                if not contiguous:
-                    # reset "buffer"
-                    contiguous = True
-                    scope      = MNEMONIC[ln][0]
-                    pos_start  = MNEMONIC[ln][1]
-                content = ''.join([
-                        zPE.core.asm.X_.tr(val.dump())
-                        for val in zPE.core.asm.get_sd(MNEMONIC[ln][2])
-                        ])
-                mem[MNEMONIC[ln][1]] = content
-                pos_end = MNEMONIC[ln][1] + len(content) / 2
-            elif contiguous:
-                # DS and have content in "buffer", print
-                __APPEND_TXT(spo, mem, scope, pos_start, pos_end, title)
-                contiguous = False
-
-        elif len(MNEMONIC[ln]) == 5: # type 5
-            if not contiguous:
-                # reset "buffer"
-                contiguous = True
-                scope      = MNEMONIC[ln][0]
-                pos_start  = MNEMONIC[ln][1]
-            content = zPE.core.asm.prnt_op(MNEMONIC[ln][2])
-            mem[MNEMONIC[ln][1]] = content
-            pos_end = MNEMONIC[ln][1] + len(content) / 2
-    # end of processing MNEMONIC
-    if contiguous:
-        # have leftover content in "buffer", print
-        __APPEND_TXT(spo, mem, scope, pos_start, pos_end, title)
-
-    # generate END records
-    if LOCAL_CONF['ENTRY_PT']:  # type 1 END
-        entry = ESD[LOCAL_CONF['ENTRY_PT']][0]
-        entry_pt = entry.addr
-        entry_id = entry.id
-        entry_sb = ''
-    else:                       # type 2 END
-        entry_pt = ''
-        entry_id = ''
-        entry_sb = PARM['ENTRY']
-
-    asm_time = localtime()
-    spo.append(OBJMOD_REC['END'](
-            entry_pt, entry_id, entry_sb,
-            '',                 # need info
-            [ {                 # need info
-                    'translator id' : '569623400', # need info
-                    'ver + release' : '0105',      # need info
-                    'assembly date' : '{0}{1}'.format(
-                        asm_time.tm_year, asm_time.tm_yday
-                        )[-5:]  # yy[yyddd]
-                    },
-              ],
-            title, len(spo) + 1
-            ))
-
-    # compress object module into binary format
-    for indx in range(len(spo)):
-        spo[indx] = a2b_hex(spo[indx])
-
-
+    
 ### Supporting Functions
 def __ADDRESSING(lbl, csect_lbl, ex_disp = 0):
     rv = [ 4096, None, -1, ]  # init to least priority USING (non-exsit)
@@ -2133,14 +2157,58 @@ def __REDUCE_EXP(exp):
     return "B'{0:0>{1}}'".format(bin(sd_val)[2:], sd_len)
 
 
-def __APPEND_TXT(spo, mem, scope, pos_start, pos_end, title):
+vf_list = []
+def __APPEND_ESD(variable_field = None):
+    if variable_field:
+        vf_list.append(variable_field)
+        force_append = False
+    else:
+        force_append = len(vf_list)
+    if force_append  or  len(variable_field) % 3 == 0:
+        OBJMOD['ESD'].append(OBJMOD_REC['ESD'](
+                vf_list,
+                PARM['AMODE'], PARM['RMODE']
+                ))
+
+def __APPEND_TXT(mem, scope, pos_start, pos_end):
+    if ( scope == None     or
+         pos_start == None or
+         pos_end == None   or
+         pos_start >= pos_end
+         ):
+        return                  # no need to append, early return
+
     p_s = pos_start
     p_e = min(pos_end, p_s + 56 * 2) # 56 Byte per TXT
     while p_s < p_e:
-        spo.append(OBJMOD_REC['TXT'](
+        OBJMOD['TXT'].append(OBJMOD_REC['TXT'](
                 scope, p_s,
-                mem[mem.min_pos + p_s : p_e],
-                title, len(spo) + 1
+                mem[mem.min_pos + p_s : p_e]
                 ))
         p_s = p_e
         p_e = min(pos_end, p_s + 56 * 2)
+
+def __APPEND_END():
+    if LOCAL_CONF['ENTRY_PT']:  # type 1 END
+        entry = ESD[LOCAL_CONF['ENTRY_PT']][0]
+        entry_pt = entry.addr
+        entry_id = entry.id
+        entry_sb = ''
+    else:                       # type 2 END
+        entry_pt = ''
+        entry_id = ''
+        entry_sb = PARM['ENTRY']
+
+    asm_time = localtime()
+    OBJMOD['END'].append(OBJMOD_REC['END'](
+            entry_pt, entry_id, entry_sb,
+            '',                 # need info
+            [ {                 # need info
+                    'translator id' : '569623400', # need info
+                    'ver + release' : '0105',      # need info
+                    'assembly date' : '{0}{1}'.format(
+                        asm_time.tm_year, asm_time.tm_yday
+                        )[-5:]  # yy[yyddd]
+                    },
+              ]
+            ))
