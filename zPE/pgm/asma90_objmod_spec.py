@@ -7,14 +7,18 @@ def chs(s):
 def deck_id(title, sequence):# 73-80 : Deck ID + sequence number
     '''
     title
-        Deck ID (first TITLE)
+        Deck ID (the name of the first named TITLE)
     sequence
         Deck sequence number
     '''
-    if len(title) > 8:          # normalize the length of Deck ID
-        title = title[:8]
-    seq_len = 8 - len(title)    # room for sequence number
-    return chs('{0}{1:0>{2}}'.format(title, sequence, seq_len))
+    if len(title) == 8:
+        return chs(title)
+    else:                        # has room for sequence number
+        # get the last `seq_len` digit of the sequence number
+        seq_len = 8 - len(title)
+        seq = '{0:0>{1}}'.format(sequence, seq_len)[-seq_len : ]
+
+        return chs('{0}{1}'.format(title, seq))
 
 
 # for ESD record

@@ -75,10 +75,31 @@ def load_local_conf(conf_dic):
 INFO = { # see init_res() for possible message levels
     # 'level' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ...] }
     }
-# check __INFO() and __INFO_GE for internal API
+def INFO_GE(line_num, err_level):
+    if line_num in INFO['S']:
+        return True
+    if err_level == 'S':        # >= S, ignore E,W,N,I
+        return False
+    if line_num in INFO['E']:
+        return True
+    if err_level == 'E':        # >= E, ignore W,N,I
+        return False
+    if line_num in INFO['W']:
+        return True
+    if err_level == 'W':        # >= W, ignore N,I
+        return False
+    if line_num in INFO['N']:
+        return True
+    if err_level == 'N':        # >= N, ignore I
+        return False
+    if line_num in INFO['I']:
+        return True
+    return False                # >= I
+
 
 TITLE = [                       # TITLE (Deck ID) list
-    # [ title_string, line_num ]
+    '',                         # will be replaced by the first named TITLE
+    # [ line_num, title_name, title_string ]
     ]
 
 MNEMONIC = {
@@ -191,8 +212,9 @@ def init_res():
     INFO['E'] = { }             # error messages
     INFO['S'] = { }             # severe error messages
 
-    del TITLE[:]                # clear a list
-    MNEMONIC.clear()            # clear a dictionary
+    del TITLE[:]                # clear the TITLE list
+    TITLE.append('')            # add back the DECK NAME
+    MNEMONIC.clear()            # clear the MNEMONIC dictionary
 
     OBJMOD['ESD'] = [ ]         # External symbol dictionary records
     OBJMOD['TXT'] = [ ]         # Text records
@@ -289,11 +311,27 @@ def pass_1():
 
         # parse TITLE
         elif field[1] == 'TITLE':
-            TITLE.append([ field[2], line_num ])
+            # check label
+            bad_lbl = zPE.bad_label(field[0])
+            if bad_lbl == None:
+                pass            # no label detected
+            elif bad_lbl:
+                __INFO('E', line_num, ( 143, bad_lbl, len(field[0]), ))
+            else:               # valid label
+                if not TITLE[0]:
+                    TITLE[0] = field[0] # record the first named TITLE
+
+            if ( len(field[2]) < 2    or # at least "''"
+                 field[2][0]  != "'"  or # start with "'"
+                 field[2][-1] != "'"  or # end with "'"
+                 "'" in field[2][1:-1]   # no "'" in the content
+                 ):
+                zPE.abort(90, 'Error: ', field[2], ': Invalid TITLE content.\n')
+            TITLE.append([ line_num, field[0], field[2][1:-1] ])
 
             MNEMONIC[line_num] = [  ]                           # type 0
             spt.append('{0:0>5}{1:<8} TITLE {2}\n'.format(
-                    line_num , '', field[2]
+                    line_num , field[0], field[2]
                     ))
 
         # parse CSECT
@@ -1051,7 +1089,7 @@ def pass_2():
                             '{0:>4}{1}'.format(line_num, 'U')
                             )
 
-            if not __INFO_GE(line_num, 'E'):
+            if not INFO_GE(line_num, 'E'):
                 # update using map
                 USING_MAP[line_num, parsed_args[1]] = Using(
                     addr, scope_id,
@@ -1276,7 +1314,7 @@ def pass_2():
                                               )
                         # end of processing res
 
-                        if __INFO_GE(line_num, 'E'):
+                        if INFO_GE(line_num, 'E'):
                             break # if has error, stop processing
 
                         # calculate constant part
@@ -1321,11 +1359,11 @@ def pass_2():
                     # end of processing args
 
                     # update the A-const information
-                    if not __INFO_GE(line_num, 'E'):
+                    if not INFO_GE(line_num, 'E'):
                         zPE.core.asm.update_sd(MNEMONIC[line_num][2], sd_info)
                 # end of parsing A-const
 
-            if __INFO_GE(line_num, 'E'):
+            if INFO_GE(line_num, 'E'):
                 # has error(s), skip
                 pass
             elif field[1] == 'DC' or field[1][0] == '=':
@@ -1358,7 +1396,7 @@ def pass_2():
 
             # check reference
             for lbl_i in range(len(args)):
-                if __INFO_GE(line_num, 'E'): # could be flagged in pass 1
+                if INFO_GE(line_num, 'E'): # could be flagged in pass 1
                     break # if has error, stop processing args
                 abs_values = False # assume no absolute values
 
@@ -1530,7 +1568,7 @@ def pass_2():
                                            )
                                     break   # stop processing current res
                                 elif symbol == None:
-                                    if not __INFO_GE(line_num, 'E'):
+                                    if not INFO_GE(line_num, 'E'):
                                         zPE.abort(90, 'Error: ', p1_lbl,
                                                   ': symbol not in EQ table.\n')
                                 elif symbol.defn == None:
@@ -1637,7 +1675,7 @@ def pass_2():
                                 bin(arg_val)[2:], arg_len
                                 )
                 # end of processing res
-                if __INFO_GE(line_num, 'E'):
+                if INFO_GE(line_num, 'E'):
                     break # if has error, stop processing args
 
                 # calculate constant part
@@ -1773,11 +1811,6 @@ def pass_2():
 
 
 def obj_mod_gen():
-    if len(TITLE):              # has at least 1 title
-        title = TITLE[0][0]
-    else:
-        title = ''
-
     spo = zPE.core.SPOOL.retrive('SYSLIN')   # output SPOOL (object module)
     deck = []
     for rec_type in [ 'ESD', 'TXT', 'RLD', 'END', 'SYM' ]:
@@ -1785,7 +1818,7 @@ def obj_mod_gen():
 
     for rec in deck:
         spo.append(a2b_hex( # compress object module into binary format
-                rec + OBJMOD_SEQ(title, len(spo) + 1)
+                rec + OBJMOD_SEQ(TITLE[0], len(spo) + 1)
                 ))
 
     # for debug only
@@ -1939,26 +1972,6 @@ def __INFO(err_level, line, item):
         INFO[err_level][line] = []
     INFO[err_level][line].append(item)
 
-def __INFO_GE(line_num, err_level):
-    if line_num in INFO['S']:
-        return True
-    if err_level == 'S':        # >= S, ignore E,W,N,I
-        return False
-    if line_num in INFO['E']:
-        return True
-    if err_level == 'E':        # >= E, ignore W,N,I
-        return False
-    if line_num in INFO['W']:
-        return True
-    if err_level == 'W':        # >= W, ignore N,I
-        return False
-    if line_num in INFO['N']:
-        return True
-    if err_level == 'N':        # >= N, ignore I
-        return False
-    if line_num in INFO['I']:
-        return True
-    return False                # >= I
 
 def __MISSED_FILE(step):
     sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01

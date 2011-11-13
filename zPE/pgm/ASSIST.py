@@ -60,7 +60,7 @@ def init(step):
     zPE.pgm.ASMA90.load_local_conf({
             'MEM_POS'   : 0,    # always start at 0x000000 for ASSIST
             'REGION'    : step.region,
-            'LN_P_PAGE' : 56,
+            'LN_P_PAGE' : 59,
             })
 
     zPE.pgm.ASMA90.pass_1()
@@ -118,6 +118,8 @@ def __MISSED_FILE(step, i):
 
     return cnt
 
+
+from ASMA90 import TITLE
 def __PARSE_OUT(step, limit, debug = True):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
@@ -128,6 +130,8 @@ def __PARSE_OUT(step, limit, debug = True):
     asm_warn    = zPE.pgm.ASMA90.INFO['W']
     asm_err     = zPE.pgm.ASMA90.INFO['E']
     asm_sev     = zPE.pgm.ASMA90.INFO['S']
+
+    info_ge     = zPE.pgm.ASMA90.INFO_GE
 
     asm_mnem    = zPE.pgm.ASMA90.MNEMONIC
 
@@ -157,13 +161,22 @@ def __PARSE_OUT(step, limit, debug = True):
     spo.append(ctrl, '\n')
     pln_cnt += 1
 
-    pln_cnt = __PRINT_HEADER(spo, pln_cnt, page_cnt, ctrl)
-
     ### main read loop, op code portion of the report
-    cnt = 0                     # line number
-    eojob = False               # end of job indicater
-    for line in spi:
-        cnt += 1                # start at line No. 1
+    init_cnt = 1                # start at line No. 1
+    title = ''                  # default title
+    title_indx = 1              # start at first title, if any
+    # print first header
+    if len(TITLE) > title_indx and TITLE[title_indx][0] == init_cnt:
+        # line No. 1 is TITLE
+        title = TITLE[title_indx][2]
+        title_indx += 1         # advance the index to the next potential TITLE
+        if not info_ge(init_cnt, 'I'):
+            init_cnt = 2        # all green with the TITLE line, skip it
+    pln_cnt = __PRINT_HEADER(spo, title, pln_cnt, page_cnt, ctrl)
+
+    eojob = False # "end of job" indicater; will be turned on by "END" statement
+    for cnt in range(init_cnt, len(spi) + 1): # loop through line_num (indx + 1)
+        line = spi[cnt - 1]     # indx = line_num - 1
         ctrl = ' '
 
         if eojob:
@@ -174,11 +187,22 @@ def __PARSE_OUT(step, limit, debug = True):
             # comments
             pln = [ ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
                     '{0:>5} {1}'.format(cnt, line) ]
-            ( pln_cnt, page_cnt ) = __PRINT_LINE(spo, pln, pln_cnt, page_cnt)
+            ( pln_cnt, page_cnt ) = __PRINT_LINE(
+                spo, title, pln, pln_cnt, page_cnt
+                )
             continue
 
         # instructions
-        if len(asm_mnem[cnt]) == 0: # type 0, no info to print
+        if len(asm_mnem[cnt]) == 0: # type 0, TITLE; new page if no error
+            if not info_ge(cnt, 'I'):
+                title = TITLE[title_indx][2] # update current TITLE
+                title_indx += 1 # advance the index to the next potential TITLE
+
+                page_cnt += 1   # new page
+                pln_cnt = __PRINT_HEADER(spo, title, 0, page_cnt)
+
+                if not info_ge(cnt, 'I'):
+                    continue    # skip the current iteration
             loc = ''
         elif len(asm_mnem[cnt]) == 1: # type 1, no info to print
             loc = ''
@@ -239,33 +263,43 @@ def __PARSE_OUT(step, limit, debug = True):
 
         pln = [ ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
                 '{0:>5} {1}'.format(cnt, line) ]
-        ( pln_cnt, page_cnt ) = __PRINT_LINE(spo, pln, pln_cnt, page_cnt)
+        ( pln_cnt, page_cnt ) = __PRINT_LINE(spo, title, pln, pln_cnt, page_cnt)
 
         # process error msg, if any
         if cnt in asm_sev:
             for tmp in asm_sev[cnt]:
                 ( pln_cnt, page_cnt ) = __PRINT_LINE(
-                    spo, [ ctrl, gen_msg('S', tmp, line) ], pln_cnt, page_cnt
+                    spo, title,
+                    [ ctrl, gen_msg('S', tmp, line) ],
+                    pln_cnt, page_cnt
                     )
         if cnt in asm_err:
             for tmp in asm_err[cnt]:
                 ( pln_cnt, page_cnt ) = __PRINT_LINE(
-                    spo, [ ctrl, gen_msg('E', tmp, line) ], pln_cnt, page_cnt
+                    spo, title,
+                    [ ctrl, gen_msg('E', tmp, line) ],
+                    pln_cnt, page_cnt
                     )
         if cnt in asm_warn:
             for tmp in asm_warn[cnt]:
                 ( pln_cnt, page_cnt ) = __PRINT_LINE(
-                    spo, [ ctrl, gen_msg('W', tmp, line) ], pln_cnt, page_cnt
+                    spo, title,
+                    [ ctrl, gen_msg('W', tmp, line) ],
+                    pln_cnt, page_cnt
                     )
         if cnt in asm_msg:
             for tmp in asm_msg[cnt]:
                 ( pln_cnt, page_cnt ) = __PRINT_LINE(
-                    spo, [ ctrl, gen_msg('N', tmp, line) ], pln_cnt, page_cnt
+                    spo, title,
+                    [ ctrl, gen_msg('N', tmp, line) ],
+                    pln_cnt, page_cnt
                     )
         if cnt in asm_info:
             for tmp in asm_info[cnt]:
                 ( pln_cnt, page_cnt ) = __PRINT_LINE(
-                    spo, [ ctrl, gen_msg('I', tmp, line) ], pln_cnt, page_cnt
+                    spo, title,
+                    [ ctrl, gen_msg('I', tmp, line) ],
+                    pln_cnt, page_cnt
                     )
     ### end of main read loop
 
@@ -423,10 +457,12 @@ def __PARSE_OUT(step, limit, debug = True):
     return cnt_err
 
 
-def __PRINT_LINE(spool_out, line_words, line_num, page_num):
+def __PRINT_LINE(spool_out, title, line_words, line_num, page_num):
     '''
     spool_out
         the spool that the header is written to
+    title
+        the current title (in case of page increment)
     line_words
         the tuple/list that consist a line
     line_num
@@ -440,16 +476,19 @@ def __PRINT_LINE(spool_out, line_words, line_num, page_num):
         inserted
     '''
     if line_num >= zPE.pgm.ASMA90.LOCAL_CONF['LN_P_PAGE']:
-        line_num = __PRINT_HEADER(spool_out, 0, page_num + 1)
+        page_num += 1           # new page
+        line_num = __PRINT_HEADER(spool_out, title, 0, page_num)
     spool_out.append(* line_words)
 
     return ( line_num + 1, page_num )
 
 
-def __PRINT_HEADER(spool_out, line_num, page_num, ctrl = '1'):
+def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):
     '''
     spool_out
         the spool that the header is written to
+    title
+        the title to be printed
     line_num
         the current line number
     page_num
@@ -460,6 +499,8 @@ def __PRINT_HEADER(spool_out, line_num, page_num, ctrl = '1'):
     return value
         the new line number after header is inserted
     '''
-    spool_out.append(ctrl, '{0:>111}PAGE {1:>4}\n'.format(' ', page_num))
+    spool_out.append(ctrl, '{0:<8} {1:<102}PAGE {2:>4}\n'.format(
+            TITLE[0], title, page_num
+            ))
     spool_out.append('0',  '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
     return line_num + 2
