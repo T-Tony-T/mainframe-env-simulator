@@ -20,6 +20,15 @@
 #     SYSPRINT  source listing and diagnostic message
 #
 # Return Code:
+#     object module generated:
+#      0        clear assemble
+#      2        clear assemble, with notificaton messages
+#      4        warnings occured during assembly
+#
+#     no objmod generated:
+#      8        errors occured during assembly
+#     12        severe errors occured during assembly
+#     16        insufficient resources
 #
 # Return Value:
 #     none
@@ -246,8 +255,8 @@ def init(step):
     # load_parm({
     #         })
     load_local_conf({
-            'MEM_POS'   : randint(512*1024, 4096*1024), # random from 512K to 4M
-            'REGION'    : step.region,
+            'MEM_POS' : randint(512*128, 4096*128) * 8, # random from 512K to 4M
+            'REGION'  : step.region,
             })
 
     rc1 = pass_1()

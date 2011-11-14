@@ -18,6 +18,7 @@ def abort(rc, *msg):
        1: currently not supported
        5: SPOOL error
        9: JCL error
+      13: Linkage-Editor error
       90: Assembler pass 1 error
       92: Assembler pass 2 error
       -1: zPE error
@@ -128,8 +129,8 @@ JCL = {
     'jobid'     : None,         # 'JOB*****'
     'spool_path': '',           # the path that all tmp files are allocated
     'jobstat'   : None,         # the status of the job
-    'jobstart'  : None,         # time object
-    'jobend'    : None,         # time object
+    'jobstart'  : None,         # timestamp
+    'jobend'    : None,         # timestamp
     'step'      : [],           # each item is of type "Step"
     'read_cnt'  : 0,            # lines read in
     'card_cnt'  : 0,            # cards read in
@@ -261,8 +262,8 @@ class Step(object):             # for JCL['step'][*]
         self.procname = ''      # not applied now
         self.region = region    # REGION=xxxx[K|M]
         self.parm = parm        # PARM='parm_list'
-        self.start = None       # time object
-        self.end   = None       # time object
+        self.start = None       # timestamp
+        self.end   = None       # timestamp
         self.rc = None          # return code
         self.dd = DDlist()
 # end of Step Definition

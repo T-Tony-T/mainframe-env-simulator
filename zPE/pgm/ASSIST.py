@@ -19,6 +19,8 @@
 #     SYSPRINT  source listing and diagnostic message
 #
 # Return Code:
+#      0        ASSIST executed
+#     16        insufficient resources
 #
 # Return Value:
 #     none
@@ -29,7 +31,7 @@ import zPE
 
 import os, sys
 import re
-from time import localtime, mktime, strftime
+from time import time, strftime
 
 from assist_err_code_rc import * # read recourse file for err msg
 
@@ -38,6 +40,13 @@ FILE = [
     ('SYSIN', 'AM002 ASSIST COULD NOT OPEN READER SYSIN:ABORT'),
     ('SYSPRINT', 'AM001 ASSIST COULD NOT OPEN PRINTER FT06F001:ABORT'),
     ]
+
+TIME = {
+    'asm_start'  : None,
+    'asm_end'    : None,
+    'exec_start' : None,
+    'exec_end'   : None,
+    }
 
 def init(step):
     # check for file requirement
@@ -63,10 +72,20 @@ def init(step):
             'LN_P_PAGE' : 59,
             })
 
+    TIME['asm_start'] = time()
     zPE.pgm.ASMA90.pass_1()
     zPE.pgm.ASMA90.pass_2()
+    TIME['asm_end'] = time()
 
-    err_cnt = __PARSE_OUT(step, limit, False)
+    err_cnt = __PARSE_OUT_ASM(limit, False)
+
+    # calculate memory needed to execute the module
+    required_mem_sz = 0
+    for esd in zPE.pgm.ASMA90.ESD.itervalues():
+        if esd[0]:
+            sz = esd[0].addr + esd[0].length
+            if sz > required_mem_sz:
+                required_mem_sz = sz
 
     zPE.pgm.ASMA90.init_res()   # release resources
 
@@ -78,10 +97,27 @@ def init(step):
 
     # invoke HEWLDRGO to link-edit and execute the object module
     zPE.core.SPOOL.replace('SYSLIN', objmod)
+    zPE.core.SPOOL.new('SYSLOUT', 'o', 'outstream', '', '')
 
-    spo = zPE.core.SPOOL.new('SYSLOUT', 'o', 'outstream', '', '')
+    # load the user-supplied PARM and config into the default configuration
+    zPE.pgm.HEWLDRGO.load_parm({
+            'AMODE'   : 24,
+            'RMODE'   : 24,
+            })
+    zPE.pgm.HEWLDRGO.load_local_conf({
+            'MEM_POS' : 0,      # always start at 0x000000 for ASSIST
+            'MEM_LEN' : required_mem_sz,
+            'REGION'  : step.region,
+            })
 
-    rc = zPE.pgm.HEWLDRGO.init(step)
+    # load OBJMOD into memory, and execute it
+    TIME['exec_start'] = time()
+    rc = zPE.pgm.HEWLDRGO.go(zPE.pgm.HEWLDRGO.load())
+    TIME['exec_end'] = time()
+
+    __PARSE_OUT_LDR(rc, False)
+
+    zPE.pgm.HEWLDRGO.init_res()   # release resources
 
     zPE.core.SPOOL.remove('SYSLIN')
     zPE.core.SPOOL.remove('SYSLOUT')
@@ -120,7 +156,7 @@ def __MISSED_FILE(step, i):
 
 
 from ASMA90 import TITLE
-def __PARSE_OUT(step, limit, debug = True):
+def __PARSE_OUT_ASM(limit, debug = True):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
@@ -303,7 +339,6 @@ def __PARSE_OUT(step, limit, debug = True):
                     )
     ### end of main read loop
 
-
     ### summary portion of the report
     cnt_warn = len(asm_info) + len(asm_msg) + len(asm_warn)
     cnt_err  = len(asm_err) + len(asm_sev)
@@ -325,10 +360,11 @@ def __PARSE_OUT(step, limit, debug = True):
     spo.append(ctrl, '*** DYNAMIC CORE AREA USED: ',
                ' LOW: {0:>7} HIGH: {1:>7}'.format('###', '###'), # need info
                ' LEAVING: {0:>7} FREE BYTES.'.format('#######'), # need info
-               ' AVERAGE: {0:>8} BYTES/STMT ***\n'.format('##')) # need info
-    diff = mktime(localtime()) - mktime(step.start)
-    spo.append(ctrl, '*** ASSEMBLY TIME = {0:>8.3f} SECS,'.format(diff),
-               ' {0:>8} STATEMENT/SEC ***\n'.format('#####')) # need info
+               ' AVERAGE: {0:>8} BYTES/STMT ***\n'.format('##'))
+               # (LOW + HIGH) / len(spi)
+    diff = TIME['asm_end'] - TIME['asm_start']
+    spo.append(ctrl, '*** ASSEMBLY TIME = {0:>8.3f} SECS, '.format(diff),
+               '{0:>8} STATEMENT/SEC ***\n'.format(int(len(spi) / diff)))
 
     if not debug:
         return cnt_err          # regular process end here
@@ -504,3 +540,28 @@ def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):
             ))
     spool_out.append('0',  '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
     return line_num + 2
+
+
+def __PARSE_OUT_LDR(rc, debug = True):
+    spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
+
+    ldr_ins    = zPE.pgm.HEWLDRGO.INSTRUCTION
+    ldr_br     = zPE.pgm.HEWLDRGO.BRANCHING
+
+
+    ctrl = '0'
+    spo.append(ctrl, '*** PROGRAM EXECUTION BEGINNING - ANY OUTPUT BEFORE EXECUTION TIME MESSAGE IS PRODUCED BY USER PROGRAM ***\n')
+
+    # output for the execution of the module
+    # end of output for the execution of the module
+
+    diff = TIME['exec_end'] - TIME['exec_start']
+    spo.append(ctrl, '*** EXECUTION TIME = {0:>8.3f} SECS. '.format(diff),
+               '{0:>9} INSTRUCTIONS EXECUTED - '.format(len(ldr_ins)),
+               '{0:>8} INSTRUCTIONS/SEC ***\n'.format(int(len(ldr_ins) / diff)))
+    spo.append(ctrl, '*** FIRST CARD NOT READ: NO CARDS READ:FILE UNOPENED\n')
+    if rc < zPE.RC['WARNING']:
+        msg = 'NORMAL'
+    else:
+        msg = 'ABNORMAL'
+    spo.append(ctrl, '*** AM004 - ', msg, 'USER TERMINATION BY RETURN ***\n')

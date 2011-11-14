@@ -1,7 +1,7 @@
 from zPE.core.asm import B_, C_, X_ # for conversion
 
-def chs(s):
-    return X_.tr(C_(s).dump())
+def chs(src):             # chs = CHaractor bit-Stream (char -> hex)
+    return X_.tr(C_(src).dump())
 
 # general
 def deck_id(title, sequence):# 73-80 : Deck ID + sequence number

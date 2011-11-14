@@ -5,7 +5,7 @@ import zPE
 
 import os, sys
 import re
-from time import localtime, mktime, strftime, strptime
+from time import time, localtime, strftime, strptime
 
 
 def parse(job):
@@ -229,7 +229,7 @@ def init_job():
     sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
     sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
 
-    zPE.JCL['jobstart'] = localtime()
+    zPE.JCL['jobstart'] = time()
     zPE.JCL['jobstat'] = 'STARTED'
 
     # ctrl for 1st line will be modified in finish_job()
@@ -252,7 +252,7 @@ def init_job():
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  IEF403I {0:<8}'.format(zPE.JCL['jobname']),
                ' - {0}'.format(zPE.JCL['jobstat']),
-               strftime(' - TIME=%H.%M.%S\n', zPE.JCL['jobstart']))
+               strftime(' - TIME=%H.%M.%S\n', localtime(zPE.JCL['jobstart'])))
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  -                                              -',
                '-TIMINGS (MINS.)--            -----PAGING COUNTS----\n')
@@ -272,7 +272,7 @@ def init_step(step):
     sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
     sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
 
-    step.start = localtime()
+    step.start = time()
     ctrl = ' '
 
     # check condition
@@ -342,8 +342,8 @@ def finish_step(step):
     sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
     sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
 
-    step.end = localtime()
-    diff = mktime(step.end) - mktime(step.start)
+    step.end = time()
+    diff = step.end - step.start
     diff_min = diff / 60
     diff_sec = diff % 60
 
@@ -407,7 +407,7 @@ def finish_step(step):
                 zPE.core.SPOOL.remove(ddname) # remove SPOOLs of the step
 
     sp3.append(' ', 'IEF373I STEP/{0:<8}/START '.format(step.name),
-               strftime('%Y%j.%H%M\n', step.start))
+               strftime('%Y%j.%H%M\n', localtime(step.start)))
     sp3.append(' ', 'IEF373I STEP/{0:<8}/STOP  '.format(step.name),
                strftime('%Y%j.%H%M'),
                ' CPU {0:>4}MIN {1:05.2f}SEC'.format(int(diff_min), diff_sec),   
@@ -422,8 +422,8 @@ def finish_job(msg):
 
     if msg in ['ok', 'steprun']: # step was executed
         zPE.JCL['jobstat'] = 'ENDED'
-    zPE.JCL['jobend'] = localtime()
-    diff = mktime(zPE.JCL['jobend']) - mktime(zPE.JCL['jobstart'])
+    zPE.JCL['jobend'] = time()
+    diff = zPE.JCL['jobend'] - zPE.JCL['jobstart']
     diff_min = diff / 60
     diff_sec = diff % 60
 
@@ -432,7 +432,7 @@ def finish_job(msg):
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  IEF404I {0:<8}'.format(zPE.JCL['jobname']),
                ' - {0}'.format(zPE.JCL['jobstat']),
-               strftime(' - TIME=%H.%M.%S\n', zPE.JCL['jobend']))
+               strftime(' - TIME=%H.%M.%S\n', localtime(zPE.JCL['jobend'])))
     sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                '  -{0:<8} ENDED.'.format(zPE.JCL['jobname']),
                '  NAME-{0:<20}'.format(zPE.JCL['pgmer']),
@@ -442,9 +442,9 @@ def finish_job(msg):
                '  $HASP395 {0:<8} ENDED\n'.format(zPE.JCL['jobname']))
 
     sp3.append(ctrl, 'IEF375I  JOB/{0:<8}/START '.format(zPE.JCL['jobname']),
-               strftime('%Y%j.%H%M', zPE.JCL['jobstart']), '\n')
+               strftime('%Y%j.%H%M', localtime(zPE.JCL['jobstart'])), '\n')
     sp3.append(ctrl, 'IEF376I  JOB/{0:<8}/STOP  '.format(zPE.JCL['jobname']),
-               strftime('%Y%j.%H%M', zPE.JCL['jobend']),
+               strftime('%Y%j.%H%M', localtime(zPE.JCL['jobend'])),
                ' CPU {0:>4}MIN {1:05.2f}SEC'.format(int(diff_min), diff_sec),
                ' SRB {0:>4}MIN {1:05.2f}SEC\n'.format(int(diff_min), diff_sec))
 
