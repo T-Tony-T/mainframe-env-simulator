@@ -195,5 +195,5 @@ def __MISSED_FILE(step):
 
 
 def __PARSE_OUT():
-    spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
+    spo = zPE.core.SPOOL.retrive('SYSLOUT') # output SPOOL
 

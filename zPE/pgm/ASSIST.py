@@ -97,7 +97,7 @@ def init(step):
 
     # invoke HEWLDRGO to link-edit and execute the object module
     zPE.core.SPOOL.replace('SYSLIN', objmod)
-    zPE.core.SPOOL.new('SYSLOUT', 'o', 'outstream', '', '')
+    zPE.core.SPOOL.pretend('SYSLOUT', 'SYSPRINT') # SYSLOUT -> SYSPRINT
 
     # load the user-supplied PARM and config into the default configuration
     zPE.pgm.HEWLDRGO.load_parm({
@@ -120,7 +120,7 @@ def init(step):
     zPE.pgm.HEWLDRGO.init_res()   # release resources
 
     zPE.core.SPOOL.remove('SYSLIN')
-    zPE.core.SPOOL.remove('SYSLOUT')
+    zPE.core.SPOOL.remove('SYSLOUT') # unlink SYSLOUT
 
     return zPE.RC['NORMAL']
 
@@ -543,7 +543,7 @@ def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):
 
 
 def __PARSE_OUT_LDR(rc, debug = True):
-    spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
+    spo = zPE.core.SPOOL.retrive('SYSPRINT') # (actual) output SPOOL
 
     ldr_ins    = zPE.pgm.HEWLDRGO.INSTRUCTION
     ldr_br     = zPE.pgm.HEWLDRGO.BRANCHING

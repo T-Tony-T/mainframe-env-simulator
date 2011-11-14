@@ -166,6 +166,10 @@ def replace(key, spool):
     SPOOL[key] = spool
     return SPOOL[key]
 
+def pretend(dest, src):
+    SPOOL[dest] = SPOOL[src]
+    return SPOOL[dest]
+
 def retrive(key):
     if key in SPOOL:
         return SPOOL[key]
