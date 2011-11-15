@@ -225,7 +225,7 @@ class Memory(object):
         else:
             self.min_pos = parse_sz_from(pos_str)
         if isinstance(sz_str, int) or isinstance(sz_str, long):
-            self.max_pos = sz_str
+            self.max_pos = self.min_pos + sz_str
         else:
             self.max_pos = self.min_pos + parse_sz_from(sz_str)
 

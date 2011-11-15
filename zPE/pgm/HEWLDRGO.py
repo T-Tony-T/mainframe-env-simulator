@@ -77,14 +77,6 @@ SCOPE = {
     #   addr    - the starting location of the CSECT relative to the OBJMOD
     #   length  - the length of the CSECT 
     }
-def scope_of(loc):
-    '''loc should be an actual memory location (not relative location)'''
-    for key in sorted(SCOPE, key = lambda t: t[0] + t[1] + t[2]):
-        loc_s = key[0] + key[1]
-        loc_e = loc_s + key[2]
-        if loc_s <= loc  and  loc < loc_e:
-            return key
-    return None
 ### end of resource definition
 
 def init_res():
@@ -159,7 +151,7 @@ def load():
         if rec[2:8] == rec_tp['ESD']: # byte 2-4
             byte_cnt = int(rec[20:24], 16) # byte 11-12: byte count
             esd_id = rec[28:32]            # byte 15-16: ESD ID / blank
-            if esd_id.startswith(zPE.c2x(' ')):
+            if esd_id == zPE.c2x('  '):    # 2 spaces
                 # blank => 'LD'
                 esd_id = None   # no advancing in ESD ID
             else:
@@ -172,7 +164,7 @@ def load():
                 vf = rec[i : i+32] # each vf is 16 bytes long
                 addr = int(vf[18:24]) # vf byte 10-12: address
                 length = vf[26:32]    # vf byte 14-16: length / blank
-                if length.startswith(zPE.c2x(' ')):
+                if length == zPE.c2x('   '): # 3 spaces
                     length = None
                 else:
                     length = int(length, 16)
@@ -218,6 +210,19 @@ def load():
             if not has_txt:
                 zPE.abort(13, 'Error: no TXT records found in OBJECT MODULE.\n')
 
+            # setup ENTRY POINT, if not offered by the user
+            if LOCAL_CONF['ENTRY_PT'] == None:
+                # no ENTRY POINT offered, nor setup by a previous OBJMOD
+                entry = rec[10:16] # byte 6-8: entry point
+                if entry == zPE.c2x('   '): # 3 spaces
+                    scope = 1   # no ENTRY POINT in END, use 1st CSECT
+                    loc = CSECT[obj_id, scope][1].addr
+                else:
+                    scope = int(rec[28:32], 16) # byte 15-16: ESD ID for EP
+                    loc = int(entry, 16)
+                loc += CSECT[obj_id, scope][0] # add the offset of the OBJMOD
+                LOCAL_CONF['ENTRY_PT'] = loc
+
             # prepare for next OBJECT MODULE, if any
             max_offset = 0
             for key in CSECT:
@@ -231,10 +236,6 @@ def load():
 
             has_txt = False # reset TXT record indi
             esd_id_next = 1 # reset next available ESD ID
-
-            ###################################
-            # need ways to decide entry point #
-            ###################################
 
         # parse SYM record
         elif rec[2:8] == rec_tp['SYM']: # byte 2-4
@@ -252,6 +253,7 @@ def go(mem):
     for key in CSECT:
         print key, '=>', CSECT[key][2], ':', CSECT[key][1].__dict__, '@', CSECT[key][0]
     print mem.dump(mem.min_pos, mem.max_pos - mem.min_pos)
+    print 'Entry Point:', LOCAL_CONF['ENTRY_PT']
 
     return zPE.RC['NORMAL']
 # end of go()
