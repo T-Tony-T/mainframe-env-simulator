@@ -371,6 +371,7 @@ def __PARSE_OUT_ASM(limit, debug = True):
     #
     # debugging information
     #
+    from binascii import b2a_hex
     print '\nExternal Symbol Dictionary:'
     for key in sorted(asm_esd_id.iterkeys()):
         k = asm_esd_id[key]
@@ -415,7 +416,11 @@ def __PARSE_OUT_ASM(limit, debug = True):
 
     print '\nMnemonic:'
     for key in sorted(asm_mnem.iterkeys()):
-        if len(asm_mnem[cnt]) == 0: # type 0
+        if len(asm_mnem[key]) == 0: # type 0
+            scope = ''
+        else:
+            scope = TP_X.tr(TP_F(asm_mnem[key][0]).dump())
+        if len(asm_mnem[key]) == 0: # type 0
             loc = ''
         elif len(asm_mnem[key]) == 1: # type 1
             loc = ''
@@ -424,10 +429,10 @@ def __PARSE_OUT_ASM(limit, debug = True):
         else:
             loc = hex(asm_mnem[key][1])[2:]
         tmp_str = ''
-        if ( len(asm_mnem[cnt]) == 3  and # type 3
-             zPE.core.asm.can_get_sd(asm_mnem[cnt][2]) # DC/=const
+        if ( len(asm_mnem[key]) == 3  and # type 3
+             zPE.core.asm.can_get_sd(asm_mnem[key][2]) # DC/=const
              ):
-            for val in zPE.core.asm.get_sd(asm_mnem[cnt][2]):
+            for val in zPE.core.asm.get_sd(asm_mnem[key][2]):
                 tmp_str += zPE.core.asm.X_.tr(val.dump())
         elif len(asm_mnem[key]) == 4: # type 4
             tmp_str += '{0:<14} {1:0>5} {0:>5}'.format(
@@ -466,7 +471,7 @@ def __PARSE_OUT_ASM(limit, debug = True):
                 )
         print '{0:>5}: {1} {2:0>6} {3}'.format(
             key,
-            TP_X.tr(TP_F(asm_mnem[key][0]).dump()),
+            scope,
             loc,
             tmp_str
             )
@@ -488,7 +493,7 @@ def __PARSE_OUT_ASM(limit, debug = True):
 
     print '\n\nObject Deck:'
     for line in zPE.core.SPOOL.retrive('SYSLIN'):
-        print line
+        print b2a_hex(line)
     # end of debugging
     return cnt_err
 

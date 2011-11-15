@@ -32,6 +32,16 @@ def mark4future(feature):
 
 
 ### Utility Function Definition
+def c2x(src):
+    return core.asm.X_.tr(core.asm.C_(src).dump())
+
+def x2c(src):
+    return core.asm.C_.tr(core.asm.X_(src).dump())
+
+def b2x(src):
+    return core.asm.X_.tr(core.asm.B_(src).dump())
+
+
 def dic_find_key(dic, val):
     '''Return the (first) key of the dic that has the given val'''
     return [k for (k, v) in dic.iteritems() if v == val][0]

@@ -130,14 +130,15 @@ OBJMOD = { # see init_res() for possible record types
 
 class ExternalSymbol(object):
     def __init__(self, tp, scope_id, addr, length,
-                 owner, flags, alias
+                 owner, amode, rmode, alias
                  ):
         self.type = tp
         self.id = scope_id
         self.addr = addr
         self.length = length
         self.owner = owner
-        self.flags = flags
+        self.amode = amode
+        self.rmode = rmode
         self.alias = alias
 
     def type_code(self):
@@ -154,6 +155,52 @@ class ExternalSymbol(object):
             'qaPC' : '0E', # Quad-aligned PC
             'qaCM' : '0F', # Quad-aligned CM
             }[self.type]
+
+    def load_type(self, type_code):
+        self.type = {
+            '00'   : 'SD',
+            '01'   : 'LD',
+            '02'   : 'ER',
+            '04'   : 'PC',
+            '05'   : 'CM',
+            '06'   : 'XD',
+            '0A'   : 'WX',
+            '0D'   : 'qaSD', # Quad-aligned SD
+            '0E'   : 'qaPC', # Quad-aligned PC
+            '0F'   : 'qaCM', # Quad-aligned CM
+            }[type_code]
+
+    def flags(self):
+        if self.type in [ 'XD', 'PR' ]:
+            return 'al'        # mark; should be alignment (need info)
+        if self.type in [ 'LD', 'ER', 'WX' ]:
+            return zPE.c2x(' ')
+        # otherwise
+        if self.rmode == 64:
+            bit_2 = '1'
+            bit_5 = '1' # any
+        else:
+            bit_2 = '0'
+            if self.rmode == 24:
+                bit_5 = '0'
+            else:
+                bit_5 = '1'
+        if self.amode == 64:
+            bit_3   = '1'
+            bit_6_7 = '11' # any
+        else:
+            bit_3 = '0'
+            if self.amode == 24:
+                bit_6_7 = '00'
+            elif self.amode == 31:
+                bit_6_7 = '10'
+            else:
+                bit_6_7 = '11'
+        bit_4 = '0' # '1' if RSECT; need info
+
+        return zPE.b2x('00{0}{1}{2}{3}{4}'.format(
+                bit_2, bit_3, bit_4, bit_5, bit_6_7
+                ))
 
 ESD = {                 # External Symbol Dictionary; build during pass 1
     # 'Symbol  ' : ( ExternalSymbol(SD/PC), ExternalSymbol(ER), )
@@ -368,11 +415,11 @@ def pass_1():
                 ESD[csect_lbl] = (
                     ExternalSymbol(
                         None, None, None, None,
-                        None, None, None,
+                        None, PARM['AMODE'],PARM['RMODE'], None,
                         ),
                     ExternalSymbol(
                         None, None, None, None,
-                        None, None, None,
+                        None, PARM['AMODE'],PARM['RMODE'], None,
                         ),
                     )
 
@@ -386,7 +433,6 @@ def pass_1():
                 # new CSECT, update info
                 ESD[csect_lbl][0].id = scope_id
                 ESD[csect_lbl][0].addr = addr
-                ESD[csect_lbl][0].flags = '00'
 
                 ESD_ID[scope_id] = csect_lbl
 
@@ -617,11 +663,11 @@ def pass_1():
                                 ESD[lbl_8] = (
                                     ExternalSymbol(
                                         None, None, None, None,
-                                        None, None, None,
+                                        None, PARM['AMODE'],PARM['RMODE'], None,
                                         ),
                                     ExternalSymbol(
                                         None, None, None, None,
-                                        None, None, None,
+                                        None, PARM['AMODE'],PARM['RMODE'], None,
                                         ),
                                     )
                             if ESD[lbl_8][1].id == None:
@@ -2197,10 +2243,7 @@ def __APPEND_ESD(variable_field = None):
     else:
         force_append = len(vf_list)
     if force_append  or  len(variable_field) % 3 == 0:
-        OBJMOD['ESD'].append(OBJMOD_REC['ESD'](
-                vf_list,
-                PARM['AMODE'], PARM['RMODE']
-                ))
+        OBJMOD['ESD'].append(OBJMOD_REC['ESD'](vf_list))
 
 def __APPEND_TXT(mem, scope, pos_start, pos_end):
     if ( scope == None     or
