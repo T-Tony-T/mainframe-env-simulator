@@ -69,12 +69,16 @@ BRANCHING = [ ]                 # Branching history
 
 from ASMA90 import ExternalSymbol
 CSECT = {
-    # ( OBJMOD_id, ESD_name ) : ExternalSymbol
+    # ( OBJMOD_id, ESD_ID ) : ( mem_loc, ExternalSymbol, ESD_name )
+    #   mem_loc - the starting memory location where the OBJMOD is loaded into
     }
 SCOPE = {
-    # ( mem_loc, addr, length ) : ( OBJMOD_id, ESD_name )
+    # ( mem_loc, addr, length ) : ( OBJMOD_id, ESD_ID )
+    #   addr    - the starting location of the CSECT relative to the OBJMOD
+    #   length  - the length of the CSECT 
     }
 def scope_of(loc):
+    '''loc should be an actual memory location (not relative location)'''
     for key in sorted(SCOPE, key = lambda t: t[0] + t[1] + t[2]):
         loc_s = key[0] + key[1]
         loc_e = loc_s + key[2]
@@ -139,8 +143,8 @@ def load():
         'SYM' : zPE.c2x('SYM').lower(),
         }
 
-    obj_id = 1           # 1st OBJECT MODULE
-    loc = mem.min_pos    # next available memory location
+    obj_id = 1            # 1st OBJECT MODULE
+    mem_loc = mem.min_pos # starting memory location for each OBJMOD
 
     has_txt = False             # indicates whether encountered TXT record(s)
     esd_id_next = 1             # next available ESD ID
@@ -179,8 +183,8 @@ def load():
                 esd.load_type(vf[16:18])         # vf byte 9: ESD type code
                 if esd.type in [ 'SD', 'PC', ]:
                     esd_name = zPE.x2c(vf[0:16]) # vf byte 1-8: ESD Name
-                    CSECT[obj_id, esd_name] = esd
-                    SCOPE[loc, esd.addr, esd.length] = ( obj_id, esd_name )
+                    CSECT[obj_id, esd.id] = ( mem_loc, esd, esd_name )
+                    SCOPE[mem_loc, esd.addr, esd.length] = ( obj_id, esd.id )
                 else:
                     pass        # ignore the rest
                 # advance ESD ID by 1
@@ -194,11 +198,16 @@ def load():
             byte_cnt = int(rec[20:24], 16) # byte 11-12: byte count
             scope = int(rec[28:32], 16)    # byte 15-16: scope id
 
-            esd = CSECT[SCOPE[scope_of(addr)]]
-            if esd.id != scope:
+            if ( obj_id, scope ) not in CSECT:
                 zPE.abort(13, 'Error: ', scope,
                           ': Invalid ESD ID in TXT record(s).\n')
-            mem[addr] = rec[32 : 32 + byte_cnt * 2]
+
+            # calculate the actual location
+            loc = ( CSECT[obj_id, scope][0] +      # start of OBJMOD
+                    CSECT[obj_id, scope][1].addr + # start of CSECT
+                    addr                           # addr into CSECT
+                    )
+            mem[loc] = rec[32 : 32 + byte_cnt * 2]
 
         # parse RLD record
         elif rec[2:8] == rec_tp['RLD']: # byte 2-4
@@ -209,13 +218,19 @@ def load():
             if not has_txt:
                 zPE.abort(13, 'Error: no TXT records found in OBJECT MODULE.\n')
 
-            if r != spi[-1]:
-                # more OBJECT MODULE to go
-                obj_id += 1     # advance OBJECT MODULE counter
-                loc = (loc + 7) / 8 * 8 # align to double-word boundary
+            # prepare for next OBJECT MODULE, if any
+            max_offset = 0
+            for key in CSECT:
+                if key[0] == obj_id:
+                    offset = CSECT[key][1].addr + CSECT[key][1].length
+                    if max_offset < offset:
+                        max_offset = offset
+            # advance to next available loc, align to double-word boundary
+            mem_loc = (mem_loc + max_offset + 7) / 8 * 8
+            obj_id += 1     # advance OBJECT MODULE counter
 
-                has_txt = False # reset TXT record indi
-                esd_id_next = 1 # reset next available ESD ID
+            has_txt = False # reset TXT record indi
+            esd_id_next = 1 # reset next available ESD ID
 
             ###################################
             # need ways to decide entry point #
@@ -233,6 +248,9 @@ def load():
 # end of load()
 
 def go(mem):
+    print SCOPE
+    for key in CSECT:
+        print key, '=>', CSECT[key][2], ':', CSECT[key][1].__dict__, '@', CSECT[key][0]
     print mem.dump(mem.min_pos, mem.max_pos - mem.min_pos)
 
     return zPE.RC['NORMAL']
