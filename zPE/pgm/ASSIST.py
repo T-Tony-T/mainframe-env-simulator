@@ -363,8 +363,12 @@ def __PARSE_OUT_ASM(limit, debug = True):
                ' AVERAGE: {0:>8} BYTES/STMT ***\n'.format('##'))
                # (LOW + HIGH) / len(spi)
     diff = TIME['asm_end'] - TIME['asm_start']
+    if diff:
+        stmt_p_sec = int(len(spi) / diff)
+    else:
+        stmt_p_sec = 'INF'
     spo.append(ctrl, '*** ASSEMBLY TIME = {0:>8.3f} SECS, '.format(diff),
-               '{0:>8} STATEMENT/SEC ***\n'.format(int(len(spi) / diff)))
+               '{0:>8} STATEMENT/SEC ***\n'.format(stmt_p_sec))
 
     if not debug:
         return cnt_err          # regular process end here
@@ -561,9 +565,13 @@ def __PARSE_OUT_LDR(rc, debug = True):
     # end of output for the execution of the module
 
     diff = TIME['exec_end'] - TIME['exec_start']
+    if diff:
+        ins_p_sec = int(len(ldr_ins) / diff)
+    else:
+        ins_p_sec = 'INF'
     spo.append(ctrl, '*** EXECUTION TIME = {0:>8.3f} SECS. '.format(diff),
                '{0:>9} INSTRUCTIONS EXECUTED - '.format(len(ldr_ins)),
-               '{0:>8} INSTRUCTIONS/SEC ***\n'.format(int(len(ldr_ins) / diff)))
+               '{0:>8} INSTRUCTIONS/SEC ***\n'.format(ins_p_sec))
     spo.append(ctrl, '*** FIRST CARD NOT READ: NO CARDS READ:FILE UNOPENED\n')
     if rc < zPE.RC['WARNING']:
         msg = 'NORMAL'

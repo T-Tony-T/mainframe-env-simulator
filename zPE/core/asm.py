@@ -74,7 +74,9 @@ class InstructionType(object):
         self.align = InstructionType.align_map[alignment]
         return self
 
-    def is_aligned(self, loc):
+    def is_aligned(self, loc = None):
+        if loc == None:
+            loc = self.value()
         return loc % self.align == 0
 
 
@@ -213,7 +215,7 @@ class S(InstructionType):
 
     def value(self):
         if self.valid:
-            rv = int(self.prnt()[0], 16)
+            rv = self.__dsplc
         else:
             rv = None
         return rv
@@ -255,11 +257,7 @@ class X(S):
         return ( rv, super(X, self).prnt()[1], )
 
     def value(self):
-        if self.valid:
-            rv = int(self.prnt()[0], 16)
-        else:
-            rv = None
-        return rv
+        return super(X, self).value()
 
     def set(self, dsplc, indx = 0, base = 0):
         if indx < 0 or indx > 15:

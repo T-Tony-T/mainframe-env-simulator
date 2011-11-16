@@ -1451,7 +1451,7 @@ def pass_2():
 
             # check reference
             for lbl_i in range(len(args)):
-                if INFO_GE(line_num, 'E'): # could be flagged in pass 1
+                if INFO_GE(line_num, 'E'): # could already be flagged in pass 1
                     break # if has error, stop processing args
                 abs_values = False # assume no absolute values
 
@@ -1744,11 +1744,6 @@ def pass_2():
                                0, sd_info[4], sd_info[3]
                                ) # all are auto-generated, no 'L' at all
                     (ex_disp, dummy) = zPE.core.asm.value_sd(sd_info)
-                    if not op_code[lbl_i + op_indx].is_aligned(ex_disp):
-                        indx_s = spi[line_num].index(p1_lbl)
-                        __INFO('I', line_num,
-                               ( 33, indx_s, indx_s + len(p1_lbl), )
-                               )
 
                 # evaluate expression
                 if abs_values:    # absolute values
@@ -1822,10 +1817,21 @@ def pass_2():
                         __INFO('E', line_num,
                                ( 34, indx_s, indx_s + len(p1_lbl), )
                                )
+
+                # check possible alignment error
+                if ( not INFO_GE(line_num, 'E')  and
+                     not op_code[lbl_i + op_indx].is_aligned(1)
+                     ): # no other error, and op code arg require an alignment
+                    if not op_code[lbl_i + op_indx].is_aligned():
+                        indx_s = spi[line_num].index(p1_lbl)
+                        __INFO('I', line_num,
+                               ( 33, indx_s, indx_s + len(p1_lbl), )
+                               )
             # end of processing args
 
             content = zPE.core.asm.prnt_op(MNEMONIC[line_num][2])
-            mem[addr] = content
+            if not INFO_GE(line_num, 'E'):
+                mem[addr] = content
             pos_end = addr + len(content) / 2
 
         # unrecognized op-code
@@ -2065,56 +2071,62 @@ def __PARSE_ARG(arg_str):
             reminder = reminder[1:]
         else:                   # number / symbol
             res = zPE.resplit_sq('[*/+-]', reminder)[0]
+            _res = res          # do not change this copy
 
-            bad_lbl = zPE.bad_label(zPE.resplit_sq('\(', res)[0])
+            bad_lbl = zPE.bad_label(zPE.resplit_sq('\(', _res)[0])
             if bad_lbl:
                 try:
-                    sd_info = zPE.core.asm.parse_sd(res)
+                    sd_info = zPE.core.asm.parse_sd(_res)
                 except:         # not a constant
                     sd_info = None
 
-                if res.isdigit(): # pure number
-                    parts.append(res)
+                if _res.isdigit(): # pure number
+                    parts.append(_res)
                     descs.append('regular_num')
-                elif len(zPE.resplit_sq('\)', res)) > 1: # abs addr + something
-                    return res.index(')') + 1
+                elif len(zPE.resplit_sq('\)', _res)) > 1: # abs addr + something
+                    return _res.index(')') + 1
                 elif sd_info:   # inline constant
                     try:
                         if sd_info[0] == 'a':
                             raise TypeError
                         zPE.core.asm.get_sd(sd_info)
-                        parts.append(res)
+                        parts.append(_res)
                         descs.append('inline_const')
                     except:     # invalid constant; return err pos
                         return len(arg_str) - len(reminder)
-                elif res[0] == '=': # =constant
-                    tmp = zPE.resplit_sq('\(', res)
+                elif _res[0] == '=': # =constant
+                    tmp = zPE.resplit_sq('\(', _res)
                     if len(tmp) > 1 and not re.match('\d{1,2}\)', tmp[1]):
                         return ( len(arg_str) - len(reminder) +
-                                 len(zPE.resplit_sq(',', res)[0]) )
-                    parts.append(res)
+                                 len(zPE.resplit_sq(',', _res)[0]) )
+                    parts.append(_res)
                     descs.append('eq_constant')
                 else:           # invalid operand; return err pos
                     return len(arg_str) - len(reminder)
             else:
-                tmp = zPE.resplit_sq('\(', res) # search for '('
+                tmp = zPE.resplit_sq('\(', _res) # search for '('
                 arg_lbl = tmp[0]
                 if len(tmp) > 1: # has '('
                     tmp = zPE.resplit_sq(',', tmp[1]) # search for ','
                     if len(tmp) > 1: # has ','
                         return ( len(arg_str) - len(reminder) +
-                                 len(zPE.resplit_sq(',', res)[0])
+                                 len(zPE.resplit_sq(',', _res)[0])
                                  )
                     tmp = zPE.resplit_sq('\)', tmp[0]) # search for ')'
                     arg_val = tmp[0]
                     if not arg_val:                   # no value
                         return ( len(arg_str) - len(reminder) +
-                                 len(zPE.resplit_sq('\(', res)[0])
+                                 len(zPE.resplit_sq('\(', _res)[0])
                                  )
                     if len(tmp) != 2 or tmp[1] != '': # not end with ')'
                         return ( len(arg_str) - len(reminder) +
-                                 len(zPE.resplit_sq('\)', res)[0])
+                                 len(zPE.resplit_sq('\)', _res)[0])
                                  )
+                    # try parse as a register
+                    reg_info = zPE.core.reg.parse_GPR(arg_val)
+                    if reg_info[0] >= 0:
+                        # substitute register equate
+                        arg_val = "B'{0}'".format(bin(reg_info[0])[2:])
                     # try to reduce the value
                     tmp = __REDUCE_EXP(arg_val)
                     if tmp == None:
@@ -2122,12 +2134,12 @@ def __PARSE_ARG(arg_str):
                             tmp = eval(arg_val)
                         except:
                             return ( len(arg_str) - len(reminder) +
-                                     len(zPE.resplit_sq('\(', res)[0])
+                                     len(zPE.resplit_sq('\(', _res)[0])
                                      ) # cannot reduce
                     res = '{0}({1})'.format(arg_lbl, tmp)
                 parts.append(res)
                 descs.append('valid_symbol')
-            reminder = reminder[len(res):]
+            reminder = reminder[len(_res):]
 
         if len(reminder) and reminder[0] == ')': # start of a sub-expression
             parts.append(')')
@@ -2205,6 +2217,8 @@ def __REDUCE_EXP(exp):
         try:
             sd_info = zPE.core.asm.parse_sd(part)
         except:
+            return None
+        if sd_info[4] == None:
             return None
         if not sd_info[5]:
             sd_info = (sd_info[0], sd_info[1], sd_info[2],
