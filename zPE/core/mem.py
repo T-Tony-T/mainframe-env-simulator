@@ -329,15 +329,15 @@ class Memory(object):
         while len(rv_list):
             self.__concat(rv, rv_list.pop())
 
-        return '{0}{1:0>6} TO {2:0>6}\n{3}'.format(
-            '                             CORE ADDRESSES SPECIFIED-     ',
-            hex(addr_s)[2:].upper(),
-            hex(addr_e)[2:].upper(),
-            ''.join(rv)
-            )
+        rv.insert(0, '{0}{1:0>6} TO {2:0>6}\n'.format(
+                '                             CORE ADDRESSES SPECIFIED-     ',
+                hex(addr_s)[2:].upper(),
+                hex(addr_e)[2:].upper()
+                ))              # prepend the header
+        return rv
 
     def dump_all(self):
-        return self.dump(self.l_bound, self.h_bound - self.l_bound)
+        return self.dump(self.min_pos, self.max_pos - self.min_pos)
 
 
     def __concat(self, dump1, dump2):

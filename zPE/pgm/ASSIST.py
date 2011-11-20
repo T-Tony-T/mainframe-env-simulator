@@ -554,6 +554,8 @@ def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):
 def __PARSE_OUT_LDR(rc, debug = True):
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # (actual) output SPOOL
 
+    mem_dump   = zPE.pgm.HEWLDRGO.MEM_DUMP
+
     ldr_ins    = zPE.pgm.HEWLDRGO.INSTRUCTION
     ldr_br     = zPE.pgm.HEWLDRGO.BRANCHING
 
@@ -573,8 +575,69 @@ def __PARSE_OUT_LDR(rc, debug = True):
                '{0:>9} INSTRUCTIONS EXECUTED - '.format(len(ldr_ins)),
                '{0:>8} INSTRUCTIONS/SEC ***\n'.format(ins_p_sec))
     spo.append(ctrl, '*** FIRST CARD NOT READ: NO CARDS READ:FILE UNOPENED\n')
-    if rc < zPE.RC['WARNING']:
-        msg = 'NORMAL'
-    else:
+    if rc >= zPE.RC['WARNING']:
         msg = 'ABNORMAL'
+        # generate err msgs here
+        spo.append('1', 'ASSIST COMPLETION DUMP\n')
+        spo.append(ctrl, 'PSW AT ABEND ', str(zPE.core.reg.SPR['PSW']),
+                   '       COMPLETION CODE   SYSTEM = ',
+                   '06C', # error code; need info
+                   ' SPECIFICATION\n')
+
+        # instructions tracing
+        spo.append(ctrl, '** TRACE OF INSTRUCTIONS JUST BEFORE TERMINATION: PSW BITS SHOWN ARE THOSE BEFORE CORRESPONDING INSTRUCTION DECODED ***\n')
+        spo.append(ctrl, '  IM LOCATION    INSTRUCTION :  IM = PSW BITS 32-39(ILC,CC,MASK) BEFORE INSTRUCTION EXECUTED AT PROGRAM LOCATION SHOWN\n')
+
+        code = [ '    ' ] * 3   # [ 4 spaces ] * 3
+        for ins in ldr_ins[-10 : ]: # only show last 10 instructions
+            if len(ins[2]) == 12:
+                code[2] = ins[2][8:12]
+            else:
+                code[2] = '    ' # 4 spaces
+            if len(code) >= 8:
+                code[1] = ins[2][4:8]
+            else:
+                code[1] = '    ' # 4 spaces
+            code[0] = ins[2][0:4]
+            spo.append(
+                ctrl, '  ', zPE.b2x(ins[0][32:39]),
+                '  {0:0>6}     {1} {2} {3}\n'.format(
+                    ins[1], code[0], code[1], code[2]
+                    )
+                )
+        # append the following words to the end of the last instruction
+        spo[-1, -1] = '  <-- LAST INSTRUCTION DONE - PROBABLE CAUSE OF TERMINATION\n'
+        spo.append(ctrl, '\n')
+
+        # branch tracing
+        spo.append('-', '** TRACE OF LAST 10 BRANCH INSTRUCTIONS EXECUTED: PSW BITS SHOWN ARE THOSE BEFORE CORRESPONDING INSTRUCTION DECODED ***\n')
+        spo.append(ctrl, '  IM LOCATION    INSTRUCTION :  IM = PSW BITS 32-39(ILC,CC,MASK) BEFORE INSTRUCTION EXECUTED AT PROGRAM LOCATION SHOWN\n')
+
+        for ins in ldr_br[-10 : ]: # only show last 10 branches
+            if len(code) == 8:
+                code = ' '.join([ ins[2][:4], ins[2][4:] ])
+            else:
+                code = ins[2]
+            spo.append(ctrl, '  ', zPE.b2x(ins[0][32:39]),
+                       '  {0:0>6}     {1}\n'.format(ins[1], code))
+
+        # register dump
+        spo.append(ctrl, ' REGS 0-7      ',
+                   '    '.join([ str(r) for r in zPE.core.reg.GPR[ :8] ]),
+                   '\n')
+        spo.append(' ',  ' REGS 8-15     ',
+                   '    '.join([ str(r) for r in zPE.core.reg.GPR[8: ] ]),
+                   '\n')
+        spo.append(ctrl, ' FLTR 0-6      '
+                   '        '.join([ '  need    info  ' ] * 4), # need info
+                   '\n')
+
+        # storage dump
+        spo.append('1', 'USER STORAGE\n')
+        spo.append(ctrl, mem_dump[0])
+        for indx in range(1, len(mem_dump)):
+            spo.append(' ', mem_dump[indx])
+        spo.append(ctrl, '\n')
+    else:
+        msg = 'NORMAL'
     spo.append(ctrl, '*** AM004 - ', msg, 'USER TERMINATION BY RETURN ***\n')

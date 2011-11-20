@@ -28,7 +28,7 @@ class GPR(Union):
             self.bytes[(4-key)%4] = val
 
     def __str__(self):
-        return '{0:0>8}'.format(hex(self.long)[2:-1])
+        return '{0:0>8}'.format(hex(self.long)[2:-1].upper())
 
     def positive(self):
         # 0x80000000 will mask off all but the sign bit
@@ -161,6 +161,10 @@ class PSW(object):
         (w1, w2) = self.dump_hex()
         return '{0} {1}'.format(w1, w2)
 
+    def __getitem__(self, key):
+        return ''.join(self.dump_bin())[key]
+
+
     def set_mode(self, C):
         if C == PSW_MODE['EC']:
             self.__full_init(
@@ -214,3 +218,6 @@ def parse_GPR(reg_str):
 SPR = {                         # special purpose registers
     'PSW' : PSW(PSW_MODE['BC']),
     }
+
+SPR['PSW'].Channel_masks = 127  # turn on all internal channels
+SPR['PSW'].E = 1                # also turn on external channel

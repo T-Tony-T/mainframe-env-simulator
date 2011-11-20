@@ -78,7 +78,9 @@ class Spool(object):
         else:
             if isinstance(key[1], int): # key = (ln, indx)
                 in_s = key[1]
-                in_e = key[1] + 1
+                while in_s < 0:
+                    in_s += len(self.spool[key[0]])
+                in_e = in_s + 1
             else:                       # key = (ln, slice)
                 (in_s, in_e, step) = key[1].indices(len(self.spool[key[0]]))
             self.spool[key[0]] = '{0}{1}{2}'.format(

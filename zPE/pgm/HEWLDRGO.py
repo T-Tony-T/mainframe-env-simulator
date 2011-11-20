@@ -64,8 +64,14 @@ def load_local_conf(conf_dic):
 
 ### resource definition
 
-INSTRUCTION = [ ]               # Instruction history
-BRANCHING = [ ]                 # Branching history
+MEM_DUMP = [ ]                  # the entire memory dump at ABEND
+
+INSTRUCTION = [                 # Instruction history
+    # [ PSW, LOC, MNEMONIC ]
+    ]
+BRANCHING = [                   # Branching history
+    # [ PSW, LOC, MNEMONIC ]
+    ]
 
 from ASMA90 import ExternalSymbol
 CSECT = {
@@ -80,6 +86,8 @@ SCOPE = {
 ### end of resource definition
 
 def init_res():
+    del MEM_DUMP[:]             # clear memory dump
+
     del INSTRUCTION[:]          # clear Instruction history
     del BRANCHING[:]            # clear Branching history
 
@@ -249,12 +257,19 @@ def load():
 # end of load()
 
 def go(mem):
-    print SCOPE
-    for key in CSECT:
-        print key, '=>', CSECT[key][2], ':', CSECT[key][1].__dict__, '@', CSECT[key][0]
-    print mem.dump(mem.min_pos, mem.max_pos - mem.min_pos)
-    print 'Entry Point:', LOCAL_CONF['ENTRY_PT']
+    psw = zPE.core.reg.SPR['PSW']
 
+    # initial program load
+    psw.Instruct_addr = LOCAL_CONF['ENTRY_PT']
+    psw.PSW_key = 12            # to match the key on "marist"
+    psw.M = 1                   # turn on "Machine check"
+    psw.W = 0                   # content switch to the program
+
+    # main execution loop
+
+    #MEM_DUMP.extend(mem.dump_all())
+
+    psw.W = 1                   # content switch back to the loader
     return zPE.RC['NORMAL']
 # end of go()
 
