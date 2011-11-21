@@ -72,10 +72,10 @@ def load_local_conf(conf_dic):
 MEM_DUMP = [ ]                  # the entire memory dump at ABEND
 
 INSTRUCTION = [                 # Instruction history
-    # [ PSW, LOC, MNEMONIC ]
+    # [ PSW, MNEMONIC ]
     ]
 BRANCHING = [                   # Branching history
-    # [ PSW, LOC, MNEMONIC ]
+    # [ PSW, MNEMONIC ]
     ]
 
 from ASMA90 import ExternalSymbol
@@ -288,7 +288,10 @@ def go(mem):
     t.start()
     try:
         while not timeouted  and  psw.Instruct_addr != LOCAL_CONF['EXIT_PT']:
-            zPE.core.cpu.execute(zPE.core.cpu.fetch(mem, psw.Instruct_addr))
+            zPE.core.cpu.execute( zPE.core.cpu.fetch(),
+                                  INSTRUCTION.append,
+                                  BRANCHING.append
+                                  )
     except:
         # ABEND CODE; need info
         MEM_DUMP.extend(mem.dump_all())

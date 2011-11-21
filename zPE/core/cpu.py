@@ -10,13 +10,14 @@ from reg import GPR, SPR
 
 ### Interface Function Definition
 
-def fetch(mem, addr):
+def fetch():
     
 
     return 
 
 
-def execute(ins):
+def execute(ins, ins_track = lambda *arg : None, br_track = lambda *arg : None):
+    ins_track(SPR['PSW'].snapshot(), ins)
     
 
     return

@@ -179,6 +179,13 @@ class PSW(object):
                 None, 0, 0,
                 self.CC, self.Program_mask, self.Instruct_addr
                 )
+
+
+    def snapshot(self):
+        ss = PSW(self.C)
+        for (k, v) in self.__dict__.iteritems():
+            ss.__dict__[k] = v
+        return ss
 # end of PSW class definition
 
 

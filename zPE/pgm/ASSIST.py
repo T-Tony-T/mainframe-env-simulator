@@ -594,19 +594,19 @@ def __PARSE_OUT_LDR(rc, debug = True):
 
         code = [ '    ' ] * 3   # [ 4 spaces ] * 3
         for ins in ldr_ins[-10 : ]: # only show last 10 instructions
-            if len(ins[2]) == 12:
-                code[2] = ins[2][8:12]
+            if len(ins[1]) == 12:
+                code[2] = ins[1][8:12]
             else:
                 code[2] = '    ' # 4 spaces
-            if len(code) >= 8:
-                code[1] = ins[2][4:8]
+            if len(ins[1]) >= 8:
+                code[1] = ins[1][4:8]
             else:
                 code[1] = '    ' # 4 spaces
-            code[0] = ins[2][0:4]
+            code[0] = ins[1][0:4]
             spo.append(
                 ctrl, '  ', zPE.b2x(ins[0][32:39]),
                 '  {0:0>6}     {1} {2} {3}\n'.format(
-                    ins[1], code[0], code[1], code[2]
+                    ins[0].Instruct_addr, code[0], code[1], code[2]
                     )
                 )
         # append the following words to the end of the last instruction
@@ -618,12 +618,12 @@ def __PARSE_OUT_LDR(rc, debug = True):
         spo.append(ctrl, '  IM LOCATION    INSTRUCTION :  IM = PSW BITS 32-39(ILC,CC,MASK) BEFORE INSTRUCTION EXECUTED AT PROGRAM LOCATION SHOWN\n')
 
         for ins in ldr_br[-10 : ]: # only show last 10 branches
-            if len(code) == 8:
-                code = ' '.join([ ins[2][:4], ins[2][4:] ])
+            if len(ins[1]) == 8:
+                code = ' '.join([ ins[1][:4], ins[1][4:] ])
             else:
-                code = ins[2]
+                code = ins[1]
             spo.append(ctrl, '  ', zPE.b2x(ins[0][32:39]),
-                       '  {0:0>6}     {1}\n'.format(ins[1], code))
+                       '  {0:0>6}     {1}\n'.format(ins[0].Instruct_addr, code))
 
         # register dump
         spo.append(ctrl, ' REGS 0-7      ',
