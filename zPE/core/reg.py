@@ -1,15 +1,14 @@
 # this is the definition and the implementation of Registers
-# currently defines: GPR, PSW
+# currently defines: General Purpose Registers, PSW
 
 import zPE
 
-import os, sys
 import re
 from ctypes import *            # for Union and C-Style array
 
 
 ## General Purpose Register
-class GPR(Union):
+class Register(Union):
     _fields_ = [
         ('long', c_ulong),
         ('bytes', c_ubyte * 4),
@@ -32,7 +31,7 @@ class GPR(Union):
 
     def positive(self):
         # 0x80000000 will mask off all but the sign bit
-        if self.long & int('80000000', 16) == 0:
+        if self.long & 0x80000000 == 0:
             return True
         else:
             return False
@@ -187,10 +186,10 @@ class PSW(object):
 GPR_NUM = 16                    # number of general purpose registers
 
 GPR = [                         # general purpose registers
-    GPR(0), GPR(0), GPR(0), GPR(0), # R0  ~ R3
-    GPR(0), GPR(0), GPR(0), GPR(0), # R4  ~ R7
-    GPR(0), GPR(0), GPR(0), GPR(0), # R8  ~ R11
-    GPR(0), GPR(0), GPR(0), GPR(0)  # R12 ~ R15
+    Register(0), Register(0), Register(0), Register(0), # R0  ~ R3
+    Register(0), Register(0), Register(0), Register(0), # R4  ~ R7
+    Register(0), Register(0), Register(0), Register(0), # R8  ~ R11
+    Register(0), Register(0), Register(0), Register(0)  # R12 ~ R15
     ]
 
 def parse_GPR(reg_str):

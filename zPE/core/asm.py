@@ -2,7 +2,6 @@
 
 import zPE
 
-import os, sys
 import re
 
 
@@ -343,10 +342,10 @@ def get_op(instruction):
 
 def len_op(op_code):
     code = int(op_code[0][:2], 16)
-    if ( code <= int('98', 16) or
-         ( code >= int('AC', 16) and code <= int('B1', 16) ) or
-         ( code >= int('B6', 16) and code <= int('DF', 16) ) or
-         code >= int('E8', 16)
+    if ( code <= 0x98 or
+         ( code >= 0xAC and code <= 0xB1 ) or
+         ( code >= 0xB6 and code <= 0xDF ) or
+         code >= 0xE8
          ):
         return 2
     else:
@@ -688,7 +687,7 @@ class F_(object):
             int_val = int(int_str, 10)
         else:
             raise ValueError
-        if int_val < int('-80000000', 16) or int_val > int('7FFFFFFF', 16):
+        if int_val < -0x80000000 or int_val > 0x7FFFFFFF:
             raise ValueError
         self.__val = int_val
     def dump(self):
@@ -696,7 +695,7 @@ class F_(object):
             hex_str = '{0:0>8}'.format(hex(self.__val)[2:])
         else:
             hex_str = '{0:0>8}'.format(hex(
-                    int('100000000', 16) + self.__val # 2's complement
+                    0x100000000 + self.__val # 2's complement
                     )[2:])
         return (
             (
@@ -717,11 +716,9 @@ class F_(object):
         for indx in range(1, len(vals)):
             int_val *= 256
             int_val += vals[indx]
-        int_val %= int('FFFFFFFF', 16)
-        if int_val > int('7FFFFFFF', 16):
-            int_str = '-{0}'.format(
-                int('100000000', 16) - int_val # 2's complement
-                )
+        int_val %= 0xFFFFFFFF
+        if int_val > 0x7FFFFFFF:
+            int_str = '-{0}'.format(0x100000000 - int_val) # 2's complement
         else:
             int_str = str(int_val)
         return int_str
@@ -749,7 +746,7 @@ class H_(object):
             int_val = int(int_str, 10)
         else:
             raise ValueError
-        if int_val < int('-8000', 16) or int_val > int('7FFF', 16):
+        if int_val < -0x8000 or int_val > 0x7FFF:
             raise ValueError
         self.__val = int_val
     def dump(self):
@@ -757,7 +754,7 @@ class H_(object):
             hex_str = '{0:0>4}'.format(hex(self.__val)[2:])
         else:
             hex_str = '{0:0>4}'.format(hex(
-                    int('10000', 16) + self.__val # 2's complement
+                    0x10000 + self.__val # 2's complement
                     )[2:])
         return (
             (
@@ -776,11 +773,9 @@ class H_(object):
         for indx in range(1, len(vals)):
             int_val *= 256
             int_val += vals[indx]
-        int_val %= int('FFFF', 16)
-        if int_val > int('7FFF', 16):
-            int_str = '-{0}'.format(
-                int('10000', 16) - int_val # 2's complement
-                )
+        int_val %= 0xFFFF
+        if int_val > 0x7FFF:
+            int_str = '-{0}'.format(0x10000 - int_val) # 2's complement
         else:
             int_str = str(int_val)
         return int_str
@@ -808,7 +803,7 @@ class A_(object):
             int_val = int(int_str, 10)
         else:
             raise ValueError
-        if int_val < 0 or int_val > int('FFFFFFFF', 16):
+        if int_val < 0 or int_val > 0xFFFFFFFF:
             raise ValueError
         self.__val = int_val
     def dump(self):
@@ -833,7 +828,7 @@ class A_(object):
             int_val *= 256
             int_val += vals[indx]
         return '0x{0:0>8}'.format(
-            hex(int_val % int('FFFFFFFF', 16))[2:-1].upper()
+            hex(int_val % 0xFFFFFFFF)[2:-1].upper()
             )
 
 

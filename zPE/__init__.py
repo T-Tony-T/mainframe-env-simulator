@@ -135,6 +135,7 @@ JCL = {
     'class'     : None,         # the last char of jobname
     'accinfo'   : None,         # the accounting information
     'pgmer'     : None,         # the name of the programmer
+    'time'      : None,         # the estimated amount of CPU time needed
     'regoin'    : None,         # the regoin of the entire job
     'jobid'     : None,         # 'JOB*****'
     'spool_path': '',           # the path that all tmp files are allocated
@@ -169,9 +170,11 @@ DD_MODE = {                     # DD mode : SPOOL mode
 
 class Step(object):             # for JCL['step'][*]
     def __init__(self, name, pgm, proc,
-                 region = None,
+                 time = None, region = None,
                  parm = ''
                  ):
+        if time == None:
+            time = conf.Config['time_limit']
         if region == None:
             region = conf.Config['memory_sz']
 
@@ -270,6 +273,7 @@ class Step(object):             # for JCL['step'][*]
         self.pgm  = pgm         # PGM='pgm_name'
         self.proc = proc        # [PROG=]'prog_name'
         self.procname = ''      # not applied now
+        self.time = time        # TIME=(m,s)
         self.region = region    # REGION=xxxx[K|M]
         self.parm = parm        # PARM='parm_list'
         self.start = None       # timestamp

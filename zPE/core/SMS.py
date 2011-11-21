@@ -3,7 +3,7 @@
 
 import zPE
 
-import os, sys
+import os
 import re
 
 

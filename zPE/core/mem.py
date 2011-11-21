@@ -4,7 +4,6 @@
 
 import zPE
 
-import os, sys
 import re
 from ctypes import *            # for Union and C-Style array
 from struct import *            # for pack and unpack

@@ -29,7 +29,6 @@
 
 import zPE
 
-import os, sys
 import re
 from time import time, strftime
 
@@ -103,10 +102,15 @@ def init(step):
     zPE.pgm.HEWLDRGO.load_parm({
             'AMODE'   : 24,
             'RMODE'   : 24,
+            'PSWKEY'  : 12, # 12 is the key used by ASSIST on "marist"
             })
     zPE.pgm.HEWLDRGO.load_local_conf({
             'MEM_POS' : 0,      # always start at 0x000000 for ASSIST
             'MEM_LEN' : required_mem_sz,
+            'TIME'    : min(
+                zPE.JCL['jobstart'] + zPE.JCL['time'] - time(), # job limit
+                step.start + step.time - time()                 # step limit
+                ),
             'REGION'  : step.region,
             })
 
@@ -388,7 +392,7 @@ def __PARSE_OUT_ASM(limit, debug = True):
     print '\nSymbol Cross Reference Table:'
     for key in sorted(asm_symb.iterkeys()):
         if asm_symb[key].value == None:
-            addr = int('ffffff', 16)
+            addr = 0xFFFFFF
         else:
             addr = asm_symb[key].value
         print '{0} (0x{1:0>6}) => {2}'.format(
@@ -397,7 +401,7 @@ def __PARSE_OUT_ASM(limit, debug = True):
     print '\nSymbol Cross Reference ER Sub-Table:'
     for key in sorted(asm_symb_v.iterkeys()):
         if asm_symb_v[key].value == None:
-            addr = int('ffffff', 16)
+            addr = 0xFFFFFF
         else:
             addr = asm_symb_v[key].value
         print '{0} (0x{1:0>6}) => {2}'.format(
@@ -407,7 +411,7 @@ def __PARSE_OUT_ASM(limit, debug = True):
     for key in sorted(asm_symb_eq.iterkeys()):
         for indx in range(len(asm_symb_eq[key])):
             if asm_symb_eq[key][indx].value == None:
-                addr = int('ffffff', 16)
+                addr = 0xFFFFFF
             else:
                 addr = asm_symb_eq[key][indx].value
             print '{0} (0x{1:0>6}) => {2}'.format(

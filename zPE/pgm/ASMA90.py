@@ -37,7 +37,6 @@
 
 import zPE
 
-import os, sys
 import re
 from time import localtime, strftime
 from random import randint

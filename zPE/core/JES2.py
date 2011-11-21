@@ -4,7 +4,7 @@
 import zPE
 from SPOOL import DEFAULT_OUT_STEP as step_lookup
 
-import os, sys
+import os
 import re
 
 import sqlite3

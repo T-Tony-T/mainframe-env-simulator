@@ -19,20 +19,22 @@
 #     [ ... ]   user-defined output for the module to be executed
 #
 # Return Code:
+#      0        the module ended normally
+#      8        the module ended abnormally
+#     12        the module is force closed by the LOADER
 #     16        insufficient resources
-#     [ ... ]   same as the RC of the execution of the module
 #
 # Return Value:
-#     [ ... ]   same as the RV of the execution of the module
+#     None
 ################################################################
 
 
 import zPE
 
-import os, sys
 from time import strftime
 from random import randint
 from binascii import b2a_hex
+from threading import Timer
 
 
 FILE = [ 'SYSLIN', 'SYSLOUT' ]  # SYSLIB not required
@@ -40,6 +42,7 @@ FILE = [ 'SYSLIN', 'SYSLOUT' ]  # SYSLIB not required
 PARM = {
     'AMODE'     : 31,
     'RMODE'     : 31,
+    'PSWKEY'    : 8,            # 1st user-mode key
 }
 def load_parm(parm_dic):
     for key in parm_dic:
@@ -51,8 +54,10 @@ def load_parm(parm_dic):
 LOCAL_CONF = {
     'MEM_POS'   : None,         # required; first available memory location
     'MEM_LEN'   : None,         # required; length of memory required
+    'TIME'      : None,         # required; maximum execution time allowed
     'REGION'    : None,         # required; maximum length allowed
     'ENTRY_PT'  : None,         # entry point (specified by END)
+    'EXIT_PT'   : None,         # return address
     }
 def load_local_conf(conf_dic):
     for key in conf_dic:
@@ -113,6 +118,10 @@ def init(step):
             'MEM_LEN' : zPE.core.mem.max_sz_of(step.region),
                         # this is WAY to large;
                         # need a way to detect actual mem size
+            'TIME'    : min(
+                zPE.JCL['jobstart'] + zPE.JCL['time'] - time(), # job limit
+                step.time                                       # step limit
+                ),
             'REGION'  : step.region,
             })
 
@@ -134,6 +143,7 @@ def load():
 
     spi = zPE.core.SPOOL.retrive('SYSLIN') # input SPOOL
     mem = zPE.core.mem.Memory(LOCAL_CONF['MEM_POS'], LOCAL_CONF['MEM_LEN'])
+    LOCAL_CONF['EXIT_PT'] = 0xFF000000 + mem.h_bound
 
     rec_tp = { # need to be all lowercase since b2a_hex() returns all lowercase
         'ESD' : zPE.c2x('ESD').lower(),
@@ -258,17 +268,37 @@ def load():
 
 def go(mem):
     psw = zPE.core.reg.SPR['PSW']
+    rtrn = zPE.core.reg.GPR[14]  # register 14: return address
+    enty = zPE.core.reg.GPR[15]  # register 15: entry address
 
     # initial program load
-    psw.Instruct_addr = LOCAL_CONF['ENTRY_PT']
-    psw.PSW_key = 12            # to match the key on "marist"
+    rtrn[0] = LOCAL_CONF['EXIT_PT']  # load exit point into register 14
+    enty[0] = LOCAL_CONF['ENTRY_PT'] # load entry point into register 15
+    psw.Instruct_addr = LOCAL_CONF['ENTRY_PT'] # set PSW accordingly
+
+    psw.PSW_key = PARM['PSWKEY']
     psw.M = 1                   # turn on "Machine check"
     psw.W = 0                   # content switch to the program
 
     # main execution loop
+    timeouted = [ ]
+    def timeout():
+        timeouted.append(True)
+    t = Timer(LOCAL_CONF['TIME'], timeout)
+    t.start()
+    try:
+        while not timeouted  and  psw.Instruct_addr != LOCAL_CONF['EXIT_PT']:
+            zPE.core.cpu.execute(zPE.core.cpu.fetch(mem, psw.Instruct_addr))
+    except:
+        # ABEND CODE; need info
+        MEM_DUMP.extend(mem.dump_all())
+        return zPE.RC['ERROR']
+    if timeouted:
+        # S322; need info
+        MEM_DUMP.extend(mem.dump_all())
+        return zPE.RC['SEVERE']
 
-    #MEM_DUMP.extend(mem.dump_all())
-
+    t.cancel()
     psw.W = 1                   # content switch back to the loader
     return zPE.RC['NORMAL']
 # end of go()

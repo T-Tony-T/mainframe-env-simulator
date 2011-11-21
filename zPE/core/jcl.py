@@ -3,7 +3,7 @@
 
 import zPE
 
-import os, sys
+import sys
 import re
 from time import time, localtime, strftime, strptime
 
@@ -76,10 +76,17 @@ def parse(job):
                   ':\n       The programmer\'s name cannot be exceed ',
                   '20 characters.\n')
     # parse parameters
+    zPE.JCL['time']   = zPE.conf.Config['time_limit']
     zPE.JCL['region'] = zPE.conf.Config['memory_sz']
     if len(args) == 3:
         for part in re.split(',', args[2]):
-            if part[:7] == 'REGION=':
+            if part[:5] == 'TIME=':
+                try:
+                    zPE.JCL['time'] = zPE.core.cpu.parse_time(part[5:])
+                except SyntaxError:
+                    zPE.abort(9, 'Error: ', part,
+                              ': Invalid time specification.\n')
+            elif part[:7] == 'REGION=':
                 try:
                     zPE.JCL['region'] = zPE.core.mem.parse_region(part[7:])
                 except SyntaxError:
@@ -134,7 +141,7 @@ def parse(job):
             invalid_lable.append(zPE.JCL['read_cnt'])
 
         # parse EXEC card
-        # currently supported parameter: parm, region
+        # currently supported parameter: parm, time, region
         # currently assumed parameter: cond=(0,NE)
         # see also: __COND_FAIL(step)
         if field[1] == 'EXEC':
@@ -149,11 +156,18 @@ def parse(job):
                 proc = args[0]
 
             parm = ''           # parameter list
+            time = zPE.JCL['time']
             region = zPE.JCL['region']
             if len(args) == 2:
                 for part in re.split(',', args[1]):
                     if part[:5] == 'PARM=':
                         parm = part[5:]
+                    elif part[:5] == 'TIME=':
+                        try:
+                            time = zPE.core.cpu.parse_time(part[5:])
+                        except SyntaxError:
+                            zPE.abort(9, 'Error: ', part,
+                                      ': Invalid time specification.\n')
                     elif part[:7] == 'REGION=':
                         try:
                             region = zPE.core.mem.parse_region(part[7:])
@@ -171,6 +185,7 @@ def parse(job):
                     name = field[0][2:],
                     pgm  = pgm,
                     proc = proc,
+                    time = time,
                     region = region,
                     parm = parm
                     ))

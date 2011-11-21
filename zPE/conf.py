@@ -1,6 +1,7 @@
 # this is the System Level Configuration
 
 from core.mem import parse_region
+from core.cpu import parse_time
 
 import os, sys, pickle
 import re
@@ -31,6 +32,7 @@ POSSIBLE_ADDR_MODE = [ 16, 31, 64, ]
 DEFAULT = {
     'ADDR_MODE' : 31,           # hardware addressing mode: 31 bit
 
+    'TIME_LIMIT': 5,            # max cpu time for a step: 5 sec
     'MEMORY_SZ' : '1024K',      # memory size: 1024 KB
 
     'ICH70001I' : {             # config list for ICH70001I
@@ -48,6 +50,8 @@ def init_rc():
     Config['addr_mode']  = DEFAULT['ADDR_MODE']
     Config['addr_max']   = 0            # calculate on loading
 
+    Config['time_limit'] = DEFAULT['TIME_LIMIT']
+                                # can be altered by "// JOB ,*,TIME=(m,s)"
     Config['memory_sz']  = DEFAULT['MEMORY_SZ']
                                 # can be altered by "// JOB ,*,REGION=*"
                                 # can be overridden by "// EXEC *,REGION=*"
@@ -92,7 +96,7 @@ def read_rc(dry_run = False):
     __CK_CONFIG()
 
     for line in open(CONFIG_PATH['rc'], 'r'):
-        (k, v) = re.split('[ \t]*=[ \t]*', line, maxsplit=1)
+        (k, v) = re.split('[ \t]*=[ \t]*', line[:-1], maxsplit=1)
         ok = False
 
         if k == 'job_id':
@@ -126,6 +130,16 @@ def read_rc(dry_run = False):
                             'CONFIG WARNING: ', v[:-1],
                             ': Invalid address mode.\n'
                             ]))
+        elif k == 'time_limit':
+            try:
+                Config[k] = parse_time(v)
+                ok = True
+            except SyntaxError as e_msg:
+                sys.stderr.write('CONFIG WARNING: {0}: \n  {1}\n'.format(v[:-1], e_msg))
+
+            if not ok:
+                Config[k] = DEFAULT['TIME_LIMIT']
+
         elif k == 'memory_sz':
             try:
                 Config[k] = parse_region(v)
@@ -203,5 +217,10 @@ def __TOUCH_RC():
     fp = open(CONFIG_PATH['rc'], 'w')
     fp.write(''.join(['job_id = ', str(Config['job_id']), '\n']))
     fp.write(''.join(['addr_mode = ', str(Config['addr_mode']), '\n']))
+    fp.write(''.join(['time_limit = (',
+                      str(Config['time_limit'] / 60),
+                      ',',
+                      str(Config['time_limit'] % 60),
+                      ')\n']))
     fp.write(''.join(['memory_sz = ', Config['memory_sz'], '\n']))
     fp.close()

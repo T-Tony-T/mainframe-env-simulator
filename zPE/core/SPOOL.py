@@ -5,8 +5,6 @@
 
 import zPE
 
-import os, sys
-
 
 MODE = {                        # SPOOL mode : display
     'i' : 'SYSIN',
