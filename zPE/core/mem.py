@@ -100,7 +100,7 @@ class Page(Structure):
 
 
     def dump(self, pos_s = 0, length = 4096): # default dump all
-        if pos_s < 0 or pos_s >= 4096:
+        if not 0 <= pos_s < 4096:
             raise IndexError('position must be within a Page (0 ~ 4095)!')
         if length < 0:
             raise OverflowError('length should be positive!')
@@ -145,30 +145,18 @@ class Page(Structure):
     # fmt: one of ['hw', 'fw', 'dw']
     # rv:  slice of the required range
     def __range_of(self, pos, fmt):
-        if fmt == 'hw':
-            if pos % 2 != 0:
-                raise IndexError('{0}: {1}'.format(
-                        pos,
-                        'Position not aligned on halfword boundary.'
-                        ))
-            key = slice(pos, pos+2)
-        elif fmt == 'fw':
-            if pos % 4 != 0:
-                raise IndexError('{0}: {1}'.format(
-                        pos,
-                        'Position not aligned on fullword boundary.'
-                        ))
-            key = slice(pos, pos+4)
-        elif fmt == 'dw':
-            if pos % 8 != 0:
-                raise IndexError('{0}: {1}'.format(
-                        pos,
-                        'Position not aligned on doubleword boundary.'
-                        ))
-            key = slice(pos, pos+8)
-        else:
+        if fmt not in zPE.fmt_align_map:
             raise SyntaxError('{0}: Invalid format.'.format(fmt))
-        return key
+
+        align = zPE.fmt_align_map[fmt]
+        if pos % align != 0:
+            raise IndexError('{0}: {1}'.format(
+                    pos,
+                    'Position not aligned on ',
+                    zPE.fmt_name_map[fmt],
+                    ' boundary.'
+                    ))
+        return slice(pos, pos + align)
 
     # key:       int
     # rv / val:  int
@@ -218,7 +206,61 @@ class Page(Structure):
 ## Virtual Memory
 # MemoryError:   addressing exception
 class Memory(object):
-    def __init__(self, pos_str, sz_str):
+    allocation = {
+        # ( loc_s, loc_e ) : Memory
+        }
+
+    # the following 3 should be manipulated by Memory.[de]ref_page() only
+    _pool_available = [ ]
+    _pool_allocated = {
+        # Page index : Page
+        }
+    _page_ref_cnt = {
+        # Page index : reference counter
+        }
+
+    @staticmethod
+    def ref_page(indx):
+        if indx in Memory._page_ref_cnt:
+            Memory._page_ref_cnt[indx] += 1
+            page = Memory._pool_allocated[indx] # retrieve the allocated page
+        else:
+            Memory._page_ref_cnt[indx] = 1
+            if Memory._pool_available:
+                page = Memory._pool_available.pop() # get a released page
+            else:
+                page = Page() # allocate a new page
+            Memory._pool_allocated[indx] = page
+        return page
+
+    @staticmethod
+    def deref_page(indx):
+        Memory._page_ref_cnt[indx] -= 1
+        if not Memory._page_ref_cnt[indx]:
+            Memory._pool_available.append(Memory._pool_allocated[indx])
+            del Memory._pool_allocated[indx]
+            del Memory._page_ref_cnt[indx]
+
+    @staticmethod
+    def is_available(loc_start, loc_end):
+        for key in sorted(Memory.allocation, key = lambda t: t[0]):
+            window_s = key[0]
+            window_e = key[1]
+            # ----  |    |          loc_start < loc_end   < window_s  < window_e
+            #    ---+    |          loc_start < loc_end   = window_s  < window_e
+            #     --|--  |          loc_start < window_s  < loc_end   < window_e
+            #       | -- |          window_s  < loc_start < loc_end   < window_e
+            #      -|----|-         loc_start < window_s  < window_e  < loc_end
+            #       |  --|--        window_s  < loc_start < window_e  < loc_end
+            #       |    +---       window_s  < window_e  = loc_start < loc_end
+            #       |    |  ----    window_s  < window_e  < loc_start < loc_end
+            if loc_start < window_e  and  window_s < loc_end:
+                return False
+        return True
+
+    def __new__(cls, pos_str, sz_str):
+        self = object.__new__(cls)
+
         if isinstance(pos_str, int) or isinstance(pos_str, long):
             self.min_pos = pos_str
         else:
@@ -228,19 +270,34 @@ class Memory(object):
         else:
             self.max_pos = self.min_pos + parse_sz_from(sz_str)
 
-        self.l_bound =      self.min_pos     / 4096 * 4096 # align to page
-        self.h_bound = (self.max_pos + 4095) / 4096 * 4096 # align to page
+        # calculate the page boundaries
+        self.page_s =      self.min_pos     / 4096
+        self.page_e = (self.max_pos + 4095) / 4096
+        self.l_bound = self.page_s * 4096
+        self.h_bound = self.page_e * 4096
 
         if self.l_bound < 0 or self.h_bound >= zPE.conf.Config['addr_max']:
             raise MemoryError('{0} 0x{1:0>6} ~ 0x{2:0>6}'.format(
                     'Addressing Exception: Valid address range is:',
-                    0,
-                    hex(zPE.conf.Config['addr_max'])[2:].upper()
+                    0, hex(zPE.conf.Config['addr_max'])[2:].upper()
                     ))
 
-        # self.memory is a C-style array of array
-        self.memory = ( Page * ((self.h_bound - self.l_bound) / 4096) )()
+        # allocate the memory
+        if Memory.is_available(self.min_pos, self.max_pos):
+            self.memory = [ ]
+            for i in range(self.page_s, self.page_e):
+                page = Memory.ref_page(i) # increment ref counter of page i
+                self.memory.append(page)  # append the page to the allocation
+            Memory.allocation[self.min_pos, self.max_pos] = self
+            return self
+        else:
+            raise MemoryError('Access denied: specific memory not available.')
 
+    def release(self):
+        for i in range(self.page_s, self.page_e):
+            Memory.deref_page(i) # decrement ref counter of page i
+        self.memory = [ ]        # empty the allocation
+        del Memory.allocation[self.min_pos, self.max_pos] # release it
 
     def __str__(self):
         return "0x{0:0>6} ~ 0x{1:0>6} (0x{2:0>6} ~ 0x{3:0>6}) : {4}".format(
@@ -256,7 +313,7 @@ class Memory(object):
             addr_s = key
             if addr_s < 0:      # handle negative index
                 addr_s += self.h_bound
-            if addr_s < self.l_bound or addr_s >= self.h_bound:
+            if not self.l_bound <= addr_s < self.h_bound:
                 raise IndexError('address out of boundary!')
             addr_e = addr_s + 1
         else: # slice
@@ -270,9 +327,9 @@ class Memory(object):
                 addr_e = self.h_bound
             elif addr_e < 0:    # handle negative index
                 addr_e += self.h_bound
-            if addr_s < self.l_bound or addr_s > self.h_bound:
+            if not self.l_bound <= addr_s < self.h_bound:
                 raise IndexError('starting address out of boundary!')
-            if addr_e < self.l_bound or addr_e > self.h_bound:
+            if not self.l_bound <= addr_e < self.h_bound:
                 raise IndexError('ending address out of boundary!')
 
         rv_list = self.__access(
@@ -292,7 +349,7 @@ class Memory(object):
         addr_s = key
         if addr_s < 0:      # handle negative index
             addr_s += self.h_bound
-        if addr_s < self.l_bound or addr_s >= self.h_bound:
+        if not self.l_bound <= addr_s < self.h_bound:
             raise IndexError('address out of boundary!')
         addr_e = addr_s + len(hex_str) / 2
 
@@ -308,7 +365,7 @@ class Memory(object):
 
 
     def dump(self, addr_s, length = 32):
-        if addr_s < self.l_bound or addr_s >= self.h_bound:
+        if not self.l_bound <= addr_s < self.h_bound:
             raise IndexError('address out of boundary!')
         if length < 0:
             raise OverflowError('length should be positive!')
@@ -368,7 +425,8 @@ class Memory(object):
         using `with_func` against "against_data"
 
         with_func(page_indx, pos, length, data):
-            page_indx : index of the current page
+            page_indx : index of the page to be accessed, relative to the
+                        first page within the memory allocation
             pos       : starting position of the current page
             length    : length to be processed within the current page
             data      : the against_data (possibly None) described below

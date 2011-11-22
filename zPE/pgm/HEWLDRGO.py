@@ -31,6 +31,8 @@
 
 import zPE
 
+import zPE.core.cpu as CPU
+
 from time import strftime
 from random import randint
 from binascii import b2a_hex
@@ -77,6 +79,12 @@ INSTRUCTION = [                 # Instruction history
 BRANCHING = [                   # Branching history
     # [ PSW, MNEMONIC ]
     ]
+def record_ins(psw, ins):
+    INSTRUCTION.append([ psw, ''.join(ins) ])
+    if ins[0][0] in '04' and ins[0][1] in '567':
+        BRANCHING.append([ psw, ''.join(ins) ])
+    return ins
+
 
 from ASMA90 import ExternalSymbol
 CSECT = {
@@ -268,14 +276,19 @@ def load():
 
 def go(mem):
     psw = zPE.core.reg.SPR['PSW']
-    rtrn = zPE.core.reg.GPR[14]  # register 14: return address
-    enty = zPE.core.reg.GPR[15]  # register 15: entry address
+    ldr_mem = zPE.core.mem.Memory(mem.max_pos, 18 * 4) # 18F RSV
+
+    prsv = zPE.core.reg.GPR[13] # register 13: parent register saving area
+    rtrn = zPE.core.reg.GPR[14] # register 14: return address
+    enty = zPE.core.reg.GPR[15] # register 15: entry address
 
     # initial program load
+    prsv[0] = mem.max_pos            # load LOADER's RSV into register 13
     rtrn[0] = LOCAL_CONF['EXIT_PT']  # load exit point into register 14
     enty[0] = LOCAL_CONF['ENTRY_PT'] # load entry point into register 15
     psw.Instruct_addr = LOCAL_CONF['ENTRY_PT'] # set PSW accordingly
 
+    old_key = psw.PSW_key       # backup previous PSW key
     psw.PSW_key = PARM['PSWKEY']
     psw.M = 1                   # turn on "Machine check"
     psw.W = 0                   # content switch to the program
@@ -285,25 +298,28 @@ def go(mem):
     def timeout():
         timeouted.append(True)
     t = Timer(LOCAL_CONF['TIME'], timeout)
-    t.start()
     try:
+        t.start()               # start the timer
         while not timeouted  and  psw.Instruct_addr != LOCAL_CONF['EXIT_PT']:
-            zPE.core.cpu.execute( zPE.core.cpu.fetch(),
-                                  INSTRUCTION.append,
-                                  BRANCHING.append
-                                  )
+            CPU.execute(record_ins(psw.snapshot(), CPU.fetch()))
+        t.cancel()              # stop the timer
+        rc = zPE.RC['NORMAL']
     except:
         # ABEND CODE; need info
+        t.cancel()              # stop the timer
         MEM_DUMP.extend(mem.dump_all())
-        return zPE.RC['ERROR']
+        rc = zPE.RC['ERROR']
     if timeouted:
         # S322; need info
         MEM_DUMP.extend(mem.dump_all())
-        return zPE.RC['SEVERE']
+        rc = zPE.RC['SEVERE']
 
-    t.cancel()
     psw.W = 1                   # content switch back to the loader
-    return zPE.RC['NORMAL']
+    psw.PSW_key = old_key       # restore PSW key
+
+    mem.release()
+    ldr_mem.release()
+    return rc
 # end of go()
 
 

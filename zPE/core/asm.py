@@ -11,13 +11,6 @@ import re
 class InstructionType(object):
     '''this is an abstract base class'''
 
-    align_map = {              # see al() and is_aligned() for details
-        'bw' : 1, # byte-word
-        'hw' : 2, # half-word
-        'fw' : 4, # full-word
-        'dw' : 8, # double-word
-        }
-
     def __init__(self, ins_type, pos):
         self.type  = ins_type
         self.pos   = pos
@@ -70,7 +63,7 @@ class InstructionType(object):
           fw = align on fullword boundary
           dw = align on doubleword boundary
         '''
-        self.align = InstructionType.align_map[alignment]
+        self.align = zPE.fmt_align_map[alignment]
         return self
 
     def is_aligned(self, loc = None):
@@ -156,7 +149,7 @@ class R(InstructionType):
         if self.valid:
             return self.__val
         else:
-            raise ValueError
+            raise ValueError('value is invalid (non-initialized).')
 
     def prnt(self):
         if self.valid:
@@ -173,8 +166,8 @@ class R(InstructionType):
         return rv
 
     def set(self, val):
-        if val < 0 or val > 15:
-            raise ValueError
+        if not 0 <= val < 16:
+            raise ValueError('register number must be between 0 and 15')
         self.__val = val
         self.valid = True
 
@@ -200,7 +193,7 @@ class S(InstructionType):
                 self.__dsplc
                 )
         else:
-            raise ValueError
+            raise ValueError('value is invalid (non-initialized).')
 
     def prnt(self):
         if self.valid:
@@ -220,10 +213,10 @@ class S(InstructionType):
         return rv
 
     def set(self, dsplc, base = 0):
-        if dsplc < 0 or dsplc > 4095:
-            raise ValueError
-        if base < 0 or base > 15:
-            raise ValueError
+        if not  0 <= dsplc < 4096:
+            raise ValueError('displacement must be between 0 and 4095')
+        if not 0 <= base < 16:
+            raise ValueError('register number must be between 0 and 15')
         self.__base = base
         self.__dsplc = dsplc
         self.valid = True
@@ -246,7 +239,7 @@ class X(S):
         if self.valid:
             return ( self.__indx, ) + super(X, self).get()
         else:
-            raise ValueError
+            raise ValueError('value is invalid (non-initialized).')
 
     def prnt(self):
         if self.valid:
@@ -259,8 +252,8 @@ class X(S):
         return super(X, self).value()
 
     def set(self, dsplc, indx = 0, base = 0):
-        if indx < 0 or indx > 15:
-            raise ValueError
+        if not 0 <= indx < 16:
+            raise ValueError('register number must be between 0 and 15')
         self.__indx = indx
         super(X, self).set(dsplc, base)
 
@@ -343,9 +336,9 @@ def get_op(instruction):
 def len_op(op_code):
     code = int(op_code[0][:2], 16)
     if ( code <= 0x98 or
-         ( code >= 0xAC and code <= 0xB1 ) or
-         ( code >= 0xB6 and code <= 0xDF ) or
-         code >= 0xE8
+         0xAC <= code <= 0xB1 or
+         0xB6 <= code <= 0xDF or
+         0xE8 <= code
          ):
         return 2
     else:
@@ -534,12 +527,12 @@ class P_(object):
         elif ch_str[0] == '+':
             ch_str = ch_str[1:]
         int(ch_str)             # check format
-        if length and length * 2 - 1 < len(ch_str):
-            raise ValueError    # check length
+        if length and length * 2 - 1 < len(ch_str): # check length
+            raise ValueError('Invalid length.')
         self.fill__(X_(ch_str + sign_digit).dump())
     def pack(self, ch_str, length = 0):
-        if length and length * 2 - 1 < len(ch_str):
-            raise ValueError    # check length
+        if length and length * 2 - 1 < len(ch_str): # check length
+            raise ValueError('Invalid length.')
         hex_str = ''
         for ch in ch_str:
             hex_str += hex(
@@ -573,16 +566,16 @@ class P_(object):
             elif sign in [ 'DB', 'CR' ]:
                 ch_str += '  '
             else:
-                raise SyntaxError
+                raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         elif hex_val[1] in 'BD':
             if sign in [ '+', '-' ]:
                 ch_str += '-'
             elif sign in [ 'DB', 'CR' ]:
                 ch_str += sign
             else:
-                raise SyntaxError
+                raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         else:
-            raise ValueError
+            raise ValueError('invalid hex value.')
         return ch_str
 
 
@@ -648,16 +641,16 @@ class Z_(object):
             elif sign in [ 'DB', 'CR' ]:
                 ch_str += '  '
             else:
-                raise SyntaxError
+                raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         elif hex_val[0] in 'BD':
             if sign in [ '+', '-' ]:
                 ch_str += '-'
             elif sign in [ 'DB', 'CR' ]:
                 ch_str += sign
             else:
-                raise SyntaxError
+                raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         else:
-            raise ValueError
+            raise ValueError('invalid hex value.')
         return ch_str
 
 
@@ -680,15 +673,15 @@ class F_(object):
         return self.__val
     def set(self, int_str, length = 0):
         if length > 4:
-            raise ValueError
-        if isinstance(int_str, int):
+            raise ValueError('Invalid length.')
+        if isinstance(int_str, int) or isinstance(int_str, long):
             int_val = int_str
         elif isinstance(int_str, str):
             int_val = int(int_str, 10)
         else:
-            raise ValueError
-        if int_val < -0x80000000 or int_val > 0x7FFFFFFF:
-            raise ValueError
+            raise ValueError('value is not a valid number')
+        if not -0x80000000 <= int_val < 0x80000000:
+            raise ValueError('overflow: value too large.')
         self.__val = int_val
     def dump(self):
         if self.__val >= 0:
@@ -739,15 +732,15 @@ class H_(object):
         return self.__val
     def set(self, int_str, length = 0):
         if length > 2:
-            raise ValueError
-        if isinstance(int_str, int):
+            raise ValueError('Invalid length.')
+        if isinstance(int_str, int) or isinstance(int_str, long):
             int_val = int_str
         elif isinstance(int_str, str):
             int_val = int(int_str, 10)
         else:
-            raise ValueError
-        if int_val < -0x8000 or int_val > 0x7FFF:
-            raise ValueError
+            raise ValueError('value is not a valid number')
+        if not -0x8000 <= int_val < 0x8000:
+            raise ValueError('overflow: value too large.')
         self.__val = int_val
     def dump(self):
         if self.__val >= 0:
@@ -796,15 +789,15 @@ class A_(object):
         return self.__val
     def set(self, int_str, length = 0):
         if length > 4:
-            raise ValueError
-        if isinstance(int_str, int):
+            raise ValueError('Invalid length.')
+        if isinstance(int_str, int) or isinstance(int_str, long):
             int_val = int_str
         elif isinstance(int_str, str):
             int_val = int(int_str, 10)
         else:
-            raise ValueError
-        if int_val < 0 or int_val > 0xFFFFFFFF:
-            raise ValueError
+            raise ValueError('value is not a valid number')
+        if not 0 <= int_val < 0x100000000:
+            raise ValueError('overflow: value too large.')
         self.__val = int_val
     def dump(self):
         hex_str = '{0:0>8}'.format(hex(self.__val)[2:])
@@ -993,7 +986,7 @@ def valid_sd(sd_arg_line):
 def value_sd(sd_info):
     sd = get_sd(sd_info)[0]
     if sd.value() == None:
-        raise ValueError
+        raise ValueError('cannot evaluate the given storage type.')
     return ( sd.value(), sd.natual_len, )
 
 ### end of Constant Type Definition

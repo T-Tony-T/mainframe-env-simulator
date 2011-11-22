@@ -31,6 +31,14 @@ def mark4future(feature):
     abort(1, ''.join(['\n\n!!! ', feature, ': feature not supported !!!\n\n']))
 
 
+### Utility Mapping Definition
+fmt_name_map = {    'bw' : 'byte-word',    'hw' : 'half-word',
+                    'fw' : 'full-word',    'dw' : 'double-word',
+                    }
+fmt_align_map = {    'bw' : 1,    'hw' : 2,    'fw' : 4,    'dw' : 8,    }
+align_fmt_map = {    1 : 'bw',    2 : 'hw',    4 : 'fw',    8 : 'dw',    }
+
+
 ### Utility Function Definition
 def c2x(src):
     return core.asm.X_.tr(core.asm.C_(src).dump())

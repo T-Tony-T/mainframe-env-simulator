@@ -1867,6 +1867,7 @@ def pass_2():
     if rc_err <= zPE.RC['WARNING']:
         obj_mod_gen() # write the object module into the corresponding SPOOL
 
+    mem.release()
     return rc_err
 
 

@@ -29,14 +29,120 @@ class Register(Union):
     def __str__(self):
         return '{0:0>8}'.format(hex(self.long)[2:-1].upper())
 
+
+    def __add__(self, other):
+        '''
+        AR  R1,R2       =>      R1 + R2
+        A   R1,addr     =>      R1 + value@addr
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        self_sign = self.sign()
+        self.long += other.long          # perform the addition
+        if ( self_sign * other.sign()  and            # both non-zero
+             self_sign == other.sign() != self.sign() # same sign => diff sign
+             ):
+            # overflow occurs
+            SPR['PSW'].CC = 3
+            if SPR['PSW'].Program_mask & 0b1000 == 0b1000:
+                raise OverflowError('fixed-point overflow exception.')
+        else:
+            SPR['PSW'].CC = self.sign()
+
+    def __sub__(self, other):
+        '''
+        SR  R1,R2       =>      R1 - R2
+        S   R1,addr     =>      R1 - value@addr
+        '''
+        if isinstance(other, Register):
+            self.__add__(Register(- other.long))
+        else:
+            self.__add__(Register(- other))
+
+    def __lshift__(self, other):
+        '''
+        LR  R1,R2       =>      R1 << R2
+        LA  R1,addr     =>      R1 << addr
+        L   R1,addr     =>      R1 << value@addr
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        self.long = other.long
+
+    def __rshift__(self, other):
+        '''
+        ST  R1,addr     =>      R1 >> ( Page, addr )
+        '''
+        if ( len(other) != 2  or
+             not isinstance(other[0], zPE.core.mem.Page)  or
+             not isinstance(other[1], int)  or
+             not 0 <= other[1] < 4096
+             ):
+            raise TypeError('Second operand must be of type `(Page, addr)`.')
+        other[0].store(other[1], self.long)
+
+
+    def sign(self):
+        if self.positive():
+            return 2
+        elif self.negative():
+            return 1
+        else:
+            return 0
+
     def positive(self):
         # 0x80000000 will mask off all but the sign bit
         if self.long & 0x80000000 == 0:
-            return True
+            return self.long != 0
         else:
             return False
     def negative(self):
-        return not self.positive
+        # 0x80000000 will mask off all but the sign bit
+        if self.long & 0x80000000 == 0x80000000:
+            return self.long != 0
+        else:
+            return False
+
+class RegisterPair(object):
+    def __init__(self, even, odd):
+        if not isinstance(even, Register) or not isinstance(odd, Register):
+            raise TypeError('Both operands must be of type `Register`.')
+        self.even = even
+        self.odd  = odd
+
+    def __str__(self):
+        return '{0} {1}'.format(self.even, self.odd)
+
+    def __mul__(self, other):
+        '''
+        MR  R2,R3       =>      R2 * R3
+        M   R2,addr     =>      R2 * value@addr
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        res = '{0:0>16}'.format(hex(self.odd.long * other.long)[2:-1].upper())
+        self.even.long = int(res[ :8], 16)
+        self.odd.long  = int(res[8: ], 16)
+
+    def __div__(self, other):
+        self.__truediv__(other)
+    def __truediv__(self, other):
+        '''
+        DR  R2,R3       =>      R2 / R3
+        D   R2,addr     =>      R2 / value@addr
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        if other.sign() == 0:       # zero-division
+            raise OverflowError('fixed-point divide exception.')
+
+        dividend = (self.even.long << 32) + self.odd.long
+        self.even.long = abs(dividend % other.long)
+        res = (dividend - self.even.long) / other.long
+
+        if not -0x80000000 <= res < 0x80000000: # quotient too large
+            raise OverflowError('fixed-point divide exception.')
+        self.odd.long  = res
 # end of GPR class definition
 
 ## Program Status Word
@@ -193,10 +299,10 @@ class PSW(object):
 GPR_NUM = 16                    # number of general purpose registers
 
 GPR = [                         # general purpose registers
-    Register(0), Register(0), Register(0), Register(0), # R0  ~ R3
-    Register(0), Register(0), Register(0), Register(0), # R4  ~ R7
-    Register(0), Register(0), Register(0), Register(0), # R8  ~ R11
-    Register(0), Register(0), Register(0), Register(0)  # R12 ~ R15
+    Register(0x0), Register(0x1), Register(0x2), Register(0x3), # R0  ~ R3
+    Register(0x4), Register(0x5), Register(0x6), Register(0x7), # R4  ~ R7
+    Register(0x8), Register(0x9), Register(0xA), Register(0xB), # R8  ~ R11
+    Register(0xC), Register(0xD), Register(0xE), Register(0xF)  # R12 ~ R15
     ]
 
 def parse_GPR(reg_str):
@@ -215,7 +321,7 @@ def parse_GPR(reg_str):
         else:
             reg_num = -1        # invalidate reg_str
 
-    if 0 <= reg_num  and  reg_num < zPE.core.reg.GPR_NUM:
+    if 0 <= reg_num < zPE.core.reg.GPR_NUM:
         return ( reg_num, equ, )
     else:
         return (   -1,    equ, )
@@ -227,3 +333,4 @@ SPR = {                         # special purpose registers
 
 SPR['PSW'].Channel_masks = 127  # turn on all internal channels
 SPR['PSW'].E = 1                # also turn on external channel
+SPR['PSW'].PSW_key = 1          # superuser mode
