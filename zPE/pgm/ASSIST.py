@@ -76,7 +76,7 @@ def init(step):
     zPE.pgm.ASMA90.pass_2()
     TIME['asm_end'] = time()
 
-    err_cnt = __PARSE_OUT_ASM(limit, False)
+    err_cnt = __PARSE_OUT_ASM(limit)
 
     # calculate memory needed to execute the module
     required_mem_sz = 0
@@ -119,7 +119,7 @@ def init(step):
     rc = zPE.pgm.HEWLDRGO.go(zPE.pgm.HEWLDRGO.load())
     TIME['exec_end'] = time()
 
-    __PARSE_OUT_LDR(rc, False)
+    __PARSE_OUT_LDR(rc)
 
     zPE.pgm.HEWLDRGO.init_res()   # release resources
 
@@ -160,7 +160,7 @@ def __MISSED_FILE(step, i):
 
 
 from ASMA90 import TITLE
-def __PARSE_OUT_ASM(limit, debug = True):
+def __PARSE_OUT_ASM(limit):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
@@ -374,7 +374,7 @@ def __PARSE_OUT_ASM(limit, debug = True):
     spo.append(ctrl, '*** ASSEMBLY TIME = {0:>8.3f} SECS, '.format(diff),
                '{0:>8} STATEMENT/SEC ***\n'.format(stmt_p_sec))
 
-    if not debug:
+    if not zPE.debug_mode():
         return cnt_err          # regular process end here
     #
     # debugging information
@@ -501,7 +501,15 @@ def __PARSE_OUT_ASM(limit, debug = True):
 
     print '\n\nObject Deck:'
     for line in zPE.core.SPOOL.retrive('SYSLIN'):
-        print b2a_hex(line)
+        line = b2a_hex(line)
+        print ' '.join(re.findall(r'(....)', line[0   :  32])), '  ',
+        print ' '.join(re.findall(r'(....)', line[32  :  64])), '  ',
+        print ' '.join(re.findall(r'(....)', line[64  :  96]))
+        print '{0:42}'.format(''),
+        print ' '.join(re.findall(r'(....)', line[96  : 128])), '  ',
+        print ' '.join(re.findall(r'(....)', line[128 : 160]))
+        print
+    print
     # end of debugging
     return cnt_err
 
@@ -555,13 +563,14 @@ def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):
     return line_num + 2
 
 
-def __PARSE_OUT_LDR(rc, debug = True):
+def __PARSE_OUT_LDR(rc):
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # (actual) output SPOOL
-
-    mem_dump   = zPE.pgm.HEWLDRGO.MEM_DUMP
 
     ldr_ins    = zPE.pgm.HEWLDRGO.INSTRUCTION
     ldr_br     = zPE.pgm.HEWLDRGO.BRANCHING
+
+    ldr_except = zPE.pgm.HEWLDRGO.EXCEPTION
+    mem_dump   = zPE.pgm.HEWLDRGO.MEM_DUMP
 
 
     ctrl = '0'
@@ -583,10 +592,14 @@ def __PARSE_OUT_LDR(rc, debug = True):
         msg = 'ABNORMAL'
         # generate err msgs here
         spo.append('1', 'ASSIST COMPLETION DUMP\n')
-        spo.append(ctrl, 'PSW AT ABEND ', str(zPE.core.reg.SPR['PSW']),
-                   '       COMPLETION CODE   SYSTEM = ',
-                   '06C', # error code; need info
-                   ' SPECIFICATION\n')
+        spo.append(
+            ctrl, 'PSW AT ABEND ', str(zPE.core.reg.SPR['PSW']),
+            '       COMPLETION CODE {0:>8} = {1} {2}\n'.format(
+                { 'S': 'SYSTEM', 'U':'UTILITY' }[ldr_except['type']],
+                ldr_except['code'],
+                ldr_except['text'][:52] # only capable for 52 charactors
+                )
+            )
 
         # instructions tracing
         spo.append(ctrl, '** TRACE OF INSTRUCTIONS JUST BEFORE TERMINATION: PSW BITS SHOWN ARE THOSE BEFORE CORRESPONDING INSTRUCTION DECODED ***\n')
@@ -633,7 +646,7 @@ def __PARSE_OUT_LDR(rc, debug = True):
                    '    '.join([ str(r) for r in zPE.core.reg.GPR[8: ] ]),
                    '\n')
         spo.append(ctrl, ' FLTR 0-6      '
-                   '        '.join([ '  need    info  ' ] * 4), # need info
+                   '        '.join([ '** need  info **' ] * 4), # need info
                    '\n')
 
         # storage dump
@@ -644,4 +657,4 @@ def __PARSE_OUT_LDR(rc, debug = True):
         spo.append(ctrl, '\n')
     else:
         msg = 'NORMAL'
-    spo.append(ctrl, '*** AM004 - ', msg, 'USER TERMINATION BY RETURN ***\n')
+    spo.append(ctrl, '*** AM004 - ', msg, ' USER TERMINATION BY RETURN ***\n')

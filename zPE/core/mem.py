@@ -204,7 +204,7 @@ class Page(Structure):
 
 
 ## Virtual Memory
-# MemoryError:   addressing exception
+
 class Memory(object):
     allocation = {
         # ( loc_s, loc_e ) : Memory

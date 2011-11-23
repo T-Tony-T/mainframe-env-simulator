@@ -18,6 +18,8 @@ def main(argv = sys.argv):
         return 0
 
     zPE.conf.read_rc()
+    zPE.debug_mode(args.debug)
+
     rc = submit(args.job_file)
 
     if args.output:
@@ -81,7 +83,7 @@ def prepare_option(prog):
         description =
 '''
     %(prog)s  -h | -l
-    %(prog)s  [-o OUTPUT_FILE]  JOB_FILE
+    %(prog)s  [-o OUTPUT_FILE]  [--debug]  JOB_FILE
 '''
         )
 
@@ -96,6 +98,13 @@ def prepare_option(prog):
         )
 
     # optional arguments
+    parser.add_argument(
+        '-D', '--debug',
+        action = 'store_true',
+        default = False,
+        help = 'print debugging information along execution',
+        dest = 'debug'
+        )
     parser.add_argument(
         '-l', '--list',
         action = 'store_true',

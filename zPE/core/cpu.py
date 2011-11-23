@@ -12,13 +12,13 @@ from asm import len_op
 def fetch():
     addr = SPR['PSW'].Instruct_addr
     if addr % 2 != 0:
-        raise ValueError('specification exception')
+        raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
 
     pg_i = addr / 4096          # index of the page containing the address
     addr = addr % 4096          # relative address within the page
 
     if pg_i not in Memory._pool_allocated:
-        raise ValueError('protection exception')
+        raise ValueError('S', '0C4', 'PROTECTION EXCEPTION')
     page = Memory._pool_allocated[pg_i] # get the actual page
 
     op_code = page[addr]
@@ -27,13 +27,13 @@ def fetch():
         op_code += page[addr]
         addr += 1
     if op_code not in ins_op:
-        raise ValueError('operation exception')
+        raise ValueError('S', '0C1', 'OPERATION EXCEPTION')
 
     byte_cnt = ins_op[op_code][0] # only fetch the argument(s) themselves
     if addr + byte_cnt > 4096:
         # retrieve next page, if available
         if pg_i + 1 not in Memory._pool_allocated:
-            raise ValueError('protection exception')
+            raise ValueError('S', '0C4', 'PROTECTION EXCEPTION')
         next_page = Memory._pool_allocated[pg_i + 1]
         arg = page[addr : ] + next_page[ : addr + byte_cnt - 4096]
     else:
@@ -48,6 +48,14 @@ def execute(ins):
     SPR['PSW'].ILC /= 2         # further reduce to num of halfwords
 
     ins_op[ins[0]][1](ins[1]) # execute the instruction against the arguments
+
+    if zPE.debug_mode():
+        print 'Exec:', ins
+        print '  '.join([ str(r) for r in GPR[:8] ])
+        print '  '.join([ str(r) for r in GPR[8:] ])
+        print ''.join(Memory.allocation.values()[0].dump_all())
+        print ''.join(Memory.allocation.values()[1].dump_all())
+        print
     return
 
 
@@ -111,7 +119,7 @@ def __reg(r):
 def __pair(r):
     indx = int(r, 16)
     if indx % 2 != 0:
-        raise ValueError('specification exception')
+        raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
     return RegisterPair(GPR[indx], GPR[indx + 1])
 
 def __addr(d, x, b):
@@ -128,13 +136,13 @@ def __addr(d, x, b):
 def __page(d, x, b, al = 4):      # default to fullword boundary
     addr = __addr(d, x, b)
     if addr % al != 0:
-        raise ValueError('specification exception')
+        raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
     
     pg_i = addr / 4096          # index of the page containing the address
     addr = addr % 4096          # relative address within the page
 
     if pg_i not in Memory._pool_allocated:
-        raise ValueError('protection exception')
+        raise ValueError('S', '0C4', 'PROTECTION EXCEPTION')
     return ( Memory._pool_allocated[pg_i], int(addr) )
 
 def __deref(d, x, b, al = 4):     # default to fullword boundary

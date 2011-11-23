@@ -4,10 +4,17 @@
 # modules that will be auto imported
 import core, pgm, conf
 
-import os, sys
-import re
+import os, sys, re
+
 
 ### Diagnostic Function Definition
+DEBUG_MODE = [ False ]
+def debug_mode(enable_debug = None):
+    if enable_debug == None:
+        return DEBUG_MODE[0]
+    else:
+        DEBUG_MODE[0] = enable_debug
+
 def abort(rc, *msg):
     '''
     Abort the entire program with the given return code and

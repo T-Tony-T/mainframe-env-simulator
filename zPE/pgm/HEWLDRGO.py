@@ -31,12 +31,13 @@
 
 import zPE
 
-import zPE.core.cpu as CPU
-
+import sys
 from time import strftime
 from random import randint
 from binascii import b2a_hex
 from threading import Timer
+
+import zPE.core.cpu as CPU
 
 
 FILE = [ 'SYSLIN', 'SYSLOUT' ]  # SYSLIB not required
@@ -71,8 +72,6 @@ def load_local_conf(conf_dic):
 
 ### resource definition
 
-MEM_DUMP = [ ]                  # the entire memory dump at ABEND
-
 INSTRUCTION = [                 # Instruction history
     # [ PSW, MNEMONIC ]
     ]
@@ -84,6 +83,13 @@ def record_ins(psw, ins):
     if ins[0][0] in '04' and ins[0][1] in '567':
         BRANCHING.append([ psw, ''.join(ins) ])
     return ins
+
+
+EXCEPTION = {
+    # e.g.      type : 'S',  code : '06C',  text : 'SPECIFICATION EXCEPTION',
+    }
+
+MEM_DUMP = [ ]                  # the entire memory dump at ABEND
 
 
 from ASMA90 import ExternalSymbol
@@ -99,13 +105,18 @@ SCOPE = {
 ### end of resource definition
 
 def init_res():
-    del MEM_DUMP[:]             # clear memory dump
-
     del INSTRUCTION[:]          # clear Instruction history
     del BRANCHING[:]            # clear Branching history
 
     CSECT.clear()               # clear Control SECTion records
     SCOPE.clear()               # clear scope records
+
+    EXCEPTION['type'] = None
+    EXCEPTION['code'] = None
+    EXCEPTION['text'] = None
+
+    del MEM_DUMP[:]             # clear memory dump
+
 
 
 def run(step):
@@ -304,13 +315,28 @@ def go(mem):
             CPU.execute(record_ins(psw.snapshot(), CPU.fetch()))
         t.cancel()              # stop the timer
         rc = zPE.RC['NORMAL']
-    except:
+    except Exception as e:
         # ABEND CODE; need info
         t.cancel()              # stop the timer
+        if isinstance(e, ValueError):
+            EXCEPTION['type'] = e.args[0]
+            EXCEPTION['code'] = e.args[1]
+            EXCEPTION['text'] = e.args[2]
+        else:
+            EXCEPTION['type'] = 'S'
+            EXCEPTION['code'] = '0C0'
+            EXCEPTION['text'] = 'UNKNOWN EXCEPTION'
+            sys.stderr.write(   # print out the actual error
+                'Exception: {0}\n'.format(
+                    ''.join([ str(arg) for arg in e.args ])
+                    )
+                )
         MEM_DUMP.extend(mem.dump_all())
         rc = zPE.RC['ERROR']
     if timeouted:
-        # S322; need info
+        EXCEPTION['code'] = '322'
+        EXCEPTION['type'] = 'S'
+        EXCEPTION['text'] = 'TIME EXCEEDED THE SPECIFIED LIMIT'
         MEM_DUMP.extend(mem.dump_all())
         rc = zPE.RC['SEVERE']
 

@@ -45,7 +45,7 @@ class Register(Union):
             # overflow occurs
             SPR['PSW'].CC = 3
             if SPR['PSW'].Program_mask & 0b1000 == 0b1000:
-                raise OverflowError('fixed-point overflow exception.')
+                raise ValueError('S', '0C8', 'FIXED POINT OVERFLOW EXCEPTION')
         else:
             SPR['PSW'].CC = self.sign()
 
@@ -134,14 +134,14 @@ class RegisterPair(object):
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
         if other.sign() == 0:       # zero-division
-            raise OverflowError('fixed-point divide exception.')
+            raise ValueError('S', '0C8', 'FIXED POINT DIVIDE EXCEPTION')
 
         dividend = (self.even.long << 32) + self.odd.long
         self.even.long = abs(dividend % other.long)
         res = (dividend - self.even.long) / other.long
 
         if not -0x80000000 <= res < 0x80000000: # quotient too large
-            raise OverflowError('fixed-point divide exception.')
+            raise ValueError('S', '0C9', 'FIXED POINT DIVIDE EXCEPTION')
         self.odd.long  = res
 # end of GPR class definition
 

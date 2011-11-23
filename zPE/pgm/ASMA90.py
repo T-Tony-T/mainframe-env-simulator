@@ -1882,15 +1882,14 @@ def obj_mod_gen():
                 rec + OBJMOD_SEQ(TITLE[0], len(spo) + 1)
                 ))
 
-    # for debug only
-    obj_dump = zPE.core.SPOOL.new(
-        'OBJMOD', 'o', 'file',
-        [ 'KC03I6E', 'TONY', 'OBJMOD' ],
-        [ 'objmod' ]
-        )
-    obj_dump.spool = spo.spool
-    zPE.flush(obj_dump)
-    # for debug only
+    if zPE.debug_mode():
+        obj_dump = zPE.core.SPOOL.new(
+            'OBJMOD', 'o', 'file',
+            [ 'KC03I6E', 'TONY', 'OBJMOD' ],
+            [ 'objmod' ]
+            )
+        obj_dump.spool = spo.spool
+        zPE.flush(obj_dump)
 
     
 ### Supporting Functions
