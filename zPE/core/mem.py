@@ -119,21 +119,17 @@ class Page(Structure):
 
             for indx in range(0, 4):
                 line += self.__getitem__(slice(pos_s, pos_s + 4)) + ' '
-                char_arr += self.__to_pack(
-                    self.__get_slice(slice(pos_s, pos_s + 4))
-                    )
+                char_arr += zPE.x2c(self.__getitem__(slice(pos_s, pos_s + 4)))
                 pos_s += 4
             line += '   '
             for indx in range(0, 4):
                 line += self.__getitem__(slice(pos_s, pos_s + 4)) + ' '
-                char_arr += self.__to_pack(
-                    self.__get_slice(slice(pos_s, pos_s + 4))
-                    )
+                char_arr += zPE.x2c(self.__getitem__(slice(pos_s, pos_s + 4)))
                 pos_s += 4
 
             rv.append('{0}  *{1}*\n'.format(
                     line,
-                    re.sub(r'[^\x21-\x7e]', '.', char_arr) # show invisible char
+                    re.sub(r'[^\x20-\x7e]', '.', char_arr) # show invisible char
                     ))
 
             if pos_s >= pos_e:

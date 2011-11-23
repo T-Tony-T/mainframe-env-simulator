@@ -295,8 +295,10 @@ op_code = {
     'LA'   : lambda: ('41', R(1).wo(), X(2).ro().al('fw')),
     'LCR'  : lambda: ('13', R(1).rw(), R(2).ro()),
     'LM'   : lambda: ('98', R(1).wo(), R(3).wo(), S(2).ro().al('fw')),
+    'LNR'  : lambda: ('11', R(1).rw(), R(2).ro()),
+    'LPR'  : lambda: ('10', R(1).rw(), R(2).ro()),
     'LR'   : lambda: ('18', R(1).wo(), R(2).ro()),
-    'LTR'  : lambda: ('12', R(1).wo(), R(2).ro()),
+    'LTR'  : lambda: ('12', R(1).rw(), R(2).ro()),
 
     'M'    : lambda: ('5C', R(1).rw(), X(2).ro().al('fw')),
     'MR'   : lambda: ('1C', R(1).rw(), R(2).ro()),

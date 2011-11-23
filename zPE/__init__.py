@@ -61,6 +61,7 @@ def dic_find_key(dic, val):
     '''Return the (first) key of the dic that has the given val'''
     return [k for (k, v) in dic.iteritems() if v == val][0]
 
+
 def resplit_sq(pattern, string, maxsplit = 0):
     '''See resplit() for detials'''
     return resplit(pattern, string, "'", "'", maxsplit)

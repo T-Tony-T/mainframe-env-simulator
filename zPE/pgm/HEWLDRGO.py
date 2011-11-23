@@ -288,6 +288,7 @@ def load():
 def go(mem):
     psw = zPE.core.reg.SPR['PSW']
     ldr_mem = zPE.core.mem.Memory(mem.max_pos, 18 * 4) # 18F RSV
+    ldr_mem[mem.max_pos] = zPE.c2x('RSV ') * 18
 
     prsv = zPE.core.reg.GPR[13] # register 13: parent register saving area
     rtrn = zPE.core.reg.GPR[14] # register 14: return address

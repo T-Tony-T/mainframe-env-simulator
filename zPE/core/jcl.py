@@ -11,7 +11,10 @@ from time import time, localtime, strftime, strptime
 def parse(job):
     invalid_lable = []          # record all invalid lables
 
-    fp = open(job, 'r')         # this is not under the control of SMS
+    if job == '-':
+        fp = sys.stdin
+    else:
+        fp = open(job, 'r')     # this is not under the control of SMS
     sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
     sp2 = zPE.core.SPOOL.retrive('JESJCL')   # SPOOL No. 02
 

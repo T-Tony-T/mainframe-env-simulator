@@ -11,6 +11,7 @@ from ctypes import *            # for Union and C-Style array
 class Register(Union):
     _fields_ = [
         ('long', c_ulong),
+        ('int',  c_long),
         ('bytes', c_ubyte * 4),
         ]
 
@@ -32,8 +33,8 @@ class Register(Union):
 
     def __add__(self, other):
         '''
-        AR  R1,R2       =>      R1 + R2
-        A   R1,addr     =>      R1 + value@addr
+        AR   R1,R2      =>      R1 + R2
+        A    R1,addr    =>      R1 + value@addr
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
@@ -41,45 +42,173 @@ class Register(Union):
         self.long += other.long          # perform the addition
         if ( self_sign * other.sign()  and            # both non-zero
              self_sign == other.sign() != self.sign() # same sign => diff sign
-             ):
-            # overflow occurs
-            SPR['PSW'].CC = 3
-            if SPR['PSW'].Program_mask & 0b1000 == 0b1000:
-                raise ValueError('S', '0C8', 'FIXED POINT OVERFLOW EXCEPTION')
-        else:
-            SPR['PSW'].CC = self.sign()
+             ):                 # overflow occurs
+            return self.__overflow()
+        else:                   # no overflow, test sign
+            return self.test()
 
     def __sub__(self, other):
         '''
-        SR  R1,R2       =>      R1 - R2
-        S   R1,addr     =>      R1 - value@addr
+        SR   R1,R2      =>      R1 - R2
+        S    R1,addr    =>      R1 - value@addr
         '''
         if isinstance(other, Register):
-            self.__add__(Register(- other.long))
+            return self.__add__(Register(- other.int))
         else:
-            self.__add__(Register(- other))
+            return self.__add__(Register(- other))
 
-    def __lshift__(self, other):
+
+    def __nonzero__(self):
+        if self.long == 0:
+            SPR['PSW'].CC = 0
+        else:
+            SPR['PSW'].CC = 1
+        return SPR['PSW'].CC
+
+    def __and__(self, other):
         '''
-        LR  R1,R2       =>      R1 << R2
-        LA  R1,addr     =>      R1 << addr
-        L   R1,addr     =>      R1 << value@addr
+        NR   R1,R2      =>      R1 & R2
+        N    R1,addr    =>      R1 & value@addr
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        self.long &= other.long
+        return bool(self)
+
+    def __or__(self, other):
+        '''
+        OR   R1,R2      =>      R1 | R2
+        O    R1,addr    =>      R1 | value@addr
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        self.long |= other.long
+        return bool(self)
+
+    def __xor__(self, other):
+        '''
+        XR   R1,R2      =>      R1 ^ R2
+        X    R1,addr    =>      R1 ^ value@addr
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        self.long ^= other.long
+        return bool(self)
+
+
+    def cmp(self, other):
+        '''
+        CR   R1,R2      =>      R1.cmp(R2)
+        C    R1,addr    =>      R1.cmp(value@addr)
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        SPR['PSW'].CC = self.__compare(self.int, other.int)
+        return SPR['PSW'].CC
+
+    def cmp_lgc(self, other):
+        '''
+        CLR  R1,R2      =>      R1.cmp_lgc(R2)
+        CL   R1,addr    =>      R1.cmp_lgc(value@addr)
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        SPR['PSW'].CC = self.__compare(self.long, other.long)
+        return SPR['PSW'].CC
+
+
+    def load(self, other):
+        '''
+        LR   R1,R2      =>      R1.load(R2)
+        LA   R1,addr    =>      R1.load(addr)
+        L    R1,addr    =>      R1.load(value@addr)
+        LM   R1,R2,addr =>    [ GPR[(R1+offset)%16].load(value@addr+offset*4)
+                                for offset in range( [
+                                    R1 + i for i in range(16)
+                                    ][R2 - R1 + 1] - R1 )
+                                ]
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
         self.long = other.long
+        return self
 
-    def __rshift__(self, other):
+    def inc(self, value, pos = 3):
         '''
-        ST  R1,addr     =>      R1 >> ( Page, addr )
+        IC   R1,addr    =>      R1.inc(value@addr)
+        ICM  R1,addr    =>    [ R1.inc(value@addr+pos, pos)
+                                for pos in (
+                                    lambda s = '{0:0>4}'.format(bin(Mask)[2:]):
+                                        [ i for i in range(4) if s[i] == '1' ]
+                                    )()
+                                ]
         '''
-        if ( len(other) != 2  or
-             not isinstance(other[0], zPE.core.mem.Page)  or
-             not isinstance(other[1], int)  or
-             not 0 <= other[1] < 4096
+        self[pos + 1] = value
+        return self
+
+    def store(self, page, addr):
+        '''
+        ST   R1,addr    =>      R1.stort(Page, addr_into_page)
+        STM  R1,R2,addr =>    [ GPR[(R1+offset)%16].store(Page, addr_into_page)
+                                for offset in range( [
+                                    R1 + i for i in range(16)
+                                    ][R2 - R1 + 1] - R1 )
+                                ]
+        '''
+        if ( not isinstance(page, zPE.core.mem.Page)  or
+             not isinstance(addr, int)  or
+             not 0 <= addr < 4096
              ):
-            raise TypeError('Second operand must be of type `(Page, addr)`.')
-        other[0].store(other[1], self.long)
+            raise TypeError('Operands must be of type `Page` and `int`.')
+        page.store(addr, self.long)
+        return self
+
+    def stc(self, page, addr, pos = 3):
+        '''
+        STC  R1,addr    =>      R1.stc(Page, addr_into_page)
+        STCM R1,addr    =>    [ R1.stc(Page, addr_into_page, pos)
+                                for pos in (
+                                    lambda s = '{0:0>4}'.format(bin(Mask)[2:]):
+                                        [ i for i in range(4) if s[i] == '1' ]
+                                    )()
+                                ]
+        '''
+        page[addr] = self[pos + 1]
+        return self
+
+
+    def set_abs(self):
+        '''
+        LPR  R1,R2      =>      R1.load(R2).set_abs()
+        '''
+        if self.long == 0x80000000: # overflow occurs, -0x80000000 == 0x80000000
+            return self.__overflow() # no need to change the value
+        else:
+            self.long = abs(self.int)
+            return self.test()
+
+    def neg_abs(self):
+        '''
+        LNR  R1,R2      =>      R1.load(R2).neg_abs()
+        '''
+        self.long = -abs(self.int)
+        return self.test()
+
+    def neg_val(self):
+        '''
+        LCR  R1,R2      =>      R1.load(R2).neg_val()
+        '''
+        if self.positive():
+            return self.neg_abs()
+        else:
+            return self.set_abs()
+
+    def test(self):
+        '''
+        LTR  R1,R2      =>      R1.load(R2).test()
+        '''
+        SPR['PSW'].CC = self.sign()
+        return self
 
 
     def sign(self):
@@ -91,17 +220,27 @@ class Register(Union):
             return 0
 
     def positive(self):
-        # 0x80000000 will mask off all but the sign bit
-        if self.long & 0x80000000 == 0:
-            return self.long != 0
-        else:
-            return False
+        return self.int > 0
+
     def negative(self):
-        # 0x80000000 will mask off all but the sign bit
-        if self.long & 0x80000000 == 0x80000000:
-            return self.long != 0
+        return self.int < 0
+
+
+    ### supporting functions
+    def __compare(self, left, right):
+        if left == right:
+            return 0
+        elif left < right:
+            return 1
         else:
-            return False
+            return 2
+
+    def __overflow(self):
+        SPR['PSW'].CC = 3
+        if SPR['PSW'].Program_mask & 0b1000 == 0b1000:
+            raise ValueError('S', '0C8', 'FIXED POINT OVERFLOW EXCEPTION')
+        return self
+# end of Register class
 
 class RegisterPair(object):
     def __init__(self, even, odd):
@@ -115,21 +254,22 @@ class RegisterPair(object):
 
     def __mul__(self, other):
         '''
-        MR  R2,R3       =>      R2 * R3
-        M   R2,addr     =>      R2 * value@addr
+        MR   R2,R3      =>      R2 * R3
+        M    R2,addr    =>      R2 * value@addr
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
         res = '{0:0>16}'.format(hex(self.odd.long * other.long)[2:-1].upper())
         self.even.long = int(res[ :8], 16)
         self.odd.long  = int(res[8: ], 16)
+        return self
 
     def __div__(self, other):
-        self.__truediv__(other)
+        return self.__truediv__(other)
     def __truediv__(self, other):
         '''
-        DR  R2,R3       =>      R2 / R3
-        D   R2,addr     =>      R2 / value@addr
+        DR   R2,R3      =>      R2 / R3
+        D    R2,addr    =>      R2 / value@addr
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
@@ -142,7 +282,8 @@ class RegisterPair(object):
 
         if not -0x80000000 <= res < 0x80000000: # quotient too large
             raise ValueError('S', '0C9', 'FIXED POINT DIVIDE EXCEPTION')
-        self.odd.long  = res
+        self.odd.long = res
+        return self
 # end of GPR class definition
 
 ## Program Status Word

@@ -53,7 +53,7 @@ def execute(ins):
         print 'Exec:', ins
         print '  '.join([ str(r) for r in GPR[:8] ])
         print '  '.join([ str(r) for r in GPR[8:] ])
-        print ''.join(Memory.allocation.values()[0].dump_all())
+        print ''.join(Memory.allocation.values()[0].dump_all()),
         print ''.join(Memory.allocation.values()[1].dump_all())
         print
     return
@@ -76,45 +76,59 @@ ins_op = {
     '05'   : ( 1, lambda s : None ),
     '06'   : ( 1, lambda s : None ),
     '07'   : ( 1, lambda s : None ),
-    '12'   : ( 1, lambda s : None ),
-    '13'   : ( 1, lambda s : None ),
-    '14'   : ( 1, lambda s : None ),
-    '15'   : ( 1, lambda s : None ),
-    '16'   : ( 1, lambda s : None ),
-    '17'   : ( 1, lambda s : None ),
-    '18'   : ( 1, lambda s : __reg(s[0]) << __reg(s[1]) ),
-    '19'   : ( 1, lambda s : None ),
+    '10'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).set_abs() ),
+    '11'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).neg_abs() ),
+    '12'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).test() ),
+    '13'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).neg_val() ),
+    '14'   : ( 1, lambda s : __reg(s[0]) & __reg(s[1]) ),
+    '15'   : ( 1, lambda s : __reg(s[0]).cmp_lgc(__reg(s[1])) ),
+    '16'   : ( 1, lambda s : __reg(s[0]) | __reg(s[1]) ),
+    '17'   : ( 1, lambda s : __reg(s[0]) ^ __reg(s[1]) ),
+    '18'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])) ),
+    '19'   : ( 1, lambda s : __reg(s[0]).cmp(__reg(s[1])) ),
     '1A'   : ( 1, lambda s : __reg(s[0])  + __reg(s[1]) ),
     '1B'   : ( 1, lambda s : __reg(s[0])  - __reg(s[1]) ),
     '1C'   : ( 1, lambda s : __pair(s[0]) * __reg(s[1]) ),
     '1D'   : ( 1, lambda s : __pair(s[0]) / __reg(s[1]) ),
-    '41'   : ( 3, lambda s : __reg(s[0]) << __addr(s[3:6], s[1], s[2]) ),
-    '42'   : ( 3, lambda s : None ),
-    '43'   : ( 3, lambda s : None ),
+    '41'   : ( 3, lambda s : __reg(s[0]).load( __addr(s[3:6], s[1], s[2])) ),
+    '42'   : ( 3, lambda s : __reg(s[0]).stc(* __page(s[3:6], s[1], s[2], 1)) ),
+    '43'   : ( 3, lambda s : __reg(s[0]).inc(  __addr(s[3:6], s[1], s[2], 1)) ),
     '44'   : ( 3, lambda s : None ),
     '45'   : ( 3, lambda s : None ),
     '46'   : ( 3, lambda s : None ),
     '47'   : ( 3, lambda s : None ),
-    '50'   : ( 3, lambda s : __reg(s[0]) >> __page(s[3:6], s[1], s[2]) ),
-    '54'   : ( 3, lambda s : None ),
-    '55'   : ( 3, lambda s : None ),
-    '56'   : ( 3, lambda s : None ),
-    '57'   : ( 3, lambda s : None ),
-    '58'   : ( 3, lambda s : __reg(s[0]) << __deref(s[3:6], s[1], s[2]) ),
-    '59'   : ( 3, lambda s : None ),
+    '50'   : ( 3, lambda s : __reg(s[0]).store(* __page(s[3:6], s[1], s[2])) ),
+    '54'   : ( 3, lambda s : __reg(s[0]) & __deref(s[3:6], s[1], s[2]) ),
+    '55'   : ( 3, lambda s : __reg(s[0]).cmp_lgc(__deref(s[3:6], s[1], s[2])) ),
+    '56'   : ( 3, lambda s : __reg(s[0]) | __deref(s[3:6], s[1], s[2]) ),
+    '57'   : ( 3, lambda s : __reg(s[0]) ^ __deref(s[3:6], s[1], s[2]) ),
+    '58'   : ( 3, lambda s : __reg(s[0]).load(__deref(s[3:6], s[1], s[2])) ),
+    '59'   : ( 3, lambda s : __reg(s[0]).cmp(__deref(s[3:6], s[1], s[2])) ),
     '5A'   : ( 1, lambda s : __reg(s[0])  + __deref(s[3:6], s[1], s[2]) ),
     '5B'   : ( 1, lambda s : __reg(s[0])  - __deref(s[3:6], s[1], s[2]) ),
     '5C'   : ( 1, lambda s : __pair(s[0]) * __deref(s[3:6], s[1], s[2]) ),
     '5D'   : ( 1, lambda s : __pair(s[0]) / __deref(s[3:6], s[1], s[2]) ),
-    '90'   : ( 3, lambda s : None ),
-    '98'   : ( 3, lambda s : None ),
+    '90'   : ( 3, lambda s : [
+            __reg(s[0], offset).store(*__page(s[3:6], '0', s[2], 4, offset))
+            for offset in (
+                lambda R1 = int(s[0], 16), R2 = int(s[1], 16) :
+                    range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
+                )() # this handles the case when R1 > R2 using negative index
+            ] ),
+    '98'   : ( 3, lambda s : [
+            __reg(s[0], offset).load(__deref(s[3:6], '0', s[2], 4, offset))
+            for offset in (
+                lambda R1 = int(s[0], 16), R2 = int(s[1], 16) :
+                    range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
+                )() # this handles the case when R1 > R2 using negative index
+            ] ),
     }
 ###
 
 ### Internal Functions
 
-def __reg(r):
-    return GPR[int(r, 16)]
+def __reg(r, offset = 0):
+    return GPR[ int(r, 16) + offset - 16 ]
 
 def __pair(r):
     indx = int(r, 16)
@@ -133,8 +147,8 @@ def __addr(d, x, b):
         base = __reg(b).long
     return indx + base + int(d, 16)
 
-def __page(d, x, b, al = 4):      # default to fullword boundary
-    addr = __addr(d, x, b)
+def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
+    addr = __addr(d, x, b) + offset * al
     if addr % al != 0:
         raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
     
@@ -145,6 +159,6 @@ def __page(d, x, b, al = 4):      # default to fullword boundary
         raise ValueError('S', '0C4', 'PROTECTION EXCEPTION')
     return ( Memory._pool_allocated[pg_i], int(addr) )
 
-def __deref(d, x, b, al = 4):     # default to fullword boundary
-    ( page, addr ) = __page(d, x, b, al)
+def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
+    ( page, addr ) = __page(d, x, b, al, offset)
     return page.retrieve(addr, zPE.align_fmt_map[al])
