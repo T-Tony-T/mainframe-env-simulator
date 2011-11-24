@@ -1314,12 +1314,12 @@ class zEditBuffer(z_ABC):
         if self.name == '*scratch*':
             # tmp buffer
             self.buffer.set_text(
-'''//*
-//* This buffer is for notes you don't want to save.
-//* If you want to create a file, do that with
-//*   {0}
-//* or save this buffer explicitly.
-//*
+'''*
+* This buffer is for notes you don't want to save.
+* If you want to create a file, do that with
+*   {0}
+* or save this buffer explicitly.
+*
 '''.format('"Open a New Buffer" -> Right Click -> "New File"')
 )
             self.writable = False # whether can be saved

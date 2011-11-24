@@ -147,7 +147,7 @@ class BaseFrame(object):
             os.path.join(os.path.dirname(__file__), 'image', 'submit_test.png')
             )
         self.tool_submit_wrap = gtk.ToolButton(bttn_icon)
-        self.tool_submit_wrap.set_tooltip_text('Test Run the Buffer Content With Default JCL')
+        self.tool_submit_wrap.set_tooltip_text('Test Run the Source File With Default JCL')
         # ------------------------
         self.tool_config = gtk.ToolButton(gtk.STOCK_PREFERENCES)
         self.tool_config.set_tooltip_text('Show the Config Window')
@@ -463,7 +463,7 @@ class BaseFrame(object):
                 pathname = zComp.io_encap.norm_path_list(buff.path[:-1])
                 basename = buff.path[-1]
             else:
-                pathname = zPE.UI.conf.Config['ENV']['starting_path']
+                pathname = None
                 basename = '<buffer>'
         elif buff.type == 'dir':
             try:
@@ -482,11 +482,15 @@ class BaseFrame(object):
         else:
             filename = '-'      # read from stdin
             # generate stdin input from the content of the buffer
-            JCL['ASM-MODE'][1] = buff.buffer.get_text(
-                buff.buffer.get_start_iter(),
-                buff.buffer.get_end_iter(),
-                False
-                )
+            if pathname == None:
+                JCL['ASM-MODE'][1] = buff.buffer.get_text(
+                    buff.buffer.get_start_iter(),
+                    buff.buffer.get_end_iter(),
+                    False
+                    )
+                pathname = zPE.UI.conf.Config['ENV']['starting_path']
+            else:
+                JCL['ASM-MODE'][1] = zComp.io_encap.open_file( (pathname, basename), 'r' ).read()
             if JCL['ASM-MODE'][1][-1] != '\n':
                 JCL['ASM-MODE'][2] = '\n'
             else:
@@ -498,7 +502,6 @@ class BaseFrame(object):
             stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr = subprocess.PIPE
             )
         ( stdoutdata, stderrdata ) = zsub.communicate(stdindata)
-        sys.stderr.write(stdoutdata)
         sys.stderr.write(stderrdata)
 
         if zsub.returncode not in zPE.conf.RC.itervalues():
@@ -521,24 +524,21 @@ class BaseFrame(object):
 
     ### signals for SplitWindow
     def _sig_popup_manip(self, widget, menu):
-        buff_type = widget.get_editor().active_buffer.type
-        if buff_type == 'file':
-            if widget.get_editor().active_buffer.path:
-                is_file = True
-            else:
-                is_file = False
-        elif buff_type == 'dir':
+        buff = widget.get_editor().active_buffer
+        if buff.type == 'dir':
+            not_tmp = True
             fullpath = widget.get_active_item()
             if fullpath and zComp.io_encap.is_file(fullpath):
                 is_file = True
             else:
                 is_file = False
         else:
-            is_file = False
+            is_file = (buff.type == 'file')
+            not_tmp = bool(buff.path)
 
         mi_submit = gtk.MenuItem('_Submit the Job File')
-        mi_submit.set_property('sensitive', is_file)
-        mi_submit_wrap = gtk.MenuItem('_Test Run the Job File')
+        mi_submit.set_property('sensitive', is_file and not_tmp)
+        mi_submit_wrap = gtk.MenuItem('_Test Run the Source File')
         mi_submit_wrap.set_property('sensitive', is_file)
 
         mi_split_horz = gtk.MenuItem('Split Horizontally <_3>')

@@ -963,9 +963,12 @@ def pass_1():
             # starting loc  + length of the mathine code
             for ln in MNEMONIC
             if len(MNEMONIC[ln]) == 5 # type 5
-            ]
+            ] +
+        [ 0 ]   # just in case no statement at all
         )
-    if sz_required > zPE.core.mem.max_sz_of(LOCAL_CONF['REGION']):
+    if not sz_required:
+        zPE.abort(9, 'Error: no statement found.\n')
+    elif sz_required > zPE.core.mem.max_sz_of(LOCAL_CONF['REGION']):
         zPE.abort(9, 'Error: ', LOCAL_CONF['REGION'],
                   ': RIGEON is not big enough.\n')
     else:
