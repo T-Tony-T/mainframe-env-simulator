@@ -287,15 +287,15 @@ def load():
 
 def go(mem):
     psw = zPE.core.reg.SPR['PSW']
-    ldr_mem = zPE.core.mem.Memory(mem.max_pos, 18 * 4) # 18F RSV
-    ldr_mem[mem.max_pos] = zPE.c2x('RSV ') * 18
+    ldr_mem = zPE.core.mem.Memory((mem.max_pos + 7) / 8 * 8, 18 * 4) # 18F RSV
+    ldr_mem[ldr_mem.min_pos] = zPE.c2x('RSV ') * 18
 
     prsv = zPE.core.reg.GPR[13] # register 13: parent register saving area
     rtrn = zPE.core.reg.GPR[14] # register 14: return address
     enty = zPE.core.reg.GPR[15] # register 15: entry address
 
     # initial program load
-    prsv[0] = mem.max_pos            # load LOADER's RSV into register 13
+    prsv[0] = ldr_mem.min_pos        # load LOADER's RSV into register 13
     rtrn[0] = LOCAL_CONF['EXIT_PT']  # load exit point into register 14
     enty[0] = LOCAL_CONF['ENTRY_PT'] # load entry point into register 15
     psw.Instruct_addr = LOCAL_CONF['ENTRY_PT'] # set PSW accordingly

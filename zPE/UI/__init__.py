@@ -497,17 +497,23 @@ class BaseFrame(object):
                 JCL['ASM-MODE'][2] = ''
             stdindata = ''.join(JCL['ASM-MODE'])
 
+        cmd = [ 'zsub', ]
+        if zPE.UI.conf.Config['MISC']['debug_mode']:
+            cmd.append('--debug')
+        cmd.append(filename)
+
         zsub = subprocess.Popen(
-            [ 'zsub', filename ], cwd = pathname,
+            cmd, cwd = pathname,
             stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr = subprocess.PIPE
             )
         ( stdoutdata, stderrdata ) = zsub.communicate(stdindata)
         sys.stderr.write(stderrdata)
 
+        if ( zPE.UI.conf.Config['MISC']['debug_mode']  or    # is in debug mode
+             zsub.returncode not in zPE.conf.RC.itervalues() # something weird happened
+             ):
+            sys.stdout.write(stdoutdata)
         if zsub.returncode not in zPE.conf.RC.itervalues():
-            # something weird happened
-            sys.stderr.write(stdoutdata)
-
             self.lastline.set_text(
                 '', '{0}: JOB submitted but aborted with {1}.'.format(basename, zsub.returncode)
                 )
@@ -989,6 +995,22 @@ class ConfigWindow(gtk.Window):
         self.time_ss_entry.connect('activate',        self._sig_time_limit_changed)
         self.time_ss_entry.connect('focus-out-event', self._sig_time_limit_changed)
 
+        # Debugging
+        self.__label['FRAME'].append(gtk.Label('Debugging'))
+        ct_system_debug = gtk.Frame()
+        ct_system_debug.set_label_widget(self.__label['FRAME'][-1])
+        ct_system.pack_start(ct_system_debug, False, False, 10)
+
+        ct_system_debug.add(gtk.HBox())
+
+        self.debug_zsub = zComp.zCheckButton('Show Debugging Info for `zsub`')
+
+        self.__label['LABEL'].append(self.tabbar_grouped.get_label_widget())
+
+        ct_system_debug.child.pack_start(self.debug_zsub, False, False, 10)
+
+        self.debug_zsub.connect('toggled', self._sig_debug_zsub)
+
 
         ### separator
         layout.pack_start(gtk.HSeparator(), False, False, 2)
@@ -1366,6 +1388,9 @@ class ConfigWindow(gtk.Window):
             return
 
         self.__on_err = False
+
+    def _sig_debug_zsub(self, bttn):
+        conf.Config['MISC']['debug_mode'] = bttn.get_active()
     ### end of signal for System
 
 
@@ -1426,6 +1451,9 @@ class ConfigWindow(gtk.Window):
         self.select_combo_item(self.addr_mode_sw, zPE.conf.Config['addr_mode'])
         self.memory_sz_entry.set_text(zPE.conf.Config['memory_sz'])
         self.update_time_limit()
+
+        # System->Debugging
+        self.debug_zsub.set_active(conf.Config['MISC']['debug_mode'])
 
 
     def load_binding(self):

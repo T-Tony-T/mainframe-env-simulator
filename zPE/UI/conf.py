@@ -68,6 +68,8 @@ DEFAULT = {
 
         'TAB_ON'        : 0,
         'TAB_GROUPED'   : 1,
+
+        'DEBUG_MODE'    : 0,
         },
 
     'FONT' : {
@@ -387,6 +389,8 @@ def init_rc():
 
         'tab_on'        : DEFAULT['MISC']['TAB_ON'],
         'tab_grouped'   : DEFAULT['MISC']['TAB_GROUPED'],
+
+        'debug_mode'    : DEFAULT['MISC']['DEBUG_MODE'],
         }
 
     Config['FONT'] = {
@@ -485,6 +489,12 @@ def read_rc():
                     Config[label][k] = 0
 
             elif k == 'tab_grouped':
+                if v and v not in STR_FALSE:
+                    Config[label][k] = 1
+                else:
+                    Config[label][k] = 0
+
+            elif k == 'debug_mode':
                 if v and v not in STR_FALSE:
                     Config[label][k] = 1
                 else:
