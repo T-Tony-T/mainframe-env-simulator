@@ -285,6 +285,7 @@ class zEntry(gtk.Entry):
         'set_mark_move_down',
         'set_mark_move_start',
         'set_mark_move_end',
+        'set_mark_select_all',
         ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -339,6 +340,9 @@ class zEntry(gtk.Entry):
             'set_mark_move_down'    : lambda msg: self.set_mark(append = 'down'),
             'set_mark_move_start'   : lambda msg: self.set_mark(append = 'start'),
             'set_mark_move_end'     : lambda msg: self.set_mark(append = 'end'),
+            'set_mark_select_all'   : lambda msg: ( self.set_mark(-1),
+                                                    self.set_position(0)
+                                                    ),
             }
         for (func, cb) in self.default_func_callback.iteritems():
             self.__listener.register_func_callback(func, cb)
@@ -443,7 +447,7 @@ class zEntry(gtk.Entry):
 
             mi_select_all = gtk.MenuItem('Select _All')
             menu.append(mi_select_all)
-            mi_select_all.connect('activate', lambda *arg: (self.set_mark(0), self.set_position(-1)))
+            mi_select_all.connect('activate', lambda *arg: (self.set_mark(-1), self.set_position(0)))
 
             menu.show_all()
             menu.popup(None, None, None, event.button, event.time)
@@ -717,13 +721,15 @@ class zEntry(gtk.Entry):
         if where == None:
             where = self.get_position()
 
+        max_pos = self.get_text_length()
+        while where < 0:
+            where += max_pos
+
         if not self.get_has_selection():
             self.__selection_mark = where
 
         # for set_mark_*
         if append:
-            max_pos = self.get_text_length()
-
             if append == 'left' and where > 0:
                 where -= 1
             elif append == 'right' and where < max_pos:
@@ -1325,6 +1331,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         'set_mark_move_down',
         'set_mark_move_start',
         'set_mark_move_end', 
+        'set_mark_select_all',
        ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -1404,6 +1411,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             'set_mark_move_down'    : lambda msg: self.set_mark(append = 'down'),
             'set_mark_move_start'   : lambda msg: self.set_mark(append = 'start'),
             'set_mark_move_end'     : lambda msg: self.set_mark(append = 'end'),
+            'set_mark_select_all'   : lambda msg: ( self.set_mark(self.buff['disp'].get_end_iter()),
+                                                    self.place_cursor(self.buff['disp'].get_start_iter()),
+                                                    ),
             }
         for (func, cb) in self.default_func_callback.iteritems():
             self.__listener.register_func_callback(func, cb)

@@ -319,6 +319,8 @@ def pass_1():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
 
+    if spi.empty():
+        raise EOFError('No Assembler Code Offered.')
     init_res()                  # initialize resources
 
     addr = 0                    # program counter
@@ -492,6 +494,8 @@ def pass_1():
                     __INFO('W', line_num, ( 165, 0, None, ))
 
                 # update the CSECT info
+                if csect_lbl == None:
+                    raise SyntaxError('No CSECT found.')
                 ESD[csect_lbl][0].length = addr
 
                 if len(field) == 3: # has label
@@ -1196,7 +1200,7 @@ def pass_2():
                 SYMBOL[lbl_8].references.append(
                     '{0:>4}{1}'.format(line_num, '')
                     )
-            else:
+            elif field[2]:
                 indx_s = spi[line_num].index(field[2])
                 __INFO('E', line_num, ( 44, indx_s, indx_s + len(field[2]), ))
             # update using map

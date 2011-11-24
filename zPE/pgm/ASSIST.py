@@ -556,10 +556,12 @@ def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):
     return value
         the new line number after header is inserted
     '''
-    spool_out.append(ctrl, '{0:<8} {1:<102}PAGE {2:>4}\n'.format(
-            TITLE[0], title, page_num
-            ))
-    spool_out.append('0',  '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n')
+    spool_out.append(
+        ctrl, '{0:<8} {1:<102}PAGE {2:>4}\n'.format(TITLE[0], title, page_num)
+        )
+    spool_out.append(
+        '0',  '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n'
+        )
     return line_num + 2
 
 
@@ -645,8 +647,8 @@ def __PARSE_OUT_LDR(rc):
         spo.append(' ',  ' REGS 8-15     ',
                    '    '.join([ str(r) for r in zPE.core.reg.GPR[8: ] ]),
                    '\n')
-        spo.append(ctrl, ' FLTR 0-6      '
-                   '        '.join([ '** need  info **' ] * 4), # need info
+        spo.append(ctrl, ' FLTR 0-6      ', # floating-point registers
+                   '        '.join([ 'not..implemented' ] * 4),
                    '\n')
 
         # storage dump

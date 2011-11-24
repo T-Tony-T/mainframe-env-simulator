@@ -330,6 +330,11 @@ DEFAULT_FUNC_KEY_BIND = {
         'vi'    : '',
         'other' : 'S-End',
         },
+    'set_mark_select_all'   : {
+        'emacs' : 'C-x h',
+        'vi'    : '',
+        'other' : 'C-a',
+        },
 
 
     # functions that are not required by any z* module

@@ -9,6 +9,22 @@ import gtk
 import gobject, pango
 
 
+JCL = {
+    'ASM-MODE' : [ '''
+//KC00NIUA JOB ,'DEFAULT ASSIST JCL',MSGCLASS=H
+//STEP1    EXEC PGM=ASSIST
+//SYSPRINT DD SYSOUT=*
+//SYSIN    DD *
+'''[1:],                        # header; index 0
+                   '  BR 14',   # replace this with the actual content
+                   '\n',        # either '' or '\n', determined by the content[-1]
+                   '''
+/*
+//
+'''[1:],                        # tailer; index 3
+                   ],
+    }
+
 class BaseFrame(object):
     def delete_event(self, widget, event, data = None):
         # change FALSE to TRUE and the main window will not be destroyed
@@ -23,7 +39,7 @@ class BaseFrame(object):
             'prog_quit'                 : lambda msg: self._sig_quit(None),
 
             'zPE_submit'                : lambda msg: self._sig_submit(None, 'direct'),
-#            'zPE_submit_with_JCL'       : lambda msg: self._sig_submit(None, 'wrap'),
+            'zPE_submit_with_JCL'       : lambda msg: self._sig_submit(None, 'wrap'),
             }
 
         # enable the global bindings for all listeners
@@ -131,7 +147,7 @@ class BaseFrame(object):
             os.path.join(os.path.dirname(__file__), 'image', 'submit_test.png')
             )
         self.tool_submit_wrap = gtk.ToolButton(bttn_icon)
-        self.tool_submit_wrap.set_tooltip_text('Test Run the Job File With Default JCL')
+        self.tool_submit_wrap.set_tooltip_text('Test Run the Buffer Content With Default JCL')
         # ------------------------
         self.tool_config = gtk.ToolButton(gtk.STOCK_PREFERENCES)
         self.tool_config.set_tooltip_text('Show the Config Window')
@@ -184,7 +200,7 @@ class BaseFrame(object):
         self.tool_win_delete_other.connect('clicked', self._sig_sw_manip, 'delete_other')
 
         self.tool_submit.connect('clicked', self._sig_submit, 'direct')
-#        self.tool_submit_wrap.connect('clicked', self._sig_submit, 'wrap')
+        self.tool_submit_wrap.connect('clicked', self._sig_submit, 'wrap')
 
         self.tool_config.connect('clicked', self.__global_key_binding_func['prog_show_config'])
         self.tool_err_console.connect('clicked', self.__global_key_binding_func['prog_show_error'])
@@ -304,7 +320,7 @@ class BaseFrame(object):
         self.tool_buff_redo.set_property('sensitive', can_redo)
 
         self.tool_submit.set_property(     'sensitive', buff.path)
-        self.tool_submit_wrap.set_property('sensitive', buff.path)
+        self.tool_submit_wrap.set_property('sensitive', is_file)
 
         return True     # keep watching until the end of the universe
     ### end of watcher definition
@@ -442,9 +458,13 @@ class BaseFrame(object):
             raise AssertionError('The main window is not focused!')
         buff = frame.active_buffer
 
-        if buff.type == 'file' and buff.path:
-            pathname = zComp.io_encap.norm_path_list(buff.path[:-1])
-            basename = buff.path[-1]
+        if buff.type == 'file':
+            if buff.path:
+                pathname = zComp.io_encap.norm_path_list(buff.path[:-1])
+                basename = buff.path[-1]
+            else:
+                pathname = zPE.UI.conf.Config['ENV']['starting_path']
+                basename = '<buffer>'
         elif buff.type == 'dir':
             try:
                 (pathname, basename) = frame.center.get_active_item()
@@ -456,25 +476,43 @@ class BaseFrame(object):
         else:
             return              # not a file nor an dir, early return
 
-        if task == 'wrap':
-            pass                # wrap the file here
+        if task == 'direct':
+            filename = basename # read from the file
+            stdindata = ''      # no stdin input
+        else:
+            filename = '-'      # read from stdin
+            # generate stdin input from the content of the buffer
+            JCL['ASM-MODE'][1] = buff.buffer.get_text(
+                buff.buffer.get_start_iter(),
+                buff.buffer.get_end_iter(),
+                False
+                )
+            if JCL['ASM-MODE'][1][-1] != '\n':
+                JCL['ASM-MODE'][2] = '\n'
+            else:
+                JCL['ASM-MODE'][2] = ''
+            stdindata = ''.join(JCL['ASM-MODE'])
 
-        zsub = subprocess.Popen(['zsub', basename], cwd = pathname,
-                                stdout = subprocess.PIPE, stderr = subprocess.PIPE
-                                )
-        rc = zsub.wait()
-        sys.stderr.write(zsub.stderr.read())
+        zsub = subprocess.Popen(
+            [ 'zsub', filename ], cwd = pathname,
+            stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr = subprocess.PIPE
+            )
+        ( stdoutdata, stderrdata ) = zsub.communicate(stdindata)
+        sys.stderr.write(stdoutdata)
+        sys.stderr.write(stderrdata)
 
-        if rc not in zPE.conf.RC.itervalues():
+        if zsub.returncode not in zPE.conf.RC.itervalues():
             # something weird happened
-            sys.stderr.write(zsub.stdout.read())
+            sys.stderr.write(stdoutdata)
 
             self.lastline.set_text(
-                '', '{0}: JOB submitted but aborted with {1}.'.format(basename, rc)
+                '', '{0}: JOB submitted but aborted with {1}.'.format(basename, zsub.returncode)
                 )
         else:
             self.lastline.set_text(
-                '', '{0}: JOB submitted with ID={1}, return value is {2}.'.format(basename, zPE.conf.fetch_job_id(), rc)
+                '', '{0}: JOB submitted with ID={1}, return value is {2}.'.format(
+                    basename, zPE.conf.fetch_job_id(), zsub.returncode
+                    )
                 )
 
         return self.lastline.get_text()[1]
@@ -521,7 +559,7 @@ class BaseFrame(object):
         menu.append(mi_delete_other)
 
         mi_submit.connect('activate', self._sig_submit, 'direct')
-#        mi_submit_wrap.connect('activate', self._sig_submit, 'wrap')
+        mi_submit_wrap.connect('activate', self._sig_submit, 'wrap')
 
         mi_split_horz.connect('activate', self._sig_sw_manip, 'split_horz')
         mi_split_vert.connect('activate', self._sig_sw_manip, 'split_vert')
@@ -581,6 +619,10 @@ class ConfigWindow(gtk.Window):
             'LABEL' : [],
             }
         self.__entry = []
+
+
+        # used to stop closing the window
+        self.__on_err = False
 
 
         # layout of the frame:
@@ -708,7 +750,8 @@ class ConfigWindow(gtk.Window):
             ct_gui_theme.child.attach(self.color_entry[key],     1 + col, 2 + col, row, 1 + row, xoptions = gtk.SHRINK)
             ct_gui_theme.child.attach(self.color_picker[key],    2 + col, 3 + col, row, 1 + row, xoptions = gtk.SHRINK)
 
-            self.color_entry[key].connect('activate', self._sig_color_entry_activate, key)
+            self.color_entry[key].connect('activate',  self._sig_color_entry_activate, None, key)
+            self.color_entry[key].connect('focus-out-event', self._sig_color_entry_activate, key)
 
         # Environment
         self.__label['FRAME'].append(gtk.Label('Environment'))
@@ -865,6 +908,7 @@ class ConfigWindow(gtk.Window):
         self.kb_rules.connect('clicked', self._sig_key_stroke_help)
         self.kb_default.connect('clicked', self._sig_key_stroke_clear)
         self.kb_stroke_entry.connect('activate', self._sig_key_stroke_entered)
+        self.kb_stroke_entry.connect('focus-out-event', self._sig_key_entry_fo)
 
 
         ## Editor
@@ -887,7 +931,8 @@ class ConfigWindow(gtk.Window):
         ct_editor_kr.child.attach(self.__label['LABEL'][-1], 0, 1, 1, 2, xoptions = gtk.SHRINK)
         ct_editor_kr.child.attach(self.kill_ring_sz_entry,   1, 2, 1, 2, xoptions = gtk.FILL)
 
-        self.kill_ring_sz_entry.connect('activate', self._sig_kill_ring_sz_entered)
+        self.kill_ring_sz_entry.connect('activate',        self._sig_kill_ring_sz_entered)
+        self.kill_ring_sz_entry.connect('focus-out-event', self._sig_kill_ring_sz_entered)
 
 
         ## System
@@ -901,26 +946,48 @@ class ConfigWindow(gtk.Window):
         ct_system_arch.set_label_widget(self.__label['FRAME'][-1])
         ct_system.pack_start(ct_system_arch, False, False, 10)
 
-        ct_system_arch.add(gtk.Table(2, 2, False))
+        ct_system_arch.add(gtk.Table(3, 2, False))
         ct_system_arch.child.set_col_spacings(10)
 
         self.addr_mode_sw = gtk.combo_box_new_text()
         self.memory_sz_entry = gtk.Entry()
+        time_input_area = gtk.HBox()
+        self.time_mm_entry = gtk.Entry()
+        self.time_ss_entry = gtk.Entry()
 
         for mode in zPE.conf.POSSIBLE_ADDR_MODE:
             self.addr_mode_sw.append_text(str(mode))
         self.memory_sz_entry.set_property('width-chars', 10)
+        self.time_mm_entry.set_property('width-chars', 3)
+        self.time_mm_entry.set_alignment(1.0)
+        self.time_ss_entry.set_property('width-chars', 3)
+        self.time_ss_entry.set_alignment(1.0)
 
-        self.__label['LABEL'].append(gtk.Label(' Simulator Address Mode:           '))
+        self.__label['LABEL'].append(gtk.Label(' Simulator Address Mode:              '))
         ct_system_arch.child.attach(self.__label['LABEL'][-1], 0, 1, 0, 1, xoptions = gtk.SHRINK)
         ct_system_arch.child.attach(self.addr_mode_sw,         1, 2, 0, 1, xoptions = gtk.FILL)
 
-        self.__label['LABEL'].append(gtk.Label(' Default Allocation of Memory Size:'))
+        self.__label['LABEL'].append(gtk.Label(' Default Region Size (for each STEP): '))
         ct_system_arch.child.attach(self.__label['LABEL'][-1], 0, 1, 1, 2, xoptions = gtk.SHRINK)
         ct_system_arch.child.attach(self.memory_sz_entry,      1, 2, 1, 2, xoptions = gtk.FILL)
 
+        self.__label['LABEL'].append(gtk.Label(' Default Time Limit (for each JOB):   '))
+        ct_system_arch.child.attach(self.__label['LABEL'][-1], 0, 1, 2, 3, xoptions = gtk.SHRINK)
+        ct_system_arch.child.attach(time_input_area,           1, 2, 2, 3, xoptions = gtk.FILL)
+        time_input_area.pack_start(self.time_mm_entry)
+        self.__label['LABEL'].append(gtk.Label('min '))
+        time_input_area.pack_start(self.__label['LABEL'][-1])
+        self.__label['LABEL'].append(gtk.Label('sec'))
+        time_input_area.pack_start(self.time_ss_entry)
+        time_input_area.pack_start(self.__label['LABEL'][-1])
+
         self.addr_mode_sw.connect('changed', self._sig_addr_mode_changed)
-        self.memory_sz_entry.connect('activate', self._sig_memory_sz_entered)
+        self.memory_sz_entry.connect('activate',        self._sig_memory_sz_entered)
+        self.memory_sz_entry.connect('focus-out-event', self._sig_memory_sz_entered)
+        self.time_mm_entry.connect('activate',        self._sig_time_limit_changed)
+        self.time_mm_entry.connect('focus-out-event', self._sig_time_limit_changed)
+        self.time_ss_entry.connect('activate',        self._sig_time_limit_changed)
+        self.time_ss_entry.connect('focus-out-event', self._sig_time_limit_changed)
 
 
         ### separator
@@ -994,6 +1061,8 @@ class ConfigWindow(gtk.Window):
         self.load_rc()
 
     def _sig_save_config(self, *arg):
+        if self.__on_err:
+            return
         conf.write_rc_all()              # write changes for GUI
         conf.read_rc_all()               # validate new GUI config
         zPE.conf.write_rc()              # write changes for zsub
@@ -1001,6 +1070,8 @@ class ConfigWindow(gtk.Window):
         self.close()
 
     def _sig_cancel_mod(self, *arg):
+        if self.__on_err:
+            return
         self._sig_reload_rc()   # cancel changes
         self.close()
         return True
@@ -1036,13 +1107,22 @@ class ConfigWindow(gtk.Window):
         zComp.zTheme.set_font(conf.Config['FONT'])
 
 
-    def _sig_color_entry_activate(self, entry, key):
+    def _sig_color_entry_activate(self, entry, event, key):
+        self.__on_err = event
+
         color_code = entry.get_text()
-        if not re.match('^#[0-9a-fA-F]{6}$', color_code):
-            entry.set_text('')
+        if re.match('^#[0-9a-fA-F]{6}$', color_code):
+            self.set_color_modify(key, color_code)
+            zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+        else:
+            entry.set_text(conf.Config['COLOR_MAP'][key])
+            entry.grab_focus()
             return
-        self.set_color_modify(key, color_code)
-        zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+
+        if event:
+            entry.select_region(0, 0) # clear selection
+
+        self.__on_err = False
 
     def _sig_color_selected(self, widget, color_code):
         for key in self.color_picker:
@@ -1203,6 +1283,10 @@ class ConfigWindow(gtk.Window):
         entry.editing_done = True
         self.kb_function[entry.func_editing].set_active(False)
 
+    def _sig_key_entry_fo(self, entry, event):
+        self.__on_err = self.kb_stroke_entry.get_property('sensitive')
+        self.kb_stroke_entry.grab_focus()
+
 
     def _sig_key_stroke_help(self, bttn):
         self.kb_rules_dialog.show()
@@ -1214,7 +1298,9 @@ class ConfigWindow(gtk.Window):
 
 
     ### signal for Editor
-    def _sig_kill_ring_sz_entered(self, entry):
+    def _sig_kill_ring_sz_entered(self, entry, event = None):
+        self.__on_err = event
+
         try:
             sz = int(entry.get_text())
             if sz < 1:          # require size to be at least 1
@@ -1229,6 +1315,8 @@ class ConfigWindow(gtk.Window):
         entry.set_property('sensitive', False) # remove focus
         entry.set_text(str(conf.Config['MISC']['kill_ring_sz']))
         entry.set_property('sensitive', True)  # retain edibility
+
+        self.__on_err = False
     ### end of signal for Editor
 
 
@@ -1241,7 +1329,9 @@ class ConfigWindow(gtk.Window):
         zPE.conf.Config['addr_mode'] = int(addr_val)
         zPE.conf.Config['addr_max'] = 2 ** zPE.conf.Config['addr_mode']
 
-    def _sig_memory_sz_entered(self, entry):
+    def _sig_memory_sz_entered(self, entry, event = None):
+        self.__on_err = event
+
         try:
             sz = zPE.conf.parse_region(entry.get_text())
         except:
@@ -1252,6 +1342,30 @@ class ConfigWindow(gtk.Window):
         entry.set_property('sensitive', False) # remove focus
         entry.set_text(zPE.conf.Config['memory_sz'])
         entry.set_property('sensitive', True)  # retain edibility
+
+        self.__on_err = False
+
+    def _sig_time_limit_changed(self, entry, event = None):
+        self.__on_err = event
+
+        try:
+            time_mm = int(self.time_mm_entry.get_text())
+        except:
+            time_mm = 0
+        try:
+            time_ss = int(self.time_ss_entry.get_text())
+        except:
+            time_ss = 0
+        time = time_mm * 60 + time_ss
+        if time:
+            zPE.conf.Config['time_limit'] = time
+            self.update_time_limit()
+        else:
+            self.update_time_limit()
+            entry.grab_focus()
+            return
+
+        self.__on_err = False
     ### end of signal for System
 
 
@@ -1311,6 +1425,7 @@ class ConfigWindow(gtk.Window):
         # System->Architecture
         self.select_combo_item(self.addr_mode_sw, zPE.conf.Config['addr_mode'])
         self.memory_sz_entry.set_text(zPE.conf.Config['memory_sz'])
+        self.update_time_limit()
 
 
     def load_binding(self):
@@ -1341,6 +1456,11 @@ class ConfigWindow(gtk.Window):
         self.tabbar_on.set_active(conf.Config['MISC']['tab_on'])
         self.tabbar_grouped.set_active(conf.Config['MISC']['tab_grouped'])
         self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
+
+    def update_time_limit(self):
+        time = zPE.conf.Config['time_limit']
+        self.time_mm_entry.set_text(str(time / 60))
+        self.time_ss_entry.set_text(str(time % 60))
     ### end of support function definition
 
 
@@ -1364,3 +1484,4 @@ class ConfigWindow(gtk.Window):
             font += ' {}'.format(size)
         widget.modify_font(pango.FontDescription(font))
     ### end of utility function definition
+
