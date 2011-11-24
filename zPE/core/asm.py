@@ -266,7 +266,40 @@ pseudo = { }        # should only be filled by other modules (e.g. ASSIST)
 ext_mnem = {
     'B'    : lambda: ('47', 'F', X(2).br().al('hw')),
     'BR'   : lambda: ('07', 'F', R(2).br()),
+    'NOP'  : lambda: ('47', '0', X(2).br().al('hw')),
+    'NOPR' : lambda: ('07', '0', R(2).br()),
+
+    'BH'   : lambda: ('47', '2', X(2).br().al('hw')),
+    'BHR'  : lambda: ('07', '2', R(2).br()),
+    'BL'   : lambda: ('47', '4', X(2).br().al('hw')),
+    'BLR'  : lambda: ('07', '4', R(2).br()),
+    'BE'   : lambda: ('47', '8', X(2).br().al('hw')),
+    'BER'  : lambda: ('07', '8', R(2).br()),
+    'BNH'  : lambda: ('47', 'D', X(2).br().al('hw')),
+    'BNHR' : lambda: ('07', 'D', R(2).br()),
+    'BNL'  : lambda: ('47', 'B', X(2).br().al('hw')),
+    'BNLR' : lambda: ('07', 'B', R(2).br()),
+    'BNE'  : lambda: ('47', '7', X(2).br().al('hw')),
+    'BNER' : lambda: ('07', '7', R(2).br()),
+
+    'BP'   : lambda: ('47', '2', X(2).br().al('hw')),
+    'BPR'  : lambda: ('07', '2', R(2).br()),
+    'BM'   : lambda: ('47', '4', X(2).br().al('hw')),
+    'BMR'  : lambda: ('07', '4', R(2).br()),
+    'BZ'   : lambda: ('47', '8', X(2).br().al('hw')),
+    'BZR'  : lambda: ('07', '8', R(2).br()),
+    'BO'   : lambda: ('47', '1', X(2).br().al('hw')),
+    'BOR'  : lambda: ('07', '1', R(2).br()),
+    'BNP'  : lambda: ('47', 'D', X(2).br().al('hw')),
+    'BNPR' : lambda: ('07', 'D', R(2).br()),
+    'BNM'  : lambda: ('47', 'B', X(2).br().al('hw')),
+    'BNMR' : lambda: ('07', 'B', R(2).br()),
+    'BNZ'  : lambda: ('47', '7', X(2).br().al('hw')),
+    'BNZR' : lambda: ('07', '7', R(2).br()),
+    'BNO'  : lambda: ('47', 'E', X(2).br().al('hw')),
+    'BNOR' : lambda: ('07', 'E', R(2).br()),
     }
+
 # Basic Instruction
 op_code = {
     'A'    : lambda: ('5A', R(1).rw(), X(2).ro().al('fw')),

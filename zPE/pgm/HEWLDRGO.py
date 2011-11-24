@@ -162,7 +162,7 @@ def load():
 
     spi = zPE.core.SPOOL.retrive('SYSLIN') # input SPOOL
     mem = zPE.core.mem.Memory(LOCAL_CONF['MEM_POS'], LOCAL_CONF['MEM_LEN'])
-    LOCAL_CONF['EXIT_PT'] = 0xFF000000 + mem.h_bound
+    LOCAL_CONF['EXIT_PT'] = mem.h_bound
 
     rec_tp = { # need to be all lowercase since b2a_hex() returns all lowercase
         'ESD' : zPE.c2x('ESD').lower(),

@@ -15,6 +15,9 @@ class Register(Union):
         ('bytes', c_ubyte * 4),
         ]
 
+    def addr(self):
+        return ( self.long & 0x00FFFFFF )
+
     def __getitem__(self, key):
         if key == 0:
             return self.long    # 0 to get the entire register
@@ -210,6 +213,13 @@ class Register(Union):
         SPR['PSW'].CC = self.sign()
         return self
 
+    def decrement(self):
+        '''
+        BCT  R1,addr    =>      R1.decrement() and <branching_to_addr>
+        BCTR R1,R2      =>      R1.decrement() and <branching_if_R2>
+        '''
+        self.long -= 1
+        return self
 
     def sign(self):
         if self.positive():

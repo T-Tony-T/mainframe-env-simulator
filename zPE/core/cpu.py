@@ -2,7 +2,7 @@
 
 import zPE
 
-from reg import GPR, SPR, RegisterPair
+from reg import GPR, SPR, Register, RegisterPair
 from mem import Memory
 from asm import len_op
 
@@ -51,7 +51,7 @@ def execute(ins):
 
     if zPE.debug_mode():
         print 'Exec:', ins
-        print '  '.join([ str(r) for r in GPR[:8] ])
+        print '  '.join([ str(r) for r in GPR[:8] ]), '\t\t', SPR['PSW']
         print '  '.join([ str(r) for r in GPR[8:] ])
         print ''.join(Memory.allocation.values()[0].dump_all()),
         print ''.join(Memory.allocation.values()[1].dump_all())
@@ -73,9 +73,11 @@ def parse_time(time):
 
 ### Instruction Look-up Tabel
 ins_op = {
-    '05'   : ( 1, lambda s : None ),
-    '06'   : ( 1, lambda s : None ),
-    '07'   : ( 1, lambda s : None ),
+    '05'   : ( 1, lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
+                               __cnt(Register(0), __addr_reg(s[1]))
+                               ] ),
+    '06'   : ( 1, lambda s : __cnt(__reg(s[0]), __addr_reg(s[1])) ),
+    '07'   : ( 1, lambda s : __br(__mask(s[0]), __reg(s[1]).addr()) ),
     '10'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).set_abs() ),
     '11'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).neg_abs() ),
     '12'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).test() ),
@@ -93,10 +95,12 @@ ins_op = {
     '41'   : ( 3, lambda s : __reg(s[0]).load( __addr(s[3:6], s[1], s[2])) ),
     '42'   : ( 3, lambda s : __reg(s[0]).stc(* __page(s[3:6], s[1], s[2], 1)) ),
     '43'   : ( 3, lambda s : __reg(s[0]).inc(  __addr(s[3:6], s[1], s[2], 1)) ),
-    '44'   : ( 3, lambda s : None ),
-    '45'   : ( 3, lambda s : None ),
-    '46'   : ( 3, lambda s : None ),
-    '47'   : ( 3, lambda s : None ),
+    '44'   : ( 3, lambda s : None ), # EX, not implemented for now
+    '45'   : ( 3, lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
+                               __cnt(Register(0), __addr(s[3:6], s[1], s[2]))
+                               ] ),
+    '46'   : ( 3, lambda s : __cnt(__reg(s[0]), __addr(s[3:6], s[1], s[2])) ),
+    '47'   : ( 3, lambda s : __br(__mask(s[0]), __addr(s[3:6], s[1], s[2])) ),
     '50'   : ( 3, lambda s : __reg(s[0]).store(* __page(s[3:6], s[1], s[2])) ),
     '54'   : ( 3, lambda s : __reg(s[0]) & __deref(s[3:6], s[1], s[2]) ),
     '55'   : ( 3, lambda s : __reg(s[0]).cmp_lgc(__deref(s[3:6], s[1], s[2])) ),
@@ -111,14 +115,14 @@ ins_op = {
     '90'   : ( 3, lambda s : [
             __reg(s[0], offset).store(*__page(s[3:6], '0', s[2], 4, offset))
             for offset in (
-                lambda R1 = int(s[0], 16), R2 = int(s[1], 16) :
+                lambda R1 = __indx(s[0]), R2 = __indx(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
     '98'   : ( 3, lambda s : [
             __reg(s[0], offset).load(__deref(s[3:6], '0', s[2], 4, offset))
             for offset in (
-                lambda R1 = int(s[0], 16), R2 = int(s[1], 16) :
+                lambda R1 = __indx(s[0]), R2 = __indx(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
@@ -127,8 +131,18 @@ ins_op = {
 
 ### Internal Functions
 
+def __indx(r):
+    return int(r, 16)
+
 def __reg(r, offset = 0):
-    return GPR[ int(r, 16) + offset - 16 ]
+    return GPR[ __indx(r) + offset - 16 ]
+
+def __addr_reg(r):
+    reg_num = __indx(r)
+    if reg_num:
+        return GPR[reg_num].addr()
+    else:
+        return None
 
 def __pair(r):
     indx = int(r, 16)
@@ -137,14 +151,12 @@ def __pair(r):
     return RegisterPair(GPR[indx], GPR[indx + 1])
 
 def __addr(d, x, b):
-    if x == '0':
+    indx = __addr_reg(x)
+    if not indx:
         indx = 0
-    else:
-        indx = __reg(x).long
-    if b == '0':
+    base = __addr_reg(b)
+    if not base:
         base = 0
-    else:
-        base = __reg(b).long
     return indx + base + int(d, 16)
 
 def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
@@ -162,3 +174,20 @@ def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
 def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
     ( page, addr ) = __page(d, x, b, al, offset)
     return page.retrieve(addr, zPE.align_fmt_map[al])
+
+def __mask(m):
+    mask = '{0:0>4}'.format(bin(int(m, 16))[2:])
+    return [ i for i in range(4) if mask[i] == '1' ]
+
+def __br(mask, addr):
+    if SPR['PSW'].CC in mask:
+        SPR['PSW'].Instruct_addr = addr
+        return True
+    return False
+
+def __cnt(cnt_reg, addr):
+    cnt_reg.decrement()
+    if addr != None:
+        SPR['PSW'].Instruct_addr = addr
+        return True
+    return False
