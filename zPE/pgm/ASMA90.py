@@ -1507,12 +1507,19 @@ def pass_2():
                             ( p1_lbl.index('('), p1_lbl.index(',') ),
                             ( p1_lbl.index(','), p1_lbl.index(')') ),
                             ]
-                    else:
+                    elif '(' in p1_lbl:
                         indx_range = [ 1, 2 ]
                         indx_os = [
                             None,
                             ( p1_lbl.index('('), p1_lbl.index(')') ),
                             None, # no base offered
+                            ]
+                    else:
+                        indx_range = [ 1, 2 ]
+                        indx_os = [
+                            None,
+                            None,
+                            None,
                             ]
                     for i in indx_range:
                         # validate register
