@@ -1486,6 +1486,9 @@ def pass_2():
 
                     # validate registers
                     if op_code[lbl_i + op_indx].type in 'S':
+                        indx_range = [ 1 ]
+                        del res[2] # remove the extra item (fake base)
+
                         if ',' in p1_lbl:
                             indx_s = spi[line_num].index(p1_lbl)
                             __INFO('S', line_num, (
@@ -1494,28 +1497,22 @@ def pass_2():
                                 indx_s + len(p1_lbl) + 1,
                                 ))
                             break   # stop processing current res
-                        indx_range = [ 1 ]
-                        del res[2] # remove the extra item (fake base)
-                        indx_os = [
-                            None,
-                            ( p1_lbl.index('('), p1_lbl.index(')') ),
-                            ]
-                    elif ',' in p1_lbl:
+                    else:
                         indx_range = [ 1, 2 ]
+
+                    if ',' in p1_lbl:
                         indx_os = [ # index offset for error msg generation
                             None,
                             ( p1_lbl.index('('), p1_lbl.index(',') ),
                             ( p1_lbl.index(','), p1_lbl.index(')') ),
                             ]
                     elif '(' in p1_lbl:
-                        indx_range = [ 1, 2 ]
                         indx_os = [
                             None,
                             ( p1_lbl.index('('), p1_lbl.index(')') ),
                             None, # no base offered
                             ]
                     else:
-                        indx_range = [ 1, 2 ]
                         indx_os = [
                             None,
                             None,

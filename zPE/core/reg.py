@@ -139,12 +139,11 @@ class Register(Union):
     def inc(self, value, pos = 3):
         '''
         IC   R1,addr    =>      R1.inc(value@addr)
-        ICM  R1,addr    =>    [ R1.inc(value@addr+pos, pos)
-                                for pos in (
-                                    lambda s = '{0:0>4}'.format(bin(Mask)[2:]):
-                                        [ i for i in range(4) if s[i] == '1' ]
-                                    )()
-                                ]
+        ICM  R1,addr    =>    ( lambda mask = listify_mask(mask_string) : [
+                                    R1.inc(value@addr+offset, mask[offset])
+                                    for offset in range(len(mask))
+                                    ]
+                                )()
         '''
         self[pos + 1] = value
         return self
@@ -169,12 +168,11 @@ class Register(Union):
     def stc(self, page, addr, pos = 3):
         '''
         STC  R1,addr    =>      R1.stc(Page, addr_into_page)
-        STCM R1,addr    =>    [ R1.stc(Page, addr_into_page, pos)
-                                for pos in (
-                                    lambda s = '{0:0>4}'.format(bin(Mask)[2:]):
-                                        [ i for i in range(4) if s[i] == '1' ]
-                                    )()
-                                ]
+        STCM R1,addr    =>    ( lambda mask = listify_mask(mask_string) : [
+                                    R1.stc(Page, addr_into_page, mask[offset])
+                                    for offset in range(len(mask))
+                                    ]
+                                )()
         '''
         page[addr] = self[pos + 1]
         return self

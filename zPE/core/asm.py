@@ -323,6 +323,7 @@ op_code = {
     'EX'   : lambda: ('44', R(1).ro(), X(2).ex()),
 
     'IC'   : lambda: ('43', R(1).rw(), X(2).ro()),
+    'ICM'  : lambda: ('BF', R(1).rw(), R(3).ro(), S(2).ro()),
 
     'L'    : lambda: ('58', R(1).wo(), X(2).ro().al('fw')),
     'LA'   : lambda: ('41', R(1).wo(), X(2).ro()),
@@ -347,6 +348,7 @@ op_code = {
 
     'ST'   : lambda: ('50', R(1).ro(), X(2).wo().al('fw')),
     'STC'  : lambda: ('42', R(1).ro(), X(2).rw()),
+    'STCM' : lambda: ('BE', R(1).ro(), R(3).ro(), S(2).rw()),
     'STM'  : lambda: ('90', R(1).ro(), R(3).ro(), S(2).wo().al('fw')),
 
     'X'    : lambda: ('57', R(1).rw(), X(2).ro().al('fw')),

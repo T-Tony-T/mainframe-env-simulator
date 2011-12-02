@@ -126,6 +126,22 @@ ins_op = {
                     range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
+    'BE'   : ( 3, lambda s : (
+            lambda mask = __mask(s[1]) : [
+                __reg(s[0]).stc(* __page(s[3:6], '0', s[2], 1, offset),
+                                  pos = mask[offset] # keyword (named) arg
+                                  ) # list extension must be last unmaned arg
+                for offset in range(len(mask))
+                ]
+            )() ),
+    'BF'   : ( 3, lambda s : (
+            lambda mask = __mask(s[1]) : [
+                __reg(s[0]).inc( __deref(s[3:6], '0', s[2], 1, offset),
+                                 mask[offset]
+                                 )
+                for offset in range(len(mask))
+                ]
+            )() ),
     }
 ###
 
