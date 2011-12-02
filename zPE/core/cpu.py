@@ -108,10 +108,10 @@ ins_op = {
     '57'   : ( 3, lambda s : __reg(s[0]) ^ __deref(s[3:6], s[1], s[2]) ),
     '58'   : ( 3, lambda s : __reg(s[0]).load(__deref(s[3:6], s[1], s[2])) ),
     '59'   : ( 3, lambda s : __reg(s[0]).cmp(__deref(s[3:6], s[1], s[2])) ),
-    '5A'   : ( 1, lambda s : __reg(s[0])  + __deref(s[3:6], s[1], s[2]) ),
-    '5B'   : ( 1, lambda s : __reg(s[0])  - __deref(s[3:6], s[1], s[2]) ),
-    '5C'   : ( 1, lambda s : __pair(s[0]) * __deref(s[3:6], s[1], s[2]) ),
-    '5D'   : ( 1, lambda s : __pair(s[0]) / __deref(s[3:6], s[1], s[2]) ),
+    '5A'   : ( 3, lambda s : __reg(s[0])  + __deref(s[3:6], s[1], s[2]) ),
+    '5B'   : ( 3, lambda s : __reg(s[0])  - __deref(s[3:6], s[1], s[2]) ),
+    '5C'   : ( 3, lambda s : __pair(s[0]) * __deref(s[3:6], s[1], s[2]) ),
+    '5D'   : ( 3, lambda s : __pair(s[0]) / __deref(s[3:6], s[1], s[2]) ),
     '90'   : ( 3, lambda s : [
             __reg(s[0], offset).store(*__page(s[3:6], '0', s[2], 4, offset))
             for offset in (

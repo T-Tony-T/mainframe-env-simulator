@@ -319,7 +319,7 @@ def go(mem):
     except Exception as e:
         # ABEND CODE; need info
         t.cancel()              # stop the timer
-        if isinstance(e, ValueError):
+        if isinstance(e, ValueError) and len(e.args) == 3:
             EXCEPTION['type'] = e.args[0]
             EXCEPTION['code'] = e.args[1]
             EXCEPTION['text'] = e.args[2]

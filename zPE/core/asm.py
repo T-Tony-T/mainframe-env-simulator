@@ -317,8 +317,8 @@ op_code = {
     'CLR'  : lambda: ('15', R(1).ro(), R(2).ro()),
     'CR'   : lambda: ('19', R(1).ro(), R(2).ro()),
 
-    'D'    : lambda: ('5D', R(1).rw(), X(2).ro().al('fw')),
-    'DR'   : lambda: ('1D', R(1).rw(), R(2).ro()),
+    'D'    : lambda: ('5D', R(1).rw().al('hw'), X(2).ro().al('fw')),
+    'DR'   : lambda: ('1D', R(1).rw().al('hw'), R(2).ro()),
 
     'EX'   : lambda: ('44', R(1).ro(), X(2).ex()),
 
@@ -333,8 +333,8 @@ op_code = {
     'LR'   : lambda: ('18', R(1).wo(), R(2).ro()),
     'LTR'  : lambda: ('12', R(1).rw(), R(2).ro()),
 
-    'M'    : lambda: ('5C', R(1).rw(), X(2).ro().al('fw')),
-    'MR'   : lambda: ('1C', R(1).rw(), R(2).ro()),
+    'M'    : lambda: ('5C', R(1).rw().al('hw'), X(2).ro().al('fw')),
+    'MR'   : lambda: ('1C', R(1).rw().al('hw'), R(2).ro()),
 
     'N'    : lambda: ('54', R(1).rw(), X(2).ro().al('fw')),
     'NR'   : lambda: ('14', R(1).rw(), R(2).ro()),
