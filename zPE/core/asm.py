@@ -325,7 +325,7 @@ op_code = {
     'IC'   : lambda: ('43', R(1).rw(), X(2).ro()),
 
     'L'    : lambda: ('58', R(1).wo(), X(2).ro().al('fw')),
-    'LA'   : lambda: ('41', R(1).wo(), X(2).ro().al('fw')),
+    'LA'   : lambda: ('41', R(1).wo(), X(2).ro()),
     'LCR'  : lambda: ('13', R(1).rw(), R(2).ro()),
     'LM'   : lambda: ('98', R(1).wo(), R(3).wo(), S(2).ro().al('fw')),
     'LNR'  : lambda: ('11', R(1).rw(), R(2).ro()),
