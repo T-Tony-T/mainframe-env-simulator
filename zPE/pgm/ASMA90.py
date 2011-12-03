@@ -890,7 +890,7 @@ def pass_1():
             # parsing addr1 and addr2
             op_addr = [ 'pos 0', None, None ]
             for i in range(op_indx, op_len):
-                if op_code[i].type in 'XS': # address type
+                if op_code[i].type in 'LSX': # address type
                     op_addr[op_code[i].pos] = op_code[i]
 
             MNEMONIC[line_num] = [ scope_id, addr,              # type 5
@@ -1464,13 +1464,13 @@ def pass_2():
                 lbl = args[lbl_i]
                 p1_lbl = p1_args[lbl_i]
 
-                res = __IS_ABS_ADDR(lbl)
-                if op_code[lbl_i + op_indx].type in 'XS' and res != None:
+                res = __IS_ABS_ADDR(lbl) # int ddd, str i, str b
+                if op_code[lbl_i + op_indx].type in 'LSX' and res != None:
                     # absolute address found
                     abs_values = True
 
                     # check length
-                    if len(res[0][2:-1]) > 12: # B'<12 bit displacement>'
+                    if not 0x000 <= res[0] <= 0xFFF:
                         indx_s = spi[line_num].index(p1_lbl)
                         if '(' in p1_lbl:
                             tmp = p1_lbl.index('(')
@@ -1480,14 +1480,20 @@ def pass_2():
                                ( 28, indx_s, indx_s + tmp, )
                                )
                         break   # stop processing current res
-                    res[0] = zPE.core.asm.value_sd(
-                        zPE.core.asm.parse_sd(res[0])
-                        )[0]    # convert displacement back to int
 
                     # validate registers
-                    if op_code[lbl_i + op_indx].type in 'S':
-                        indx_range = [ 1 ]
-                        del res[2] # remove the extra item (fake base)
+                    if op_code[lbl_i + op_indx].type == 'L':
+                        indx_range = [ 1, 2 ] # validate length and base
+                        max_len = op_code[lbl_i + op_indx].max_len_length()
+
+                        # ture validation of length
+                        reg_indx = __PARSE_EQU_VALUE(res[1]) # length @ indx
+                        if not 0 <= reg_indx <= max_len:
+                            reg[1] = '-1' # invalidate the register check
+
+                    elif op_code[lbl_i + op_indx].type == 'S':
+                        del res[2] # remove the extra item (real base in indx)
+                        indx_range = [ 1 ] # only validate indx (real base)
 
                         if ',' in p1_lbl:
                             indx_s = spi[line_num].index(p1_lbl)
@@ -1498,7 +1504,7 @@ def pass_2():
                                 ))
                             break   # stop processing current res
                     else:
-                        indx_range = [ 1, 2 ]
+                        indx_range = [ 1, 2 ] # validate indx and base
 
                     if ',' in p1_lbl:
                         indx_os = [ # index offset for error msg generation
@@ -1515,11 +1521,11 @@ def pass_2():
                     else:
                         indx_os = [
                             None,
-                            None,
-                            None,
+                            None, # no indx offered
+                            None, # no base offered
                             ]
                     for i in indx_range:
-                        # validate register
+                        # validate each register
                         reg_info = zPE.core.reg.parse_GPR(res[i])
                         if reg_info[0] >= 0:
                             res[i] = reg_info[0]
@@ -1537,7 +1543,7 @@ def pass_2():
                                    )
                             break   # stop processing current res
 
-                elif op_code[lbl_i + op_indx].type in 'R':
+                elif op_code[lbl_i + op_indx].type == 'R':
                     # register found
                     abs_values = True
 
@@ -1546,13 +1552,6 @@ def pass_2():
                         res[0] = __REDUCE_EXP(lbl)
                         if res[0] == None: # label cannot be reduced
                             res[0] = lbl
-                        else:
-                            try:
-                                res[0] = zPE.core.asm.value_sd(
-                                    zPE.core.asm.parse_sd(res[0])
-                                    )[0]
-                            except: # cannot evaluate B-const
-                                res[0] = lbl
                     # validate register
                     reg_info = zPE.core.reg.parse_GPR(res[0])
                     if reg_info[0] >= 0:
@@ -1647,7 +1646,7 @@ def pass_2():
                                 lbl_8 = '{0:<8}'.format(tmp[0])
 
                                 if ( len(tmp) > 1 and
-                                     op_code[lbl_i + op_indx].type in 'S'
+                                     op_code[lbl_i + op_indx].type == 'S'
                                      ):
                                     indx_s = spi[line_num].index(p1_lbl)
                                     __INFO('S', line_num, (
@@ -1749,15 +1748,13 @@ def pass_2():
                     if ex_disp == None:
                         zPE.abort(92, 'Error: ', ''.join(res[0]),
                                   ': Invalid expression.\n')
-                    sd_info = zPE.core.asm.parse_sd(ex_disp)
-                    sd_info = (sd_info[0], sd_info[1], sd_info[2],
-                               0, sd_info[4], sd_info[3]
-                               ) # all are auto-generated, no 'L' at all
-                    (ex_disp, dummy) = zPE.core.asm.value_sd(sd_info)
 
                 # evaluate expression
                 if abs_values:    # absolute values
-                    op_code[lbl_i + op_indx].set(*res)
+                    if op_code[lbl_i + op_indx].type == 'L':
+                        op_code[lbl_i + op_indx].set(reg_indx, res[0], res[2])
+                    else:
+                        op_code[lbl_i + op_indx].set(*res)
                 elif reloc_cnt == 0:    # no relocatable symbol
                     try:
                         op_code[lbl_i + op_indx].set(ex_disp)
@@ -1770,7 +1767,7 @@ def pass_2():
                     if reloc_arg == '*':
                         # current location ptr
                         lbl_8 = '*{0}'.format(line_num)
-                        reg_indx = '0'
+                        reg_indx = 0
                     else:
                         # label
                         tmp = zPE.resplit_sq('[()]', reloc_arg)
@@ -1780,15 +1777,16 @@ def pass_2():
                             lbl_8 = '{0:<8}'.format(tmp[0])
                         if len(tmp) > 1:
                             # [ symbol, indx, '' ]
-                            sd_info = zPE.core.asm.parse_sd(tmp[1])
-                            sd_info = (sd_info[0], sd_info[1], sd_info[2],
-                                       0, sd_info[4], sd_info[3]
-                                       ) # all are auto-generated, no 'L' at all
-                            (reg_indx, dummy) = zPE.core.asm.value_sd(sd_info)
-                            reg_indx = str(reg_indx)
+                            if op_code[lbl_i + op_indx].type == 'L':
+                                reg_indx = __PARSE_EQU_VALUE(tmp[1])
+                            else:
+                                reg_indx = zPE.core.reg.parse_GPR(tmp[1])[0]
                         else:
                             # [ symbol ]
-                            reg_indx = '0'
+                            if op_code[lbl_i + op_indx].type == 'L':
+                                reg_indx = SYMBOL[lbl_8].length
+                            else:
+                                reg_indx = 0
 
                     if __IS_ADDRESSABLE(lbl_8, csect_lbl, ex_disp):
                         # update Using Map
@@ -1814,13 +1812,17 @@ def pass_2():
                                     op_code[lbl_i + op_indx].flag()
                                     )
                                 )
-                        if op_code[lbl_i + op_indx].type in 'S':
+                        if op_code[lbl_i + op_indx].type == 'L':
+                            op_code[lbl_i + op_indx].set(
+                                reg_indx, addr_res[0], addr_res[2]
+                                )
+                        elif op_code[lbl_i + op_indx].type == 'S':
                             op_code[lbl_i + op_indx].set(
                                 addr_res[0], addr_res[2]
                                 )
                         else:
                             op_code[lbl_i + op_indx].set(
-                                addr_res[0], int(reg_indx), addr_res[2]
+                                addr_res[0], reg_indx, addr_res[2]
                                 )
                     else:
                         indx_s = spi[line_num].index(p1_lbl)
@@ -1947,7 +1949,7 @@ def __IS_ADDRESSABLE(lbl, csect_lbl, ex_disp = 0):
     return False                # not in the range of any USING
 
 # rv:
-#   [ disp_B_const, indx_num, base_num ]
+#   [ disp, indx_str, base_str ]
 #   None    if error happened during parsing
 #
 # Note: no length check nor register validating involved
@@ -1964,6 +1966,8 @@ def __IS_ABS_ADDR(addr_arg):
         reminder = ''
     disp = __REDUCE_EXP(disp)
     if disp == None:            # disp cannot be reduced
+        return None
+    if disp < 0:                # negative disp
         return None
 
     # parse index
@@ -1985,12 +1989,9 @@ def __IS_ABS_ADDR(addr_arg):
         indx = __REDUCE_EXP(indx)
         if indx == None:        # indx cannot be reduced
             return None
-        try:
-            indx = zPE.core.asm.value_sd(
-                zPE.core.asm.parse_sd(indx)
-                )[0]
-        except:                 # cannot evaluate B-const
+        if indx < 0:            # negative indx
             return None
+        indx = str(indx)
 
     # parse base
     res = re.search('\)', reminder)
@@ -2006,12 +2007,9 @@ def __IS_ABS_ADDR(addr_arg):
         base = __REDUCE_EXP(base)
         if base == None:        # base cannot be reduced
             return None
-        try:
-            base = zPE.core.asm.value_sd(
-                zPE.core.asm.parse_sd(base)
-                )[0]
-        except:                 # cannot evaluate B-const
+        if base < 0:            # negative base
             return None
+        base = str(base)
 
     # check reminder
     if reminder != '':
@@ -2133,19 +2131,18 @@ def __PARSE_ARG(arg_str):
                                  len(zPE.resplit_sq('\)', _res)[0])
                                  )
                     # try parse as a register
-                    reg_info = zPE.core.reg.parse_GPR(arg_val)
-                    if reg_info[0] >= 0:
-                        # substitute register equate
-                        arg_val = "B'{0}'".format(bin(reg_info[0])[2:])
-                    # try to reduce the value
-                    tmp = __REDUCE_EXP(arg_val)
-                    if tmp == None:
-                        try:
-                            tmp = eval(arg_val)
-                        except:
-                            return ( len(arg_str) - len(reminder) +
-                                     len(zPE.resplit_sq('\(', _res)[0])
-                                     ) # cannot reduce
+                    if zPE.core.reg.parse_GPR(arg_val)[0] >= 0:
+                        tmp = arg_val
+                    else:
+                        # try to reduce the value
+                        tmp = __REDUCE_EXP(arg_val)
+                        if tmp == None:
+                            try:
+                                tmp = eval(arg_val)
+                            except:
+                                return ( len(arg_str) - len(reminder) +
+                                         len(zPE.resplit_sq('\(', _res)[0])
+                                         ) # cannot reduce
                     res = '{0}({1})'.format(arg_lbl, tmp)
                 parts.append(res)
                 descs.append('valid_symbol')
@@ -2168,6 +2165,19 @@ def __PARSE_ARG(arg_str):
     return ( parts, descs, )
 
 
+def __PARSE_EQU_VALUE(equ):
+    if isinstance(equ, int):
+        return equ
+    if equ.isdigit():
+        return int(equ)
+    # search for equates
+    lbl_8 = '{0:<8}'.format(equ)
+    if lbl_8 in SYMBOL  and  SYMBOL[lbl_8].type == 'U':
+        return SYMBOL[lbl_8].value
+    else:
+        return None
+
+
 def __PARSE_OUT():
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
     spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
@@ -2178,7 +2188,7 @@ def __PARSE_OUT():
 
     ### header portion of the report
     ctrl = '1'
-    spo.append(ctrl, '{0:>40} High Level Assembler Option Summary                   (PTF UK28644)   Page {1:>4}\n'.format(' ', 1))
+    spo.append(ctrl, '{0:40} High Level Assembler Option Summary {0:17} (PTF UK28644)   Page {1:>4}\n'.format('', 1))
     ctrl = '-'
     spo.append(ctrl, '{0:>90}  HLASM R5.0  {1}\n'.format(
             ' ', strftime('%Y/%m/%d %H.%M')
@@ -2198,11 +2208,9 @@ def __PARSE_OUT():
 # note: work only for B-const
 def __REDUCE_EXP(exp):
     if exp == '':
-        return "B'0'"
+        return 0
 
     exp_list = []
-    sd_len = None               # tmp length holder
-    prev_sd_len = None          # tmp previous length holder
 
     pattern = '[*/+-]'          # separator list
 
@@ -2228,35 +2236,23 @@ def __REDUCE_EXP(exp):
             sd_info = zPE.core.asm.parse_sd(part)
         except:
             return None
-        if sd_info[4] == None:
+        if sd_info[4] == None:  # no (initial) value
             return None
-        if not sd_info[5]:
+        if not sd_info[5]:      # no limit on length
             sd_info = (sd_info[0], sd_info[1], sd_info[2],
                        0, sd_info[4], sd_info[3]
                        )
-        prev_sd_len = sd_len
-        (sd_val, sd_len) = zPE.core.asm.value_sd(sd_info)
-        if not prev_opnd:   # first part
+        (sd_val, dummy) = zPE.core.asm.value_sd(sd_info) # get the value
+        if not prev_opnd:       # is the first part
             exp_list.append(str(sd_val))
-        elif prev_opnd in "+-":
-            exp_list.extend( [ prev_opnd, str(sd_val), ] )
         else:
-            sd_len = 1
-            while 2 ** sd_len <= sd_val:
-                sd_len += 1
-            sd_val = eval(''.join( [ exp_list[-1], prev_opnd, str(sd_val), ] ))
-            if prev_opnd == '*':
-                prev_sd_len += sd_len - 1
-            else:
-                prev_sd_len -= sd_len
-            exp_list[-1] = str(sd_val)
-            sd_len = max(prev_sd_len, len(bin(sd_val)[2:]))
+            exp_list.extend( [ prev_opnd, str(sd_val), ] )
 
     if len(exp_list) == 1:
         sd_val = int(exp_list[0])
     else:
         sd_val = eval(''.join(exp_list))
-    return "B'{0:0>{1}}'".format(bin(sd_val)[2:], sd_len)
+    return sd_val
 
 
 vf_list = []

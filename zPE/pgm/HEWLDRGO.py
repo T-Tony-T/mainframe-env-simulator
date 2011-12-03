@@ -80,10 +80,12 @@ BRANCHING = [                   # Branching history
     ]
 def record_ins(psw, ins):
     INSTRUCTION.append([ psw, ''.join(ins) ])
-    if ins[0][0] in '04' and ins[0][1] in '567':
-        BRANCHING.append([ psw, ''.join(ins) ])
+    if ins[0][0] in '04' and ins[0][1] in '567': # all branching stmts supported
+        record_br(psw, ins)
     return ins
-
+def record_br(psw, ins):
+    BRANCHING.append([ psw, ''.join(ins) ])
+    return ins
 
 EXCEPTION = {
     # e.g.      type : 'S',  code : '06C',  text : 'SPECIFICATION EXCEPTION',
@@ -312,6 +314,7 @@ def go(mem):
     t = Timer(LOCAL_CONF['TIME'], timeout)
     try:
         t.start()               # start the timer
+        record_br(psw.snapshot(), ['00', '00']) # branch into the module
         while not timeouted  and  psw.Instruct_addr != LOCAL_CONF['EXIT_PT']:
             CPU.execute(record_ins(psw.snapshot(), CPU.fetch()))
         t.cancel()              # stop the timer

@@ -38,10 +38,10 @@ class InstructionType(object):
 
     def prnt(self):
         '''
-        return ( first_str, second_str ) where either can be ''
+        return ( first_str, second_str ) where either one can be ''
 
-        when connecting multiple types, 'first_str's are concatenate
-        before 'second_str's
+        when connecting multiple InstructionTypes, 'first_str's are
+        concatenated before 'second_str's
         '''
         raise AssertionError('require overridden')
 
@@ -160,14 +160,54 @@ class R(InstructionType):
 
     def value(self):
         if self.valid:
-            rv = int(self.prnt()[0], 16)
+            rv = self.__val
         else:
             rv = None
         return rv
 
     def set(self, val):
-        if not 0 <= val < 16:
+        if not 0x0 <= val <= 0xF:
             raise ValueError('register number must be between 0 and 15')
+        self.__val = val
+        self.valid = True
+
+# char => ( 'ii', '' )
+class I(InstructionType):
+    def __init__(self, arg_pos, val = None):
+        super(I, self).__init__('I', arg_pos)
+
+        if val == None:
+            self.valid = False
+            self.__val = None
+        else:
+            self.set(val)
+
+    def __len__(self):
+        return 2                # number of half-bytes / hex-digits
+
+    def get(self):
+        if self.valid:
+            return self.__val
+        else:
+            raise ValueError('value is invalid (non-initialized).')
+
+    def prnt(self):
+        if self.valid:
+            rv = '{0:0>2}'.format(hex(self.__val)[2:].upper())
+        else:
+            rv = '--'
+        return ( rv, '', )
+
+    def value(self):
+        if self.valid:
+            rv = self.__val
+        else:
+            rv = None
+        return rv
+
+    def set(self, val):
+        if not 0x00 <= val <= 0xFF:
+            raise ValueError('immediate byte must be 8 bit long')
         self.__val = val
         self.valid = True
 
@@ -213,9 +253,9 @@ class S(InstructionType):
         return rv
 
     def set(self, dsplc, base = 0):
-        if not  0 <= dsplc < 4096:
+        if not 0x000 <= dsplc <= 0xFFF:
             raise ValueError('displacement must be between 0 and 4095')
-        if not 0 <= base < 16:
+        if not 0x0 <= base <= 0xF:
             raise ValueError('register number must be between 0 and 15')
         self.__base = base
         self.__dsplc = dsplc
@@ -243,7 +283,7 @@ class X(S):
 
     def prnt(self):
         if self.valid:
-            rv = str(hex(self.__indx)[-1].upper())
+            rv = hex(self.__indx)[-1].upper()
         else:
             rv = '-'
         return ( rv, super(X, self).prnt()[1], )
@@ -252,10 +292,58 @@ class X(S):
         return super(X, self).value()
 
     def set(self, dsplc, indx = 0, base = 0):
-        if not 0 <= indx < 16:
+        if not 0x0 <= indx <= 0xF:
             raise ValueError('register number must be between 0 and 15')
         self.__indx = indx
         super(X, self).set(dsplc, base)
+
+# int_12(int_4, int_4) => (  'l', 'bddd' )
+# int_12(int_8, int_4) => ( 'll', 'bddd' )
+class L(S):
+    def __init__(self, arg_pos, lenfmt = 1, dsplc = None, length = 0, base = 0):
+        super(L, self).__init__(arg_pos, dsplc, base)
+        self.type = 'L'         # override type
+        if lenfmt == 1:
+            self.lenfmt = 1     # 1 : L + bddd
+        else:
+            self.lenfmt = 2     # 2 : LL + bddd
+
+        if dsplc == None:
+            self.__length = None
+        else:
+            self.set(length, dsplc, base)
+
+    def __len__(self):
+        return 4 + self.lenfmt
+
+    def get(self):
+        if self.valid:
+            return ( self.__length, ) + super(L, self).get()
+        else:
+            raise ValueError('value is invalid (non-initialized).')
+
+    def prnt(self):
+        if self.valid:
+            if self.__length:   # non-zero
+                encoded_len = self.__length - 1 # length code = length - 1
+            else:               # zero
+                encoded_len = self.__length     # length code = 0
+            rv = '{0:0>{1}}'.format(hex(encoded_len)[2:].upper(), self.lenfmt)
+        else:
+            rv = '{0:->{1}}'.format('', self.lenfmt)
+        return ( rv, super(L, self).prnt()[1], )
+
+    def value(self):
+        return super(L, self).value()
+
+    def set(self, length, dsplc, base = 0):
+        if not 0x0 <= length <= self.max_len_length():
+            raise ValueError('length must be between 1 and ' + str(max_len))
+        self.__length = length
+        super(L, self).set(dsplc, base)
+
+    def max_len_length(self):
+        return 0x1 << ( 4 * self.lenfmt )
 
 
 ## Op-Code Look-Up Table
@@ -336,6 +424,9 @@ op_code = {
 
     'M'    : lambda: ('5C', R(1).rw().al('hw'), X(2).ro().al('fw')),
     'MR'   : lambda: ('1C', R(1).rw().al('hw'), R(2).ro()),
+
+    'MVC'  : lambda: ('D2', L(1, 2).rw(), S(2).ro()), # LL + bddd format
+    'MVI'  : lambda: ('92', S(1).rw(), I(2).ro()),
 
     'N'    : lambda: ('54', R(1).rw(), X(2).ro().al('fw')),
     'NR'   : lambda: ('14', R(1).rw(), R(2).ro()),

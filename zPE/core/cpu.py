@@ -113,14 +113,15 @@ ins_op = {
     '5C'   : ( 3, lambda s : __pair(s[0]) * __deref(s[3:6], s[1], s[2]) ),
     '5D'   : ( 3, lambda s : __pair(s[0]) / __deref(s[3:6], s[1], s[2]) ),
     '90'   : ( 3, lambda s : [
-            __reg(s[0], offset).store(*__page(s[3:6], '0', s[2], 4, offset))
+            __reg(s[0], offset).store(* __page(s[3:6], '0', s[2], 4, offset))
             for offset in (
                 lambda R1 = __indx(s[0]), R2 = __indx(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
+    '92'   : ( 3, lambda s : __ref(s[3:6], '0', s[2], s[0:2]) ),
     '98'   : ( 3, lambda s : [
-            __reg(s[0], offset).load(__deref(s[3:6], '0', s[2], 4, offset))
+            __reg(s[0], offset).load(  __deref(s[3:6], '0', s[2], 4, offset))
             for offset in (
                 lambda R1 = __indx(s[0]), R2 = __indx(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
@@ -142,6 +143,13 @@ ins_op = {
                 for offset in range(len(mask))
                 ]
             )() ),
+    'D2'   : ( 5, lambda s : [
+            __ref( s[3:6], '0', s[2],                      # d, i, b
+                   __deref(s[7:10], '0', s[6], 1, offset), # value
+                   offset                                  # offset
+                   )
+            for offset in range(int(s[0:2], 16) + 1) # length = length code + 1
+            ] ),
     }
 ###
 
@@ -161,7 +169,7 @@ def __addr_reg(r):
         return None
 
 def __pair(r):
-    indx = int(r, 16)
+    indx = __indx(r)
     if indx % 2 != 0:
         raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
     return RegisterPair(GPR[indx], GPR[indx + 1])
@@ -186,6 +194,13 @@ def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
     if pg_i not in Memory._pool_allocated:
         raise ValueError('S', '0C4', 'PROTECTION EXCEPTION')
     return ( Memory._pool_allocated[pg_i], int(addr) )
+
+def __ref(d, x, b, byte, offset = 0):
+    if isinstance(byte, str):
+        byte = int(byte, 16)
+    ( page, addr ) = __page(d, x, b, 1, offset) # have to be byteword boundary
+    page[addr] = byte
+    return byte
 
 def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
     ( page, addr ) = __page(d, x, b, al, offset)
