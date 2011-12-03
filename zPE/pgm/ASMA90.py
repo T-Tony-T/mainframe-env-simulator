@@ -1421,7 +1421,10 @@ def pass_2():
 
                     # update the A-const information
                     if not INFO_GE(line_num, 'E'):
-                        zPE.core.asm.update_sd(MNEMONIC[line_num][2], sd_info)
+                        MNEMONIC[line_num][2] = (
+                            MNEMONIC[line_num][2][:3] + sd_info[3:5] +
+                            MNEMONIC[line_num][2][5:]
+                            )
                 # end of parsing A-const
 
             if INFO_GE(line_num, 'E'):
