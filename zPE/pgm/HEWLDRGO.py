@@ -322,7 +322,7 @@ def go(mem):
             else:
                 sys.stderr.write(   # print out the actual error
                     'Exception: {0}\n'.format(
-                        ''.join([ str(arg) for arg in e.args ])
+                        ', '.join([ str(arg) for arg in e.args ])
                         )
                     )
             zPE.e_push( zPE.newSystemException('0C0', 'UNKNOWN EXCEPTION') )
