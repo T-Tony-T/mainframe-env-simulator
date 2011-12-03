@@ -9,13 +9,21 @@ from asm import len_op
 
 ### Interface Function Definition
 
-def fetch(addr = None):
-    '''only an EX instruction is allowed to pass the address to `fetch()`'''
-    if addr == None:
-        addr = SPR['PSW'].Instruct_addr
+def fetch(EX_addr = None, EX_reg = None):
+    '''
+    both EX_addr and EX_reg should not be touched by any regular fetch;
+    only an EX instruction should pass those to `fetch()`
+    '''
+    if EX_reg:
+        addr = EX_addr                  # use the address specified by EX
+    else:
+        addr = SPR['PSW'].Instruct_addr # retrieve address of next instruction
+
+    # check address alignment
     if addr % 2 != 0:
         raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
 
+    # get to the page containing the address
     pg_i = addr / 4096          # index of the page containing the address
     addr = addr % 4096          # relative address within the page
 
@@ -23,15 +31,24 @@ def fetch(addr = None):
         raise ValueError('S', '0C4', 'PROTECTION EXCEPTION')
     page = Memory._pool_allocated[pg_i] # get the actual page
 
+    # get 1st byte of the op-code
     op_code = page[addr]
     addr += 1
-    if len_op([ op_code ]) == 4:
-        op_code += page[addr]
+    if EX_reg and op_code == '44':
+        # try to EXecute an EX instruction
+        raise ValueError('S', '0C3', 'EXECUTION EXCEPTION')
+
+    # test if op-code is more than one byte
+    if len_op([ op_code ]) == 4: # must be a 2-byte instruction (4 hex digit)
+        op_code += page[addr]    # no need to check page, since aligned on hw
         addr += 1
+
+    # validate op-code
     if op_code not in ins_op:
         raise ValueError('S', '0C1', 'OPERATION EXCEPTION')
 
-    byte_cnt = ins_op[op_code][0] # only fetch the argument(s) themselves
+    # fetch the argument(s)
+    byte_cnt = ins_op[op_code][0]
     if addr + byte_cnt > 4096:
         # retrieve next page, if available
         if pg_i + 1 not in Memory._pool_allocated:
@@ -41,38 +58,50 @@ def fetch(addr = None):
     else:
         arg = page[addr : addr + byte_cnt]
 
-    return ( op_code, arg )
-
-
-def execute(ins, EX_reg = None):
-    '''EX_reg should not be touched by anything other than an EX instruction'''
-    if not EX_reg:
-        # regular fetch and execute
-        SPR['PSW'].ILC =  (len(ins[0]) + len(ins[1]) ) / 2 # num of bytes
-        SPR['PSW'].Instruct_addr += SPR['PSW'].ILC
-        SPR['PSW'].ILC /= 2     # further reduce to num of halfwords
-    elif ins[0] == '44':
-        # try to EXecute an EX instruction
-        raise ValueError('S', '0C3', 'EXECUTION EXCEPTION')
-    else:
-        # an valid EX instruction
+    if EX_reg:
         if zPE.debug_mode():
-            print '[ EX instruction ] receives:', ''.join(ins)
+            print '[ EX instruction ] receives:', op_code, arg
+
+        # perform OR if needed
         indx = __indx(EX_reg)
         if indx:                # not R0
             if zPE.debug_mode():
                 print '  ORing with R{0} = {1:0>2}******'.format(
                     indx, hex(GPR[indx][1])[2:].upper()
                     )
-            new_arg = '{0:0>2}{1}'.format(
-                hex( GPR[indx][1] | int(ins[1][0:2], 16) )[2:].upper(),
-                ins[1][2:]
-                ) # perform or on 2nd byte (first byte of arg) to form new arg
-            ins = ( ins[0], new_arg ) # replace the instruction
+            if len(op_code) == 2:
+                # 1-byte instruction
+                arg = '{0:0>2}{1}'.format(
+                    hex( GPR[indx][1] | int(arg[0:2],16) )[2:].upper(), arg[2:]
+                    ) # perform OR on 2nd byte of instruction (1st arg byte)
+            else:
+                # 2-byte instruction
+                op_code = '{0}{1:0>2}{2}'.format(
+                    op_code[:2],
+                    hex( GPR[indx][1] | int(op_code[2:],16) )[2:].upper()
+                    ) # perform OR on 2nd byte of instruction (2nd op-code byte)
+                # validate op-code
+                if op_code not in ins_op:
+                    raise ValueError('S', '0C1', 'OPERATION EXCEPTION')
+                # validate arg length
+                if byte_cnt != ins_op[op_code][0]:
+                    raise ValueError('S', '0C1', 'OPERATION EXCEPTION')
         else:
             if zPE.debug_mode():
                 print '  Register is R0, no instruction unchanged'
 
+    return ( op_code, arg )
+
+
+def execute(ins):
+    SPR['PSW'].ILC =  (len(ins[0]) + len(ins[1]) ) / 2 # num of bytes
+    SPR['PSW'].Instruct_addr += SPR['PSW'].ILC
+    SPR['PSW'].ILC /= 2     # further reduce to num of halfwords
+
+    return __exec(ins)
+
+
+def __exec(ins):
     if zPE.debug_mode() and ins[0] == '44': # print EX before it executed
         print 'Exec:', ins
 
@@ -124,7 +153,7 @@ ins_op = {
     '41'   : ( 3, lambda s : __reg(s[0]).load( __addr(s[3:6], s[1], s[2])) ),
     '42'   : ( 3, lambda s : __reg(s[0]).stc(* __page(s[3:6], s[1], s[2], 1)) ),
     '43'   : ( 3, lambda s : __reg(s[0]).inc(  __addr(s[3:6], s[1], s[2], 1)) ),
-    '44'   : ( 3, lambda s : execute(fetch(__addr(s[3:6], s[1], s[2])), s[0]) ),
+    '44'   : ( 3, lambda s : __exec(fetch(__addr(s[3:6], s[1], s[2]), s[0])) ),
     '45'   : ( 3, lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
                                __cnt(Register(0), __addr(s[3:6], s[1], s[2]))
                                ] ),

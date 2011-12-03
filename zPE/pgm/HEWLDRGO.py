@@ -327,6 +327,8 @@ def go(mem):
             EXCEPTION['code'] = e.args[1]
             EXCEPTION['text'] = e.args[2]
         else:
+            if zPE.debug_mode():
+                raise
             EXCEPTION['type'] = 'S'
             EXCEPTION['code'] = '0C0'
             EXCEPTION['text'] = 'UNKNOWN EXCEPTION'
