@@ -9,8 +9,10 @@ from asm import len_op
 
 ### Interface Function Definition
 
-def fetch():
-    addr = SPR['PSW'].Instruct_addr
+def fetch(addr = None):
+    '''only an EX instruction is allowed to pass the address to `fetch()`'''
+    if addr == None:
+        addr = SPR['PSW'].Instruct_addr
     if addr % 2 != 0:
         raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
 
@@ -42,14 +44,41 @@ def fetch():
     return ( op_code, arg )
 
 
-def execute(ins):
-    SPR['PSW'].ILC =  (len(ins[0]) + len(ins[1]) ) / 2 # num of bytes
-    SPR['PSW'].Instruct_addr += SPR['PSW'].ILC
-    SPR['PSW'].ILC /= 2         # further reduce to num of halfwords
+def execute(ins, EX_reg = None):
+    '''EX_reg should not be touched by anything other than an EX instruction'''
+    if not EX_reg:
+        # regular fetch and execute
+        SPR['PSW'].ILC =  (len(ins[0]) + len(ins[1]) ) / 2 # num of bytes
+        SPR['PSW'].Instruct_addr += SPR['PSW'].ILC
+        SPR['PSW'].ILC /= 2     # further reduce to num of halfwords
+    elif ins[0] == '44':
+        # try to EXecute an EX instruction
+        raise ValueError('S', '0C3', 'EXECUTION EXCEPTION')
+    else:
+        # an valid EX instruction
+        if zPE.debug_mode():
+            print '[ EX instruction ] receives:', ''.join(ins)
+        indx = __indx(EX_reg)
+        if indx:                # not R0
+            if zPE.debug_mode():
+                print '  ORing with R{0} = {1:0>2}******'.format(
+                    indx, hex(GPR[indx][1])[2:].upper()
+                    )
+            new_arg = '{0:0>2}{1}'.format(
+                hex( GPR[indx][1] | int(ins[1][0:2], 16) )[2:].upper(),
+                ins[1][2:]
+                ) # perform or on 2nd byte (first byte of arg) to form new arg
+            ins = ( ins[0], new_arg ) # replace the instruction
+        else:
+            if zPE.debug_mode():
+                print '  Register is R0, no instruction unchanged'
+
+    if zPE.debug_mode() and ins[0] == '44': # print EX before it executed
+        print 'Exec:', ins
 
     ins_op[ins[0]][1](ins[1]) # execute the instruction against the arguments
 
-    if zPE.debug_mode():
+    if zPE.debug_mode() and ins[0] != '44': # skip EX
         print 'Exec:', ins
         print '  '.join([ str(r) for r in GPR[:8] ]), '\t\t', SPR['PSW']
         print '  '.join([ str(r) for r in GPR[8:] ])
@@ -95,7 +124,7 @@ ins_op = {
     '41'   : ( 3, lambda s : __reg(s[0]).load( __addr(s[3:6], s[1], s[2])) ),
     '42'   : ( 3, lambda s : __reg(s[0]).stc(* __page(s[3:6], s[1], s[2], 1)) ),
     '43'   : ( 3, lambda s : __reg(s[0]).inc(  __addr(s[3:6], s[1], s[2], 1)) ),
-    '44'   : ( 3, lambda s : None ), # EX, not implemented for now
+    '44'   : ( 3, lambda s : execute(fetch(__addr(s[3:6], s[1], s[2])), s[0]) ),
     '45'   : ( 3, lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
                                __cnt(Register(0), __addr(s[3:6], s[1], s[2]))
                                ] ),

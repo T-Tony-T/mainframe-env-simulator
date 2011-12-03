@@ -621,7 +621,7 @@ def __PARSE_OUT_LDR(rc):
             spo.append(
                 ctrl, '  ', zPE.b2x(ins[0][32:39]),
                 '  {0:0>6}     {1} {2} {3}\n'.format(
-                    ins[0].Instruct_addr, code[0], code[1], code[2]
+                    hex(ins[0].Instruct_addr)[2:].upper(), * code
                     )
                 )
         # append the following words to the end of the last instruction
@@ -637,8 +637,10 @@ def __PARSE_OUT_LDR(rc):
                 code = ' '.join([ ins[1][:4], ins[1][4:] ])
             else:
                 code = ins[1]
-            spo.append(ctrl, '  ', zPE.b2x(ins[0][32:39]),
-                       '  {0:0>6}     {1}\n'.format(ins[0].Instruct_addr, code))
+            spo.append(
+                ctrl, '  ', zPE.b2x(ins[0][32:39]),
+                '  {0:0>6}     {1}\n'.format(
+                    hex(ins[0].Instruct_addr)[2:].upper(), code))
 
         # register dump
         spo.append(ctrl, ' REGS 0-7      ',
