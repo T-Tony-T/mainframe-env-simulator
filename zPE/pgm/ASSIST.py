@@ -571,7 +571,7 @@ def __PARSE_OUT_LDR(rc):
     ldr_ins    = zPE.pgm.HEWLDRGO.INSTRUCTION
     ldr_br     = zPE.pgm.HEWLDRGO.BRANCHING
 
-    ldr_except = zPE.pgm.HEWLDRGO.EXCEPTION
+    ldr_except = zPE.e_pop()    # get the last exception, is exists
     mem_dump   = zPE.pgm.HEWLDRGO.MEM_DUMP
 
 
@@ -594,14 +594,9 @@ def __PARSE_OUT_LDR(rc):
         msg = 'ABNORMAL'
         # generate err msgs here
         spo.append('1', 'ASSIST COMPLETION DUMP\n')
-        spo.append(
-            ctrl, 'PSW AT ABEND ', str(zPE.core.reg.SPR['PSW']),
-            '       COMPLETION CODE {0:>8} = {1} {2}\n'.format(
-                { 'S': 'SYSTEM', 'U':'UTILITY' }[ldr_except['type']],
-                ldr_except['code'],
-                ldr_except['text'][:52] # only capable for 52 charactors
-                )
-            )
+        spo.append( ctrl, 'PSW AT ABEND ', str(zPE.core.reg.SPR['PSW']),
+                    '       COMPLETION CODE {0}\n'.format(str(ldr_except)[:76])
+                    ) # only capable of at most 76 characters of exception msg
 
         # instructions tracing
         spo.append(ctrl, '** TRACE OF INSTRUCTIONS JUST BEFORE TERMINATION: PSW BITS SHOWN ARE THOSE BEFORE CORRESPONDING INSTRUCTION DECODED ***\n')

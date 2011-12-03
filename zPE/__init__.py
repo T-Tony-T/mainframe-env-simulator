@@ -3,6 +3,7 @@
 
 # modules that will be auto imported
 import core, pgm, conf
+from core.excptn import *       # pull all exceptions over
 
 import os, sys, re
 
@@ -14,6 +15,7 @@ def debug_mode(enable_debug = None):
         return DEBUG_MODE[0]
     else:
         DEBUG_MODE[0] = enable_debug
+
 
 def abort(rc, *msg):
     '''

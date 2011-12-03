@@ -87,10 +87,6 @@ def record_br(psw, ins):
     BRANCHING.append([ psw, ''.join(ins) ])
     return ins
 
-EXCEPTION = {
-    # e.g.      type : 'S',  code : '06C',  text : 'SPECIFICATION EXCEPTION',
-    }
-
 MEM_DUMP = [ ]                  # the entire memory dump at ABEND
 
 
@@ -112,10 +108,6 @@ def init_res():
 
     CSECT.clear()               # clear Control SECTion records
     SCOPE.clear()               # clear scope records
-
-    EXCEPTION['type'] = None
-    EXCEPTION['code'] = None
-    EXCEPTION['text'] = None
 
     del MEM_DUMP[:]             # clear memory dump
 
@@ -322,27 +314,24 @@ def go(mem):
     except Exception as e:
         # ABEND CODE; need info
         t.cancel()              # stop the timer
-        if isinstance(e, ValueError) and len(e.args) == 3:
-            EXCEPTION['type'] = e.args[0]
-            EXCEPTION['code'] = e.args[1]
-            EXCEPTION['text'] = e.args[2]
+        if isinstance(e, zPE.zPException):
+            zPE.e_push(e)
         else:
             if zPE.debug_mode():
                 raise
-            EXCEPTION['type'] = 'S'
-            EXCEPTION['code'] = '0C0'
-            EXCEPTION['text'] = 'UNKNOWN EXCEPTION'
-            sys.stderr.write(   # print out the actual error
-                'Exception: {0}\n'.format(
-                    ''.join([ str(arg) for arg in e.args ])
+            else:
+                sys.stderr.write(   # print out the actual error
+                    'Exception: {0}\n'.format(
+                        ''.join([ str(arg) for arg in e.args ])
+                        )
                     )
-                )
+            zPE.e_push( zPE.newSystemException('0C0', 'UNKNOWN EXCEPTION') )
         MEM_DUMP.extend(mem.dump_all())
         rc = zPE.RC['ERROR']
     if timeouted:
-        EXCEPTION['code'] = '322'
-        EXCEPTION['type'] = 'S'
-        EXCEPTION['text'] = 'TIME EXCEEDED THE SPECIFIED LIMIT'
+        zPE.e_push( zPE.newSystemException(
+                '322', 'TIME EXCEEDED THE SPECIFIED LIMIT'
+                ) )
         MEM_DUMP.extend(mem.dump_all())
         rc = zPE.RC['SEVERE']
 
@@ -351,6 +340,9 @@ def go(mem):
 
     mem.release()
     ldr_mem.release()
+
+    if zPE.debug_mode():
+        sys.stderr.write(zPE.e_dump())
     return rc
 # end of go()
 

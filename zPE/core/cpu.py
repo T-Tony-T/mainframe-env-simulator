@@ -21,14 +21,14 @@ def fetch(EX_addr = None, EX_reg = None):
 
     # check address alignment
     if addr % 2 != 0:
-        raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
+        raise zPE.newSpecificationException()
 
     # get to the page containing the address
     pg_i = addr / 4096          # index of the page containing the address
     addr = addr % 4096          # relative address within the page
 
     if pg_i not in Memory._pool_allocated:
-        raise ValueError('S', '0C4', 'PROTECTION EXCEPTION')
+        raise zPE.newProtectionException()
     page = Memory._pool_allocated[pg_i] # get the actual page
 
     # get 1st byte of the op-code
@@ -36,7 +36,7 @@ def fetch(EX_addr = None, EX_reg = None):
     addr += 1
     if EX_reg and op_code == '44':
         # try to EXecute an EX instruction
-        raise ValueError('S', '0C3', 'EXECUTION EXCEPTION')
+        raise zPE.newSystemException('0C3', 'EXECUTION EXCEPTION')
 
     # test if op-code is more than one byte
     if len_op([ op_code ]) == 4: # must be a 2-byte instruction (4 hex digit)
@@ -45,14 +45,14 @@ def fetch(EX_addr = None, EX_reg = None):
 
     # validate op-code
     if op_code not in ins_op:
-        raise ValueError('S', '0C1', 'OPERATION EXCEPTION')
+        raise zPE.newOperationException()
 
     # fetch the argument(s)
     byte_cnt = ins_op[op_code][0]
     if addr + byte_cnt > 4096:
         # retrieve next page, if available
         if pg_i + 1 not in Memory._pool_allocated:
-            raise ValueError('S', '0C4', 'PROTECTION EXCEPTION')
+            raise zPE.newProtectionException()
         next_page = Memory._pool_allocated[pg_i + 1]
         arg = page[addr : ] + next_page[ : addr + byte_cnt - 4096]
     else:
@@ -82,10 +82,10 @@ def fetch(EX_addr = None, EX_reg = None):
                     ) # perform OR on 2nd byte of instruction (2nd op-code byte)
                 # validate op-code
                 if op_code not in ins_op:
-                    raise ValueError('S', '0C1', 'OPERATION EXCEPTION')
+                    raise zPE.newOperationException()
                 # validate arg length
                 if byte_cnt != ins_op[op_code][0]:
-                    raise ValueError('S', '0C1', 'OPERATION EXCEPTION')
+                    raise zPE.newOperationException()
         else:
             if zPE.debug_mode():
                 print '  Register is R0, no instruction unchanged'
@@ -229,7 +229,7 @@ def __addr_reg(r):
 def __pair(r):
     indx = __indx(r)
     if indx % 2 != 0:
-        raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
+        raise zPE.newSpecificationException()
     return RegisterPair(GPR[indx], GPR[indx + 1])
 
 def __addr(d, x, b):
@@ -244,13 +244,13 @@ def __addr(d, x, b):
 def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
     addr = __addr(d, x, b) + offset * al
     if addr % al != 0:
-        raise ValueError('S', '0C6', 'SPECIFICATION EXCEPTION')
+        raise zPE.newSpecificationException()
     
     pg_i = addr / 4096          # index of the page containing the address
     addr = addr % 4096          # relative address within the page
 
     if pg_i not in Memory._pool_allocated:
-        raise ValueError('S', '0C4', 'PROTECTION EXCEPTION')
+        raise zPE.newProtectionException()
     return ( Memory._pool_allocated[pg_i], int(addr) )
 
 def __ref(d, x, b, byte, offset = 0):
