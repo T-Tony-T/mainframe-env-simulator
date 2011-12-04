@@ -518,8 +518,10 @@ class C_(object):
 
     def get(self):
         return self.tr(self.dump())
+
     def value(self):
         return int(X_.tr(self.dump()), 16)
+
     def set(self, ch_str, length = 0):
         ch_len = len(ch_str)
         if not length:
@@ -531,11 +533,14 @@ class C_(object):
                                 # initialize to all spaces
         for indx in range(0, min(ch_len, length), 1):
             self.__vals[indx] = ord(ch_str[indx].encode('EBCDIC-CP-US'))
+
     def dump(self):
         return (self.__vals, self.natual_len)
+
     def fill__(self, dump):     # no error checking
         self.__vals = dump[0]
         self.natual_len = dump[1]
+
     @staticmethod
     def tr(dump):
         ch_str = ''
@@ -554,8 +559,10 @@ class X_(object):
 
     def get(self):
         return self.tr(self.dump())
+
     def value(self):
         return int(self.get(), 16)
+
     def set(self, hex_str, length = 0):
         hex_len = len(hex_str)
         # calculate natual length; in unit of bin_digit
@@ -574,11 +581,14 @@ class X_(object):
         for indx in range(0, min(hex_len, length), 2):
             end = hex_len - indx
             self.__vals[- indx / 2 - 1] = int(hex_str[end - 2 : end], 16)
+
     def dump(self):
         return (self.__vals, self.natual_len)
+
     def fill__(self, dump):     # no error checking
         self.__vals = dump[0]
         self.natual_len = dump[1]
+
     @staticmethod
     def tr(dump):
         hex_str = ''
@@ -597,8 +607,10 @@ class B_(object):
 
     def get(self):
         return self.tr(self.dump())
+
     def value(self):
         return int(self.get(), 2)
+
     def set(self, bin_str, length = 0):
         bin_len = len(bin_str)
         # calculate natual length; in unit of bin_digit
@@ -617,11 +629,14 @@ class B_(object):
         for indx in range(0, min(bin_len, length), 8):
             end = bin_len - indx
             self.__vals[- indx / 8 - 1] = int(bin_str[end - 8 : end], 2)
+
     def dump(self):
         return (self.__vals, self.natual_len)
+
     def fill__(self, dump):     # no error checking
         self.__vals = dump[0]
         self.natual_len = dump[1]
+
     @staticmethod
     def tr(dump):
         bin_str = ''
@@ -643,9 +658,11 @@ class P_(object):
 
     def get(self, sign = '-'):
         return self.tr(self.dump(), sign)
+
     def value(self):
         ch_str = self.tr(self.dump(), '+')
         return int(ch_str[-1] + ch_str[:-1])
+
     def set(self, ch_str, length = 0):
         # check sign
         sign_digit = 'C'        # assume positive
@@ -658,6 +675,7 @@ class P_(object):
         if length and length * 2 - 1 < len(ch_str): # check length
             raise ValueError('Invalid length.')
         self.fill__(X_(ch_str + sign_digit).dump())
+
     def pack(self, ch_str, length = 0):
         if length and length * 2 - 1 < len(ch_str): # check length
             raise ValueError('Invalid length.')
@@ -670,11 +688,14 @@ class P_(object):
             hex(ord(ch_str[-1].encode('EBCDIC-CP-US')))[2:]
             )[0].upper()        # for the last char, add the high digit
         self.fill__(X_(hex_str).dump())
+
     def dump(self):
         return (self.__vals, self.natual_len)
+
     def fill__(self, dump):     # no error checking
         self.__vals = dump[0]
         self.natual_len = dump[1]
+
     @staticmethod
     def tr(dump, sign = '-'):
         vals = dump[0]
@@ -720,9 +741,11 @@ class Z_(object):
 
     def get(self, sign = '-'):
         return self.tr(self.dump(), sign)
+
     def value(self):
         ch_str = self.tr(self.dump(), '+')
         return int(ch_str[-1] + ch_str[:-1])
+
     def set(self, ch_str, length = 0):
         # check sign
         sign_digit = 'C'        # assume positive
@@ -747,11 +770,14 @@ class Z_(object):
                 )
         # set sign for the last digit
         self.__vals[-1] = int(sign_digit + hex(self.__vals[-1])[-1], 16)
+
     def dump(self):
         return (self.__vals, self.natual_len)
+
     def fill__(self, dump):     # no error checking
         self.__vals = dump[0]
         self.natual_len = dump[1]
+
     @staticmethod
     def tr(dump, sign = '-'):
         vals = dump[0]
@@ -783,53 +809,92 @@ class Z_(object):
 
 
 
-# non-byte-based types
+# non-byte-based (numerical) types
 
-# Exception:
-#   ValueError: if length (required or actual) greater than 4
-class F_(object):
-    def __init__(self, int_str, length = 0):
-        self.natual_len = 32    # must be 32
+class SDNumericalType(object):
+    '''this is an abstract base class'''
+
+    def __init__(self, int_str, length, n_byte):
+        self.natual_len = n_byte * 8
+        self._byte_len_ = n_byte
         self.set(int_str, length)
 
     def __len__(self):
-        return 4                # must be 4
+        return self._byte_len_
 
     def get(self):
         return self.tr(self.dump())
+
     def value(self):
         return self.__val
+
     def set(self, int_str, length = 0):
-        if length > 4:
-            raise ValueError('Invalid length.')
+        self.__val  = 0      # reset value
+        self.__indx = 1      # reset insert index
+        self.append(int_str, length)
+
+    def append(self, int_str, length = 0):
+        if not length:
+            length = self._byte_len_
+        if not 0 < length <= self.room_left(): # length not in (0, room left]
+            raise ValueError('invalid length / no room to append')
         if isinstance(int_str, int) or isinstance(int_str, long):
             int_val = int_str
         elif isinstance(int_str, str):
             int_val = int(int_str, 10)
         else:
             raise ValueError('value is not a valid number')
-        if not -0x80000000 <= int_val < 0x80000000:
-            raise ValueError('overflow: value too large.')
-        self.__val = int_val
+        # get the max value allowed by the length
+        max_val = 0x1 << ( 8 * length - 1 )
+        if not - max_val <= int_val < max_val:
+            raise ValueError('overflow: value too large')
+        # update the value
+        self.apply_append(int_val, length)
+
+    def apply_append(self, val, length):
+        self.__val  += val << ( 8 * (self._byte_len_ - length) )
+        self.__indx += length
+
+    def room_left(self):
+        return self._byte_len_ + 1 - self.__indx
+
+
     def dump(self):
         if self.__val >= 0:
-            hex_str = '{0:0>8}'.format(hex(self.__val)[2:])
+            hex_str = '{0:0>{1}}'.format(
+                hex(self.__val)[2:], self._byte_len_ * 2
+                )
         else:
-            hex_str = '{0:0>8}'.format(hex(
-                    0x100000000 + self.__val # 2's complement
-                    )[2:])
-        return (
-            (
-                int(hex_str[0:2], 16),
-                int(hex_str[2:4], 16),
-                int(hex_str[4:6], 16),
-                int(hex_str[6:8], 16),
-                ),
-            self.natual_len
-            )
+            hex_str = '{0:0>{1}}'.format( # display 2's complement
+                hex((0x1 << self.natual_len) + self.__val)[2:],
+                self._byte_len_ * 2
+                )
+        return ( [ int(hex_str[ i : i+2 ], 16)
+                   for i in [ i * 2 for i in range(len(hex_str)/2) ]
+                   ],
+                 self.natual_len
+                 )
+
+    def fill__(self, dump):
+        '''load the universal dump into the internal structure'''
+        raise AssertionError('require overridden')
+
+    def load_value(self, val, length): # no error checking
+        self.__val      = val
+        self.natual_len = length
+
+    @staticmethod
+    def tr(dump):
+        '''translate the universal dump to the repr string of this class'''
+        raise AssertionError('require overridden')
+
+class F_(SDNumericalType):
+    def __init__(self, int_str, length = 0):
+        super(F_, self).__init__(int_str, length, 4) # 4-byte natual length
+
     def fill__(self, dump):      # no error checking
-        self.__val = int(self.tr(dump))
-        self.natual_len = dump[1]
+        self.load_value(int(self.tr(dump)), dump[1])
+
     @staticmethod
     def tr(dump):
         vals = dump[0]
@@ -844,49 +909,13 @@ class F_(object):
             int_str = str(int_val)
         return int_str
 
-# Exception:
-#   ValueError: if length (required or actual) greater than 2
-class H_(object):
+class H_(SDNumericalType):
     def __init__(self, int_str, length = 0):
-        self.natual_len = 16    # must be 16
-        self.set(int_str, length)
+        super(H_, self).__init__(int_str, length, 2) # 2-byte natual length
 
-    def __len__(self):
-        return 2                # must be 2
-
-    def get(self):
-        return self.tr(self.dump())
-    def value(self):
-        return self.__val
-    def set(self, int_str, length = 0):
-        if length > 2:
-            raise ValueError('Invalid length.')
-        if isinstance(int_str, int) or isinstance(int_str, long):
-            int_val = int_str
-        elif isinstance(int_str, str):
-            int_val = int(int_str, 10)
-        else:
-            raise ValueError('value is not a valid number')
-        if not -0x8000 <= int_val < 0x8000:
-            raise ValueError('overflow: value too large.')
-        self.__val = int_val
-    def dump(self):
-        if self.__val >= 0:
-            hex_str = '{0:0>4}'.format(hex(self.__val)[2:])
-        else:
-            hex_str = '{0:0>4}'.format(hex(
-                    0x10000 + self.__val # 2's complement
-                    )[2:])
-        return (
-            (
-                int(hex_str[0:2], 16),
-                int(hex_str[2:4], 16),
-                ),
-            self.natual_len
-            )
     def fill__(self, dump):      # no error checking
-        self.__val = int(self.tr(dump))
-        self.natual_len = dump[1]
+        self.load_value(int(self.tr(dump)), dump[1])
+
     @staticmethod
     def tr(dump):
         vals = dump[0]
@@ -901,46 +930,42 @@ class H_(object):
             int_str = str(int_val)
         return int_str
 
-# Exception:
-#   ValueError: if length (required or actual) greater than 4
-class A_(object):
+
+class A_(SDNumericalType):
     def __init__(self, int_str, length = 0):
-        self.natual_len = 32    # must be 32
-        self.set(int_str, length)
+        super(A_, self).__init__(int_str, length, 4) # 4-byte natual length
 
-    def __len__(self):
-        return 4                # must be 4
-
-    def get(self):
-        return self.tr(self.dump())
-    def value(self):
-        return self.__val
-    def set(self, int_str, length = 0):
-        if length > 4:
-            raise ValueError('Invalid length.')
+    def append(self, int_str, length = 0):
+        if not length:
+            length = self._byte_len_
+        if not 0 < length <= self.room_left(): # length not in (0, room left]
+            raise ValueError('invalid length / no room to append')
         if isinstance(int_str, int) or isinstance(int_str, long):
             int_val = int_str
         elif isinstance(int_str, str):
             int_val = int(int_str, 10)
         else:
             raise ValueError('value is not a valid number')
-        if not 0 <= int_val < 0x100000000:
+        # get the max value allowed by the length
+        max_val = 0x1 << ( 8 * length )
+        if not 0 <= int_val < max_val:
             raise ValueError('overflow: value too large.')
-        self.__val = int_val
+        # update the value
+        self.apply_append(int_val, length)
+
     def dump(self):
-        hex_str = '{0:0>8}'.format(hex(self.__val)[2:])
-        return (
-            (
-                int(hex_str[0:2], 16),
-                int(hex_str[2:4], 16),
-                int(hex_str[4:6], 16),
-                int(hex_str[6:8], 16),
-                ),
-            self.natual_len
-            )
-    def fill__(self, vals):      # no error checking
-        self.__val = int(self.tr(dump)[2:], 16)
-        self.natual_len = dump[1]
+        hex_str = '{0:0>8}'.format(hex(self.value())[2:])
+        return ( [ int(hex_str[0:2], 16),
+                   int(hex_str[2:4], 16),
+                   int(hex_str[4:6], 16),
+                   int(hex_str[6:8], 16),
+                   ],
+                 self.natual_len
+                 )
+
+    def fill__(self, dump):      # no error checking
+        self.load_value(int(self.tr(dump)[2:], 16), dump[1])
+
     @staticmethod
     def tr(dump):
         vals = dump[0]
