@@ -58,11 +58,11 @@ def init_rc():
 
 
 CONFIG_PATH = {
-    'dir'       : os.path.join(os.environ['HOME'], '.zPE'),
-    'rc'        : os.path.join(os.environ['HOME'], '.zPE', 'config'),
-    'data'      : os.path.join(os.environ['HOME'], '.zPE', 'data'),
-    'ICH70001I' : os.path.join(os.environ['HOME'], '.zPE', 'data', 'ICH70001I'),
-    'SPOOL'     : os.path.join(os.environ['HOME'], '.zPE', 'data', 'SPOOL.sqlite')
+    'dir'       : os.path.join(os.path.expanduser('~'), '.zPE'),
+    'rc'        : os.path.join(os.path.expanduser('~'), '.zPE', 'config'),
+    'data'      : os.path.join(os.path.expanduser('~'), '.zPE', 'data'),
+    'ICH70001I' : os.path.join(os.path.expanduser('~'), '.zPE', 'data', 'ICH70001I'),
+    'SPOOL'     : os.path.join(os.path.expanduser('~'), '.zPE', 'data', 'SPOOL.sqlite')
     }
 
 def dump_ICH70001I(conf):

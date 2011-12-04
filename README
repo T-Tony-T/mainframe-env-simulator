@@ -27,8 +27,8 @@ http://python.org/download/
 And you can find the setuptools here:
 http://pypi.python.org/pypi/setuptools#files
 
-Under Windows, please make sure the Environment Variable "HOME"
-and "Path" are set correctly.
+Under Windows, please make sure the installation directory of python
+is in your "PATH" Environment Variable.
 
 
 To make the GUI work, you also need to install GTK+ and PyGTK.

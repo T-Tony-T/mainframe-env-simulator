@@ -431,11 +431,11 @@ def init_key_binding():
 
 
 CONFIG_PATH = {
-    'dir'       : os.path.join(os.environ['HOME'], '.zPE'),
-    'gui_rc'    : os.path.join(os.environ['HOME'], '.zPE', 'gui.conf'),
-    'key_emacs' : os.path.join(os.environ['HOME'], '.zPE', 'key.emacs'),
-#    'key_vi'    : os.path.join(os.environ['HOME'], '.zPE', 'key.vi'),
-    'key_other' : os.path.join(os.environ['HOME'], '.zPE', 'key.other'),
+    'dir'       : os.path.join(os.path.expanduser('~'), '.zPE'),
+    'gui_rc'    : os.path.join(os.path.expanduser('~'), '.zPE', 'gui.conf'),
+    'key_emacs' : os.path.join(os.path.expanduser('~'), '.zPE', 'key.emacs'),
+#    'key_vi'    : os.path.join(os.path.expanduser('~'), '.zPE', 'key.vi'),
+    'key_other' : os.path.join(os.path.expanduser('~'), '.zPE', 'key.other'),
     }
 
 def read_rc_all():
