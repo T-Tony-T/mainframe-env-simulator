@@ -855,24 +855,29 @@ class SDNumericalType(object):
         self.__val  += val << ( 8 * (self._byte_len_ - length) )
         self.__indx += length
 
+    def room_used(self):
+        return self.__indx - 1
+
     def room_left(self):
-        return self._byte_len_ + 1 - self.__indx
+        return self._byte_len_ - self.room_used()
 
 
     def dump(self):
         if self.__val >= 0:
             hex_str = '{0:0>{1}}'.format(
-                hex(self.__val)[2:], self._byte_len_ * 2
+                hex(self.__val)[2:],
+                self._byte_len_ * 2
                 )
         else:
             hex_str = '{0:0>{1}}'.format( # display 2's complement
                 hex((0x1 << self.natual_len) + self.__val)[2:],
                 self._byte_len_ * 2
                 )
+        hex_str = hex_str[ : self.room_used() * 2] # get the actually used bytes
         return ( [ int(hex_str[ i : i+2 ], 16)
                    for i in [ i * 2 for i in range(len(hex_str)/2) ]
                    ],
-                 self.natual_len
+                 self.room_used() * 8 # real length in bit
                  )
 
     def fill__(self, dump):
@@ -955,12 +960,11 @@ class A_(SDNumericalType):
 
     def dump(self):
         hex_str = '{0:0>8}'.format(hex(self.value())[2:])
-        return ( [ int(hex_str[0:2], 16),
-                   int(hex_str[2:4], 16),
-                   int(hex_str[4:6], 16),
-                   int(hex_str[6:8], 16),
+        hex_str = hex_str[ : self.room_used() * 2] # get the actually used bytes
+        return ( [ int(hex_str[ i : i+2 ], 16)
+                   for i in [ i * 2 for i in range(len(hex_str)/2) ]
                    ],
-                 self.natual_len
+                 self.room_used() * 8 # real length in bit
                  )
 
     def fill__(self, dump):      # no error checking
@@ -973,8 +977,10 @@ class A_(SDNumericalType):
         for indx in range(1, len(vals)):
             int_val *= 256
             int_val += vals[indx]
-        return '0x{0:0>8}'.format(
-            hex(int_val % 0xFFFFFFFF)[2:-1].upper()
+        return '0x{0}'.format(
+            '{0:0>8}'.format(
+                hex(int_val % 0xFFFFFFFF)[2:-1].upper()
+                )[ 8 - dump[1] / 4 : ] # only show the real length
             )
 
 

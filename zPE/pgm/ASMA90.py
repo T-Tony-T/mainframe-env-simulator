@@ -607,6 +607,12 @@ def pass_1():
                 zPE.abort(90, 'Error: ', tmp,
                           ': Invalid constant at line {0}.\n'.format(line_num))
 
+            # align boundary if needed
+            if not sd_info[5]:
+                # do not have length specified, force alignment
+                alignment = zPE.core.asm.align_at(sd_info[2])
+                addr = (addr + alignment - 1) / alignment * alignment
+
             # check =constant
             if field[1][0] == '=':
                 if not const_left:
@@ -689,10 +695,6 @@ def pass_1():
                     zPE.abort(90, 'Error: ', sd_info[2],
                               ': Invalid address type.\n')
 
-            # align boundary
-            alignment = zPE.core.asm.align_at(sd_info[2])
-            addr = (addr + alignment - 1) / alignment * alignment
-
             # check lable
             bad_lbl = zPE.bad_label(field[0])
             lbl_8 = '{0:<8}'.format(field[0])
@@ -727,6 +729,9 @@ def pass_1():
 
         # parse op-code
         elif zPE.core.asm.valid_op(field[1]):
+            # align boundary
+            addr = addr + addr % 2
+
             op_code = zPE.core.asm.get_op(field[1])
             op_len  = len(op_code)
             op_indx = zPE.core.asm.op_arg_indx(op_code)

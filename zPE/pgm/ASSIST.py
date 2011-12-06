@@ -273,12 +273,13 @@ def __PARSE_OUT_ASM(limit):
             if len(code) == 12:
                 field_3 = code[8:12]
             else:
-                field_3 = '    ' # 4 spaces
+                field_3 = ' ' * 4
             if len(code) >= 8:
                 field_2 = code[4:8]
             else:
-                field_2 = '    ' # 4 spaces
+                field_2 = ' ' * 4
             field_1 = code[0:4]
+
             tmp_str = '{0} {1} {2} '.format(
                 field_1, field_2, field_3
                 )
@@ -602,16 +603,16 @@ def __PARSE_OUT_LDR(rc):
         spo.append(ctrl, '** TRACE OF INSTRUCTIONS JUST BEFORE TERMINATION: PSW BITS SHOWN ARE THOSE BEFORE CORRESPONDING INSTRUCTION DECODED ***\n')
         spo.append(ctrl, '  IM LOCATION    INSTRUCTION :  IM = PSW BITS 32-39(ILC,CC,MASK) BEFORE INSTRUCTION EXECUTED AT PROGRAM LOCATION SHOWN\n')
 
-        code = [ '    ' ] * 3   # [ 4 spaces ] * 3
+        code = [ ' ' * 4 ] * 3
         for ins in ldr_ins[-10 : ]: # only show last 10 instructions
             if len(ins[1]) == 12:
                 code[2] = ins[1][8:12]
             else:
-                code[2] = '    ' # 4 spaces
+                code[2] = ' ' * 4
             if len(ins[1]) >= 8:
                 code[1] = ins[1][4:8]
             else:
-                code[1] = '    ' # 4 spaces
+                code[1] = ' ' * 4
             code[0] = ins[1][0:4]
             spo.append(
                 ctrl, '  ', zPE.b2x(ins[0][32:39]),
