@@ -22,13 +22,16 @@ setup(
         'console_scripts': [
             'zsub = zPE.scripts.zsub:main',
             'zfetch = zPE.scripts.zfetch:main',
-        ],
+            ],
         'gui_scripts': [
             'zPE = zPE.zPE_gtk:main',
-        ],
-    },
+            ],
+        },
+    package_dir = {
+        'UI': 'zPE/UI'
+        },
     package_data = {
-        'UI': [ '*.svg', '*.png', '*.gif' ]
-    },
+        'UI': [ 'image/*.svg', 'image/*.png', 'image/*.gif' ]
+        },
     long_description=read('README'),
-)
+    )
