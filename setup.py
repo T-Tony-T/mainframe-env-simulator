@@ -27,9 +27,7 @@ setup(
             'zPE = zPE.zPE_gtk:main',
             ],
         },
-    package_dir = {
-        'UI': 'zPE/UI'
-        },
+    include_package_data = True,
     package_data = {
         'UI': [ 'image/*.svg', 'image/*.png', 'image/*.gif' ]
         },
