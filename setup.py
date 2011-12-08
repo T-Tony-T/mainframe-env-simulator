@@ -28,5 +28,6 @@ setup(
             ],
         },
     include_package_data = True, # include every data file under SVN control
+    zip_safe = False,            # do NOT install as a zip file; install as dir
     long_description=read('README'),
     )
