@@ -27,9 +27,6 @@ setup(
             'zPE = zPE.zPE_gtk:main',
             ],
         },
-    include_package_data = True,
-    package_data = {
-        'UI': [ 'image/*.svg', 'image/*.png', 'image/*.gif' ]
-        },
+    include_package_data = True, # include every data file under SVN control
     long_description=read('README'),
     )
