@@ -488,7 +488,7 @@ class BaseFrame(object):
                     buff.buffer.get_end_iter(),
                     False
                     )
-                pathname = zPE.UI.conf.Config['ENV']['starting_path']
+                pathname = conf.Config['ENV']['starting_path']
             else:
                 JCL['ASM-MODE'][1] = zComp.io_encap.open_file( (pathname, basename), 'r' ).read()
             if JCL['ASM-MODE'][1][-1] != '\n':
@@ -498,7 +498,7 @@ class BaseFrame(object):
             stdindata = ''.join(JCL['ASM-MODE'])
 
         cmd = [ 'zsub', ]
-        if zPE.UI.conf.Config['MISC']['debug_mode']:
+        if conf.Config['MISC']['debug_mode']:
             cmd.append('--debug')
         cmd.append(filename)
 
@@ -509,7 +509,7 @@ class BaseFrame(object):
         ( stdoutdata, stderrdata ) = zsub.communicate(stdindata)
         sys.stderr.write(stderrdata)
 
-        if ( zPE.UI.conf.Config['MISC']['debug_mode']  or    # is in debug mode
+        if ( conf.Config['MISC']['debug_mode']  or    # is in debug mode
              zsub.returncode not in zPE.conf.RC.itervalues() # something weird happened
              ):
             sys.stdout.write(stdoutdata)
