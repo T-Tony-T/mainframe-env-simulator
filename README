@@ -43,6 +43,7 @@ $ sudo python setup.py install --record install.record.txt
 ("install.record.txt" is used for uninstall)
 
 Under Windows: (cmd)
+> python setup.py build
 > python setup.py bdist_wininst
 > dist/mainframe-env-simulator-*.exe
 

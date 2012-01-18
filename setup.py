@@ -1,4 +1,4 @@
-import os
+import os, sys
 from setuptools import setup, find_packages
 from shutil import copytree     # for including data files under Windows
 
@@ -36,10 +36,11 @@ setup(
 
 
 # including data files under Windows
-for (base_path, dirs, files) in os.walk('build'):
-    if base_path.endswith(os.path.join('zPE', 'UI')):
-        if 'image' not in dirs:
-            copytree(
-                os.path.join('zPE', 'UI', 'image'), # from src dir
-                os.path.join(base_path, 'image')    # to build dir
-                )
+if sys.argv[1] = 'build':
+    for (base_path, dirs, files) in os.walk('build'):
+        if base_path.endswith(os.path.join('zPE', 'UI')):
+            if 'image' not in dirs:
+                copytree(
+                    os.path.join('zPE', 'UI', 'image'), # from src dir
+                    os.path.join(base_path, 'image')    # to build dir
+                    )
