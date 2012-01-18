@@ -1,5 +1,6 @@
 import os
 from setuptools import setup, find_packages
+from shutil import copytree     # for including data files under Windows
 
 # Utility function to read the README file.
 # Used for the long_description.  It's nice, because now 1) we have a top level
@@ -7,6 +8,7 @@ from setuptools import setup, find_packages
 # string in below ...
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
 
 setup(
     name = "mainframe-env-simulator",
@@ -31,3 +33,13 @@ setup(
     zip_safe = False,            # do NOT install as a zip file; install as dir
     long_description=read('README'),
     )
+
+
+# including data files under Windows
+for (base_path, dirs, files) in os.walk('build'):
+    if base_path.endswith(os.path.join('zPE', 'UI')):
+        if 'image' not in dirs:
+            copytree(
+                os.path.join('zPE', 'UI', 'image'), # from src dir
+                os.path.join(base_path, 'image')    # to build dir
+                )
