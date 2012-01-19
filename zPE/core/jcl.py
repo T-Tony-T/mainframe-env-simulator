@@ -419,7 +419,7 @@ def finish_step(step):
                 elif f_type == 'tmp':                   # remove tmp
                     pass
                 else:                                   # sync file if needed
-                    if step.dd.nmend(ddname) in [ 'KEEP', 'PASS', 'CATLG' ]:
+                    if step.dd.get_act(ddname) in [ 'KEEP', 'PASS', 'CATLG' ]:
                         __WRITE_OUT([ddname])
 
                 zPE.core.SPOOL.remove(ddname) # remove SPOOLs of the step

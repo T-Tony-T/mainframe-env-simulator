@@ -104,6 +104,31 @@ def INFO_GE(line_num, err_level):
         return True
     return False                # >= I
 
+def MAP_INFO_GE(line_num, err_level, func):
+    '''
+    call `func(line_num, err_level)` for each err_level greater than
+    the specified one, if the line has errors in that err_level.
+    '''
+    if line_num in INFO['S']:
+        func(line_num, 'S')
+    if err_level == 'S':        # >= S, ignore E,W,N,I
+        return
+    if line_num in INFO['E']:
+        func(line_num, 'E')
+    if err_level == 'E':        # >= E, ignore W,N,I
+        return
+    if line_num in INFO['W']:
+        func(line_num, 'W')
+    if err_level == 'W':        # >= W, ignore N,I
+        return
+    if line_num in INFO['N']:
+        func(line_num, 'N')
+    if err_level == 'N':        # >= N, ignore I
+        return
+    if line_num in INFO['I']:
+        func(line_num, 'I')
+    return                      # >= I
+
 
 TITLE = [                       # TITLE (Deck ID) list
     '',                         # will be replaced by the first named TITLE
@@ -327,7 +352,7 @@ def pass_1():
     prev_addr = None            # previous program counter
     line_num = 0
 
-    scope_id = 0                # current scope ID; init to None (0)
+    scope_id = 0                # current scope ID; init to zero
     scope_new = scope_id + 1    # next available scope ID; starting at 1
     csect_lbl = None            # current csect label
 
@@ -357,6 +382,14 @@ def pass_1():
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
 
+
+        # check label / variable symbol
+        if True:                # add cond to test variable symbol
+            # check label
+            ins_lbl = zPE.bad_label(field[0])
+            if ins_lbl:
+                __INFO('E', line_num, ( 143, ins_lbl - 1, len(field[0]), ))
+
         # check for OP code
         if len(field) < 2:
             __INFO('E', line_num, ( 142, 9, None, ))
@@ -365,16 +398,13 @@ def pass_1():
             spt.append('{0:0>5}{1:<8}\n'.format(
                     line_num, field[0]
                     ))
+            continue
+        # end of checks
 
         # parse TITLE
-        elif field[1] == 'TITLE':
+        if field[1] == 'TITLE':
             # check label
-            bad_lbl = zPE.bad_label(field[0])
-            if bad_lbl == None:
-                pass            # no label detected
-            elif bad_lbl:
-                __INFO('E', line_num, ( 143, bad_lbl, len(field[0]), ))
-            else:               # valid label
+            if ins_lbl == 0:    # valid label
                 if not TITLE[0]:
                     TITLE[0] = field[0] # record the first named TITLE
 
@@ -397,13 +427,11 @@ def pass_1():
             if scope_id:        # if not first CSECT
                 ESD[csect_lbl][0].length = addr
 
-            bad_lbl = zPE.bad_label(field[0])
-            if bad_lbl == None:
+            if ins_lbl == None: # no label detected
                 csect_lbl = '{0:<8}'.format('') # PC symbol
-            elif bad_lbl:
-                __INFO('E', line_num, ( 143, bad_lbl, len(field[0]), ))
+            elif ins_lbl:       # invalid label
                 csect_lbl = '{0:<8}'.format('') # treat as PC symbol
-            else:
+            else:               # valid label
                 csect_lbl = '{0:<8}'.format(field[0])
 
             # parse the new CSECT
@@ -512,7 +540,7 @@ def pass_1():
                     # no auto-generation of END, undo the termination
                     spi.unterminate()
 
-                MNEMONIC[line_num] = [ 0, addr, ]               # type 2
+                MNEMONIC[line_num] = [ None, addr, ]            # type 2
                 # the scope ID of END is always set to 0
                 spt.append('{0:0>5}{1:<8} END   {2}\n'.format(
                         line_num, '', lbl_8
@@ -571,15 +599,10 @@ def pass_1():
                 zPE.mark4future('complex EQUates exp')
 
             # check label
-            bad_lbl = zPE.bad_label(field[0])
             lbl_8 = '{0:<8}'.format(field[0])
-            if bad_lbl == None:
-                pass        # no label detected
-            elif bad_lbl:
-                __INFO('E', line_num, ( 143, bad_lbl, len(field[0]), ))
-            elif lbl_8 in SYMBOL:
+            if lbl_8 in SYMBOL: # duplicated label definition
                 __INFO('E', line_num, ( 43, 0, len(field[0]), ))
-            else:
+            elif ins_lbl == 0:  # valid label
                 SYMBOL[lbl_8] = Symbol(
                     equ_len, equ_addr, scope_id,
                     equ_reloc, 'U', '', '',
@@ -604,8 +627,9 @@ def pass_1():
             try:
                 sd_info = zPE.core.asm.parse_sd(tmp)
             except:
-                zPE.abort(90, 'Error: ', tmp,
-                          ': Invalid constant at line {0}.\n'.format(line_num))
+                zPE.abort( 90, 'Error: ', tmp,
+                           ': Invalid constant at line {0}.\n'.format(line_num)
+                           )
 
             # align boundary if needed
             if not sd_info[5]:
@@ -651,7 +675,7 @@ def pass_1():
                                 90, 'wrong value in sd:{0}.\n'.format(sd_info)
                                 )
                         elif bad_lbl:
-                            indx_s = line.index(lbl) + bad_lbl
+                            indx_s = line.index(lbl) + bad_lbl - 1
                             __INFO( 'E', line_num,
                                     ( 143, indx_s, indx_s + len(lbl), )
                                     )
@@ -696,15 +720,10 @@ def pass_1():
                               ': Invalid address type.\n')
 
             # check lable
-            bad_lbl = zPE.bad_label(field[0])
             lbl_8 = '{0:<8}'.format(field[0])
-            if bad_lbl == None:
-                pass        # no label detected
-            elif bad_lbl:
-                __INFO('E', line_num, ( 143, bad_lbl, len(field[0]), ))
-            elif lbl_8 in SYMBOL:
+            if lbl_8 in SYMBOL: # duplicated label definition
                 __INFO('E', line_num, ( 43, 0, len(field[0]), ))
-            else:
+            elif ins_lbl == 0:  # valid label
                 SYMBOL[lbl_8] = Symbol(
                     sd_info[3], addr, scope_id,
                     '', sd_info[2], sd_info[2], '',
@@ -787,8 +806,30 @@ def pass_1():
                         lbl = reminder
                         sept = ''
                         reminder = ''
-                    if lbl.count("'") % 2 == 1: # quoted literal
+                    if lbl.count("'") % 2 == 1:
+                        # quoted literal
                         indx_s = reminder.index("'") + 1
+                        if indx_s == len(reminder):
+                            indx_e = indx_s
+                        else:
+                            indx_e = indx_s + 1
+                        lbl += sept + reminder[:indx_s]
+                        sept = reminder[indx_s:indx_e]
+                        reminder = reminder[indx_e:]
+                        if sept  and  not re.search(pattern, sept):
+                            # invalid separator
+                            indx_e = ( line.index(field[2])
+                                       + len(field[2]) # move to end of arg_list
+                                       - len(reminder) # move back to error pos
+                                       )
+                            __INFO('E', line_num, (
+                                    41, indx_e - 1, indx_e,
+                                    ))
+                    elif ( lbl.startswith('=')  and
+                           zPE.core.asm.valid_sd(lbl[1:]) == 'a'
+                           ):
+                        # address constant
+                        indx_s = reminder.index(')') + 1
                         if indx_s == len(reminder):
                             indx_e = indx_s
                         else:
@@ -832,13 +873,41 @@ def pass_1():
                                 '{0:>4}{1}'.format(line_num, '')
                                 )
                         elif zPE.core.asm.valid_sd(lbl[1:]):
-                            const_pool[lbl] = Symbol(
-                                None, None, const_plid,
-                                '', lbl[1], '', '',
-                                None, [
-                                    '{0:>4}{1}'.format(line_num, ''),
-                                    ]
-                                )
+                            try:
+                                sd_info = zPE.core.asm.parse_sd(lbl[1:])
+                            except:
+                                zPE.abort( 90, 'Error: ', lbl[1:],
+                                           ': Invalid constant at line',
+                                           ' {0}.\n'.format(line_num)
+                                           )
+
+                            # validate =constant (not complete)
+                            if sd_info[4] == None:
+                                zPE.abort( 90, 'Error: ', lbl[1:],
+                                           ': Uninitialized constant at line',
+                                           ' {0}.\n'.format(line_num)
+                                           )
+                            for tmp in sd_info[4]:
+                                bad_lbl = zPE.bad_label(tmp)
+                                if bad_lbl == None:
+                                    zPE.abort( 90, 'wrong value in sd:',
+                                               '{0}.\n'.format(sd_info)
+                                               )
+                                elif bad_lbl:
+                                    indx_s = line.index(tmp) + bad_lbl - 1
+                                    __INFO( 'E', line_num,
+                                            ( 143, indx_s, indx_s + len(tmp), )
+                                            )
+
+                            # add =constant to the constant pool, if all green
+                            if not INFO_GE(line_num, 'W'):
+                                const_pool[lbl] = Symbol(
+                                    None, None, const_plid,
+                                    '', lbl[1], '', '',
+                                    None, [
+                                        '{0:>4}{1}'.format(line_num, ''),
+                                        ]
+                                    )
                         else:
                             indx_s = line.index(lbl) + 1
                             __INFO('E', line_num,
@@ -876,15 +945,10 @@ def pass_1():
                 ## end of normalizing arguments
 
                 # check lable
-                bad_lbl = zPE.bad_label(field[0])
                 lbl_8 = '{0:<8}'.format(field[0])
-                if bad_lbl == None:
-                    pass        # no label detected
-                elif bad_lbl:
-                    __INFO('E', line_num, ( 143, bad_lbl, len(field[0]), ))
-                elif lbl_8 in SYMBOL:
+                if lbl_8 in SYMBOL: # duplicated label definition
                     __INFO('E', line_num, ( 43, 0, len(field[0]), ))
-                else:
+                elif ins_lbl == 0:  # valid label
                     SYMBOL[lbl_8] = Symbol(
                         zPE.core.asm.len_op(op_code), addr, scope_id,
                         '', 'I', '', '',
@@ -918,7 +982,7 @@ def pass_1():
         # unrecognized op-code
         else:
             indx_s = line.index(field[1])
-            __INFO('E', line_num, ( 57, indx_s, indx_s, ))
+            __INFO('E', line_num, ( 57, indx_s, indx_s + len(field[1]), ))
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
             spt.append('{0:0>5}{1}'.format(line_num, line))
     # end of main read loop
@@ -1229,7 +1293,7 @@ def pass_2():
             try:
                 sd_info = zPE.core.asm.parse_sd(tmp)
             except:
-                zPE.abort(90,'Error: ', tmp, ': Invalid constant.\n')
+                zPE.abort(90, 'Error: ', tmp, ': Invalid constant.\n')
 
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
@@ -1388,8 +1452,9 @@ def pass_2():
                             try:
                                 ex_disp = eval(''.join(res[0]))
                             except:
-                                zPE.abort(92, 'Error: ', ''.join(res[0]),
-                                          ': Invalid expression.\n')
+                                zPE.abort( 92, 'Error: ', ''.join(res[0]),
+                                           ': Invalid expression.\n'
+                                           )
                         # evaluate expression
                         if reloc_cnt == 0:      # no relocatable symbol
                             sd_info[4][lbl_i] = str(ex_disp)
@@ -1623,23 +1688,8 @@ def pass_2():
                                             ))
                                     break   # stop processing current res
 
-                                tmp = zPE.resplit_sq('[()]', lbl)
-                                symbol = __HAS_EQ(tmp[0], scope_id)
-
-                                if len(tmp) > 1 and indx != len(res[0]) - 1:
-                                    indx_s = (
-                                        spi[line_num].index(p1_res[0][indx]) +
-                                        len(p1_res[0][indx])
-                                        )
-                                    indx_e = (
-                                        spi[line_num].index(p1_lbl) +
-                                        len(p1_lbl)
-                                        )
-                                    __INFO('S', line_num,
-                                           ( 173, indx_s, indx_e, )
-                                           )
-                                    break   # stop processing current res
-                                elif symbol == None:
+                                symbol = __HAS_EQ(lbl, scope_id)
+                                if symbol == None:
                                     if not INFO_GE(line_num, 'E'):
                                         zPE.abort(90, 'Error: ', p1_lbl,
                                                   ': symbol not in EQ table.\n')
@@ -1776,13 +1826,15 @@ def pass_2():
                         # current location ptr
                         lbl_8 = '*{0}'.format(line_num)
                         reg_indx = 0
+                    elif reloc_arg[0] == '=':
+                        # =constant
+                        lbl_8 = reloc_arg
+                        reg_indx = 0
                     else:
                         # label
                         tmp = zPE.resplit_sq('[()]', reloc_arg)
-                        if reloc_arg[0] == '=':
-                            lbl_8 = tmp[0]
-                        else:
-                            lbl_8 = '{0:<8}'.format(tmp[0])
+                        lbl_8 = '{0:<8}'.format(tmp[0])
+
                         if len(tmp) > 1:
                             # [ symbol, indx, '' ]
                             if op_code[lbl_i + op_indx].type == 'L':
@@ -2099,7 +2151,9 @@ def __PARSE_ARG(arg_str):
                 if _res.isdigit(): # pure number
                     parts.append(_res)
                     descs.append('regular_num')
-                elif len(zPE.resplit_sq('\)', _res)) > 1: # abs addr + something
+                elif ( _res[0] != '='  and
+                       len(zPE.resplit_sq('\)', _res)) > 1
+                       ):       # abs addr + something
                     return _res.index(')') + 1
                 elif sd_info:   # inline constant
                     try:
@@ -2111,10 +2165,6 @@ def __PARSE_ARG(arg_str):
                     except:     # invalid constant; return err pos
                         return len(arg_str) - len(reminder)
                 elif _res[0] == '=': # =constant
-                    tmp = zPE.resplit_sq('\(', _res)
-                    if len(tmp) > 1 and not re.match('\d{1,2}\)', tmp[1]):
-                        return ( len(arg_str) - len(reminder) +
-                                 len(zPE.resplit_sq(',', _res)[0]) )
                     parts.append(_res)
                     descs.append('eq_constant')
                 else:           # invalid operand; return err pos

@@ -1049,7 +1049,7 @@ def update_sd(sd_list, sd_info):
 
 # rv: ( const_type, multiplier, ch, length, init_val, has_L )
 #   const_type: 'a' | 's'
-#   init_val:   str(num) | [ symbol ]
+#   init_val:   str(num) | [ symbol ] | None
 # exception:
 #   SyntaxError: any syntax error in parsing the arguments
 def parse_sd(sd_arg):
@@ -1060,6 +1060,8 @@ def parse_sd(sd_arg):
         # A(label) ==> [ 'A', 'label)' ]
         sd_ch = L[0]
         sd_val = zPE.resplit(',', L[1][:-1], ['(',"'"], [')',"'"])
+        if not sd_val:
+            sd_val = None
         val_tp = 'a'            # address type constant
     elif sz == 1:
         # AL3 ==> [ 'AL3' ]  or  8F'1' ==> [ "8F'1'" ]

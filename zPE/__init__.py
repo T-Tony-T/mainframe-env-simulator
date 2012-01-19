@@ -4,6 +4,7 @@
 # modules that will be auto imported
 import core, pgm, conf
 from core.excptn import *       # pull all exceptions over
+from conf import RC             # pull Return Code definition over
 
 import os, sys, re
 
@@ -57,6 +58,12 @@ def x2c(src):
 
 def b2x(src):
     return core.asm.X_.tr(core.asm.B_(src).dump())
+
+def h2x(src):
+    return core.asm.X_.tr(core.asm.H_(src).dump())
+
+def f2x(src):
+    return core.asm.X_.tr(core.asm.F_(src).dump())
 
 
 def dic_find_key(dic, val):
@@ -126,10 +133,34 @@ def bad_label(label):
             return indx         # (indx+1)th character not legal
     return 0                    # all good
 
+def bad_var_symbol(symbol):
+    '''
+    Return:
+      - the position (start at 1) of the first invalid char
+      - 0 if all good
+      - None if no variable symbol
+    '''
+    if len(label) == 0:
+        return None             # no variable symbol
+    if len(symbol) > 8:
+        return 9                # symbol too long
+    if symbol[0] != '&':
+        return 1                # symbol not start with an ampersand
+    if not re.match('[A-Z]', symbol[1]):
+        return 2                # first character not legal
+    for indx in range(1, len(symbol)):
+        if not re.match('[A-Z0-9]', symbol[indx]):
+            return indx         # (indx+1)th character not legal
+    return 0                    # all good
 
-## Return Code
-RC = conf.RC
 
+SPOOL_CTRL_MAP = {
+    # ctrl : line spacing
+    '1' : 1,                    # single spacing, new page
+    ' ' : 1,                    # single spacing
+    '0' : 2,                    # double spacing
+    '-' : 3,                    # triple spacing
+    }
 
 
 ### Program Definition
