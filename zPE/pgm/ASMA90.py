@@ -43,6 +43,7 @@ from random import randint
 from binascii import a2b_hex
 
 from asma90_err_code_rc import * # read recourse file for err msg
+from asma90_ibm_macro import *   # read recourse file for macro support
 
 # read recourse file for objmod specification
 from asma90_objmod_spec import REC_FMT as OBJMOD_REC
@@ -55,6 +56,7 @@ PARM = {
     'AMODE'     : 31,
     'RMODE'     : 31,
     'ENTRY'     : '',           # need info
+    'LN_P_PAGE' : 60,           # line per page for output
 }
 def load_parm(parm_dic):
     for key in parm_dic:
@@ -68,7 +70,6 @@ LOCAL_CONF = {
     'MEM_LEN'   : None,         # required; length of memory required
     'REGION'    : None,         # required; maximum length allowed
     'ENTRY_PT'  : None,         # entry point (specified by END)
-    'LN_P_PAGE' : 60,           # line per page for output
     }
 def load_local_conf(conf_dic):
     for key in conf_dic:
@@ -142,6 +143,16 @@ MNEMONIC = {
     # Line_Num : [ scope, LOC, sd_info, ]                       // type (len) 3
     # Line_Num : [ scope,  ,  , equates, ]                      // type (len) 4
     # Line_Num : [ scope, LOC, (OBJECT_CODE), ADDR1, ADDR2, ]   // type (len) 5
+    }
+
+MACRO_DEF = {
+    # Macro_Name : generation_function(macro_arguments)
+    }
+MACRO_GEN = {
+    # Line_Num : [ generated_lines ]
+    }
+VAR_SYMBLE = {
+    # Var_Symble : value
     }
 
 RELOCATE_OFFSET = {
@@ -294,15 +305,20 @@ def init_res():
 
     del TITLE[:]                # clear the TITLE list
     TITLE.append('')            # add back the DECK NAME
+
     MNEMONIC.clear()            # clear the MNEMONIC dictionary
+
+    MACRO_DEF.clear()           # clear the MACRO definition dictionary
+    MACRO_GEN.clear()           # clear the MACRO generation dictionary
+    VAR_SYMBLE.clear()          # clear the Variable Symbol dictionary
+
+    RELOCATE_OFFSET[1] = 0      # the main scope always start at 0x000000
 
     OBJMOD['ESD'] = [ ]         # External symbol dictionary records
     OBJMOD['TXT'] = [ ]         # Text records
     OBJMOD['RLD'] = [ ]         # Relocation dictionary records
     OBJMOD['END'] = [ ]         # End records
     OBJMOD['SYM'] = [ ]         # Symbol table records
-
-    RELOCATE_OFFSET[1] = 0   # the main scope always start at 0x000000
 
     ESD.clear()
     ESD_ID.clear()
@@ -347,6 +363,12 @@ def pass_1():
     if spi.empty():
         raise EOFError('No Assembler Code Offered.')
     init_res()                  # initialize resources
+
+    # load and init Default Macros
+    MACRO_DEF.update(IBM_MACRO)
+    VAR_SYMBLE.update(SYS_VAR_SYMBLE)
+    VAR_SYMBLE['&SYSDATE'] = strftime('%m/%d/%Y')
+    VAR_SYMBLE['&SYSTIME'] = strftime('%H.%M')
 
     addr = 0                    # program counter
     prev_addr = None            # previous program counter

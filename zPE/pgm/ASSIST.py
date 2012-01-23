@@ -8,7 +8,8 @@
 #     pseudo-instructions, etc.)
 #
 # Parameter:
-#     MACRO     not implemented yet
+#     MACRO     required by Marist ASSIST (MACRO=H);
+#               will be ignored here
 #
 # Input:
 #     STEPLIB   required by the ASSIST on Mainframe;
@@ -160,7 +161,7 @@ def __MISSED_FILE(step, i):
 
 from ASMA90 import TITLE
 from ASMA90 import INFO, INFO_GE, MAP_INFO_GE
-from ASMA90 import ESD, ESD_ID, MNEMONIC, USING_MAP
+from ASMA90 import ESD, ESD_ID, MNEMONIC, MACRO_GEN, USING_MAP
 from ASMA90 import SYMBOL, SYMBOL_V, SYMBOL_EQ, NON_REF_SYMBOL, INVALID_SYMBOL
 
 def __PARSE_OUT_ASM(limit):
@@ -210,7 +211,9 @@ def __PARSE_OUT_ASM(limit):
             ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
                 spo, title,
                 [ ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
-                  '{0:>5} {1}'.format(line_num, line)
+                  '{0:>5} {1:<72}'.format(line_num, line[:-1]),
+                  '{0:0>4}{1:0>4}'.format(line_num, 0), # need info
+                  '\n',
                   ],
                 CNT['pln'], CNT['page']
                 )
@@ -218,8 +221,8 @@ def __PARSE_OUT_ASM(limit):
 
 
         # instructions
-        if len(MNEMONIC[line_num]) == 0: # type 0, TITLE; new page if no error
-            if not INFO_GE(line_num, 'I'):
+        if len(MNEMONIC[line_num]) == 0: # type 0, TITLE
+            if not INFO_GE(line_num, 'E'):
                 title = TITLE[title_indx][2] # update current TITLE
                 title_indx += 1 # advance the index to the next potential TITLE
 
@@ -227,8 +230,9 @@ def __PARSE_OUT_ASM(limit):
                 CNT['pln']   = __PRINT_HEADER(spo, title, 0, CNT['page'])
 
                 if not INFO_GE(line_num, 'I'):
-                    continue    # skip the current iteration
-            loc = ''
+                    # skip the current iteration if no info need to be printed
+                    continue
+            loc = ' ' * 6       # do not print location for this type
         elif len(MNEMONIC[line_num]) == 1: # type 1, no info to print
             loc = ''
         elif MNEMONIC[line_num][0] == None: # no scope ==> END (type 2)
@@ -290,7 +294,9 @@ def __PARSE_OUT_ASM(limit):
         ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
             spo, title,
             [ ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
-              '{0:>5} {1}'.format(line_num, line)
+              '{0:>5} {1:<72}'.format(line_num, line[:-1]),
+              '{0:0>4}{1:0>4}'.format(line_num, 0), # need info
+              '\n',
               ],
             CNT['pln'], CNT['page']
             )
@@ -501,7 +507,7 @@ def __PRINT_LINE(spool_out, title, line_words, line_num, page_num):
         and the new page number after the line is
         inserted
     '''
-    if line_num >= zPE.pgm.ASMA90.LOCAL_CONF['LN_P_PAGE']:
+    if line_num >= zPE.pgm.ASMA90.PARM['LN_P_PAGE']:
         page_num += 1           # new page
         line_num = __PRINT_HEADER(spool_out, title, 0, page_num)
     spool_out.append(* line_words)
