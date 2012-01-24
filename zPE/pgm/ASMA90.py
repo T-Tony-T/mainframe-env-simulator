@@ -145,16 +145,6 @@ MNEMONIC = {
     # Line_Num : [ scope, LOC, (OBJECT_CODE), ADDR1, ADDR2, ]   // type (len) 5
     }
 
-MACRO_DEF = {
-    # Macro_Name : generation_function(macro_arguments)
-    }
-MACRO_GEN = {
-    # Line_Num : [ generated_lines ]
-    }
-VAR_SYMBLE = {
-    # Var_Symble : value
-    }
-
 RELOCATE_OFFSET = {
     # scope_id : offset
     }
@@ -308,10 +298,6 @@ def init_res():
 
     MNEMONIC.clear()            # clear the MNEMONIC dictionary
 
-    MACRO_DEF.clear()           # clear the MACRO definition dictionary
-    MACRO_GEN.clear()           # clear the MACRO generation dictionary
-    VAR_SYMBLE.clear()          # clear the Variable Symbol dictionary
-
     RELOCATE_OFFSET[1] = 0      # the main scope always start at 0x000000
 
     OBJMOD['ESD'] = [ ]         # External symbol dictionary records
@@ -364,11 +350,8 @@ def pass_1():
         raise EOFError('No Assembler Code Offered.')
     init_res()                  # initialize resources
 
-    # load and init Default Macros
-    MACRO_DEF.update(IBM_MACRO)
-    VAR_SYMBLE.update(SYS_VAR_SYMBLE)
-    VAR_SYMBLE['&SYSDATE'] = strftime('%m/%d/%Y')
-    VAR_SYMBLE['&SYSTIME'] = strftime('%H.%M')
+    macro_init()                # load and init macro engine
+    macro_parse(spi)            # pre-process macro
 
     addr = 0                    # program counter
     prev_addr = None            # previous program counter
