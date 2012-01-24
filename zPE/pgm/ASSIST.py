@@ -200,6 +200,7 @@ def __PARSE_OUT_ASM(limit):
     for line_num in range(init_line_num, len(spi) + 1):
         # loop through line_num (indx + 1)
         line = spi[line_num - 1]
+        line_did = spi.deck_id(line_num - 1)
         ctrl = ' '
 
         if eojob:
@@ -212,7 +213,7 @@ def __PARSE_OUT_ASM(limit):
                 spo, title,
                 [ ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
                   '{0:>5} {1:<72}'.format(line_num, line[:-1]),
-                  '{0:0>4}{1:0>4}'.format(line_num, 0), # need info
+                  '{0:0>4}{1:0>4}'.format(line_did, '----'), # need info
                   '\n',
                   ],
                 CNT['pln'], CNT['page']
@@ -295,7 +296,7 @@ def __PARSE_OUT_ASM(limit):
             spo, title,
             [ ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
               '{0:>5} {1:<72}'.format(line_num, line[:-1]),
-              '{0:0>4}{1:0>4}'.format(line_num, 0), # need info
+              '{0:0>4}{1:0>4}'.format(line_did, '----'), # need info
               '\n',
               ],
             CNT['pln'], CNT['page']

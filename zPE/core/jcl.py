@@ -199,9 +199,9 @@ def parse(job):
             dsn = []
             disp = ''
             if field[2] == '*' or field[2] == 'DATA':
-                nextline = __READ_UNTIL(fp, field[0][2:], [], '/*')
+                nextline = __READ_UNTIL(fp, field[0][2:], '/*')
             elif field[2][:9] == 'DATA,DLM=\'':
-                nextline = __READ_UNTIL(fp, field[0][2:], [], field[2][9:11])
+                nextline = __READ_UNTIL(fp, field[0][2:], field[2][9:11])
             elif field[2][:7] == 'SYSOUT=':
                 sysout = field[2][7:]
             else:
@@ -536,27 +536,25 @@ def __JES2_STAT(msg, job_time):
     h_mm = '{0}.{1:0>2}'.format(int(job_time / 3600), int(job_time / 60) % 60)
     sp1.append(ctrl, '{0:>13}'.format(h_mm), ' MINUTES EXECUTION TIME\n')
 
-def __READ_UNTIL(fp, fn, dsn, dlm):
+def __READ_UNTIL(fp, fn, dlm):
     # prepare spool
-    sp = zPE.core.SPOOL.new(fn, 'i', 'instream', dsn)
+    sp = zPE.core.SPOOL.new(fn, 'i', 'instream', [])
 
     # read until encountering dlm
     while True:
         line = fp.readline()
+        zPE.JCL['read_cnt'] += 1
 
         # check end of stream
         if line[:2] == dlm:
-            if len(dsn) == 0:
-                zPE.JCL['read_cnt'] += 1 # in-stream data, update counter
-            return ''           # the return value of readline() on EOF
+            return ''
 
-        # check in-stream data
-        if len(dsn) == 0:
-            if (line[:2] == '//'):
-                return line     # next JCL card, put it back
-            zPE.JCL['read_cnt'] += 1
+        if (line[:2] == '//'):
+            # next JCL card, put it back
+            zPE.JCL['read_cnt'] -= 1
+            return line
 
-        sp.append(line)
+        sp.append(line, deck_id = zPE.JCL['read_cnt'])
 
 def __WRITE_OUT(dd_list):
     for fn in dd_list:

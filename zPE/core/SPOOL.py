@@ -14,8 +14,9 @@ MODE = {                        # SPOOL mode : display
 
 ## Simultaneous Peripheral Operations On-line
 class Spool(object):
-    def __init__(self, spool, mode, f_type, virtual_path, real_path):
-        self.spool = spool      # [ line_1, line_2, ... ]
+    def __init__(self, spool, spdid, mode, f_type, virtual_path, real_path):
+        self.spool = spool      # [ line_1,  line_2,  ... ]
+        self.spdid = spdid      # [ ln_id_1, ln_id_2, ... ] // deck id
         self.mode = mode        # one of the MODE keys
         self.f_type = f_type    # one of the zPE.JES keys
         self.virtual_path = virtual_path
@@ -30,7 +31,7 @@ class Spool(object):
     def empty(self):
         return (len(self.spool) == 0)
 
-    def atEOF(self, line = -1):
+    def atEOF(self, line = -1): # EOF = -1; see `terminate()` for more info
         try:
             indx = self.spool.index(-1)
             found = True
@@ -38,20 +39,24 @@ class Spool(object):
             found = False
         return (found  and  (line == self.spool[-1]))
 
-    def append(self, *phrase):
-        self.insert(len(self.spool), *phrase)
+    def append(self, *phrase, **option):
+        self.insert(len(self.spool), *phrase, **option)
 
-    def insert(self, indx, *phrase):
+    def insert(self, indx, *phrase, **option):
         self.spool.insert(indx, ''.join(phrase))
+        if 'deck_id' not in option:
+            option['deck_id'] = None
+        self.spdid.insert(indx, option['deck_id'])
 
     def rmline(self, indx):
         if indx < len(self.spool):
             del self.spool[indx]
+            del self.spdid[indx]
 
     def terminate(self):
-        self.spool.append(-1)
+        self.spool.append(-1)   # append EOF to the end of the SPOOL
     def unterminate(self):
-        self.spool.remove(-1)
+        self.spool.remove(-1)   # remove the last line (hopefully EOF)
 
     def __str__(self):
         return ''.join([
@@ -69,6 +74,9 @@ class Spool(object):
             return self.spool[key]
         else:                           # key = (ln, indx/slice)
             return self.spool[key[0]][key[1]]
+
+    def deck_id(self, key):
+        return self.spdid[key]
 
     def __setitem__(self, key, val):
         if isinstance(key, int):        # key = ln
@@ -99,9 +107,9 @@ DEFAULT_OUT_STEP = { # step name corresponding to the above list
     }
 
 SPOOL = {
-    'JESMSGLG' : Spool([], 'o', 'outstream', None, ['JESMSGLG']),
-    'JESJCL'   : Spool([], 'o', 'outstream', None, ['JESJCL']),
-    'JESYSMSG' : Spool([], 'o', 'outstream', None, ['JESYSMSG']),
+    'JESMSGLG' : Spool([], [], 'o', 'outstream', None, ['JESMSGLG']),
+    'JESJCL'   : Spool([], [], 'o', 'outstream', None, ['JESJCL']),
+    'JESYSMSG' : Spool([], [], 'o', 'outstream', None, ['JESYSMSG']),
     }
 
 
@@ -155,7 +163,7 @@ def new(key, mode, f_type, path = [], real_path = []):
     if len(real_path) == 0:
         real_path = path
 
-    SPOOL[key] = Spool([], mode, f_type, path, real_path)
+    SPOOL[key] = Spool([], [], mode, f_type, path, real_path)
     return SPOOL[key]
 
 def remove(key):
