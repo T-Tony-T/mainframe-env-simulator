@@ -209,15 +209,23 @@ def __PARSE_OUT_ASM(limit):
 
         elif line[0] == '*':
             # comments
+            if isinstance(line_did, int) or line_did.isdigit():
+                p_line = [      # regular input line
+                    ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
+                    '{0:>5} {1:<72}'.format(line_num, line[:-1]),
+                    '{0:0>4}{1:0>4}'.format(line_did, '----'), # need info
+                    '\n',
+                    ]
+            else:
+                p_line = [      # expanded line
+                    ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
+                    '{0:>5}+{1:<72}'.format(line_num, line[:-1]),
+                    line_did,   # deck ID
+                    '\n',
+                    ]
             ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
-                spo, title,
-                [ ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
-                  '{0:>5} {1:<72}'.format(line_num, line[:-1]),
-                  '{0:0>4}{1:0>4}'.format(line_did, '----'), # need info
-                  '\n',
-                  ],
-                CNT['pln'], CNT['page']
-                )
+                spo, title, p_line, CNT['pln'], CNT['page']
+                )                
             continue
 
 
@@ -292,14 +300,22 @@ def __PARSE_OUT_ASM(limit):
                 addr_1, addr_2
                 )
 
+        if isinstance(line_did, int) or line_did.isdigit():
+            p_line = [      # regular input line
+                ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
+                '{0:>5} {1:<72}'.format(line_num, line[:-1]),
+                '{0:0>4}{1:0>4}'.format(line_did, '----'), # need info
+                '\n',
+                ]
+        else:
+            p_line = [      # expanded line
+                ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
+                '{0:>5}+{1:<72}'.format(line_num, line[:-1]),
+                line_did,   # deck ID
+                '\n',
+                ]
         ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
-            spo, title,
-            [ ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
-              '{0:>5} {1:<72}'.format(line_num, line[:-1]),
-              '{0:0>4}{1:0>4}'.format(line_did, '----'), # need info
-              '\n',
-              ],
-            CNT['pln'], CNT['page']
+            spo, title, p_line, CNT['pln'], CNT['page']
             )
 
         # process error msg, if any

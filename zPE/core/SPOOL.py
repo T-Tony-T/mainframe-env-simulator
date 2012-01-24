@@ -17,6 +17,10 @@ class Spool(object):
     def __init__(self, spool, spdid, mode, f_type, virtual_path, real_path):
         self.spool = spool      # [ line_1,  line_2,  ... ]
         self.spdid = spdid      # [ ln_id_1, ln_id_2, ... ] // deck id
+                                # digit (line number) for input SPOOL
+                                # label (tp-lblstr) for expanded input
+                                # none for output SPOOL
+        # the above two need to be in sync (if modifiey manually)
         self.mode = mode        # one of the MODE keys
         self.f_type = f_type    # one of the zPE.JES keys
         self.virtual_path = virtual_path
