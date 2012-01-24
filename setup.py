@@ -36,7 +36,7 @@ setup(
 
 
 # including data files under Windows
-if sys.argv[1] = 'build':
+if sys.argv[1] == 'build':
     for (base_path, dirs, files) in os.walk('build'):
         if base_path.endswith(os.path.join('zPE', 'UI')):
             if 'image' not in dirs:
