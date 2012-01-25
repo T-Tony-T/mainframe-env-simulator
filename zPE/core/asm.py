@@ -5,6 +5,20 @@ import zPE
 import re
 
 
+### Valid ASM Instruction
+ASM_INSTRUCTION = set([
+        'TITLE', 'EJECT'
+        'CSECT', 'DSECT',
+        'USING', 'DROP',
+        'END',
+        'LTORG', 'ORG',
+        'EQU', 'DC', 'DS',
+        ])
+
+def valid_ins(instruction):
+    return (instruction in ASM_INSTRUCTION)
+
+
 ### Valid Operation Code
 
 ## basic instruction format type

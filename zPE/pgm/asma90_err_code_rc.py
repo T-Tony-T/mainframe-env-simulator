@@ -59,4 +59,7 @@ __MSG = {
     }
 
 def gen_msg(msg_type, info, line):
-    return '** ASMA{0:0>3}{1} {2}\n'.format(info[0], msg_type, __MSG[msg_type][info[0]](info, line))
+    if len(info) == 3:          # standard info message
+        return '** ASMA{0:0>3}{1} {2}\n'.format(info[0], msg_type, __MSG[msg_type][info[0]](info, line))
+    else:
+        return '** AS{0}\n'.format(info)

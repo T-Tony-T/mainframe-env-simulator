@@ -43,7 +43,7 @@ from random import randint
 from binascii import a2b_hex
 
 from asma90_err_code_rc import * # read recourse file for err msg
-from asma90_ibm_macro import *   # read recourse file for macro support
+from asma90_macro_preprocessor import * # read recourse file for macro support
 
 # read recourse file for objmod specification
 from asma90_objmod_spec import REC_FMT as OBJMOD_REC
@@ -82,7 +82,7 @@ def load_local_conf(conf_dic):
 ### resource definition
 
 INFO = { # see init_res() for possible message levels
-    # 'level' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ...] }
+    # 'level' : { Line_Num : [ ( Err_No, Pos_Start, Pos_End, ), ... ] }
     }
 def INFO_GE(line_num, err_level):
     if line_num in INFO['S']:
@@ -368,32 +368,40 @@ def pass_1():
 
     spi.terminate()             # manually append an EOF at the end, which
                                 # will be removed before leave 1st pass
+    skip_until = None
+    sysndx = 0
 
     # main read loop
     for line in spi:
         line_num += 1           # start at line No. 1
 
         # check EOF
-        if spi.atEOF(line):
+        if spi.atEOF(line):     # encountered EOF before END
             __INFO('W', line_num, ( 140, 9, None, ))
             # replace EOF with an END instruction
             spi.unterminate()   # this indicates the generation of the END
             line = '{0:<8} END\n'.format('')
-            spi.append(line)    # will be removed when encountered
+            spi.append(line, deck_id = 'ASMPASER')
+
+        field = zPE.resplit_sq('\s+', line[:-1], 3)
+
+        # check Macro definition
+        if len(field) > 1 and field[1] == 'MACRO':
+            skip_until = 'MEND'
+        if skip_until:
+            # skip all lines until the end flag encountered
+            if len(field) > 1 and field[1] == skip_until:
+                skip_until = None
+            continue
 
         # check comment
         if line[0] == '*':
             continue
 
-        field = zPE.resplit_sq('\s+', line[:-1], 3)
-
-
-        # check label / variable symbol
-        if True:                # add cond to test variable symbol
-            # check label
-            ins_lbl = zPE.bad_label(field[0])
-            if ins_lbl:
-                __INFO('E', line_num, ( 143, ins_lbl - 1, len(field[0]), ))
+        # check label
+        ins_lbl = zPE.bad_label(field[0])
+        if ins_lbl:
+            __INFO('E', line_num, ( 143, ins_lbl - 1, len(field[0]), ))
 
         # check for OP code
         if len(field) < 2:
@@ -418,7 +426,7 @@ def pass_1():
                  field[2][-1] != "'"  or # end with "'"
                  "'" in field[2][1:-1]   # no "'" in the content
                  ):
-                zPE.abort(90, 'Error: ', field[2], ': Invalid TITLE content.\n')
+                zPE.abort(91, 'Error: ', field[2], ': Invalid TITLE content.\n')
             TITLE.append([ line_num, field[0], field[2][1:-1] ])
 
             MNEMONIC[line_num] = [  ]                           # type 0
@@ -632,7 +640,7 @@ def pass_1():
             try:
                 sd_info = zPE.core.asm.parse_sd(tmp)
             except:
-                zPE.abort( 90, 'Error: ', tmp,
+                zPE.abort( 91, 'Error: ', tmp,
                            ': Invalid constant at line {0}.\n'.format(line_num)
                            )
 
@@ -655,7 +663,7 @@ def pass_1():
                 if field[1] in SYMBOL_EQ:
                     symbol = __HAS_EQ(field[1], scope_id)
                     if symbol == None or symbol.defn != None:
-                        zPE.abort(90, 'Error: ', field[1],
+                        zPE.abort(91, 'Error: ', field[1],
                                   ': Fail to find the allocation.\n')
                     else:       # found successfully
                         const_left -= 1
@@ -664,7 +672,7 @@ def pass_1():
                         symbol.type   = sd_info[2]
                         symbol.defn   = line_num
                 else:
-                    zPE.abort(90, 'Error: ', field[1],
+                    zPE.abort(91, 'Error: ', field[1],
                               ': Fail to allocate the constant.\n')
 
             # check address const
@@ -677,7 +685,7 @@ def pass_1():
 
                         if bad_lbl == None:
                             zPE.abort(
-                                90, 'wrong value in sd:{0}.\n'.format(sd_info)
+                                91, 'wrong value in sd:{0}.\n'.format(sd_info)
                                 )
                         elif bad_lbl:
                             indx_s = line.index(lbl) + bad_lbl - 1
@@ -721,7 +729,7 @@ def pass_1():
                         sd_info[4][lbl_i] = '0' # fool the paser
                     pass        # hand check to pass 2
                 else:
-                    zPE.abort(90, 'Error: ', sd_info[2],
+                    zPE.abort(91, 'Error: ', sd_info[2],
                               ': Invalid address type.\n')
 
             # check lable
@@ -736,7 +744,7 @@ def pass_1():
                     )
 
             if field[1] == 'DC' and not zPE.core.asm.can_get_sd(sd_info):
-                zPE.abort(90, 'Error: ', field[2],
+                zPE.abort(91, 'Error: ', field[2],
                           ': Cannot evaluate the constant.\n')
             MNEMONIC[line_num] = [ scope_id, addr, sd_info, ]   # type 3
 
@@ -881,21 +889,21 @@ def pass_1():
                             try:
                                 sd_info = zPE.core.asm.parse_sd(lbl[1:])
                             except:
-                                zPE.abort( 90, 'Error: ', lbl[1:],
+                                zPE.abort( 91, 'Error: ', lbl[1:],
                                            ': Invalid constant at line',
                                            ' {0}.\n'.format(line_num)
                                            )
 
                             # validate =constant (not complete)
                             if sd_info[4] == None:
-                                zPE.abort( 90, 'Error: ', lbl[1:],
+                                zPE.abort( 91, 'Error: ', lbl[1:],
                                            ': Uninitialized constant at line',
                                            ' {0}.\n'.format(line_num)
                                            )
                             for tmp in sd_info[4]:
                                 bad_lbl = zPE.bad_label(tmp)
                                 if bad_lbl == None:
-                                    zPE.abort( 90, 'wrong value in sd:',
+                                    zPE.abort( 91, 'wrong value in sd:',
                                                '{0}.\n'.format(sd_info)
                                                )
                                 elif bad_lbl:
@@ -980,9 +988,15 @@ def pass_1():
             for code in op_code:
                 length += len(code)
             if length % 2 != 0:
-                zPE.abort(90, 'Error: {0}'.format(length / 2),
+                zPE.abort(91, 'Error: {0}'.format(length / 2),
                           '.5: Invalid OP code length\n')
             addr += length / 2
+
+        # parse macro call
+        elif field[1] in MACRO_DEF:
+            sysndx += 1
+            if sysndx in MACRO_ERR:
+                __INFO('E', line_num, ( MACRO_ERR[sysndx] ))
 
         # unrecognized op-code
         else:
@@ -1298,7 +1312,7 @@ def pass_2():
             try:
                 sd_info = zPE.core.asm.parse_sd(tmp)
             except:
-                zPE.abort(90, 'Error: ', tmp, ': Invalid constant.\n')
+                zPE.abort(91, 'Error: ', tmp, ': Invalid constant.\n')
 
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
@@ -1696,10 +1710,10 @@ def pass_2():
                                 symbol = __HAS_EQ(lbl, scope_id)
                                 if symbol == None:
                                     if not INFO_GE(line_num, 'E'):
-                                        zPE.abort(90, 'Error: ', p1_lbl,
+                                        zPE.abort(91, 'Error: ', p1_lbl,
                                                   ': symbol not in EQ table.\n')
                                 elif symbol.defn == None:
-                                    zPE.abort(90, 'Error: ', p1_lbl,
+                                    zPE.abort(91, 'Error: ', p1_lbl,
                                               ': symbol not allocated.\n')
                             elif res[1][indx] == 'location_ptr':
                                 pass # no special process required
@@ -1910,6 +1924,10 @@ def pass_2():
             if not INFO_GE(line_num, 'E'):
                 mem[addr] = content
             pos_end = addr + len(content) / 2
+
+        # parse macro call
+        elif field[1] in MACRO_DEF:
+            pass
 
         # unrecognized op-code
         else:

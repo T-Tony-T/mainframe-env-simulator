@@ -18,7 +18,7 @@ class Spool(object):
         self.spool = spool      # [ line_1,  line_2,  ... ]
         self.spdid = spdid      # [ ln_id_1, ln_id_2, ... ] // deck id
                                 # digit (line number) for input SPOOL
-                                # label (tp-lblstr) for expanded input
+                                # label (tp-label) for expanded input
                                 # none for output SPOOL
         # the above two need to be in sync (if modifiey manually)
         self.mode = mode        # one of the MODE keys
@@ -30,21 +30,21 @@ class Spool(object):
                                 # path in the actual file system;
                                 # same format as above
 
-
     # the following methods are for Spool.spool
     def empty(self):
-        return (len(self.spool) == 0)
+        return (self.__len__() == 0)
 
-    def atEOF(self, line = -1): # EOF = -1; see `terminate()` for more info
-        try:
-            indx = self.spool.index(-1)
-            found = True
-        except:
-            found = False
-        return (found  and  (line == self.spool[-1]))
+    def atEOF(self, line = None): # see `terminate()` for more info
+        if line == None:
+            line = self.spool[-1]
+        return (line == -1)
+    def terminate(self):
+        self.spool.append(-1)   # append EOF to the end of the SPOOL
+    def unterminate(self):
+        self.spool.remove(-1)   # remove the last line (hopefully EOF)
 
     def append(self, *phrase, **option):
-        self.insert(len(self.spool), *phrase, **option)
+        self.insert(self.__len__(), *phrase, **option)
 
     def insert(self, indx, *phrase, **option):
         self.spool.insert(indx, ''.join(phrase))
@@ -53,14 +53,9 @@ class Spool(object):
         self.spdid.insert(indx, option['deck_id'])
 
     def rmline(self, indx):
-        if indx < len(self.spool):
+        if indx < self.__len__():
             del self.spool[indx]
             del self.spdid[indx]
-
-    def terminate(self):
-        self.spool.append(-1)   # append EOF to the end of the SPOOL
-    def unterminate(self):
-        self.spool.remove(-1)   # remove the last line (hopefully EOF)
 
     def __str__(self):
         return ''.join([

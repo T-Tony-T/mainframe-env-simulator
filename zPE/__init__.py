@@ -29,7 +29,8 @@ def abort(rc, *msg):
        5: SPOOL error
        9: JCL error
       13: Linkage-Editor error
-      90: Assembler pass 1 error
+      90: Macro Pre-Processor error
+      91: Assembler pass 1 error
       92: Assembler pass 2 error
       -1: zPE error
     '''
@@ -140,7 +141,7 @@ def bad_var_symbol(symbol):
       - 0 if all good
       - None if no variable symbol
     '''
-    if len(label) == 0:
+    if len(symbol) == 0:
         return None             # no variable symbol
     if len(symbol) > 8:
         return 9                # symbol too long

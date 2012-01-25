@@ -69,4 +69,7 @@ __MSG = {
     }
 
 def gen_msg(msg_type, info, line):
-    return '----->{0}:{1:0>3} {2}\n'.format(msg_type, info[0], __MSG[msg_type][info[0]](info, line))
+    if len(info) == 3:          # standard info message
+        return '----->{0}:{1:0>3} {2}\n'.format(msg_type, info[0], __MSG[msg_type][info[0]](info, line))
+    else:
+        return '----->AS{0:<110}<-ERROR\n'.format(info)

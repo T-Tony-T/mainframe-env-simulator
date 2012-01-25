@@ -161,12 +161,11 @@ def __MISSED_FILE(step, i):
 
 from ASMA90 import TITLE
 from ASMA90 import INFO, INFO_GE, MAP_INFO_GE
-from ASMA90 import ESD, ESD_ID, MNEMONIC, MACRO_GEN, USING_MAP
+from ASMA90 import ESD, ESD_ID, MNEMONIC, USING_MAP
 from ASMA90 import SYMBOL, SYMBOL_V, SYMBOL_EQ, NON_REF_SYMBOL, INVALID_SYMBOL
 
 def __PARSE_OUT_ASM(limit):
     spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
-    spt = zPE.core.SPOOL.retrive('SYSUT1')   # sketch SPOOL
     spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
 
     CNT = {
@@ -207,8 +206,8 @@ def __PARSE_OUT_ASM(limit):
             # inline inputs
             continue # ignored
 
-        elif line[0] == '*':
-            # comments
+        if line_num not in MNEMONIC:
+            # comments, MACRO definition, etc.
             if isinstance(line_did, int) or line_did.isdigit():
                 p_line = [      # regular input line
                     ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
@@ -414,12 +413,12 @@ def __PARSE_OUT_ASM(limit):
     print '\nMnemonic:'
     for key in sorted(MNEMONIC.iterkeys()):
         if len(MNEMONIC[key]) == 0: # type 0
-            scope = ''
+            scope = ' ' * 8
         else:
             try:
                 scope = zPE.f2x(MNEMONIC[key][0])
             except:
-                scope = ''
+                scope = ' ' * 8
         if len(MNEMONIC[key]) == 0: # type 0
             loc = ''
         elif len(MNEMONIC[key]) == 1: # type 1
