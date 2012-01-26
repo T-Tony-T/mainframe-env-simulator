@@ -84,10 +84,6 @@ def __defining(spi, line_num):
         if field[0].startswith('.*'):
             continue
 
-        # sequence symbol
-        elif field[0].startswith('.'):
-            pass                # parsing sequence symbol
-
         # variable symbol
         elif var_lbl:
             zPE.abort(90, 'Error: ', field[0], ': Invalid variable symbol.\n')
