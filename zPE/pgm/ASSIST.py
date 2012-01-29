@@ -208,7 +208,14 @@ def __PARSE_OUT_ASM(limit):
 
         if line_num not in MNEMONIC:
             # comments, MACRO definition, etc.
-            if isinstance(line_did, int) or line_did.isdigit():
+            if line_did == None:
+                p_line = [      # regular input line
+                    ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
+                    '{0:>5} {1:<72}'.format(line_num, line[:-1]),
+                    '{0:8}'.format(''), # 8 spaces
+                    '\n',
+                    ]
+            elif isinstance(line_did, int) or line_did.isdigit():
                 p_line = [      # regular input line
                     ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
                     '{0:>5} {1:<72}'.format(line_num, line[:-1]),
@@ -299,7 +306,14 @@ def __PARSE_OUT_ASM(limit):
                 addr_1, addr_2
                 )
 
-        if isinstance(line_did, int) or line_did.isdigit():
+        if line_did == None:
+            p_line = [      # regular input line
+                ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
+                '{0:>5} {1:<72}'.format(line_num, line[:-1]),
+                '{0:8}'.format(''), # 8 spaces
+                '\n',
+                ]
+        elif isinstance(line_did, int) or line_did.isdigit():
             p_line = [      # regular input line
                 ctrl, '{0:0>6} {1:<26} '.format(loc, tmp_str),
                 '{0:>5} {1:<72}'.format(line_num, line[:-1]),

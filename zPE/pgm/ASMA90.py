@@ -363,6 +363,7 @@ def pass_1():
 
     # memory heap for constant allocation
     const_pool = {}             # same format as SYMBOL
+    const_pool_lbl = []         # order of the occurrence
     const_plid = None
     const_left = 0              # number of =constant LTORG/END allocated
 
@@ -381,7 +382,7 @@ def pass_1():
             # replace EOF with an END instruction
             spi.unterminate()   # this indicates the generation of the END
             line = '{0:<8} END\n'.format('')
-            spi.append(line, deck_id = 'ASMPASER')
+            spi.append(line)
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
 
@@ -516,7 +517,7 @@ def pass_1():
         elif field[1] == 'END':
             if const_plid:      # check left-over constants
                 line_num_tmp = line_num - 1
-                for lbl in const_pool:
+                for lbl in const_pool_lbl:
                     spi.insert(line_num_tmp,
                                '{0:<14} {1}\n'.format('', lbl)
                                )
@@ -524,7 +525,8 @@ def pass_1():
                     const_left += 1
                     line_num_tmp += 1
                 # close the current pool
-                const_pool = {}
+                const_pool.clear()
+                del const_pool_lbl[:]
                 const_plid = None
                 # the following is to "move back" the iterator
                 # need to be removed after END
@@ -575,7 +577,7 @@ def pass_1():
                 [],     # pool for constant with half-word alignment
                 [],     # pool for constant with byte alignment
                 ]
-            for lbl in const_pool:
+            for lbl in const_pool_lbl:
                 alignment = zPE.core.asm.align_at(lbl[1])
                 for i in range(0,3):
                     if alignment == 2 ** i:
@@ -591,7 +593,8 @@ def pass_1():
                     line_num_tmp += 1
 
             # close the current pool
-            const_pool = {}
+            const_pool.clear()
+            del const_pool_lbl[:]
             const_plid = None
 
             MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
@@ -900,17 +903,20 @@ def pass_1():
                                            ': Uninitialized constant at line',
                                            ' {0}.\n'.format(line_num)
                                            )
-                            for tmp in sd_info[4]:
-                                bad_lbl = zPE.bad_label(tmp)
-                                if bad_lbl == None:
-                                    zPE.abort( 91, 'wrong value in sd:',
-                                               '{0}.\n'.format(sd_info)
-                                               )
-                                elif bad_lbl:
-                                    indx_s = line.index(tmp) + bad_lbl - 1
-                                    __INFO( 'E', line_num,
-                                            ( 143, indx_s, indx_s + len(tmp), )
-                                            )
+                            if sd_info[0] == 'a':
+                                for tmp in sd_info[4]:
+                                    bad_lbl = zPE.bad_label(tmp)
+                                    if bad_lbl == None:
+                                        zPE.abort( 91, 'wrong value in sd:',
+                                                   '{0}.\n'.format(sd_info)
+                                                   )
+                                    elif bad_lbl:
+                                        indx_s = line.index(tmp) + bad_lbl - 1
+                                        __INFO( 'E', line_num, (
+                                                143,
+                                                indx_s,
+                                                indx_s + len(tmp),
+                                                ) )
 
                             # add =constant to the constant pool, if all green
                             if not INFO_GE(line_num, 'W'):
@@ -921,6 +927,7 @@ def pass_1():
                                         '{0:>4}{1}'.format(line_num, ''),
                                         ]
                                     )
+                                const_pool_lbl.append(lbl)
                         else:
                             indx_s = line.index(lbl) + 1
                             __INFO('E', line_num,
@@ -1033,6 +1040,13 @@ def pass_1():
             if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]: # type 2/3/5
                 MNEMONIC[line_num][1] += RELOCATE_OFFSET[scope_id]
 
+    # update symbol address
+    for key in ESD:
+        ESD[key][0].addr = offset[ESD[key][0].id]
+    for key in SYMBOL:
+        if not SYMBOL[key].reloc:
+            SYMBOL[key].value += offset[SYMBOL[key].id]
+
     # update memory requirement for generating OBJECT MODULE
     sz_required = max(
         # get maximum of size from:
@@ -1095,10 +1109,6 @@ def pass_2():
     # obtain memory for generating Object Module
     mem = zPE.core.mem.Memory(LOCAL_CONF['MEM_POS'], LOCAL_CONF['MEM_LEN'])
 
-    # memory heap for constant allocation
-    const_pool = {}             # same format as SYMBOL
-    const_plid = None
-
     addr = 0                    # program counter
     prev_addr = None            # previous program counter
 
@@ -1140,11 +1150,6 @@ def pass_2():
         elif field[1] == 'TITLE':
             continue            # TITLE statement
 
-        # update symbol address
-        lbl_8 = '{0:<8}'.format(field[0])
-        if field[0] and lbl_8 in SYMBOL:
-            SYMBOL[lbl_8].value = addr
-
         # parse CSECT
         if field[1] == 'CSECT':
             if ( csect_lbl != '{0:<8}'.format(field[0]) and
@@ -1154,8 +1159,6 @@ def pass_2():
             if scope_id != ESD[csect_lbl][0].id:
                 zPE.abort(92, 'Error: Fail to retrive scope ID.\n')
 
-            # update symbol address
-            ESD[csect_lbl][0].addr = addr
             # append it to ESD records
             __APPEND_ESD([ csect_lbl, ESD[csect_lbl][0] ])
 
@@ -1299,9 +1302,16 @@ def pass_2():
             # generate END records
             __APPEND_END()
 
+        # parse LTORG
+        elif field[1] == 'LTORG':
+            if pos_end and pos_start < pos_end: 
+                # effective LTORG, append to TXT records
+                __APPEND_TXT(mem, prev_scope, pos_start, pos_end)
+                prev_scope = None # virtually switch scope to reset "buffer"
+
         # skip any line that do not need second pass
-        elif field[1] in [ 'LTORG', 'EQU', ]:
-            pass
+        elif field[1] in [ 'EQU', ]:
+            continue
 
         # parse DC/DS/=constant
         elif field[1] in [ 'DC', 'DS' ] or field[1][0] == '=':
@@ -1322,7 +1332,7 @@ def pass_2():
                         lbl_8 = '{0:<8}'.format(lbl)
                         if lbl_8 in SYMBOL_V: # fully processed in pass 1
                             # append it to ESD records
-                            __APPEND_ESD([ csect_lbl, ESD[csect_lbl][0] ])
+                            __APPEND_ESD([ lbl_8, ESD[lbl_8][1] ])
 
                 elif sd_info[2] == 'A':
                     # check internal reference
@@ -1483,29 +1493,7 @@ def pass_2():
                             else:
                                 lbl_8 = '{0:<8}'.format(reloc_arg)
 
-                            if __IS_ADDRESSABLE(lbl_8, csect_lbl, ex_disp):
-                                # update Using Map
-                                addr_res = __ADDRESSING(
-                                    lbl_8, csect_lbl, ex_disp
-                                    )
-                                using = USING_MAP[addr_res[1]]
-                                using.max_disp = max(
-                                    using.max_disp, addr_res[0]
-                                    )
-                                using.last_stmt = '{0:>5}'.format(line_num)
-                                # update CR table
-                                if reloc_arg != '*':
-                                    SYMBOL[lbl_8].references.append(
-                                        '{0:>4}{1}'.format(line_num, '')
-                                        )
-                                sd_info[4][lbl_i] = str(
-                                    using.u_value + addr_res[0]
-                                    )
-                            else:
-                                indx_s = spi[line_num].index(lbl)
-                                __INFO('E', line_num,
-                                       ( 34, indx_s, indx_s + len(lbl), )
-                                       )
+                            sd_info[4][lbl_i] = str(SYMBOL[lbl_8].value)
                     # end of processing args
 
                     # update the A-const information
@@ -2339,12 +2327,14 @@ def __REDUCE_EXP(exp):
 vf_list = []
 def __APPEND_ESD(variable_field = None):
     if variable_field:
-        vf_list.append(variable_field)
-        force_append = False
+        vf_list.append(variable_field) # append to variable field list
+        force_flush = False            # natual append
     else:
-        force_append = len(vf_list)
-    if force_append  or  len(variable_field) % 3 == 0:
+        force_flush = len(vf_list)     # force flush if there is any pending vf
+    if force_flush  or  len(vf_list) % 3 == 0:
+        # force flush the list, or the list is full (len = 3)
         OBJMOD['ESD'].append(OBJMOD_REC['ESD'](vf_list))
+        del vf_list[:]                 # clear variable field list
 
 def __APPEND_TXT(mem, scope, pos_start, pos_end):
     if ( scope == None     or
@@ -2355,7 +2345,7 @@ def __APPEND_TXT(mem, scope, pos_start, pos_end):
         return                  # no need to append, early return
 
     p_s = pos_start
-    p_e = min(pos_end, p_s + 56 * 2) # 56 Byte per TXT
+    p_e = min(pos_end, p_s + 56) # 56 Byte per TXT
     while p_s < p_e:
         OBJMOD['TXT'].append(OBJMOD_REC['TXT'](
                 scope, p_s,

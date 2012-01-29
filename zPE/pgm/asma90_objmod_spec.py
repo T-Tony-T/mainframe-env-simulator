@@ -31,22 +31,31 @@ def esd_vf(vf, indx):
 
     sym = vf[indx][1]
 
-    # byte 14-16
-    if sym.type == 'LD':
-        last = sym.id
+    # byte 10-12
+    if sym.type == 'ER':
+        addr = 0
     else:
-        last = sym.length
+        addr = sym.addr
+    # byte 14-16
+    if sym.type == 'ER':
+        last = c2x(' ' * 3)
+    elif sym.type == 'LD':
+        last = '{0:0>6}'.format(
+            hex(sym.id)[2:]
+            )
+    else:
+        last = '{0:0>6}'.format(
+            hex(sym.length)[2:]
+            )
 
     return ''.join([
             c2x(vf[indx][0]),      # 01-08 : External symbol name
             sym.type_code(),       # 09    : ESD type code
             '{0:0>6}'.format(      # 10-12 : Address
-                hex(sym.addr)[2:]
+                hex(addr)[2:]
                 ),
             sym.flags(),           # 13    : Flag
-            '{0:0>6}'.format(      # 14-16 : Length, LDID, or space
-                hex(last)[2:]
-                ),
+            last,                  # 14-16 : Length, LDID, or space
             ])
 
 # for TXT record

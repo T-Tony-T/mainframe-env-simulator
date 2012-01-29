@@ -193,8 +193,8 @@ def load():
                        for j in range(byte_cnt / 16) # number of vf
                        ]:
                 vf = rec[i : i+32] # each vf is 16 bytes long
-                addr = int(vf[18:24]) # vf byte 10-12: address
-                length = vf[26:32]    # vf byte 14-16: length / blank
+                addr = int(vf[18:24], 16) # vf byte 10-12: address
+                length = vf[26:32]        # vf byte 14-16: length / blank
                 if length == zPE.c2x('   '): # 3 spaces
                     length = None
                 else:
