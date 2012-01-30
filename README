@@ -45,7 +45,7 @@ $ sudo python setup.py install --record install.record.txt
 Under Windows: (cmd)
 > python setup.py build
 > python setup.py bdist_wininst
-> dist/mainframe-env-simulator-*.exe
+> dist\mainframe-env-simulator-*.exe
 
 
 USAGE
