@@ -1562,7 +1562,7 @@ def pass_2():
                         zPE.core.asm.X_.tr(val.dump())
                         for val in zPE.core.asm.get_sd(MNEMONIC[line_num][2])
                         ])
-                mem[addr] = content
+                mem[mem.min_pos + addr] = content
                 pos_end = addr + len(content) / 2
             else:
                 if MNEMONIC[line_num][2][1] * MNEMONIC[line_num][2][3]:
@@ -1959,7 +1959,7 @@ def pass_2():
 
             content = zPE.core.asm.prnt_op(MNEMONIC[line_num][2])
             if not INFO_GE(line_num, 'E'):
-                mem[addr] = content
+                mem[mem.min_pos + addr] = content
             pos_end = addr + len(content) / 2
 
         # parse macro call
@@ -2400,7 +2400,7 @@ def __APPEND_TXT(mem, scope, pos_start, pos_end):
     while p_s < p_e:
         OBJMOD['TXT'].append(OBJMOD_REC['TXT'](
                 scope, p_s,
-                mem[mem.min_pos + p_s : p_e]
+                mem[mem.min_pos + p_s : mem.min_pos + p_e]
                 ))
         p_s = p_e
         p_e = min(pos_end, p_s + 56 * 2)

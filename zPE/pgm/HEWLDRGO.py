@@ -240,7 +240,56 @@ def load():
 
         # parse RLD record
         elif rec[2:8] == rec_tp['RLD']: # byte 2-4
-            pass                # currently not supported
+            byte_cnt = int(rec[20:24], 16) # byte 11-12: byte count
+            remainder = rec[32 : 32 + byte_cnt * 2]
+            df_same = False     # not the same ESDID
+            while remainder:
+                if not df_same: # update ESDID if needed
+                    rel_id = int(remainder[  : 4], 16)
+                    pos_id = int(remainder[4 : 8], 16)
+                    remainder = remainder[8:]
+                # parsing flags
+                df_vcon = (remainder[0] == '1') # 1st hex-digit: v-con flag
+                df_flag = int(remainder[1], 16) # 2nd hex-digit: flags
+                df_len  = (df_flag >> 2) + 1    # 2.1 - 2.2: length - 1
+                df_neg  = bool(df_flag & 0b10)  # 2.3: negative flag
+                df_same = bool(df_flag & 0b01)  # 2.4: same ESDID flag
+                # retrieving address
+                df_addr = int(remainder[2:8], 16)
+                remainder = remainder[8:]
+
+                # relocate the address constant
+                df_addr += mem.min_pos # re-mapping the memory address
+                if df_neg:
+                    reloc_offset = - mem.min_pos
+                else:
+                    reloc_offset = mem.min_pos
+                if df_vcon:
+                    found = False
+                    for val in CSECT.itervalues():
+                        if ( val[2] == EXREF[obj_id, rel_id][2] and
+                             val[1].type == 'SD'
+                             ):
+                            reloc_value = zPE.core.reg.Register(val[1].addr)
+                            reloc_value + reloc_offset # AR rl_value,rl_offset
+                            mem[df_addr] = '{0:0>{1}}'.format(
+                                str(reloc_value)[- df_len * 2 : ], # max len
+                                df_len * 2                         # min len
+                                )
+                            found = True
+                            break
+                    if not found:
+                        zPE.abort(13, 'Error: ', EXREF[obj_id, rel_id][2],
+                                  ': Storage Definition not found.\n')
+                else:
+                    reloc_value = zPE.core.reg.Register(
+                        int(mem[df_addr : df_addr + df_len], 16)
+                        )
+                    reloc_value + reloc_offset # AR rl_value,rl_offset
+                    mem[df_addr] = '{0:0>{1}}'.format(
+                        str(reloc_value)[- df_len * 2 : ], # max len
+                        df_len * 2                         # min len
+                        )
 
         # parse END record
         elif rec[2:8] == rec_tp['END']: # byte 2-4
@@ -281,6 +330,12 @@ def load():
         else:
             zPE.abort(13, 'Error: ', zPE.x2c(rec[2:8]), # byte 2-4
                       ': invalid OBJECT MODULE record type.\n')
+
+    if zPE.debug_mode():
+        print 'Memory after loading Object Deck:'
+        for line in mem.dump_all():
+            print line[:-1]
+        print
 
     return mem
 # end of load()
