@@ -337,7 +337,7 @@ class PSW(object):
 
         # EC + BC:
         self.E = E              # (E) External mask
-        self.PSW_key = PSW_key
+        self.PSW_key = PSW_key  # Storage (virtual memory) Reference access key
         self.C = C              # (C = 0) Control mode:
                                 #      0 -> Basic Control mode
                                 #      1 -> Extended Control mode
@@ -482,4 +482,5 @@ SPR = {                         # special purpose registers
 
 SPR['PSW'].Channel_masks = 127  # turn on all internal channels
 SPR['PSW'].E = 1                # also turn on external channel
-SPR['PSW'].PSW_key = 1          # superuser mode
+SPR['PSW'].P = 1                # problem (user) state
+SPR['PSW'].PSW_key = 1          # 1st kernel-mode key
