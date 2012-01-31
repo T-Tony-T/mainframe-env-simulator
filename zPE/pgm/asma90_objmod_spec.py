@@ -49,13 +49,13 @@ def esd_vf(vf, indx):
             )
 
     return ''.join([
-            c2x(vf[indx][0]),      # 01-08 : External symbol name
-            sym.type_code(),       # 09    : ESD type code
-            '{0:0>6}'.format(      # 10-12 : Address
+            c2x(vf[indx][0]),           # 01-08 : External symbol name
+            sym.type_code(),            # 09    : ESD type code
+            '{0:0>6}'.format(           # 10-12 : Address
                 hex(addr)[2:]
                 ),
-            sym.flags(),           # 13    : Flag
-            last,                  # 14-16 : Length, LDID, or space
+            sym.flags(),                # 13    : Flag
+            last,                       # 14-16 : Length, LDID, or space
             ])
 
 # for TXT record
@@ -67,8 +67,40 @@ def txt_ds(ds):
     return rv
 
 # for RLD record
+def rld_flag(df, indx):
+    bits = df[indx][1].len - 1
+    if df[indx][1].action == '-':
+        bits = (bits << 1 + 1) << 1
+    else:
+        bits <<= 2
+    if indx + 1 < len(df) and df[indx + 1][0] == 4:
+        # next entry uses pack format
+        bits += 1
+    return hex(bits)[-1].upper()
+
 def rld_df(df):
-    return c2x('{0:56}'.format('Need Information')) # need info
+    df_list = []
+    for indx in range(len(df)):
+        if df[indx][0] == 8:
+            # full record
+            df_list.append(             # 01-02 : Relocation ESDID
+                '{0:0>4}'.format(hex(df[indx][3])[2:].upper())
+                )
+            df_list.append(             # 03-04 : Position ESDID
+                '{0:0>4}'.format(hex(df[indx][2])[2:].upper())
+                )
+        df_list.append(                 # 05    : Flag
+            '{0}{1}'.format('AV'.index(df[indx][1].type), rld_flag(df, indx))
+            )
+        df_list.append(                 # 06-08 : Address
+            '{0:0>6}'.format(hex(df[indx][1].addr)[2:].upper())
+            )
+
+    rv = ''.join(df_list)
+    rv_len = len(rv) / 2
+    if rv_len < 56:       # fill with tailing spaces
+        rv += c2x('{0:{1}}'.format('', 56 - rv_len))
+    return rv
 
 # for END record
 def end_fill(src, length):
@@ -145,12 +177,16 @@ REC_FMT = {                 # record formatter
     # Relocation dictionary provide information required to relocate
     # address constants within the object module
     'RLD' : lambda df : ''.join([
-            # df  : data field (1~7 [ Symbol, <need info> ])
+            # df  : data field ( 1~13 [ 8, RelocationEntry, pos_id, rel_id ]
+            #                     or  [ 4, RelocationEntry ]
+            #                    )
             '02',                       # 01    : X'02'
             c2x('RLD'),                 # 02-04 : RLD
             c2x('{0:6}'.format('')),    # 05-10 : Space
             '{0:0>4}'.format(           # 11-12 : Data field count
-                hex(len(df) * 8)[2:]    #         (number of bytes of df)
+                hex(sum([               #         (number of bytes of df)
+                            entry[0] for entry in df
+                            ]))[2:]
                 ),
             c2x('{0:4}'.format('')),    # 13-16 : Space
             rld_df(df),                 # 17-72 : Data fields

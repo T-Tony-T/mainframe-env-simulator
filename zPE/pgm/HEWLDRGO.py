@@ -92,13 +92,16 @@ MEM_DUMP = [ ]                  # the entire memory dump at ABEND
 
 from ASMA90 import ExternalSymbol
 CSECT = {
-    # ( OBJMOD_id, ESD_ID ) : ( mem_loc, ExternalSymbol, ESD_name )
+    # ( OBJMOD_id, ESD_ID ) : ( mem_loc,  ExternalSymbol, ESD_name )
     #   mem_loc - the starting memory location where the OBJMOD is loaded into
     }
 SCOPE = {
     # ( mem_loc, addr, length ) : ( OBJMOD_id, ESD_ID )
     #   addr    - the starting location of the CSECT relative to the OBJMOD
     #   length  - the length of the CSECT 
+    }
+EXREF = {
+    # ( OBJMOD_id, ESD_ID ) : ( 0x000000, ExternalSymbol, ESD_name )
     }
 ### end of resource definition
 
@@ -108,6 +111,7 @@ def init_res():
 
     CSECT.clear()               # clear Control SECTion records
     SCOPE.clear()               # clear scope records
+    EXREF.clear()               # clear EXternal REFerence records
 
     del MEM_DUMP[:]             # clear memory dump
 
@@ -169,7 +173,6 @@ def load():
     obj_id = 1            # 1st OBJECT MODULE
     mem_loc = mem.min_pos # starting memory location for each OBJMOD
 
-    has_txt = False             # indicates whether encountered TXT record(s)
     esd_id_next = 1             # next available ESD ID
     for r in spi.spool:
         rec = b2a_hex(r)
@@ -180,6 +183,7 @@ def load():
 
         # parse ESD record
         if rec[2:8] == rec_tp['ESD']: # byte 2-4
+            has_txt = False # indicates if encountered TXT record(s) before END
             byte_cnt = int(rec[20:24], 16) # byte 11-12: byte count
             esd_id = rec[28:32]            # byte 15-16: ESD ID / blank
             if esd_id == zPE.c2x('  '):    # 2 spaces
@@ -203,11 +207,13 @@ def load():
                     None, esd_id, addr, length,
                     None, PARM['AMODE'],PARM['RMODE'], None
                     )
-                esd.load_type(vf[16:18])         # vf byte 9: ESD type code
+                esd.load_type(vf[16:18])        # vf byte 9: ESD type code
+                esd_name = zPE.x2c(vf[0:16])    # vf byte 1-8: ESD Name
                 if esd.type in [ 'SD', 'PC', ]:
-                    esd_name = zPE.x2c(vf[0:16]) # vf byte 1-8: ESD Name
                     CSECT[obj_id, esd.id] = ( mem_loc, esd, esd_name )
                     SCOPE[mem_loc, esd.addr, esd.length] = ( obj_id, esd.id )
+                elif esd.type == 'ER':
+                    EXREF[obj_id, esd.id] = ( 0,       esd, esd_name)
                 else:
                     pass        # ignore the rest
                 # advance ESD ID by 1

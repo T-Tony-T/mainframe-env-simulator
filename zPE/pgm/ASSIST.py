@@ -161,7 +161,7 @@ def __MISSED_FILE(step, i):
 
 from ASMA90 import TITLE
 from ASMA90 import INFO, INFO_GE, MAP_INFO_GE
-from ASMA90 import ESD, ESD_ID, MNEMONIC, USING_MAP
+from ASMA90 import ESD, ESD_ID, MNEMONIC, RLD, USING_MAP
 from ASMA90 import SYMBOL, SYMBOL_V, SYMBOL_EQ, NON_REF_SYMBOL, INVALID_SYMBOL
 
 def __PARSE_OUT_ASM(limit):
@@ -388,6 +388,19 @@ def __PARSE_OUT_ASM(limit):
             v = ESD[k][1]
         print '{0} => {1}'.format(k, v.__dict__)
 
+    print '\nRelocation Dictionary:'
+    print' Pos.Id   Rel.Id   Address  Type  Action'
+    for (pos_id, rel_id) in sorted(RLD):
+        for entry in RLD[pos_id, rel_id]:
+            print '{0:0>8} {1:0>8} {2:0>8}   {3} {4}  {5:>4}'.format(
+                hex(pos_id)[2:].upper(),
+                hex(rel_id)[2:].upper(),
+                hex(entry.addr)[2:].upper(),
+                entry.type,
+                entry.len,
+                entry.action
+                )
+
     print '\nSymbol Cross Reference Table:'
     for key in sorted(SYMBOL.iterkeys()):
         if SYMBOL[key].value == None:
@@ -506,13 +519,13 @@ def __PARSE_OUT_ASM(limit):
 
     print '\n\nObject Deck:'
     for line in zPE.core.SPOOL.retrive('SYSLIN'):
-        line = b2a_hex(line)
-        print ' '.join(re.findall(r'(....)', line[0   :  32])), '  ',
-        print ' '.join(re.findall(r'(....)', line[32  :  64])), '  ',
-        print ' '.join(re.findall(r'(....)', line[64  :  96]))
-        print '{0:42}'.format(''),
-        print ' '.join(re.findall(r'(....)', line[96  : 128])), '  ',
-        print ' '.join(re.findall(r'(....)', line[128 : 160]))
+        line = b2a_hex(line).upper()
+        print ' '.join(re.findall(r'(........)', line[0   :  32])), '  ',
+        print ' '.join(re.findall(r'(........)', line[32  :  64])), '  ',
+        print ' '.join(re.findall(r'(........)', line[64  :  96]))
+        print '{0:38}'.format(''),
+        print ' '.join(re.findall(r'(........)', line[96  : 128])), '  ',
+        print ' '.join(re.findall(r'(........)', line[128 : 160]))
         print
     print
     # end of debugging

@@ -67,6 +67,11 @@ def f2x(src):
     return core.asm.X_.tr(core.asm.F_(src).dump())
 
 
+def dic_append_list(dic, key, value):
+    if key not in dic:
+        dic[key] = []
+    dic[key].append(value)
+
 def dic_find_key(dic, val):
     '''Return the (first) key of the dic that has the given val'''
     return [k for (k, v) in dic.iteritems() if v == val][0]

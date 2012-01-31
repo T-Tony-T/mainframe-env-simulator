@@ -259,8 +259,24 @@ SYMBOL_V = {            # Cross Reference ER Sub-Table
 SYMBOL_EQ = {           # Cross Reference =Const Sub-Table
     # 'Symbol  ' : [ Symbol(), ... ]
     }
+def ALLOC_EQ_SYMBOL(lbl, symbol):
+    zPE.dic_append_list(SYMBOL_EQ, lbl, symbol) # mark =const as allocable
 INVALID_SYMBOL = []     # non-defined symbol
 NON_REF_SYMBOL = []     # non-referenced symbol
+
+class RelocationEntry(object):
+    def __init__(self, addr, const_type, const_len, action
+                 ):
+        self.addr       = addr   # address of the symbol, or 0x0 if external
+        self.type       = const_type # A or V
+        self.len        = const_len  # 1, 2, 3, or 4
+        self.action     = action     # +, -, or ST
+RLD = {
+    # (pos_id, rel_id) : [ RelocationEntry, ... ]
+    }
+def RECORD_RL_SYMBOL(pos_id, rel_id, rl_entry):
+    zPE.dic_append_list(RLD, (pos_id, rel_id), rl_entry)
+
 
 class Using(object):
     def __init__(self, curr_addr, curr_id,
@@ -314,6 +330,8 @@ def init_res():
     SYMBOL_EQ.clear()
     del INVALID_SYMBOL[:]
     del NON_REF_SYMBOL[:]
+
+    RLD.clear()
 
     USING_MAP.clear()
     ACTIVE_USING.clear()
@@ -521,7 +539,7 @@ def pass_1():
                     spi.insert(line_num_tmp,
                                '{0:<14} {1}\n'.format('', lbl)
                                )
-                    __ALLOC_EQ(lbl, const_pool[lbl])
+                    ALLOC_EQ_SYMBOL(lbl, const_pool[lbl])
                     const_left += 1
                     line_num_tmp += 1
                 # close the current pool
@@ -588,7 +606,7 @@ def pass_1():
             for pool in curr_pool:
                 for lbl in pool:
                     spi.insert(line_num_tmp, '{0:<15}{1}\n'.format('', lbl))
-                    __ALLOC_EQ(lbl, const_pool[lbl])
+                    ALLOC_EQ_SYMBOL(lbl, const_pool[lbl])
                     const_left += 1
                     line_num_tmp += 1
 
@@ -1333,6 +1351,14 @@ def pass_2():
                         if lbl_8 in SYMBOL_V: # fully processed in pass 1
                             # append it to ESD records
                             __APPEND_ESD([ lbl_8, ESD[lbl_8][1] ])
+                            # add to relocation dictionary
+                            RECORD_RL_SYMBOL(
+                                scope_id,         # position   ESDID
+                                ESD[lbl_8][1].id, # relocation ESDID
+                                RelocationEntry(  # relocation entry
+                                    addr, 'V', sd_info[3], 'ST'
+                                    )
+                                )
 
                 elif sd_info[2] == 'A':
                     # check internal reference
@@ -1352,8 +1378,21 @@ def pass_2():
 
                         reloc_cnt = 0    # number of relocatable symbol
                         reloc_arg = None # backup of the relocatable symbol
+                        reloc_neg = [ False ] # if negative of each level of ()
+                        reloc_entry = None
                         for indx in range(len(res[0])):
                             # for each element in the exp, try to envaluate
+
+                            if res[1][indx] == 'parenthesis':
+                                if res[0][indx] == '(':
+                                    reloc_neg.append(False) # push down 1 level
+                                else:
+                                    reloc_neg.pop()         # pop  back 1 level
+                                continue
+                            elif res[1][indx] == 'operator':
+                                if res[0][indx] == '-':
+                                    reloc_neg[-1] = not reloc_neg[-1]
+                                continue
 
                             if reloc_cnt > 1: # more than one relocatable symbol
                                 indx_s = spi[line_num].index(lbl)
@@ -1494,6 +1533,9 @@ def pass_2():
                                 lbl_8 = '{0:<8}'.format(reloc_arg)
 
                             sd_info[4][lbl_i] = str(SYMBOL[lbl_8].value)
+                            reloc_entry = RelocationEntry(
+                                addr, 'A', sd_info[3], '+-'[reloc_neg[-1]]
+                                )
                     # end of processing args
 
                     # update the A-const information
@@ -1502,6 +1544,13 @@ def pass_2():
                             MNEMONIC[line_num][2][:3] + sd_info[3:5] +
                             MNEMONIC[line_num][2][5:]
                             )
+                        # add to relocation dictionary
+                        if reloc_entry:
+                            RECORD_RL_SYMBOL(
+                                scope_id,         # position   ESDID
+                                SYMBOL[lbl_8].id, # relocation ESDID
+                                reloc_entry       # relocation entry
+                                )
                 # end of parsing A-const
 
             if INFO_GE(line_num, 'E'):
@@ -1926,6 +1975,11 @@ def pass_2():
 
     # append leftover variable fields to ESD records
     __APPEND_ESD()
+    # append data fields to RLD records
+    for (pos_id, rel_id) in sorted(RLD):
+        for entry in RLD[pos_id, rel_id]:
+            __APPEND_RLD(pos_id, rel_id, entry)
+    __APPEND_RLD()        # append leftover data fields to RLD records
 
 
     # check cross references table integrality
@@ -1995,11 +2049,6 @@ def __ADDRESSING(lbl, csect_lbl, ex_disp = 0):
                  ):
                 rv = [ disp, (v, k), k, ]
     return rv
-
-def __ALLOC_EQ(lbl, symbol):
-    if lbl not in SYMBOL_EQ:
-        SYMBOL_EQ[lbl] = []
-    SYMBOL_EQ[lbl].append(symbol) # mark =const as allocable
 
 def __HAS_EQ(lbl, scope_id):
     if lbl not in SYMBOL_EQ:
@@ -2327,14 +2376,16 @@ def __REDUCE_EXP(exp):
 vf_list = []
 def __APPEND_ESD(variable_field = None):
     if variable_field:
-        vf_list.append(variable_field) # append to variable field list
-        force_flush = False            # natual append
+        vf_list.append(variable_field)  # append to variable field list
+        force_flush = False             # natual append
     else:
-        force_flush = len(vf_list)     # force flush if there is any pending vf
+        force_flush = len(vf_list)      # force flush if there is any pending vf
+
     if force_flush  or  len(vf_list) % 3 == 0:
         # force flush the list, or the list is full (len = 3)
         OBJMOD['ESD'].append(OBJMOD_REC['ESD'](vf_list))
-        del vf_list[:]                 # clear variable field list
+        del vf_list[:]                  # clear variable field list
+
 
 def __APPEND_TXT(mem, scope, pos_start, pos_end):
     if ( scope == None     or
@@ -2353,6 +2404,46 @@ def __APPEND_TXT(mem, scope, pos_start, pos_end):
                 ))
         p_s = p_e
         p_e = min(pos_end, p_s + 56 * 2)
+
+
+df_list = []
+df_list_memory = {
+    'byte_cnt' : 0,
+    'pos_id'   : None,
+    'rel_id'   : None,
+    }
+def __APPEND_RLD(pos_id = None, rel_id = None, data_field = None):
+    if data_field:
+        # append to data field list
+        if ( df_list and        # there is pending df in the list
+             pos_id == df_list_memory['pos_id'] and
+             rel_id == df_list_memory['rel_id']
+             ):
+            # same as previous one, use pack format
+            df_list.append([ 4, data_field ])
+        else:
+            # scope changed, use full format and record the change
+            df_list.append([ 8, data_field, pos_id, rel_id ])
+            df_list_memory['pos_id'] = pos_id
+            df_list_memory['rel_id'] = rel_id
+        df_list_memory['byte_cnt'] += df_list[-1][0] # update byte counter
+        force_flush = False             # natual append
+    else:
+        force_flush = len(df_list)      # force flush if there is any pending df
+
+    if force_flush  or  df_list_memory['byte_cnt'] == 56:
+        # force flush the list, or the list is full (len = 56)
+        OBJMOD['RLD'].append(OBJMOD_REC['RLD'](df_list))
+        del df_list[:]                 # clear data field list
+        df_list_memory['byte_cnt'] = 0 # reset byte counter
+
+    elif df_list_memory['byte_cnt'] > 56:
+        # the list is overflowed
+        OBJMOD['RLD'].append(OBJMOD_REC['RLD'](df_list[-1]))
+        del df_list[:]                 # clear data field list
+        df_list.append([ 8, data_field, pos_id, rel_id ]) # push back last one
+        df_list_memory['byte_cnt'] = 8
+
 
 def __APPEND_END():
     if LOCAL_CONF['ENTRY_PT']:  # type 1 END
