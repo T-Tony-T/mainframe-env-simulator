@@ -145,7 +145,7 @@ def init(step):
     # load OBJMOD into memory, and execute it
     rc = go(load())
 
-    __PARSE_OUT()
+    __PARSE_OUT(rc)
 
     init_res() # release resources (by releasing their refs to enable gc)
 
@@ -169,6 +169,15 @@ def load():
         'END' : zPE.c2x('END').lower(),
         'SYM' : zPE.c2x('SYM').lower(),
         }
+    rec_order = {
+        # current type : expected type(s)
+        rec_tp['ESD']  : [ rec_tp['ESD'], rec_tp['TXT'], ],
+        rec_tp['TXT']  : [ rec_tp['TXT'], rec_tp['RLD'], rec_tp['END'], ],
+        rec_tp['RLD']  : [ rec_tp['RLD'], rec_tp['END'], ],
+        rec_tp['END']  : [ rec_tp['ESD'], None, ], # None <==> EoF
+#        rec_tp['SYM']  : [  ],
+        }
+    expect_type = [ rec_tp['ESD'] ]     # next expected record type
 
     obj_id = 1            # 1st OBJECT MODULE
     mem_loc = mem.min_pos # starting memory location for each OBJMOD (RF)
@@ -181,9 +190,17 @@ def load():
                       "': invalid OBJECT MODULE record indicator.\n",
                       "    Every record should begin with X'02'.\n")
 
+        # check record type
+        if rec[2:8] not in expect_type:
+            sys.stderr.write(
+                'Error: Loader: Invalid OBJECT MODULE record encountered.\n'
+                )
+            return zPE.RC['ERROR'] # OBJECT module format error
+        else:
+            expect_type = rec_order[rec[2:8]]
+
         # parse ESD record
         if rec[2:8] == rec_tp['ESD']: # byte 2-4
-            has_txt = False # indicates if encountered TXT record(s) before END
             byte_cnt = int(rec[20:24], 16) # byte 11-12: byte count
             esd_id = rec[28:32]            # byte 15-16: ESD ID / blank
             if esd_id == zPE.c2x('  '):    # 2 spaces
@@ -222,7 +239,6 @@ def load():
 
         # parse TXT record
         elif rec[2:8] == rec_tp['TXT']: # byte 2-4
-            has_txt = True
             addr = int(rec[10:16], 16)     # byte 6-8: starting address
             byte_cnt = int(rec[20:24], 16) # byte 11-12: byte count
             scope = int(rec[28:32], 16)    # byte 15-16: scope id
@@ -293,9 +309,6 @@ def load():
 
         # parse END record
         elif rec[2:8] == rec_tp['END']: # byte 2-4
-            if not has_txt:
-                zPE.abort(13, 'Error: no TXT records found in OBJECT MODULE.\n')
-
             # setup ENTRY POINT, if not offered by the user
             if LOCAL_CONF['ENTRY_PT'] == None:
                 # no ENTRY POINT offered, nor setup by a previous OBJMOD
@@ -320,16 +333,19 @@ def load():
             mem_loc = (mem_loc + max_offset + 7) / 8 * 8
             obj_id += 1     # advance OBJECT MODULE counter
 
-            has_txt = False # reset TXT record indi
             esd_id_next = 1 # reset next available ESD ID
 
         # parse SYM record
         elif rec[2:8] == rec_tp['SYM']: # byte 2-4
             pass                # currently not supported
 
-        else:
-            zPE.abort(13, 'Error: ', zPE.x2c(rec[2:8]), # byte 2-4
-                      ': invalid OBJECT MODULE record type.\n')
+
+    # check end state
+    if None not in expect_type:
+        sys.stderr.write(
+            'Error: Loader: OBJECT MODULE not end with END card.\n'
+            )
+        return zPE.RC['ERROR'] # OBJECT module format error
 
     if zPE.debug_mode():
         print 'Memory after loading Object Deck:'
@@ -341,6 +357,9 @@ def load():
 # end of load()
 
 def go(mem):
+    if mem.__class__ is not zPE.core.mem.Memory:
+        return mem # not a Memory instance, error occured during loading
+
     psw = zPE.core.reg.SPR['PSW']
     ldr_mem = zPE.core.mem.Memory((mem.max_pos + 7) / 8 * 8, 18 * 4) # 18F RSV
     ldr_mem[ldr_mem.min_pos] = zPE.c2x('RSV ') * 18
@@ -388,13 +407,13 @@ def go(mem):
                     )
             zPE.e_push( zPE.newSystemException('0C0', 'UNKNOWN EXCEPTION') )
         MEM_DUMP.extend(mem.dump_all())
-        rc = zPE.RC['ERROR']
+        rc = zPE.RC['ERROR']    # OBJECT module abnormally ended
     if timeouted:
         zPE.e_push( zPE.newSystemException(
                 '322', 'TIME EXCEEDED THE SPECIFIED LIMIT'
                 ) )
         MEM_DUMP.extend(mem.dump_all())
-        rc = zPE.RC['SEVERE']
+        rc = zPE.RC['SEVERE']   # OBJECT module force closed
 
     psw.W = 1                   # content switch back to the loader
     psw.PSW_key = old_key       # restore PSW key
@@ -427,6 +446,6 @@ def __MISSED_FILE(step):
     return cnt
 
 
-def __PARSE_OUT():
+def __PARSE_OUT(rc):
     spo = zPE.core.SPOOL.retrive('SYSLOUT') # output SPOOL
 
