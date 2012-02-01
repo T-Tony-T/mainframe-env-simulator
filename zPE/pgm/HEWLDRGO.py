@@ -171,7 +171,7 @@ def load():
         }
 
     obj_id = 1            # 1st OBJECT MODULE
-    mem_loc = mem.min_pos # starting memory location for each OBJMOD
+    mem_loc = mem.min_pos # starting memory location for each OBJMOD (RF)
 
     esd_id_next = 1             # next available ESD ID
     for r in spi.spool:
@@ -259,11 +259,11 @@ def load():
                 remainder = remainder[8:]
 
                 # relocate the address constant
-                df_addr += mem.min_pos # re-mapping the memory address
+                df_addr += mem_loc # re-mapping the memory address
                 if df_neg:
-                    reloc_offset = - mem.min_pos
+                    reloc_offset = - mem_loc
                 else:
-                    reloc_offset = mem.min_pos
+                    reloc_offset = mem_loc
                 if df_vcon:
                     found = False
                     for val in CSECT.itervalues():
