@@ -270,16 +270,18 @@ def load():
                 df_len  = (df_flag >> 2) + 1    # 2.1 - 2.2: length - 1
                 df_neg  = bool(df_flag & 0b10)  # 2.3: negative flag
                 df_same = bool(df_flag & 0b01)  # 2.4: same ESDID flag
+
                 # retrieving address
                 df_addr = int(remainder[2:8], 16)
                 remainder = remainder[8:]
 
-                # relocate the address constant
                 df_addr += mem_loc # re-mapping the memory address
                 if df_neg:
                     reloc_offset = - mem_loc
                 else:
                     reloc_offset = mem_loc
+
+                # get the original value of the address constant
                 if df_vcon:
                     found = False
                     for val in CSECT.itervalues():
@@ -287,11 +289,6 @@ def load():
                              val[1].type == 'SD'
                              ):
                             reloc_value = zPE.core.reg.Register(val[1].addr)
-                            reloc_value + reloc_offset # AR rl_value,rl_offset
-                            mem[df_addr] = '{0:0>{1}}'.format(
-                                str(reloc_value)[- df_len * 2 : ], # max len
-                                df_len * 2                         # min len
-                                )
                             found = True
                             break
                     if not found:
@@ -301,11 +298,13 @@ def load():
                     reloc_value = zPE.core.reg.Register(
                         int(mem[df_addr : df_addr + df_len], 16)
                         )
-                    reloc_value + reloc_offset # AR rl_value,rl_offset
-                    mem[df_addr] = '{0:0>{1}}'.format(
-                        str(reloc_value)[- df_len * 2 : ], # max len
-                        df_len * 2                         # min len
-                        )
+
+                # relocate the address constant
+                reloc_value + reloc_offset # AR rl_value,rl_offset
+                mem[df_addr] = '{0:0>{1}}'.format(
+                    str(reloc_value)[- df_len * 2 : ], # max len
+                    df_len * 2                         # min len
+                    )
 
         # parse END record
         elif rec[2:8] == rec_tp['END']: # byte 2-4
