@@ -136,16 +136,26 @@ class Register(Union):
         self.long = other.long
         return self
 
-    def inc(self, value, pos = 3):
+    def inc(self, value, pos_mask = None):
         '''
         IC   R1,addr    =>      R1.inc(value@addr)
-        ICM  R1,addr    =>    ( lambda mask = listify_mask(mask_string) : [
-                                    R1.inc(value@addr+offset, mask[offset])
-                                    for offset in range(len(mask))
-                                    ]
+        ICM  R1,addr    =>    ( lambda mask = listify_mask(mask_string) :
+                                    R1.inc(value@addr:addr+len(mask), mask)
                                 )()
         '''
-        self[pos + 1] = value
+        if pos_mask == None:
+            self[4] = value
+        else:
+            if not pos_mask or int(value, 16) == 0:
+                SPR['PSW'].CC = 0
+            elif int(value[:1], 16) >= 0x8:
+                SPR['PSW'].CC = 1
+            else:
+                SPR['PSW'].CC = 2
+            # insert the bytes
+            for pos in pos_mask:
+                self[pos + 1] = int(value[:2], 16)
+                value = value[2:]
         return self
 
     def store(self, page, addr):

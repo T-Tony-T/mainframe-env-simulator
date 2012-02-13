@@ -152,7 +152,7 @@ ins_op = {
     '1D'   : ( 1, lambda s : __pair(s[0]) / __reg(s[1]) ),
     '41'   : ( 3, lambda s : __reg(s[0]).load( __addr(s[3:6], s[1], s[2])) ),
     '42'   : ( 3, lambda s : __reg(s[0]).stc(* __page(s[3:6], s[1], s[2], 1)) ),
-    '43'   : ( 3, lambda s : __reg(s[0]).inc(  __addr(s[3:6], s[1], s[2], 1)) ),
+    '43'   : ( 3, lambda s : __reg(s[0]).inc( __deref(s[3:6], s[1], s[2], 1)) ),
     '44'   : ( 3, lambda s : __exec(fetch(__addr(s[3:6], s[1], s[2]), s[0])) ),
     '45'   : ( 3, lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
                                __cnt(Register(0), __addr(s[3:6], s[1], s[2]))
@@ -194,12 +194,8 @@ ins_op = {
                 ]
             )() ),
     'BF'   : ( 3, lambda s : (
-            lambda mask = __mask(s[1]) : [
-                __reg(s[0]).inc( __deref(s[3:6], '0', s[2], 1, offset),
-                                 mask[offset]
-                                 )
-                for offset in range(len(mask))
-                ]
+            lambda mask = __mask(s[1]) :
+                __reg(s[0]).inc(__dump(s[3:6], s[2], len(mask)), mask)
             )() ),
     'D2'   : ( 5, lambda s : [
             __ref( s[3:6], '0', s[2],                      # d, i, b
@@ -264,9 +260,18 @@ def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
     ( page, addr ) = __page(d, x, b, al, offset)
     return page.retrieve(addr, zPE.align_fmt_map[al])
 
+def __dump(d, b, size):
+    addr_start = int(d, 16) + __addr_reg(b)
+    addr_end   = addr_start + size
+    try:
+        val = Memory.deref_storage(addr_start, addr_end)
+    except:
+        raise zPE.newProtectionException()
+    return val
+
 def __mask(m):
-    mask = '{0:0>4}'.format(bin(int(m, 16))[2:])
-    return [ i for i in range(4) if mask[i] == '1' ]
+    return zPE.listify_mask(m)
+
 
 def __br(mask, addr):
     if SPR['PSW'].CC in mask:

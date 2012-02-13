@@ -398,6 +398,13 @@ class Memory(object):
                 return Memory.allocation[key].dump(loc_s, loc_e - loc_s)
         raise MemoryError('Access denied: specific memory not available.')
 
+    @staticmethod
+    def deref_storage(loc_s, loc_e):
+        for key in sorted(Memory.allocation, key = lambda t: t[0]):
+            if key[0] <= loc_s < loc_e <= key[1]:
+                return Memory.allocation[key][loc_s : loc_e]
+        raise MemoryError('Access denied: specific memory not available.')
+
 
     def __concat(self, dump1, dump2):
         if dump1[-1][0] == ' ':

@@ -77,6 +77,12 @@ def dic_find_key(dic, val):
     return [k for (k, v) in dic.iteritems() if v == val][0]
 
 
+def listify_mask(mask_hex):
+    '''Convert an (hex) mask to an index list containing positions of 1-bit'''
+    mask = '{0:0>4}'.format(bin(int(mask_hex, 16))[2:])
+    return [ i for i in range(4) if mask[i] == '1' ]
+
+
 def resplit_sq(pattern, string, maxsplit = 0):
     '''See resplit() for detials'''
     return resplit(pattern, string, "'", "'", maxsplit)
