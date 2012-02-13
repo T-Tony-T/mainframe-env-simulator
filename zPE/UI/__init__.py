@@ -71,7 +71,7 @@ class BaseFrame(object):
         sys.stdout = self.err_console
         sys.stderr = self.err_console
 
-        ### retrive configuration
+        ### retrieve configuration
         self.config_window = ConfigWindow()
         self.config_window.load_rc()
 
@@ -614,7 +614,7 @@ class ConfigWindow(gtk.Window):
 
         self.set_title('zPE Config')
 
-        # retrive configs
+        # retrieve configs
         zPE.conf.read_rc(dry_run = True) # this need to be done first to ensure config dir structure
         conf.read_rc_all()
 

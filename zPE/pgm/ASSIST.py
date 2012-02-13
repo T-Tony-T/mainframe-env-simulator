@@ -34,6 +34,7 @@ import re
 from time import time, strftime
 
 from assist_err_code_rc import * # read recourse file for err msg
+from assist_pseudo_ins import PSEUDO_INS, PSEUDO_OP # load pseudo-instructions
 
 
 FILE = [
@@ -48,18 +49,21 @@ TIME = {
     'exec_end'   : None,
     }
 
+
 def init(step):
     # check for file requirement
     if __MISSED_FILE(step, 0) != 0:
         return zPE.RC['CRITICAL']
 
-    __LOAD_PSEUDO()             # load in all the pseudo instructions
+    # load in all the pseudo instructions
+    zPE.core.asm.pseudo.update(PSEUDO_INS)
+    zPE.core.cpu.ins_op.update(PSEUDO_OP)
 
     limit = 0 # error tolerance limit; currently hard coded. need info
 
     # invoke parser from ASMA90 to assemble the source code
-    objmod = zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '')
-    sketch = zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '')
+    om = zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '') # new,delete,delete
+    ut = zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '') # new,delete,delete
 
     # load the user-supplied PARM and config into the default configuration
     zPE.pgm.ASMA90.load_parm({
@@ -95,8 +99,12 @@ def init(step):
         return zPE.RC['NORMAL'] # skip exec, return with "CC = 0"
 
     # invoke HEWLDRGO to link-edit and execute the object module
-    zPE.core.SPOOL.replace('SYSLIN', objmod)
-    zPE.core.SPOOL.pretend('SYSLOUT', 'SYSPRINT') # SYSLOUT -> SYSPRINT
+    zPE.core.SPOOL.replace('SYSLIN', om)
+    om = None                   # un-link om
+    ut = None                   # un-link ut
+    zPE.core.SPOOL.new('SYSLOUT', 'o', 'outstream', '', '') # new,delete,delete
+    zPE.core.SPOOL.pretend('XPRNT',    'SYSLOUT') # XPRNT    -> SYSLOUT
+    zPE.core.SPOOL.pretend('XSNAPOUT', 'SYSLOUT') # XSNAPOUT -> SYSLOUT
 
     # load the user-supplied PARM and config into the default configuration
     zPE.pgm.HEWLDRGO.load_parm({
@@ -114,6 +122,10 @@ def init(step):
             'REGION'  : step.region,
             })
 
+    # initialize all register to "F4F4F4F4"
+    for reg in zPE.core.reg.GPR:
+        reg.long = 0xF4F4F4F4
+
     # load OBJMOD into memory, and execute it
     TIME['exec_start'] = time()
     rc = zPE.pgm.HEWLDRGO.go(zPE.pgm.HEWLDRGO.load())
@@ -124,21 +136,20 @@ def init(step):
     zPE.pgm.HEWLDRGO.init_res()   # release resources
 
     zPE.core.SPOOL.remove('SYSLIN')
-    zPE.core.SPOOL.remove('SYSLOUT') # unlink SYSLOUT
+    zPE.core.SPOOL.remove('SYSLOUT')
+    zPE.core.SPOOL.remove('XPRNT')    # unlink XPRNT
+    zPE.core.SPOOL.remove('XSNAPOUT') # unlink XSNAPOUT
 
     return zPE.RC['NORMAL']
 
 
 ### Supporting Functions
-def __LOAD_PSEUDO():
-    pass
-
 def __MISSED_FILE(step, i):
     if i >= len(FILE):
         return 0                # termination condition
 
-    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
-    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
     ctrl = ' '
 
     if FILE[i][0] not in zPE.core.SPOOL.list():
@@ -165,8 +176,8 @@ from ASMA90 import ESD, ESD_ID, MNEMONIC, RLD, USING_MAP
 from ASMA90 import SYMBOL, SYMBOL_V, SYMBOL_EQ, NON_REF_SYMBOL, INVALID_SYMBOL
 
 def __PARSE_OUT_ASM(limit):
-    spi = zPE.core.SPOOL.retrive('SYSIN')    # input SPOOL
-    spo = zPE.core.SPOOL.retrive('SYSPRINT') # output SPOOL
+    spi = zPE.core.SPOOL.retrieve('SYSIN')    # input SPOOL
+    spo = zPE.core.SPOOL.retrieve('SYSPRINT') # output SPOOL
 
     CNT = {
         'pln'  : 1,         # printed line counter of the current page
@@ -518,7 +529,7 @@ def __PARSE_OUT_ASM(limit):
         print k, v.__dict__
 
     print '\n\nObject Deck:'
-    for line in zPE.core.SPOOL.retrive('SYSLIN'):
+    for line in zPE.core.SPOOL.retrieve('SYSLIN'):
         line = b2a_hex(line).upper()
         print ' '.join(re.findall(r'(........)', line[0   :  32])), '  ',
         print ' '.join(re.findall(r'(........)', line[32  :  64])), '  ',
@@ -584,7 +595,8 @@ def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):
 
 
 def __PARSE_OUT_LDR(rc):
-    spo = zPE.core.SPOOL.retrive('SYSPRINT') # (actual) output SPOOL
+    spi = zPE.core.SPOOL.retrieve('SYSLOUT')  # LOADER output SPOOL
+    spo = zPE.core.SPOOL.retrieve('SYSPRINT') # ASSIST output SPOOL
 
     ldr_ins    = zPE.pgm.HEWLDRGO.INSTRUCTION
     ldr_br     = zPE.pgm.HEWLDRGO.BRANCHING
@@ -597,6 +609,9 @@ def __PARSE_OUT_LDR(rc):
     spo.append(ctrl, '*** PROGRAM EXECUTION BEGINNING - ANY OUTPUT BEFORE EXECUTION TIME MESSAGE IS PRODUCED BY USER PROGRAM ***\n')
 
     # output for the execution of the module
+    spi[0] = '1' + spi[0][1:]   # start an new page on the report
+    for line in spi:
+        spo.append(line)
     # end of output for the execution of the module
 
     diff = TIME['exec_end'] - TIME['exec_start']

@@ -15,8 +15,8 @@ def parse(job):
         fp = sys.stdin
     else:
         fp = open(job, 'r')     # this is not under the control of SMS
-    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
-    sp2 = zPE.core.SPOOL.retrive('JESJCL')   # SPOOL No. 02
+    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
+    sp2 = zPE.core.SPOOL.retrieve('JESJCL')   # SPOOL No. 02
 
     ctrl = '1'                  # control character
     sp1.append(ctrl, '{0:>27}  J O B  L O G  -'.format(zPE.SYSTEM['JEST']),
@@ -229,7 +229,7 @@ def parse(job):
         sp2.append(ctrl, '{0:>9} {1}'.format(zPE.JCL['card_cnt'], line))
     # end of the main read loop
 
-    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+    sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
     if len(invalid_lable) != 0:
         # ctrl for 1st line will be modified in finish_job()
         sp3.append('c', ' STMT NO. MESSAGE\n')
@@ -244,8 +244,8 @@ def parse(job):
 
 
 def init_job():
-    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
-    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
 
     zPE.JCL['jobstart'] = time()
     zPE.JCL['jobstat'] = 'STARTED'
@@ -287,8 +287,8 @@ def init_job():
 
 
 def init_step(step):
-    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
-    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
 
     step.start = time()
     ctrl = ' '
@@ -357,8 +357,8 @@ def init_step(step):
     return 'ok'
 
 def finish_step(step):
-    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
-    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
 
     step.end = time()
     diff = step.end - step.start
@@ -435,8 +435,8 @@ def finish_step(step):
 
 
 def finish_job(msg):
-    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
-    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
 
     if msg in ['ok', 'steprun']: # step was executed
         zPE.JCL['jobstat'] = 'ENDED'
@@ -472,7 +472,7 @@ def finish_job(msg):
         ctrl_new = ' '
 
     for key in zPE.core.SPOOL.DEFAULT:
-        sp = zPE.core.SPOOL.retrive(key)
+        sp = zPE.core.SPOOL.retrieve(key)
         if sp.empty():
             continue            # empty spool
         if key in ['JESMSGLG']:
@@ -507,7 +507,7 @@ def __JES2_STAT(msg, job_time):
         ctrl = '-'
     # ^^^ JCL executed ^^^
 
-    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
+    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
     sp1.append('0', '------ JES2 JOB STATISTICS ------\n')
     if msg not in ['label']:    # if JCL executed
         sp1.append(ctrl, '{0:>13}'.format(strftime(' %d %b %Y').upper()),
@@ -558,7 +558,7 @@ def __READ_UNTIL(fp, fn, dlm):
 
 def __WRITE_OUT(dd_list):
     for fn in dd_list:
-        sp = zPE.core.SPOOL.retrive(fn)
+        sp = zPE.core.SPOOL.retrieve(fn)
         if sp.mode == 'i':
             continue            # input spool
         if sp.empty():

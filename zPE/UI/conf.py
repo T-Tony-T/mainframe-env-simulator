@@ -455,7 +455,7 @@ def read_rc():
         line = line[:-1]        # get rid of the '\n'
 
         if line in [ '[MISC]', '[FONT]', '[COLOR_MAP]', '[ENV]' ]:
-            label = line[1:-1]  # retrive the top-level key
+            label = line[1:-1]  # retrieve the top-level key
             continue
 
         if not label:
@@ -552,7 +552,7 @@ def read_rc():
 def read_key_binding():
     __CK_KEY()
 
-    # retrive all valid functions
+    # retrieve all valid functions
     Config['FUNC_BINDING'] = dict(zip(DEFAULT_FUNC_KEY_BIND.keys(), [''] * len(DEFAULT_FUNC_KEY_BIND)))
     Config['KEY_BINDING'] = {}
 

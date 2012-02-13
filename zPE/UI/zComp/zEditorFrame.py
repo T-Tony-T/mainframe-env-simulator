@@ -276,7 +276,7 @@ class zEdit(z_ABC, gtk.VBox):
                     # no other user buffer
                     new_active_indx -= 1 # system buffer <= -1 <= separater
 
-            # retrive the buffer info of the new active buffer
+            # retrieve the buffer info of the new active buffer
             new_active_name = self.buffer_sw.get_value(new_active_indx, 0)
             new_active = zEditBuffer.buff_list[new_active_name]
 
@@ -955,7 +955,7 @@ class zEdit(z_ABC, gtk.VBox):
         while not self.tab_on_current:
             gtk.main_iteration(False)
 
-        # retrive tabbar info
+        # retrieve tabbar info
         curr_tab = self.tabbar.get_active()
         tab_list = self.tabbar.get_tab_list()
 

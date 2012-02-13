@@ -585,7 +585,7 @@ class zPopupMenu(gtk.Menu):
                 attached_widget.get_allocation().height
                 )
         '''
-        # retrive info for the attached widget
+        # retrieve info for the attached widget
         self.__attached_widget = attached_widget
 
         if w_alloc:

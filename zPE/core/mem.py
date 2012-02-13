@@ -129,7 +129,7 @@ class Page(Structure):
 
             rv.append('{0}  *{1}*\n'.format(
                     line,
-                    re.sub(r'[^\x20-\x7e]', '.', char_arr) # show invisible char
+                    re.sub(r'[^A-Z0-9]', '.', char_arr) # hide binary code
                     ))
 
             if pos_s >= pos_e:
@@ -390,6 +390,13 @@ class Memory(object):
 
     def dump_all(self):
         return self.dump(self.min_pos, self.max_pos - self.min_pos)
+
+    @staticmethod
+    def dump_storage(loc_s, loc_e):
+        for key in sorted(Memory.allocation, key = lambda t: t[0]):
+            if key[0] <= loc_s < loc_e <= key[1]:
+                return Memory.allocation[key].dump(loc_s, loc_e - loc_s)
+        raise MemoryError('Access denied: specific memory not available.')
 
 
     def __concat(self, dump1, dump2):

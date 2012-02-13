@@ -879,7 +879,7 @@ class zStrokeListener(gobject.GObject):
             # Commanding initiated
 
             # on commanding
-            # retrive previous combo, if there is any
+            # retrieve previous combo, if there is any
             if self.__combo_content:
                 # appand previous combo to stroke
                 stroke = '{0} {1}'.format(self.__combo_content, stroke)

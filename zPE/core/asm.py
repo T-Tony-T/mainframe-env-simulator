@@ -35,7 +35,7 @@ class InstructionType(object):
 
         # default to no access permission
         # see flag() / ro() / wo() / rw() / br() / ex() for more info
-        self.for_read   = False # flag  ; able to retrive value
+        self.for_read   = False # flag  ; able to retrieve value
         self.for_write  = False # flag M; able to set new value
         self.for_branch = False # flag B; able to jump to value
         self.for_exec   = False # flag X; able to exec at value
@@ -143,6 +143,34 @@ class InstructionType(object):
         self.for_branch = False
         self.for_exec   = True
         return self
+
+class OpConst(object):
+    '''this is for extended mnemonics and other pre-filled InstructionTypes()'''
+    def __init__(self, ins_type, value):
+        self.ins_type = ins_type
+        self.type = self.ins_type.type # pull over the type info
+        self.pos  = self.ins_type.pos  # pull over the position info
+
+        self.ins_type.set(value)         # initialize the constant
+        self.valid = self.ins_type.valid # pull over the valid indicator
+
+    def __len__(self):
+        return len(self.ins_type)
+
+    def get(self):
+        return self.ins_type.get()
+
+    def prnt(self):
+        return self.ins_type.prnt()
+
+    def value(self):
+        return self.ins_type.value()
+
+    def is_aligned(self, loc = None):
+        return self.ins_type.is_aligned(loc)
+
+    def flag(self):
+        return self.ins_type.flag()
 
 
 # int_4 => ( 'r', '' )
@@ -366,40 +394,40 @@ pseudo = { }        # should only be filled by other modules (e.g. ASSIST)
 
 # Extended Mnemonic
 ext_mnem = {
-    'B'    : lambda: ('47', 'F', X(2).br().al('hw')),
-    'BR'   : lambda: ('07', 'F', R(2).br()),
-    'NOP'  : lambda: ('47', '0', X(2).br().al('hw')),
-    'NOPR' : lambda: ('07', '0', R(2).br()),
+    'B'    : lambda: ('47', OpConst(R(1).ro(), 0xF), X(2).br().al('hw')),
+    'BR'   : lambda: ('07', OpConst(R(1).ro(), 0xF), R(2).br()),
+    'NOP'  : lambda: ('47', OpConst(R(1).ro(), 0x0), X(2).br().al('hw')),
+    'NOPR' : lambda: ('07', OpConst(R(1).ro(), 0x0), R(2).br()),
 
-    'BH'   : lambda: ('47', '2', X(2).br().al('hw')),
-    'BHR'  : lambda: ('07', '2', R(2).br()),
-    'BL'   : lambda: ('47', '4', X(2).br().al('hw')),
-    'BLR'  : lambda: ('07', '4', R(2).br()),
-    'BE'   : lambda: ('47', '8', X(2).br().al('hw')),
-    'BER'  : lambda: ('07', '8', R(2).br()),
-    'BNH'  : lambda: ('47', 'D', X(2).br().al('hw')),
-    'BNHR' : lambda: ('07', 'D', R(2).br()),
-    'BNL'  : lambda: ('47', 'B', X(2).br().al('hw')),
-    'BNLR' : lambda: ('07', 'B', R(2).br()),
-    'BNE'  : lambda: ('47', '7', X(2).br().al('hw')),
-    'BNER' : lambda: ('07', '7', R(2).br()),
+    'BH'   : lambda: ('47', OpConst(R(1).ro(), 0x2), X(2).br().al('hw')),
+    'BHR'  : lambda: ('07', OpConst(R(1).ro(), 0x2), R(2).br()),
+    'BL'   : lambda: ('47', OpConst(R(1).ro(), 0x4), X(2).br().al('hw')),
+    'BLR'  : lambda: ('07', OpConst(R(1).ro(), 0x4), R(2).br()),
+    'BE'   : lambda: ('47', OpConst(R(1).ro(), 0x8), X(2).br().al('hw')),
+    'BER'  : lambda: ('07', OpConst(R(1).ro(), 0x8), R(2).br()),
+    'BNH'  : lambda: ('47', OpConst(R(1).ro(), 0xD), X(2).br().al('hw')),
+    'BNHR' : lambda: ('07', OpConst(R(1).ro(), 0xD), R(2).br()),
+    'BNL'  : lambda: ('47', OpConst(R(1).ro(), 0xB), X(2).br().al('hw')),
+    'BNLR' : lambda: ('07', OpConst(R(1).ro(), 0xB), R(2).br()),
+    'BNE'  : lambda: ('47', OpConst(R(1).ro(), 0x7), X(2).br().al('hw')),
+    'BNER' : lambda: ('07', OpConst(R(1).ro(), 0x7), R(2).br()),
 
-    'BP'   : lambda: ('47', '2', X(2).br().al('hw')),
-    'BPR'  : lambda: ('07', '2', R(2).br()),
-    'BM'   : lambda: ('47', '4', X(2).br().al('hw')),
-    'BMR'  : lambda: ('07', '4', R(2).br()),
-    'BZ'   : lambda: ('47', '8', X(2).br().al('hw')),
-    'BZR'  : lambda: ('07', '8', R(2).br()),
-    'BO'   : lambda: ('47', '1', X(2).br().al('hw')),
-    'BOR'  : lambda: ('07', '1', R(2).br()),
-    'BNP'  : lambda: ('47', 'D', X(2).br().al('hw')),
-    'BNPR' : lambda: ('07', 'D', R(2).br()),
-    'BNM'  : lambda: ('47', 'B', X(2).br().al('hw')),
-    'BNMR' : lambda: ('07', 'B', R(2).br()),
-    'BNZ'  : lambda: ('47', '7', X(2).br().al('hw')),
-    'BNZR' : lambda: ('07', '7', R(2).br()),
-    'BNO'  : lambda: ('47', 'E', X(2).br().al('hw')),
-    'BNOR' : lambda: ('07', 'E', R(2).br()),
+    'BP'   : lambda: ('47', OpConst(R(1).ro(), 0x2), X(2).br().al('hw')),
+    'BPR'  : lambda: ('07', OpConst(R(1).ro(), 0x2), R(2).br()),
+    'BM'   : lambda: ('47', OpConst(R(1).ro(), 0x4), X(2).br().al('hw')),
+    'BMR'  : lambda: ('07', OpConst(R(1).ro(), 0x4), R(2).br()),
+    'BZ'   : lambda: ('47', OpConst(R(1).ro(), 0x8), X(2).br().al('hw')),
+    'BZR'  : lambda: ('07', OpConst(R(1).ro(), 0x8), R(2).br()),
+    'BO'   : lambda: ('47', OpConst(R(1).ro(), 0x1), X(2).br().al('hw')),
+    'BOR'  : lambda: ('07', OpConst(R(1).ro(), 0x1), R(2).br()),
+    'BNP'  : lambda: ('47', OpConst(R(1).ro(), 0xD), X(2).br().al('hw')),
+    'BNPR' : lambda: ('07', OpConst(R(1).ro(), 0xD), R(2).br()),
+    'BNM'  : lambda: ('47', OpConst(R(1).ro(), 0xB), X(2).br().al('hw')),
+    'BNMR' : lambda: ('07', OpConst(R(1).ro(), 0xB), R(2).br()),
+    'BNZ'  : lambda: ('47', OpConst(R(1).ro(), 0x7), X(2).br().al('hw')),
+    'BNZR' : lambda: ('07', OpConst(R(1).ro(), 0x7), R(2).br()),
+    'BNO'  : lambda: ('47', OpConst(R(1).ro(), 0xE), X(2).br().al('hw')),
+    'BNOR' : lambda: ('07', OpConst(R(1).ro(), 0xE), R(2).br()),
     }
 
 # Basic Instruction
@@ -439,7 +467,7 @@ op_code = {
     'M'    : lambda: ('5C', R(1).rw().al('hw'), X(2).ro().al('fw')),
     'MR'   : lambda: ('1C', R(1).rw().al('hw'), R(2).ro()),
 
-    'MVC'  : lambda: ('D2', L(1, 2).rw(), S(2).ro()), # LL + bddd format
+    'MVC'  : lambda: ('D2', L(1,2).rw(), S(2).ro()), # LL + bddd format
     'MVI'  : lambda: ('92', S(1).rw(), I(2).ro()),
 
     'N'    : lambda: ('54', R(1).rw(), X(2).ro().al('fw')),
@@ -465,12 +493,16 @@ op_code = {
 
 # rv: ( 'op_mnem', fmt_tp_1, ... )
 def get_op(instruction):
-    if instruction in pseudo:
-        return pseudo[instruction]()
+    if instruction in op_code:
+        return op_code[instruction]()
     elif instruction in ext_mnem:
         return ext_mnem[instruction]()
-    elif instruction in op_code:
-        return op_code[instruction]()
+    else:
+        return None
+
+def get_op_from(pseudo_ins, argc):
+    if pseudo_ins in pseudo:
+        return pseudo[pseudo_ins](argc)
     else:
         return None
 
@@ -487,35 +519,39 @@ def len_op(op_code):
         return 4
 
 def op_arg_indx(op_code):
-    indx = 0
-    while isinstance(op_code[indx], str):
+    rv = []
+    indx = 1                    # op_code[0] is the OP code itself
+    while indx < len(op_code):
+        if isinstance(op_code[indx], InstructionType):
+            rv.append(indx)
         indx += 1
-    return indx
+    return rv
 
 def prnt_op(op_code):
-    # zero-th pass
-    arg_indx = op_arg_indx(op_code)
-    code = ''
-    for indx in range(arg_indx):
-        code += op_code[indx]
-    # first pass
-    for indx in range(arg_indx, len(op_code)):
+    # print OP code itself
+    code = op_code[0]
+
+    # print arguments - first pass
+    for indx in range(1, len(op_code)):
         code += op_code[indx].prnt()[0]
-    # second pass
-    for indx in range(arg_indx, len(op_code)):
+
+    # print arguments - second pass
+    for indx in range(1, len(op_code)):
         code += op_code[indx].prnt()[1]
+
     return code
 
 
 def valid_op(instruction):
-    if instruction in pseudo:
+    if instruction in op_code:
         return True
     elif instruction in ext_mnem:
         return True
-    elif instruction in op_code:
-        return True
     else:
-        return False
+        return valid_pseudo(instruction)
+
+def valid_pseudo(instruction):
+    return (instruction in pseudo)
 ### end of Operation Code Definition
 
 

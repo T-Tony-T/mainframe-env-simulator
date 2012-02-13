@@ -177,7 +177,7 @@ def pretend(dest, src):
     SPOOL[dest] = SPOOL[src]
     return SPOOL[dest]
 
-def retrive(key):
+def retrieve(key):
     if key in SPOOL:
         return SPOOL[key]
     else:

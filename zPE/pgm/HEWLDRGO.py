@@ -12,10 +12,13 @@
 # Input:
 #     SYSLIN    the object module
 #     SYSLIB    load module libraries needed by the loader
+#     XREAD     input for XREAD; default to instream data
 #     [ ... ]   user-defined input for the module to be executed
 #
 # Output:
 #     SYSLOUT   loader information and diagnostic message
+#     XPRNT     output for XPRNT
+#     XSNAPOUT  output for XDUMP and XSNAP
 #     [ ... ]   user-defined output for the module to be executed
 #
 # Return Code:
@@ -40,7 +43,7 @@ from threading import Timer
 import zPE.core.cpu as CPU
 
 
-FILE = [ 'SYSLIN', 'SYSLOUT' ]  # SYSLIB not required
+FILE = [ 'SYSLIN', 'SYSLOUT' ]  # SYSLIB not required, so does X-Macro DDs
 
 PARM = {
     'AMODE'     : 31,
@@ -158,7 +161,7 @@ def load():
         zPE.abort(9, 'Error: ', LOCAL_CONF['REGION'],
                   ': RIGEON is not big enough.\n')
 
-    spi = zPE.core.SPOOL.retrive('SYSLIN') # input SPOOL
+    spi = zPE.core.SPOOL.retrieve('SYSLIN') # input SPOOL
     mem = zPE.core.mem.Memory(LOCAL_CONF['MEM_POS'], LOCAL_CONF['MEM_LEN'])
     LOCAL_CONF['EXIT_PT'] = mem.h_bound
 
@@ -428,8 +431,8 @@ def go(mem):
 
 ### Supporting Functions
 def __MISSED_FILE(step):
-    sp1 = zPE.core.SPOOL.retrive('JESMSGLG') # SPOOL No. 01
-    sp3 = zPE.core.SPOOL.retrive('JESYSMSG') # SPOOL No. 03
+    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
+    sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
     ctrl = ' '
 
     cnt = 0
@@ -446,5 +449,5 @@ def __MISSED_FILE(step):
 
 
 def __PARSE_OUT(rc):
-    spo = zPE.core.SPOOL.retrive('SYSLOUT') # output SPOOL
+    spo = zPE.core.SPOOL.retrieve('SYSLOUT') # output SPOOL
 

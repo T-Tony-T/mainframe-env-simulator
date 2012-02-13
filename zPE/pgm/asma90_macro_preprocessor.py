@@ -41,6 +41,7 @@ def macro_parse(spi):
         __scanning(spi)
 
 def __scanning(spi, line_num = 0):
+    # MACRO definition section
     while line_num < len(spi):
         line_num += 1           # start at line No. 1
         line = spi[line_num - 1]
@@ -54,6 +55,22 @@ def __scanning(spi, line_num = 0):
         # starting point of macro definition
         elif field[1] == 'MACRO':
             line_num = __defining(spi, line_num + 1)
+
+        # first non-macro-def statement -> end of the current section
+        else:
+            line_num -= 1       # put back the line just read
+            break               # goto the next section
+
+    # ASM section
+    while line_num < len(spi):
+        line_num += 1           # start at line No. 1
+        line = spi[line_num - 1]
+
+        field = zPE.resplit_sq('\s+', line[:-1], 3)
+
+        # non-instruction stuff
+        if len(field) < 2:
+            continue
 
         # machine instruction
         elif zPE.core.asm.valid_op(field[1]):
@@ -78,16 +95,12 @@ def __defining(spi, line_num):
         line = spi[line_num - 1]
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
-        var_lbl = zPE.bad_var_symbol(field[0])
+# try parsing .labels and &labels
+#        var_lbl = zPE.bad_(field[0])
 
         # comment
         if field[0].startswith('.*'):
             continue
-
-        # variable symbol
-        elif var_lbl:
-            zPE.abort(90, 'Error: ', field[0], ': Invalid variable symbol.\n')
-
 
         # check instruction
         if len(field) < 2:

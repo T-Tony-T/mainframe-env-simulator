@@ -194,7 +194,7 @@ class zUndoStack(object):
         return state in self.__group[self.__group_saved]
 
     def get_group_id(self, state):
-        '''retrive the group ID for a specific state'''
+        '''retrieve the group ID for a specific state'''
         for indx in range(len(self.__group)):
             if state in self.__group[indx]:
                 break
@@ -202,7 +202,7 @@ class zUndoStack(object):
 
 
     def get_current_state(self):
-        '''retrive the current state'''
+        '''retrieve the current state'''
         return self.__stack[-1]
 
     def save_current_state(self):

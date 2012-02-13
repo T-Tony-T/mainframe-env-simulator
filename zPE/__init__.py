@@ -139,26 +139,6 @@ def bad_label(label):
             return indx         # (indx+1)th character not legal
     return 0                    # all good
 
-def bad_var_symbol(symbol):
-    '''
-    Return:
-      - the position (start at 1) of the first invalid char
-      - 0 if all good
-      - None if no variable symbol (symbolic parameter / sequence symbol)
-    '''
-    if len(symbol) == 0:
-        return None             # no variable symbol
-    if len(symbol) > 63:        # [.|&][A-Z][A-Z0-9]{0,61}
-        return 9                # symbol too long
-    if symbol[0] not in '.&':
-        return 1                # symbol not start with an ampersand
-    if not re.match('[A-Z]', symbol[1]):
-        return 2                # first character not legal
-    for indx in range(1, len(symbol)):
-        if not re.match('[A-Z0-9]', symbol[indx]):
-            return indx         # (indx+1)th character not legal
-    return 0                    # all good
-
 
 SPOOL_CTRL_MAP = {
     # ctrl : line spacing
