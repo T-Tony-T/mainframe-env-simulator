@@ -145,13 +145,13 @@ class InstructionType(object):
         return self
 
 class OpConst(object):
-    '''this is for extended mnemonics and other pre-filled InstructionTypes()'''
-    def __init__(self, ins_type, value):
+    '''this is for extended mnemonics and other pre-filled InstructionType()'''
+    def __init__(self, ins_type, *val_list):
         self.ins_type = ins_type
         self.type = self.ins_type.type # pull over the type info
         self.pos  = self.ins_type.pos  # pull over the position info
 
-        self.ins_type.set(value)         # initialize the constant
+        self.ins_type.set(*val_list)     # initialize the constant
         self.valid = self.ins_type.valid # pull over the valid indicator
 
     def __len__(self):
@@ -502,7 +502,14 @@ def get_op(instruction):
 
 def get_op_from(pseudo_ins, argc):
     if pseudo_ins in pseudo:
-        return pseudo[pseudo_ins](argc)
+        try:
+            op = pseudo[pseudo_ins](argc) # fetch the indicated format
+        except:
+            # number of arguments is invalid
+            if zPE.debug_mode():
+                raise
+            op = pseudo[pseudo_ins](0)    # fetch the default format
+        return op
     else:
         return None
 

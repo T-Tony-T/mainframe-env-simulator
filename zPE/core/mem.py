@@ -129,7 +129,7 @@ class Page(Structure):
 
             rv.append('{0}  *{1}*\n'.format(
                     line,
-                    re.sub(r'[^A-Z0-9]', '.', char_arr) # hide binary code
+                    re.sub(r'[^ A-Z0-9]', '.', char_arr) # hide binary code
                     ))
 
             if pos_s >= pos_e:

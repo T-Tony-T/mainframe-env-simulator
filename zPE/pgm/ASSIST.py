@@ -15,6 +15,7 @@
 #     STEPLIB   required by the ASSIST on Mainframe;
 #               an empty folder will work here
 #     SYSIN     source code to be assembled, link-edited, and executed
+#     FT05F001  data file for XREAD; default to instream data
 #
 # Output:
 #     SYSPRINT  source listing and diagnostic message
@@ -63,7 +64,8 @@ def init(step):
 
     # invoke parser from ASMA90 to assemble the source code
     om = zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '') # new,delete,delete
-    ut = zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '') # new,delete,delete
+    zPE.core.SPOOL.new(     'SYSUT1', '+', 'tmp', '', '') # new,delete,delete
+    zPE.core.SPOOL.new(     'XREAD',  '+', 'tmp', '', '') # new,delete,delete
 
     # load the user-supplied PARM and config into the default configuration
     zPE.pgm.ASMA90.load_parm({
@@ -96,15 +98,18 @@ def init(step):
     zPE.core.SPOOL.remove('SYSUT1')
 
     if err_cnt > limit:
+        zPE.core.SPOOL.remove('XREAD')
         return zPE.RC['NORMAL'] # skip exec, return with "CC = 0"
 
     # invoke HEWLDRGO to link-edit and execute the object module
     zPE.core.SPOOL.replace('SYSLIN', om)
     om = None                   # un-link om
-    ut = None                   # un-link ut
     zPE.core.SPOOL.new('SYSLOUT', 'o', 'outstream', '', '') # new,delete,delete
     zPE.core.SPOOL.pretend('XPRNT',    'SYSLOUT') # XPRNT    -> SYSLOUT
     zPE.core.SPOOL.pretend('XSNAPOUT', 'SYSLOUT') # XSNAPOUT -> SYSLOUT
+
+    if 'FT05F001' in zPE.core.SPOOL.list():
+        zPE.core.SPOOL.pretend('XREAD', 'FT05F001') # XREAD  -> FT05F001
 
     # load the user-supplied PARM and config into the default configuration
     zPE.pgm.HEWLDRGO.load_parm({
@@ -130,6 +135,8 @@ def init(step):
     TIME['exec_start'] = time()
     rc = zPE.pgm.HEWLDRGO.go(zPE.pgm.HEWLDRGO.load())
     TIME['exec_end'] = time()
+
+    zPE.core.SPOOL.remove('XREAD')
 
     __PARSE_OUT_LDR(rc)
 
@@ -622,7 +629,6 @@ def __PARSE_OUT_LDR(rc):
     spo.append(ctrl, '*** EXECUTION TIME = {0:>8.3f} SECS. '.format(diff),
                '{0:>9} INSTRUCTIONS EXECUTED - '.format(len(ldr_ins)),
                '{0:>8} INSTRUCTIONS/SEC ***\n'.format(ins_p_sec))
-    spo.append(ctrl, '*** FIRST CARD NOT READ: NO CARDS READ:FILE UNOPENED\n')
     if rc >= zPE.RC['WARNING']:
         msg = 'ABNORMAL'
         # generate err msgs here

@@ -585,6 +585,15 @@ def pass_1():
                 # remove the dummy line added in the previous branch
                 if spi[0] == '':
                     spi.rmline(0)
+
+                # read instrame data
+                spx = zPE.core.SPOOL.retrieve('XREAD')
+                while line_num < len(spi):
+                    spx.append('{0:<72}{1:0>4}{2:0>4}\n'.format(
+                            spi[line_num][:-1],
+                            spi.deck_id(line_num), '----' # need info
+                            ))
+                    line_num += 1
                 break           # end of program
 
         # parse LTORG
@@ -809,7 +818,7 @@ def pass_1():
             if not args:                    # no args required
                 pass
             elif len(op_args) > len(args):  # too few args
-                indx_s = line.index(args[-1])
+                indx_s = line.index(args[-1]) + len(args[-1])
                 __INFO('S', line_num, ( 175, indx_s, indx_s, ))
                 arg_list = field[2]
             elif len(op_args) < len(args):  # too many args
@@ -1634,7 +1643,9 @@ def pass_2():
                         # ture validation of length
                         reg_indx = __PARSE_EQU_VALUE(res[1]) # length @ indx
                         if not 0 <= reg_indx <= max_len:
-                            reg[1] = '-1' # invalidate the register check
+                            res[1] = '-1' # invalidate the register check
+                        else:
+                            res[1] = '0'  # skip the register check
 
                     elif op_code[op_args[lbl_i]].type == 'S':
                         del res[2] # remove the extra item (real base in indx)

@@ -52,6 +52,14 @@ class Spool(object):
             option['deck_id'] = None
         self.spdid.insert(indx, option['deck_id'])
 
+    def pop(self, indx = -1):
+        if indx < self.__len__():
+            rv = self.spool[indx]
+            self.rmline(indx)
+            return rv
+        else:
+            return None
+
     def rmline(self, indx):
         if indx < self.__len__():
             del self.spool[indx]
