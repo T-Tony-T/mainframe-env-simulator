@@ -50,7 +50,15 @@ from asma90_objmod_spec import REC_FMT as OBJMOD_REC
 from asma90_objmod_spec import deck_id as OBJMOD_SEQ
 
 
-FILE = [ 'SYSIN', 'SYSPRINT', 'SYSLIN', 'SYSUT1' ] # SYSLIB not required
+FILE_CHK = [                    # files to be checked
+    'SYSIN', 'SYSPRINT', 'SYSLIN', 'SYSUT1',
+    ]
+FILE_REQ = [                    # files that are required
+    'SYSIN', 'SYSPRINT', 'SYSLIN', 'SYSUT1',
+    ]
+FILE_GEN = {                    # files that will be generated if missing
+    }
+
 
 PARM = {
     'AMODE'     : 31,
@@ -69,7 +77,6 @@ LOCAL_CONF = {
     'MEM_POS'   : None,         # required; first available memory location
     'MEM_LEN'   : None,         # required; length of memory required
     'REGION'    : None,         # required; maximum length allowed
-    'ENTRY_PT'  : None,         # entry point (specified by END)
     }
 def load_local_conf(conf_dic):
     for key in conf_dic:
@@ -350,14 +357,15 @@ def init(step):
             'REGION'  : step.region,
             })
 
-    rc1 = pass_1()
-    rc2 = pass_2()
+    while not zPE.core.SPOOL.retrieve('SYSIN').empty():
+        rc = max(pass_1(), pass_2())
 
-    __PARSE_OUT()
+        __PARSE_OUT()
+        init_res() # release resources (by releasing their refs to enable gc)
 
-    init_res() # release resources (by releasing their refs to enable gc)
-
-    return max(rc1, rc2)
+        if rc >= RC['ERROR']:
+            return rc        
+    return rc
 
 
 def pass_1():
@@ -388,22 +396,13 @@ def pass_1():
     const_plid = None
     const_left = 0              # number of =constant LTORG/END allocated
 
-    spi.terminate()             # manually append an EOF at the end, which
-                                # will be removed before leave 1st pass
     skip_until = None
-    sysndx = 0
+    eoflag = False
 
     # main read loop
-    for line in spi:
-        line_num += 1           # start at line No. 1
-
-        # check EOF
-        if spi.atEOF(line):     # encountered EOF before END
-            __INFO('W', line_num, ( 140, 9, None, ))
-            # replace EOF with an END instruction
-            spi.unterminate()   # this indicates the generation of the END
-            line = '{0:<8} END\n'.format('')
-            spi.append(line)
+    while not spi.empty():
+        ( line, deck_id ) = spi.pop(0) # get next line
+        line_num += 1                  # start at line No. 1
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
 
@@ -414,10 +413,12 @@ def pass_1():
             # skip all lines until the end flag encountered
             if len(field) > 1 and field[1] == skip_until:
                 skip_until = None
+            spt.push( ( line, deck_id, ) )
             continue
 
         # check comment
         if line[0] == '*':
+            spt.push( ( line, deck_id, ) )
             continue
 
         # check label
@@ -430,9 +431,7 @@ def pass_1():
             __INFO('E', line_num, ( 142, 9, None, ))
 
             MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
-            spt.append('{0:0>5}{1:<8}\n'.format(
-                    line_num, field[0]
-                    ))
+            spt.push( ( line, deck_id, ) )
             continue
         # end of checks
 
@@ -452,9 +451,7 @@ def pass_1():
             TITLE.append([ line_num, field[0], field[2][1:-1] ])
 
             MNEMONIC[line_num] = [  ]                           # type 0
-            spt.append('{0:0>5}{1:<8} TITLE {2}\n'.format(
-                    line_num , field[0], field[2]
-                    ))
+            spt.push( ( line, deck_id, ) )
 
         # parse CSECT
         elif field[1] == 'CSECT':
@@ -514,86 +511,47 @@ def pass_1():
                         )
 
             MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
-            spt.append('{0:0>5}{1:<8} CSECT\n'.format(
-                    line_num, field[0]
-                    ))
+            spt.push( ( line, deck_id, ) )
 
         # parse USING
         elif field[1] == 'USING':
             # actual parsing in pass 2
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
-            spt.append('{0:0>5}{1:<8} USING {2}\n'.format(
-                    line_num , '', field[2]
-                    ))
+            spt.push( ( line, deck_id, ) )
 
         # parse DROP
         elif field[1] == 'DROP':
             # actual parsing in pass 2
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
-            spt.append('{0:0>5}{1:<8} DROP {2}\n'.format(
-                    line_num , '', field[2]
-                    ))
+            spt.push( ( line, deck_id, ) )
 
         # parse END
         elif field[1] == 'END':
-            if const_plid:      # check left-over constants
-                line_num_tmp = line_num - 1
-                for lbl in const_pool_lbl:
-                    spi.insert(line_num_tmp,
-                               '{0:<14} {1}\n'.format('', lbl)
-                               )
-                    ALLOC_EQ_SYMBOL(lbl, const_pool[lbl])
-                    const_left += 1
-                    line_num_tmp += 1
-                # close the current pool
-                const_pool.clear()
-                del const_pool_lbl[:]
-                const_plid = None
-                # the following is to "move back" the iterator
-                # need to be removed after END
-                spi.insert(0, '')
-                line_num -= 1
-            else:               # no left-over constant, end the program
-                if len(field[0]) != 0:
-                    __INFO('W', line_num, ( 165, 0, None, ))
+            if len(field[0]) != 0: # has label
+                __INFO('W', line_num, ( 165, 0, None, ))
 
+            spi.push( ( line, deck_id, ), 0 ) # put back the END card
+            if not eoflag:
+                # first time encounter END
+                eoflag = True
+                spt.push( ( line, deck_id, ) )
+                # the scope ID of END is always None, and
+                # the location counter is always 0
+                MNEMONIC[line_num] = [ None, 0, ]               # type 2
+            
+            if const_plid:      # check left-over constants
+                spi.insert(0, ' LTORG\a') # hand left-over constants to LTORG
+                                          # the generated LTORG will be removed
+                continue
+
+            else:               # no left-over constant, end the program
                 # update the CSECT info
                 if csect_lbl == None:
                     raise SyntaxError('No CSECT found.')
                 ESD[csect_lbl][0].length = addr
 
-                if len(field) == 3: # has label
-                    lbl_8 = '{0:<8}'.format(field[2])
-                    LOCAL_CONF['ENTRY_PT'] = lbl_8 # set entry point
-                else:               # has no label; default to 1st CSECT
-                    lbl_8 = ESD_ID[1]
-
                 addr = 0    # reset program counter
                 prev_addr = None
-
-                # check EOF again
-                if spi.atEOF():
-                    # no auto-generation of END, undo the termination
-                    spi.unterminate()
-
-                MNEMONIC[line_num] = [ None, addr, ]            # type 2
-                # the scope ID of END is always set to 0
-                spt.append('{0:0>5}{1:<8} END   {2}\n'.format(
-                        line_num, '', lbl_8
-                        ))
-
-                # remove the dummy line added in the previous branch
-                if spi[0] == '':
-                    spi.rmline(0)
-
-                # read instrame data
-                spx = zPE.core.SPOOL.retrieve('XREAD')
-                while line_num < len(spi):
-                    spx.append('{0:<72}{1:0>4}{2:0>4}\n'.format(
-                            spi[line_num][:-1],
-                            spi.deck_id(line_num), '----' # need info
-                            ))
-                    line_num += 1
                 break           # end of program
 
         # parse LTORG
@@ -614,7 +572,7 @@ def pass_1():
                         curr_pool[3 - i].append(lbl)
                         break
 
-            line_num_tmp = line_num
+            line_num_tmp = 0    # start insertion before next line
             for pool in curr_pool:
                 for lbl in pool:
                     spi.insert(line_num_tmp, '{0:<15}{1}\n'.format('', lbl))
@@ -627,8 +585,12 @@ def pass_1():
             del const_pool_lbl[:]
             const_plid = None
 
-            MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
-            spt.append('{0:0>5}{1:<8} LTORG\n'.format(line_num, ''))
+            if line == ' LTORG\a'  and  deck_id == None:
+                # inserted LTORG, ignore it
+                line_num -= 1   # move back one line (since not LTORG)
+            else:
+                MNEMONIC[line_num] = [ scope_id, addr, ]        # type 2
+                spt.push( ( line, deck_id, ) )
 
         # parse EQU
         elif field[1] == 'EQU':
@@ -660,9 +622,7 @@ def pass_1():
                                    None, # need info
                                    equ_addr,
                                    ]
-            spt.append('{0:0>5}{1:<8} EQU   {2}\n'.format(
-                    line_num, field[0], field[2]
-                    ))
+            spt.push( ( line, deck_id, ) )
 
         # parse DC/DS/=constant
         elif field[1] in [ 'DC', 'DS' ] or field[1][0] == '=':
@@ -691,6 +651,7 @@ def pass_1():
                            ( 141, indx_s, indx_s + len(field[1]), )
                            )
                     MNEMONIC[line_num] = [ scope_id, ]          # type 1
+                    spt.push( ( line, deck_id, ) )
                     continue
 
                 if field[1] in SYMBOL_EQ:
@@ -780,13 +741,7 @@ def pass_1():
                 zPE.abort(91, 'Error: ', field[2],
                           ': Cannot evaluate the constant.\n')
             MNEMONIC[line_num] = [ scope_id, addr, sd_info, ]   # type 3
-
-            if field[1][0] == '=':
-                spt.append('{0:0>5}{1}'.format(line_num, line))
-            else:
-                spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
-                        line_num, field[0], field[1], field[2]
-                        ))
+            spt.push( ( line, deck_id, ) )
 
             # update address
             prev_addr = addr
@@ -830,8 +785,7 @@ def pass_1():
                         ))
                 arg_list = field[2]
             else:                           # correct number of args
-                # normalize arguments
-                arg_list = ''         # the final argument list
+                # check arguments
                 pattern = '[,()*/+-]' # separator list
                 sept = ''             # tmp separator holder
                 reminder = field[2]   # tmp reminder holder
@@ -848,7 +802,6 @@ def pass_1():
                             __INFO('E', line_num, (
                                     41, indx_e - 1, indx_e,
                                     ))
-                    arg_list += sept # append leftover separator
 
                     # check end of arg_list
                     if reminder == '':
@@ -904,24 +857,14 @@ def pass_1():
                             __INFO('E', line_num, (
                                     41, indx_e - 1, indx_e,
                                     ))
-                    parsed = False # reset the flag
 
-                    # validate and normalize splitted argument (lbl)
+                    # validate splitted argument (lbl)
                     last_lbl = lbl
                     if lbl == '':
                         continue # if no label, continue
 
-                    if not parsed and lbl.isdigit():
-                        # parse integer string
-                        parsed = True # anything has only digits belongs here
-
-                        int_val = int(lbl)
-                        arg_list += "B'{0}'".format(bin(int_val)[2:])
-
-                    if not parsed and lbl[0] == '=':
+                    if lbl[0] == '=':
                         # parse =constant
-                        parsed = True # anything started with '=' belongs here
-
                         if not const_plid:
                             # allocate new pool
                             const_plid = scope_id
@@ -975,9 +918,8 @@ def pass_1():
                             __INFO('E', line_num,
                                    ( 65, indx_s, indx_s - 1 + len(lbl), )
                                    )
-                        arg_list += lbl
 
-                    if not parsed and zPE.core.asm.valid_sd(lbl):
+                    elif zPE.core.asm.valid_sd(lbl):
                         # try parse in-line constant
                         try:
                             sd_info = zPE.core.asm.parse_sd(lbl)
@@ -985,25 +927,14 @@ def pass_1():
                                 sd_info = (sd_info[0], sd_info[1], sd_info[2],
                                            0, sd_info[4], sd_info[3]
                                            )
-                            if sd_info[2] in 'BCX': # variable length const
-                                ( arg_val, arg_len ) = zPE.core.asm.value_sd(
-                                    sd_info
-                                    )
-                                arg_list += "B'{0:0>{1}}'".format(
-                                    bin(arg_val)[2:], arg_len
-                                    )
-                            else:
+                            if sd_info[2] not in 'BCX':
+                                # in-line constant need to be variable length
                                 indx_s = line.index(lbl)
                                 __INFO('E', line_num,
                                        ( 41, indx_s, indx_s - 1 + len(lbl), )
                                        )
-                                arg_list += lbl
-                            parsed = True
                         except:
                             pass
-
-                    if not parsed: # get the leftover label
-                        arg_list += lbl
                 ## end of normalizing arguments
 
                 # check lable
@@ -1027,9 +958,7 @@ def pass_1():
             MNEMONIC[line_num] = [ scope_id, addr,              # type 5
                                    op_code, op_addr[1], op_addr[2],
                                    ]
-            spt.append('{0:0>5}{1:<8} {2:<5} {3}\n'.format(
-                    line_num, field[0], field[1], arg_list
-                    ))
+            spt.push( ( line, deck_id, ) )
 
             # update address
             prev_addr = addr
@@ -1043,17 +972,24 @@ def pass_1():
 
         # parse macro call
         elif field[1] in MACRO_DEF:
-            sysndx += 1
-            if sysndx in MACRO_ERR:
-                __INFO('E', line_num, ( MACRO_ERR[sysndx] ))
+            zPE.mark4future('Macro Expansion')
 
         # unrecognized op-code
         else:
             indx_s = line.index(field[1])
             __INFO('E', line_num, ( 57, indx_s, indx_s + len(field[1]), ))
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
-            spt.append('{0:0>5}{1}'.format(line_num, line))
+            spt.push( ( line, deck_id, ) )
     # end of main read loop
+
+    # check END
+    if spi.empty():             # encountered EOF before END
+        line_num += 1
+        __INFO('W', line_num, ( 140, 9, None, ))
+        # manually insert an END instruction
+        spt.append('{0:<8} END\n'.format(''))
+    else:
+        spi.pop(0)
 
     # prepare the offset look-up table of the addresses
     offset = RELOCATE_OFFSET
@@ -1073,10 +1009,12 @@ def pass_1():
                 prev_sym = symbol
 
     # update the address in MNEMONIC table
+    line_num = 0
     for line in spt:
-        line_num = int(line[:5])                # retrieve line No.
-        if len(MNEMONIC[line_num]) == 0:
-            continue                     # TITLE statement
+        line_num += 1
+        if line_num not in MNEMONIC  or  len(MNEMONIC[line_num]) == 0:
+            # comments               or      TITLE statement
+            continue
         scope_id = MNEMONIC[line_num][0]        # retrieve scope ID
         if scope_id:
             if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]: # type 2/3/5
@@ -1145,31 +1083,29 @@ def pass_1():
 
 
 def pass_2():
-    spi = zPE.core.SPOOL.retrieve('SYSIN')  # original input SPOOL
-    spt = zPE.core.SPOOL.retrieve('SYSUT1') # sketch SPOOL (main input)
+    spi = zPE.core.SPOOL.retrieve('SYSUT1') # sketch SPOOL (main input)
 
     # obtain memory for generating Object Module
     mem = zPE.core.mem.Memory(LOCAL_CONF['MEM_POS'], LOCAL_CONF['MEM_LEN'])
 
     addr = 0                    # program counter
     prev_addr = None            # previous program counter
+    line_num = 0
 
     scope_id = 0                # scope id for current line
     prev_scope = None           # scope id for last statement
     pos_start = None            # starting addr for last contiguous machine code
     pos_end   = None            # ending addr for last contiguous machine code
 
-    spi.insert(0, '')           # align the line index with line No.
-
     # main read loop
-    for line in spt:
-        line_num = int(line[:5])                # retrieve line No.
-        line = line[5:]                         # retrieve line
-        if len(MNEMONIC[line_num]) == 0:
-            continue                     # TITLE statement
-        scope_id = MNEMONIC[line_num][0]        # retrieve scope ID
+    for line in spi:
+        line_num += 1
+        if line_num not in MNEMONIC  or  len(MNEMONIC[line_num]) == 0:
+            # comments               or      TITLE statement
+            continue
+        scope_id = MNEMONIC[line_num][0] # retrieve scope ID
         if scope_id:
-            csect_lbl = ESD_ID[scope_id]        # retrieve CSECT label
+            csect_lbl = ESD_ID[scope_id] # retrieve CSECT label
             if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]:
                 # update & retrieve address
                 prev_addr = addr
@@ -1209,7 +1145,7 @@ def pass_2():
             if len(field[0]) != 0:
                 zPE.mark4future('Labeled USING')
             if len(field) < 3:
-                indx_s = spi[line_num].index(field[1]) + len(field[1]) + 1
+                indx_s = line.index(field[1]) + len(field[1]) + 1
                                                                 # +1 for ' '
                 __INFO('S', line_num, ( 40, indx_s, None, ))
             else:
@@ -1223,13 +1159,13 @@ def pass_2():
 
                     bad_lbl = zPE.bad_label(args[0])
                     if bad_lbl == None: # nothing before ','
-                        indx_s = spi[line_num].index(field[2])
+                        indx_s = line.index(field[2])
                         __INFO('E', line_num,
                                ( 74, indx_s, indx_s + 1 + len(args[1]), )
                                )
                     elif bad_lbl:       # not a valid label
                         # not a relocatable address
-                        indx_s = spi[line_num].index(field[2])
+                        indx_s = line.index(field[2])
                         __INFO('E', line_num, ( 305, indx_s, None, ))
                     else:               # a valid label
                         lbl_8 = '{0:<8}'.format(args[0])
@@ -1238,7 +1174,7 @@ def pass_2():
                                 '{0:>4}{1}'.format(line_num, 'U')
                                 )
                         else:
-                            indx_s = spi[line_num].index(field[2])
+                            indx_s = line.index(field[2])
                             __INFO('E', line_num,
                                    ( 44, indx_s, indx_s + 1 + len(args[1]), )
                                    )
@@ -1246,15 +1182,15 @@ def pass_2():
                     if len(sub_args) != 2:
                         __INFO('S', line_num, (
                                 178,
-                                spi[line_num].index(sub_args[2]),
-                                spi[line_num].index(args[0]) + len(args[0]) - 1,
+                                line.index(sub_args[2]),
+                                line.index(args[0]) + len(args[0]) - 1,
                                 ))
                     # range-limit using
                     zPE.mark4future('Range-Limited USING')
 
                 # check existance of 2nd argument
                 if len(args) < 2:
-                    indx_s = spi[line_num].index(field[2]) + len(field[2])
+                    indx_s = line.index(field[2]) + len(field[2])
                     __INFO('S', line_num, ( 174, indx_s, indx_s, ))
 
                 # check following arguments
@@ -1262,13 +1198,13 @@ def pass_2():
                 for indx in range(1, len(args)):
                     reg_info = zPE.core.reg.parse_GPR(args[indx])
                     if reg_info[0] < 0:
-                        indx_s = spi[line_num].index(args[indx])
+                        indx_s = line.index(args[indx])
                         __INFO('E', line_num,
                                ( 29, indx_s, indx_s + len(args[indx]), )
                                )
                         break
                     if reg_info[0] in parsed_args:
-                        indx_s = ( spi[line_num].index(args[indx-1]) +
+                        indx_s = ( line.index(args[indx-1]) +
                                    len(args[indx-1]) + 1 # +1 for ','
                                    )
                         __INFO('E', line_num,
@@ -1311,7 +1247,7 @@ def pass_2():
             for indx in range(len(args)):
                 reg_info = zPE.core.reg.parse_GPR(args[indx])
                 if reg_info[0] < 0:
-                    indx_s = spi[line_num].index(args[indx])
+                    indx_s = line.index(args[indx])
                     __INFO('E', line_num,
                            ( 29, indx_s, indx_s + len(args[indx]), )
                            )
@@ -1324,25 +1260,28 @@ def pass_2():
                             '{0:>4}{1}'.format(line_num, 'D')
                             )
                 else:
-                    indx_s = spi[line_num].index(args[indx])
+                    indx_s = line.index(args[indx])
                     __INFO('W', line_num,
                            ( 45, indx_s, indx_s + len(args[indx]), )
                            )
 
         # parse END
         elif field[1] == 'END':
-            lbl_8 = '{0:<8}'.format(field[2])
-            if lbl_8 in SYMBOL:
-                SYMBOL[lbl_8].references.append(
-                    '{0:>4}{1}'.format(line_num, '')
-                    )
-            elif field[2]:
-                indx_s = spi[line_num].index(field[2])
-                __INFO('E', line_num, ( 44, indx_s, indx_s + len(field[2]), ))
-            # update using map
-            ACTIVE_USING.clear() # end domain of all USINGs
-            # generate END records
-            __APPEND_END()
+            if len(field) == 3: # has CSECT name
+                lbl_8 = '{0:<8}'.format(field[2])
+                if lbl_8 in SYMBOL:
+                    SYMBOL[lbl_8].references.append(
+                        '{0:>4}{1}'.format(line_num, '')
+                        )
+                else:
+                    indx_s = line.index(field[2])
+                    __INFO('E', line_num,
+                           ( 44, indx_s, indx_s + len(field[2]), )
+                           )
+
+                __APPEND_END(lbl_8)
+            else:               # has no argument; default to 1st CSECT
+                __APPEND_END()
 
         # parse LTORG
         elif field[1] == 'LTORG':
@@ -1394,7 +1333,7 @@ def pass_2():
                         res = __PARSE_ARG(lbl)
 
                         if isinstance(res, int):
-                            indx_s = spi[line_num].index(lbl)
+                            indx_s = line.index(lbl)
                             __INFO('S', line_num,
                                    ( 35, indx_s + res, indx_s + len(lbl), )
                                    )
@@ -1419,13 +1358,13 @@ def pass_2():
                                 continue
 
                             if reloc_cnt > 1: # more than one relocatable symbol
-                                indx_s = spi[line_num].index(lbl)
+                                indx_s = line.index(lbl)
                                 __INFO('E', line_num,
                                        ( 78, indx_s, indx_s + len(lbl), )
                                        )
                                 break
                             if res[1][indx] == 'eq_constant':
-                                indx_s = spi[line_num].index(res[0][indx])
+                                indx_s = line.index(res[0][indx])
                                 __INFO('E', line_num, (
                                         30,
                                         indx_s,
@@ -1443,7 +1382,7 @@ def pass_2():
                                     lbl_8 = '{0:<8}'.format(res[0][indx])
 
                                     if bad_lbl:
-                                        indx_s = spi[line_num].index(
+                                        indx_s = line.index(
                                             res[0][indx]
                                             )
                                         __INFO('E', line_num, (
@@ -1452,7 +1391,7 @@ def pass_2():
                                                 indx_s + len(res[0][indx]),
                                                 ))
                                     elif lbl_8 not in SYMBOL:
-                                        indx_s = spi[line_num].index(
+                                        indx_s = line.index(
                                             res[0][indx]
                                             )
                                         __INFO('E', line_num, (
@@ -1467,7 +1406,7 @@ def pass_2():
                                      ( indx+1 < len(res[0])  and
                                        res[0][indx+1] in '*/()'
                                        ) ):
-                                    indx_s = spi[line_num].index(lbl)
+                                    indx_s = line.index(lbl)
                                     __INFO('E', line_num, (
                                             32,
                                             indx_s,
@@ -1480,7 +1419,7 @@ def pass_2():
                             elif res[1][indx] == 'inline_const':
                                 tmp = zPE.core.asm.parse_sd(res[0][indx])
                                 if tmp[2] not in 'BCX': # variable length const
-                                    indx_s = spi[line_num].index(
+                                    indx_s = line.index(
                                         res[0][indx]
                                         )
                                     __INFO('E', line_num, (
@@ -1491,7 +1430,7 @@ def pass_2():
                                            )
                                     break
                                 elif res[0][indx][0] != tmp[2]: # e.g. 2B'10'
-                                    indx_s = spi[line_num].index(
+                                    indx_s = line.index(
                                         res[0][indx]
                                         )
                                     __INFO('E', line_num, (
@@ -1501,7 +1440,7 @@ def pass_2():
                                             ))
                                     break
                                 elif res[0][indx][1] != "'": # e.g. BL2'1'
-                                    indx_s = spi[line_num].index(
+                                    indx_s = line.index(
                                         res[0][indx]
                                         )
                                     __INFO('E', line_num, (
@@ -1521,7 +1460,7 @@ def pass_2():
                                         ):
                                         res[0][indx] = str(int(parsed_addr, 16))
                                     else:
-                                        indx_s = spi[line_num].index(
+                                        indx_s = line.index(
                                             res[0][indx]
                                             )
                                         __INFO('E', line_num, (
@@ -1606,9 +1545,6 @@ def pass_2():
             if len(op_args) != len(args):
                 continue        # should be processed in pass 1
 
-            p1_field = zPE.resplit_sq('\s+', spi[line_num], 3)
-            p1_args = zPE.resplit(',', p1_field[2], ['(',"'"], [')',"'"])
-
             # check reference
             for lbl_i in range(len(args)):
                 if INFO_GE(line_num, 'E'): # could already be flagged in pass 1
@@ -1616,20 +1552,26 @@ def pass_2():
                 abs_values = False # assume no absolute values
 
                 lbl = args[lbl_i]
-                p1_lbl = p1_args[lbl_i]
+                res = __IS_ABS_ADDR(lbl)
 
-                res = __IS_ABS_ADDR(lbl) # int ddd, str i, str b
                 if op_code[op_args[lbl_i]].type in 'LSX' and res != None:
                     # absolute address found
                     abs_values = True
 
+                    equ_info = __PARSE_EQU_VALUE(res[0])
+                    if equ_info[0] != None:
+                        res[0] = equ_info[0]
+                        if equ_info[1]:
+                            equ_info[1].references.append(
+                                '{0:>4}{1}'.format(line_num, '')
+                                )
                     # check length
                     if not 0x000 <= res[0] <= 0xFFF:
-                        indx_s = spi[line_num].index(p1_lbl)
-                        if '(' in p1_lbl:
-                            tmp = p1_lbl.index('(')
+                        indx_s = line.index(lbl)
+                        if '(' in lbl:
+                            tmp = lbl.index('(')
                         else:
-                            tmp = len(p1_lbl)
+                            tmp = len(lbl)
                         __INFO('E', line_num,
                                ( 28, indx_s, indx_s + tmp, )
                                )
@@ -1641,37 +1583,43 @@ def pass_2():
                         max_len = op_code[op_args[lbl_i]].max_len_length()
 
                         # ture validation of length
-                        reg_indx = __PARSE_EQU_VALUE(res[1]) # length @ indx
-                        if not 0 <= reg_indx <= max_len:
-                            res[1] = '-1' # invalidate the register check
+                        equ_info = __PARSE_EQU_VALUE(res[1]) # length @ indx
+                        reg_indx = equ_info[0]  # type 'L' will use reg_indx
+                                                # instead of res[1]
+                        if equ_info[0] != None  and  0 <= reg_indx <= max_len:
+                            res[1] =  0 # skip the register check
+                            if equ_info[1]:
+                                equ_info[1].references.append(
+                                    '{0:>4}{1}'.format(line_num, '')
+                                    )
                         else:
-                            res[1] = '0'  # skip the register check
+                            res[1] = -1 # invalidate the register check
 
                     elif op_code[op_args[lbl_i]].type == 'S':
                         del res[2] # remove the extra item (real base in indx)
                         indx_range = [ 1 ] # only validate indx (real base)
 
-                        if ',' in p1_lbl:
-                            indx_s = spi[line_num].index(p1_lbl)
+                        if ',' in lbl:
+                            indx_s = line.index(lbl)
                             __INFO('S', line_num, (
                                 179,
-                                indx_s + p1_lbl.index(','),
-                                indx_s + len(p1_lbl) + 1,
+                                indx_s + lbl.index(','),
+                                indx_s + len(lbl) + 1,
                                 ))
                             break   # stop processing current res
                     else:
                         indx_range = [ 1, 2 ] # validate indx and base
 
-                    if ',' in p1_lbl:
+                    if ',' in lbl:
                         indx_os = [ # index offset for error msg generation
                             None,
-                            ( p1_lbl.index('('), p1_lbl.index(',') ),
-                            ( p1_lbl.index(','), p1_lbl.index(')') ),
+                            ( lbl.index('('), lbl.index(',') ),
+                            ( lbl.index(','), lbl.index(')') ),
                             ]
-                    elif '(' in p1_lbl:
+                    elif '(' in lbl:
                         indx_os = [
                             None,
-                            ( p1_lbl.index('('), p1_lbl.index(')') ),
+                            ( lbl.index('('), lbl.index(')') ),
                             None, # no base offered
                             ]
                     else:
@@ -1690,7 +1638,7 @@ def pass_2():
                                     '{0:>4}{1}'.format(line_num, '')
                                     )
                         else:
-                            indx_s = spi[line_num].index(p1_lbl) + 1
+                            indx_s = line.index(lbl) + 1
                             __INFO('E', line_num,
                                    ( 29,
                                      indx_s + indx_os[i][0],
@@ -1704,10 +1652,9 @@ def pass_2():
                     abs_values = True
 
                     res = [ lbl ]
-                    if lbl.startswith("B'"):
-                        res[0] = __REDUCE_EXP(lbl)
-                        if res[0] == None: # label cannot be reduced
-                            res[0] = lbl
+                    res[0] = __REDUCE_EXP(lbl)
+                    if res[0] == None: # label cannot be reduced
+                        res[0] = lbl
                     # validate register
                     reg_info = zPE.core.reg.parse_GPR(res[0])
                     if reg_info[0] >= 0:
@@ -1720,19 +1667,17 @@ def pass_2():
                                     )
                                 )
                     else:
-                        indx_s = spi[line_num].index(p1_lbl) + 1
+                        indx_s = line.index(lbl) + 1
                         __INFO('E', line_num,
-                               ( 29, indx_s, indx_s + len(p1_lbl), )
+                               ( 29, indx_s, indx_s + len(lbl), )
                                )
                         break   # stop processing current res
                 else:
-                    res    = __PARSE_ARG(lbl)
-                    p1_res = __PARSE_ARG(p1_lbl)
-
+                    res = __PARSE_ARG(lbl)
                     if isinstance(res, int):
                         # delimiter error, S035, S173-175, S178-179
-                        indx_s = spi[line_num].index(p1_args[lbl_i])
-                        if spi[line_num][indx_s + p1_res - 1] in ')':
+                        indx_s = line.index(args[lbl_i])
+                        if line[indx_s + res - 1] in ')':
                             if lbl_i < len(op_args) - 1:
                                 err_num = 175 # expect comma
                             else:
@@ -1741,8 +1686,8 @@ def pass_2():
                             err_num = 35 # cannot determine
                         __INFO('S', line_num, (
                                 err_num,
-                                indx_s + p1_res,
-                                indx_s + len(p1_args[lbl_i]),
+                                indx_s + res,
+                                indx_s + len(args[lbl_i]),
                                 ))
                         break   # stop processing current res
 
@@ -1751,7 +1696,7 @@ def pass_2():
                     for indx in range(len(res[0])):
                         # for each element in the exp, try to envaluate
                         if reloc_cnt > 1: # more than one relocatable symbol
-                            indx_s = spi[line_num].index(lbl)
+                            indx_s = line.index(lbl)
                             __INFO('E', line_num,
                                    ( 78, indx_s, indx_s + len(lbl), )
                                    )
@@ -1763,7 +1708,7 @@ def pass_2():
                              ):
                             if res[1][indx] == 'eq_constant':
                                 if op_code[op_args[lbl_i]].for_write:
-                                    indx_s = spi[line_num].index(res[0][indx])
+                                    indx_s = line.index(res[0][indx])
                                     __INFO('E', line_num, (
                                             30,
                                             indx_s,
@@ -1774,10 +1719,10 @@ def pass_2():
                                 symbol = __HAS_EQ(lbl, scope_id)
                                 if symbol == None:
                                     if not INFO_GE(line_num, 'E'):
-                                        zPE.abort(91, 'Error: ', p1_lbl,
+                                        zPE.abort(91, 'Error: ', lbl,
                                                   ': symbol not in EQ table.\n')
                                 elif symbol.defn == None:
-                                    zPE.abort(91, 'Error: ', p1_lbl,
+                                    zPE.abort(91, 'Error: ', lbl,
                                               ': symbol not allocated.\n')
                             elif res[1][indx] == 'location_ptr':
                                 pass # no special process required
@@ -1789,22 +1734,22 @@ def pass_2():
                                 if ( len(tmp) > 1 and
                                      op_code[op_args[lbl_i]].type == 'S'
                                      ):
-                                    indx_s = spi[line_num].index(p1_lbl)
+                                    indx_s = line.index(lbl)
                                     __INFO('S', line_num, (
                                         173,
-                                        indx_s + p1_lbl.index('('),
-                                        indx_s + len(p1_lbl) + 1,
+                                        indx_s + lbl.index('('),
+                                        indx_s + len(lbl) + 1,
                                         ))
                                     break   # stop processing current res
                                 elif len(tmp) > 1 and indx != len(res[0]) - 1:
                                     # complex symbol must be last node of exp
                                     indx_s = (
-                                        spi[line_num].index(p1_res[0][indx]) +
-                                        len(p1_res[0][indx])
+                                        line.index(res[0][indx]) +
+                                        len(res[0][indx])
                                         )
                                     indx_e = (
-                                        spi[line_num].index(p1_lbl) +
-                                        len(p1_lbl)
+                                        line.index(lbl) +
+                                        len(lbl)
                                         )
                                     __INFO('S', line_num,
                                            ( 173, indx_s, indx_e, )
@@ -1812,22 +1757,22 @@ def pass_2():
                                     break   # stop processing current res
                                 elif bad_lbl:
                                     indx_s = (
-                                        spi[line_num].index(p1_res[0][indx])
+                                        line.index(res[0][indx])
                                         )
                                     __INFO('E', line_num, (
                                             74,
                                             indx_s,
-                                            indx_s + len(p1_res[0][indx]),
+                                            indx_s + len(res[0][indx]),
                                             ))
                                     break   # stop processing current res
                                 elif lbl_8 not in SYMBOL:
                                     indx_s = (
-                                        spi[line_num].index(p1_res[0][indx])
+                                        line.index(res[0][indx])
                                         )
                                     __INFO('E', line_num, (
                                             44,
                                             indx_s,
-                                            indx_s + len(p1_res[0][indx]),
+                                            indx_s + len(res[0][indx]),
                                             ))
                                     break   # stop processing current res
                             # check complex addressing
@@ -1837,11 +1782,11 @@ def pass_2():
                                  ( indx+1 < len(res[0])  and
                                    res[0][indx+1] in '*/()'
                                    ) ):
-                                indx_s = spi[line_num].index(p1_lbl)
+                                indx_s = line.index(lbl)
                                 __INFO('E', line_num, (
                                         32,
                                         indx_s,
-                                        indx_s + len(p1_lbl),
+                                        indx_s + len(lbl),
                                         ))
                                 break   # stop processing current res
                             reloc_arg = res[0][indx]
@@ -1851,22 +1796,22 @@ def pass_2():
                             sd_info = zPE.core.asm.parse_sd(res[0][indx])
                             if res[0][indx][0] != sd_info[2]: # e.g. 2B'10'
                                 indx_s = (
-                                    spi[line_num].index(p1_res[0][indx])
+                                    line.index(res[0][indx])
                                     )
                                 __INFO('E', line_num, (
                                         145,
                                         indx_s,
-                                        indx_s + len(p1_res[0][indx]),
+                                        indx_s + len(res[0][indx]),
                                         ))
                                 break   # stop processing current res
                             elif res[0][indx][1] != "'": # e.g. BL2'1'
                                 indx_s = (
-                                    spi[line_num].index(p1_res[0][indx])
+                                    line.index(res[0][indx])
                                     )
                                 __INFO('E', line_num, (
                                         150,
                                         indx_s,
-                                        indx_s + len(p1_res[0][indx]),
+                                        indx_s + len(res[0][indx]),
                                         ))
                                 break   # stop processing current res
 
@@ -1874,11 +1819,6 @@ def pass_2():
                                 sd_info = (sd_info[0], sd_info[1], sd_info[2],
                                            0, sd_info[4], sd_info[3]
                                            )
-                            (arg_val, arg_len) = zPE.core.asm.value_sd(sd_info)
-
-                            res[0][indx] = "B'{0:0>{1}}'".format(
-                                bin(arg_val)[2:], arg_len
-                                )
                 # end of processing res
                 if INFO_GE(line_num, 'E'):
                     break # if has error, stop processing args
@@ -1900,9 +1840,9 @@ def pass_2():
                     try:
                         op_code[op_args[lbl_i]].set(ex_disp)
                     except:
-                        indx_s = spi[line_num].index(p1_lbl)
+                        indx_s = line.index(lbl)
                         __INFO('E', line_num,
-                               ( 29, indx_s, indx_s + len(p1_lbl), )
+                               ( 29, indx_s, indx_s + len(lbl), )
                                )
                 elif reloc_cnt == 1:    # one relocatable symbol
                     if reloc_arg == '*':
@@ -1921,7 +1861,7 @@ def pass_2():
                         if len(tmp) > 1:
                             # [ symbol, indx, '' ]
                             if op_code[op_args[lbl_i]].type == 'L':
-                                reg_indx = __PARSE_EQU_VALUE(tmp[1])
+                                reg_indx = __PARSE_EQU_VALUE(tmp[1])[0]
                             else:
                                 reg_indx = zPE.core.reg.parse_GPR(tmp[1])[0]
                         else:
@@ -1968,9 +1908,9 @@ def pass_2():
                                 addr_res[0], reg_indx, addr_res[2]
                                 )
                     else:
-                        indx_s = spi[line_num].index(p1_lbl)
+                        indx_s = line.index(lbl)
                         __INFO('E', line_num,
-                               ( 34, indx_s, indx_s + len(p1_lbl), )
+                               ( 34, indx_s, indx_s + len(lbl), )
                                )
 
                 # check possible alignment error
@@ -1978,9 +1918,9 @@ def pass_2():
                      not op_code[op_args[lbl_i]].is_aligned(1)
                      ): # no other error, and op code arg require an alignment
                     if not op_code[op_args[lbl_i]].is_aligned():
-                        indx_s = spi[line_num].index(p1_lbl)
+                        indx_s = line.index(lbl)
                         __INFO('I', line_num,
-                               ( 33, indx_s, indx_s + len(p1_lbl), )
+                               ( 33, indx_s, indx_s + len(lbl), )
                                )
             # end of processing args
 
@@ -1997,8 +1937,6 @@ def pass_2():
         else:
             pass                # already handled in pass 1
     # end of main read loop
-
-    spi.rmline(0)               # undo the align of line No.
 
     # append leftover variable fields to ESD records
     __APPEND_ESD()
@@ -2096,7 +2034,7 @@ def __IS_ADDRESSABLE(lbl, csect_lbl, ex_disp = 0):
     return False                # not in the range of any USING
 
 # rv:
-#   [ disp, indx_str, base_str ]
+#   [ disp_str, indx_str, base_str ]
 #   None    if error happened during parsing
 #
 # Note: no length check nor register validating involved
@@ -2111,10 +2049,7 @@ def __IS_ABS_ADDR(addr_arg):
     else:
         disp     = reminder
         reminder = ''
-    disp = __REDUCE_EXP(disp)
-    if disp == None:            # disp cannot be reduced
-        return None
-    if disp < 0:                # negative disp
+    if __REDUCE_EXP(disp) == None: # disp cannot be reduced
         return None
 
     # parse index
@@ -2131,14 +2066,6 @@ def __IS_ABS_ADDR(addr_arg):
                 return None
     else:
         indx = '0'
-    # check B-const
-    if indx.startswith("B'"):
-        indx = __REDUCE_EXP(indx)
-        if indx == None:        # indx cannot be reduced
-            return None
-        if indx < 0:            # negative indx
-            return None
-        indx = str(indx)
 
     # parse base
     res = re.search('\)', reminder)
@@ -2149,14 +2076,6 @@ def __IS_ABS_ADDR(addr_arg):
             base = '0'
     else:
         base = '0'
-    # check B-const
-    if base.startswith("B'"):
-        base = __REDUCE_EXP(base)
-        if base == None:        # base cannot be reduced
-            return None
-        if base < 0:            # negative base
-            return None
-        base = str(base)
 
     # check reminder
     if reminder != '':
@@ -2195,14 +2114,18 @@ def __MISSED_FILE(step):
     ctrl = ' '
 
     cnt = 0
-    for fn in FILE:
+    for fn in FILE_CHK:
         if fn not in zPE.core.SPOOL.list():
             sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                        '  IEC130I {0:<8}'.format(fn),
                        ' DD STATEMENT MISSING\n')
             sp3.append(ctrl, 'IEC130I {0:<8}'.format(fn),
                        ' DD STATEMENT MISSING\n')
-            cnt += 1
+
+            if fn in FILE_REQ:
+                cnt += 1
+            else:
+                FILE_GEN[fn]()
 
     return cnt
 
@@ -2312,20 +2235,19 @@ def __PARSE_ARG(arg_str):
 
 def __PARSE_EQU_VALUE(equ):
     if isinstance(equ, int):
-        return equ
+        return ( equ, None, )
     if equ.isdigit():
-        return int(equ)
+        return ( int(equ), None, )
     # search for equates
     lbl_8 = '{0:<8}'.format(equ)
     if lbl_8 in SYMBOL  and  SYMBOL[lbl_8].type == 'U':
-        return SYMBOL[lbl_8].value
+        return ( SYMBOL[lbl_8].value, SYMBOL[lbl_8], )
     else:
-        return None
+        return ( None, None, )
 
 
 def __PARSE_OUT():
-    spi = zPE.core.SPOOL.retrieve('SYSIN')    # input SPOOL
-    spt = zPE.core.SPOOL.retrieve('SYSUT1')   # sketch SPOOL
+    spi = zPE.core.SPOOL.retrieve('SYSUT1')   # input SPOOL
     spo = zPE.core.SPOOL.retrieve('SYSPRINT') # output SPOOL
 
     pln_cnt = 0                 # printed line counter of the current page
@@ -2350,13 +2272,11 @@ def __PARSE_OUT():
 
 
 
-# note: work only for B-const
 def __REDUCE_EXP(exp):
     if exp == '':
         return 0
 
     exp_list = []
-
     pattern = '[*/+-]'          # separator list
 
     opnd = None                 # tmp operand holder
@@ -2377,27 +2297,33 @@ def __REDUCE_EXP(exp):
             opnd = ''
             reminder = ''
 
-        try:
-            sd_info = zPE.core.asm.parse_sd(part)
-        except:
-            return None
-        if sd_info[4] == None:  # no (initial) value
-            return None
-        if not sd_info[5]:      # no limit on length
-            sd_info = (sd_info[0], sd_info[1], sd_info[2],
-                       0, sd_info[4], sd_info[3]
-                       )
-        (sd_val, dummy) = zPE.core.asm.value_sd(sd_info) # get the value
-        if not prev_opnd:       # is the first part
-            exp_list.append(str(sd_val))
+        if part.isdigit():
+            val_str = part
+        elif zPE.core.asm.valid_sd(part):
+            try:
+                sd_info = zPE.core.asm.parse_sd(part)
+                if sd_info[4] == None:  # no (initial) value
+                    return None
+                if not sd_info[5]:      # no limit on length
+                    sd_info = (sd_info[0], sd_info[1], sd_info[2],
+                               0, sd_info[4], sd_info[3]
+                               )
+                (val, dummy) = zPE.core.asm.value_sd(sd_info) # get the value
+                val_str = str(val)
+            except:
+                return None
         else:
-            exp_list.extend( [ prev_opnd, str(sd_val), ] )
+            return None
+        if not prev_opnd:       # is the first part
+            exp_list.append(val_str)
+        else:
+            exp_list.extend( [ prev_opnd, val_str, ] )
 
     if len(exp_list) == 1:
-        sd_val = int(exp_list[0])
+        val = int(exp_list[0])
     else:
-        sd_val = eval(''.join(exp_list))
-    return sd_val
+        val = eval(''.join(exp_list))
+    return val
 
 
 vf_list = []
@@ -2472,9 +2398,9 @@ def __APPEND_RLD(pos_id = None, rel_id = None, data_field = None):
         df_list_memory['byte_cnt'] = 8
 
 
-def __APPEND_END():
-    if LOCAL_CONF['ENTRY_PT']:  # type 1 END
-        entry = ESD[LOCAL_CONF['ENTRY_PT']][0]
+def __APPEND_END(entry_csect):
+    if entry_csect:             # type 1 END
+        entry = ESD[entry_csect][0]
         entry_pt = entry.addr
         entry_id = entry.id
         entry_sb = ''

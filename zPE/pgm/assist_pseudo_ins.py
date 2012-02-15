@@ -138,7 +138,7 @@ def __xprnt(base, disp, size):
 
 
 def __xin(spool):
-    return zPE.core.SPOOL.retrieve(spool).pop(0)
+    return zPE.core.SPOOL.retrieve(spool).pop(0)[0]
 
 def __xout(spool, *words):
     zPE.core.SPOOL.retrieve(spool).append(*words)

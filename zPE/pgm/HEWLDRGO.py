@@ -43,7 +43,15 @@ from threading import Timer
 import zPE.core.cpu as CPU
 
 
-FILE = [ 'SYSLIN', 'SYSLOUT' ]  # SYSLIB not required, so does X-Macro DDs
+FILE_CHK = [                    # files to be checked
+    'SYSLIN', 'SYSLOUT',
+    ]
+FILE_REQ = [                    # files that are required
+    'SYSLIN', 'SYSLOUT',
+    ]
+FILE_GEN = {                    # files that will be generated if missing
+    }
+
 
 PARM = {
     'AMODE'     : 31,
@@ -436,14 +444,18 @@ def __MISSED_FILE(step):
     ctrl = ' '
 
     cnt = 0
-    for fn in FILE:
+    for fn in FILE_CHK:
         if fn not in zPE.core.SPOOL.list():
             sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
                        '  IEC130I {0:<8}'.format(fn),
                        ' DD STATEMENT MISSING\n')
             sp3.append(ctrl, 'IEC130I {0:<8}'.format(fn),
                        ' DD STATEMENT MISSING\n')
-            cnt += 1
+
+            if fn in FILE_REQ:
+                cnt += 1
+            else:
+                FILE_GEN[fn]()
 
     return cnt
 

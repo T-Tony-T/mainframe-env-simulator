@@ -38,10 +38,18 @@ from assist_err_code_rc import * # read recourse file for err msg
 from assist_pseudo_ins import PSEUDO_INS, PSEUDO_OP # load pseudo-instructions
 
 
-FILE = [
-    ('SYSIN', 'AM002 ASSIST COULD NOT OPEN READER SYSIN:ABORT'),
-    ('SYSPRINT', 'AM001 ASSIST COULD NOT OPEN PRINTER FT06F001:ABORT'),
+FILE_CHK = [                    # files to be checked
+    'SYSIN', 'FT05F001', 'SYSPRINT',
     ]
+FILE_REQ = {                    # files that are required
+    'SYSIN'    : 'AM002 ASSIST COULD NOT OPEN READER SYSIN:ABORT',
+    'SYSPRINT' : 'AM001 ASSIST COULD NOT OPEN PRINTER FT06F001:ABORT',
+    }
+FILE_GEN = {                    # files that will be generated if missing
+    'FT05F001' : lambda : zPE.core.SPOOL.new('FT05F001', '+', 'tmp', '', ''),
+    }
+FILE_MISSING = [ ]              # files that are missing
+
 
 TIME = {
     'asm_start'  : None,
@@ -63,9 +71,9 @@ def init(step):
     limit = 0 # error tolerance limit; currently hard coded. need info
 
     # invoke parser from ASMA90 to assemble the source code
-    om = zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '') # new,delete,delete
-    zPE.core.SPOOL.new(     'SYSUT1', '+', 'tmp', '', '') # new,delete,delete
-    zPE.core.SPOOL.new(     'XREAD',  '+', 'tmp', '', '') # new,delete,delete
+    zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '') # new,pass,delete
+    zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '') # new,delete,delete
+
 
     # load the user-supplied PARM and config into the default configuration
     zPE.pgm.ASMA90.load_parm({
@@ -84,6 +92,18 @@ def init(step):
 
     err_cnt = __PARSE_OUT_ASM(limit)
 
+    # get instream data, if not specified in DD card
+    if 'FT05F001' in FILE_MISSING:
+        spi = zPE.core.SPOOL.retrieve('SYSIN')
+        spo = zPE.core.SPOOL.retrieve('FT05F001')
+        while not spi.empty():
+            spo.append('{0:<72}{1:0>4}{2:0>4}\n'.format(
+                    spi[0][:-1], spi.deck_id(0), '----' # need info
+                    ))
+            spi.pop(0)
+    spi = None                  # unlink spi
+    spo = None                  # unlink spo
+
     # calculate memory needed to execute the module
     required_mem_sz = 0
     for esd in zPE.pgm.ASMA90.ESD.itervalues():
@@ -93,23 +113,19 @@ def init(step):
                 required_mem_sz = sz
 
     zPE.pgm.ASMA90.init_res()   # release resources
-
-    zPE.core.SPOOL.remove('SYSLIN')
     zPE.core.SPOOL.remove('SYSUT1')
 
     if err_cnt > limit:
-        zPE.core.SPOOL.remove('XREAD')
+        if 'FT05F001' in FILE_MISSING:
+            zPE.core.SPOOL.remove('FT05F001')
+        zPE.core.SPOOL.remove('SYSLIN')
         return zPE.RC['NORMAL'] # skip exec, return with "CC = 0"
 
     # invoke HEWLDRGO to link-edit and execute the object module
-    zPE.core.SPOOL.replace('SYSLIN', om)
-    om = None                   # un-link om
     zPE.core.SPOOL.new('SYSLOUT', 'o', 'outstream', '', '') # new,delete,delete
-    zPE.core.SPOOL.pretend('XPRNT',    'SYSLOUT') # XPRNT    -> SYSLOUT
-    zPE.core.SPOOL.pretend('XSNAPOUT', 'SYSLOUT') # XSNAPOUT -> SYSLOUT
-
-    if 'FT05F001' in zPE.core.SPOOL.list():
-        zPE.core.SPOOL.pretend('XREAD', 'FT05F001') # XREAD  -> FT05F001
+    zPE.core.SPOOL.pretend('XREAD',    'FT05F001') # XREAD    -> FT05F001
+    zPE.core.SPOOL.pretend('XPRNT',    'SYSLOUT')  # XPRNT    -> SYSLOUT
+    zPE.core.SPOOL.pretend('XSNAPOUT', 'SYSLOUT')  # XSNAPOUT -> SYSLOUT
 
     # load the user-supplied PARM and config into the default configuration
     zPE.pgm.HEWLDRGO.load_parm({
@@ -136,7 +152,9 @@ def init(step):
     rc = zPE.pgm.HEWLDRGO.go(zPE.pgm.HEWLDRGO.load())
     TIME['exec_end'] = time()
 
-    zPE.core.SPOOL.remove('XREAD')
+    if 'FT05F001' in FILE_MISSING:
+        zPE.core.SPOOL.remove('FT05F001')
+    zPE.core.SPOOL.remove('XREAD')    # unlink XREAD
 
     __PARSE_OUT_LDR(rc)
 
@@ -152,27 +170,31 @@ def init(step):
 
 ### Supporting Functions
 def __MISSED_FILE(step, i):
-    if i >= len(FILE):
+    if i >= len(FILE_CHK):
         return 0                # termination condition
 
     sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
     sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
     ctrl = ' '
 
-    if FILE[i][0] not in zPE.core.SPOOL.list():
+    if FILE_CHK[i] not in zPE.core.SPOOL.list(): # not offered
         sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
-                   '  IEC130I {0:<8}'.format(FILE[i][0]),
+                   '  IEC130I {0:<8}'.format(FILE_CHK[i]),
                    ' DD STATEMENT MISSING\n')
-        sp3.append(ctrl, 'IEC130I {0:<8}'.format(FILE[i][0]),
+        sp3.append(ctrl, 'IEC130I {0:<8}'.format(FILE_CHK[i]),
                    ' DD STATEMENT MISSING\n')
+        FILE_MISSING.append(FILE_CHK[i])
 
     cnt = __MISSED_FILE(step, i+1)
 
-    if FILE[i][0] not in zPE.core.SPOOL.list():
-        sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
-                   '  +{0}\n'.format(FILE[i][1]))
-        sp3.append(ctrl, '{0}\n'.format(FILE[i][1]))
-        cnt += 1
+    if FILE_CHK[i] not in zPE.core.SPOOL.list():
+        if FILE_CHK[i] in FILE_REQ:
+            sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
+                       '  +{0}\n'.format(FILE_REQ[FILE_CHK[i]]))
+            sp3.append(ctrl, '{0}\n'.format(FILE_REQ[FILE_CHK[i]]))
+            cnt += 1
+        else:
+            FILE_GEN[FILE_CHK[i]]()
 
     return cnt
 
@@ -183,7 +205,7 @@ from ASMA90 import ESD, ESD_ID, MNEMONIC, RLD, USING_MAP
 from ASMA90 import SYMBOL, SYMBOL_V, SYMBOL_EQ, NON_REF_SYMBOL, INVALID_SYMBOL
 
 def __PARSE_OUT_ASM(limit):
-    spi = zPE.core.SPOOL.retrieve('SYSIN')    # input SPOOL
+    spi = zPE.core.SPOOL.retrieve('SYSUT1')   # input SPOOL
     spo = zPE.core.SPOOL.retrieve('SYSPRINT') # output SPOOL
 
     CNT = {
@@ -213,16 +235,11 @@ def __PARSE_OUT_ASM(limit):
             init_line_num = 2   # all green with the TITLE line, skip it
     CNT['pln'] = __PRINT_HEADER(spo, title, CNT['pln'], CNT['page'], ctrl)
 
-    eojob = False # "end of job" indicater; will be turned on by "END" statement
     for line_num in range(init_line_num, len(spi) + 1):
         # loop through line_num (indx + 1)
         line = spi[line_num - 1]
         line_did = spi.deck_id(line_num - 1)
         ctrl = ' '
-
-        if eojob:
-            # inline inputs
-            continue # ignored
 
         if line_num not in MNEMONIC:
             # comments, MACRO definition, etc.
@@ -270,7 +287,6 @@ def __PARSE_OUT_ASM(limit):
             loc = ''
         elif MNEMONIC[line_num][0] == None: # no scope ==> END (type 2)
             loc = ''
-            eojob = True
         elif len(MNEMONIC[line_num]) == 4: # type 4, EQU
             loc = hex(MNEMONIC[line_num][3])[2:].upper()
         else:                       # type 2/3/5, inside CSECT or DSECT
@@ -616,7 +632,8 @@ def __PARSE_OUT_LDR(rc):
     spo.append(ctrl, '*** PROGRAM EXECUTION BEGINNING - ANY OUTPUT BEFORE EXECUTION TIME MESSAGE IS PRODUCED BY USER PROGRAM ***\n')
 
     # output for the execution of the module
-    spi[0] = '1' + spi[0][1:]   # start an new page on the report
+    if len(spi):
+        spi[0] = '1' + spi[0][1:]   # start an new page on the report
     for line in spi:
         spo.append(line)
     # end of output for the execution of the module
@@ -689,7 +706,8 @@ def __PARSE_OUT_LDR(rc):
 
         # storage dump
         spo.append('1', 'USER STORAGE\n')
-        spo.append(ctrl, mem_dump[0])
+        if len(mem_dump):
+            spo.append(ctrl, mem_dump[0])
         for indx in range(1, len(mem_dump)):
             spo.append(' ', mem_dump[indx])
         spo.append(ctrl, '\n')

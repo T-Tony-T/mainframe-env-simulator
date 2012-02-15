@@ -3,6 +3,8 @@
 
 # in future, may switch to "mmap"
 
+import sys                      # for sys.maxsize
+
 import zPE
 
 
@@ -34,17 +36,9 @@ class Spool(object):
     def empty(self):
         return (self.__len__() == 0)
 
-    def atEOF(self, line = None): # see `terminate()` for more info
-        if line == None:
-            line = self.spool[-1]
-        return (line == -1)
-    def terminate(self):
-        self.spool.append(-1)   # append EOF to the end of the SPOOL
-    def unterminate(self):
-        self.spool.remove(-1)   # remove the last line (hopefully EOF)
 
     def append(self, *phrase, **option):
-        self.insert(self.__len__(), *phrase, **option)
+        self.insert(sys.maxsize, *phrase, **option)
 
     def insert(self, indx, *phrase, **option):
         self.spool.insert(indx, ''.join(phrase))
@@ -53,17 +47,14 @@ class Spool(object):
         self.spdid.insert(indx, option['deck_id'])
 
     def pop(self, indx = -1):
-        if indx < self.__len__():
-            rv = self.spool[indx]
-            self.rmline(indx)
-            return rv
-        else:
-            return None
+        line = self.spool.pop(indx)
+        did  = self.spdid.pop(indx)
+        return ( line, did, )
 
-    def rmline(self, indx):
-        if indx < self.__len__():
-            del self.spool[indx]
-            del self.spdid[indx]
+    def push(self, pop_res, indx = sys.maxsize):
+        self.spool.insert(indx, pop_res[0])
+        self.spdid.insert(indx, pop_res[1])
+
 
     def __str__(self):
         return ''.join([

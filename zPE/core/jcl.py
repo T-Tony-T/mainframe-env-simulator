@@ -307,7 +307,7 @@ def init_step(step):
     if 'STEPLIB' in step.dd.dict():
         if not zPE.is_dir(step.dd['STEPLIB']['DSN']):
             # STEPLIB cannot be instream, thus DSN= should always exist
-            sp3.rmline(-1)      # no file allocated
+            sp3.pop()           # no file allocated
             sp3.append(ctrl, 'IEF212I {0:<8} '.format(zPE.JCL['jobname']),
                        step.name, ' STEPLIB - DATA SET NOT FOUND\n')
             step.dd['STEPLIB']['STAT'] = zPE.DD_STATUS['abnormal']
@@ -353,7 +353,7 @@ def init_step(step):
         alloc = True
 
     if not alloc:
-        sp3.rmline(-1)      # no file allocated
+        sp3.pop()               # no file allocated
     return 'ok'
 
 def finish_step(step):
@@ -481,7 +481,7 @@ def finish_job(msg):
         sp[0,0] = ctrl_new
 
         if key == 'JESYSMSG' and msg != 'ok':
-            sp.rmline(0)
+            sp.pop(0)
 
     __JES2_STAT(msg, diff)
     __WRITE_OUT(zPE.core.SPOOL.DEFAULT_OUT) # write out all registered SPOOLs
