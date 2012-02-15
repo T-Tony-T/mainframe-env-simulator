@@ -196,10 +196,22 @@ def load():
     esd_id_next = 1             # next available ESD ID
     for r in spi.spool:
         rec = b2a_hex(r)
-        if rec[:2] != '02':     # first byte need to be X'02'
-            zPE.abort(13, "Error: X'", rec[:2],
-                      "': invalid OBJECT MODULE record indicator.\n",
-                      "    Every record should begin with X'02'.\n")
+        if rec[:2] != '02':     # control statement
+            field = zPE.resplit_sq('\s+', rec, 3)
+            if len(field) < 3  or  field[0] != '':
+                zPE.abort(13, "Error: ", rec,
+                          ":\n invalid OBJECT MODULE control statement.\n")
+
+            if field[1] == 'ENTRY':
+                LOCAL_CONF['ENTRY_PT'] = '{0:<8}'.format(field[2])
+
+            elif field[1] == 'INCLUDE':
+                zPE.mark4future('OM INCLUDE statement')
+
+            else:
+                zPE.abort(13, "Error: ", rec,
+                          ":\n invalid OBJECT MODULE control statement.\n")
+            continue
 
         # check record type
         if rec[2:8] not in expect_type:
@@ -240,6 +252,10 @@ def load():
                 if esd.type in [ 'SD', 'PC', ]:
                     CSECT[obj_id, esd.id] = ( mem_loc, esd, esd_name )
                     SCOPE[mem_loc, esd.addr, esd.length] = ( obj_id, esd.id )
+
+                    if esd_name == LOCAL_CONF['ENTRY_PT']:
+                        LOCAL_CONF['ENTRY_PT'] = mem_loc
+
                 elif esd.type == 'ER':
                     EXREF[obj_id, esd.id] = ( 0,       esd, esd_name)
                 else:
