@@ -340,6 +340,7 @@ def init_step(step):
                     # file
                     f_type = 'file'
                     v_path = [ ddname ]
+                    r_path = step.dd[ddname]['DSN']
                 else:
                     # tmp
                     f_type = 'tmp'
@@ -411,14 +412,14 @@ def finish_step(step):
                        ' {0}\n'.format(action))
 
             f_type = zPE.core.SPOOL.type_of(ddname)
-            if f_type == 'outstream':                   # register outstream for writting out
+            if f_type == 'outstream':    # register outstream for writting out
                 zPE.core.SPOOL.register_write(ddname, step.name)
             else:
-                if f_type == 'instream':                # remove instream
+                if f_type == 'instream': # remove instream
                     pass
-                elif f_type == 'tmp':                   # remove tmp
+                elif f_type == 'tmp':    # remove tmp
                     pass
-                else:                                   # sync file if needed
+                else:                    # sync file if needed
                     if step.dd.get_act(ddname) in [ 'KEEP', 'PASS', 'CATLG' ]:
                         __WRITE_OUT([ddname])
 

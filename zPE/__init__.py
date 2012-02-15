@@ -350,6 +350,23 @@ def open_file(dsn, mode, f_type):
     '''Open the target file in regardless of the existance'''
     return eval(''.join(['core.', JES[f_type], '.open_file']))(dsn, mode)
 
+def load_fb80(sp):
+    '''Load the indicated SPOOL from the indicated file, treated as FB 80'''
+    if sp.mode != 'i':
+        return -1
+
+    fp = open_file(sp.real_path, 'rb', sp.f_type)
+
+    cnt = 0
+    rec = fp.read(80)           # initial read
+    while rec:
+        sp.append(rec)
+        cnt += 1
+
+        rec = fp.read(80)       # updating read
+    fp.close()
+    return cnt
+
 def flush(sp):
     '''Flush the indicated SPOOL to the indicated file'''
     if sp.mode == 'i':

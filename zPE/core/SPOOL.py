@@ -162,6 +162,8 @@ def new(key, mode, f_type, path = [], real_path = []):
         real_path = path
 
     SPOOL[key] = Spool([], [], mode, f_type, path, real_path)
+    if f_type == 'file'  and  mode == 'i':
+        zPE.load_fb80(SPOOL[key])
     return SPOOL[key]
 
 def remove(key):

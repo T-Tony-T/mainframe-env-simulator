@@ -35,7 +35,7 @@
 import zPE
 
 import sys
-from time import strftime
+from time import strftime, time
 from random import randint
 from binascii import b2a_hex
 from threading import Timer
@@ -208,6 +208,9 @@ def load():
             elif field[1] == 'INCLUDE':
                 zPE.mark4future('OM INCLUDE statement')
 
+            elif field[1] == 'NAME':
+                pass            # only the linkage-editor need this
+
             else:
                 zPE.abort(13, "Error: ", rec,
                           ":\n invalid OBJECT MODULE control statement.\n")
@@ -347,6 +350,14 @@ def load():
                     loc = int(entry, 16)
                 loc += CSECT[obj_id, scope][0] # add the offset of the OBJMOD
                 LOCAL_CONF['ENTRY_PT'] = loc
+            elif isinstance(LOCAL_CONF['ENTRY_PT'], str):
+                # CSECT name not found
+                sys.stderr.write(
+                    'Error: {0}: Invalid Entry Point specified.\n'.format(
+                        LOCAL_CONF['ENTRY_PT']
+                        )
+                    )
+                return zPE.RC['ERROR'] # OBJECT module format error
 
             # prepare for next OBJECT MODULE, if any
             max_offset = 0
