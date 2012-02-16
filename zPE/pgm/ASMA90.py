@@ -1565,6 +1565,9 @@ def pass_2():
                             equ_info[1].references.append(
                                 '{0:>4}{1}'.format(line_num, '')
                                 )
+                    else:
+                        res[0] = __REDUCE_EXP(res[0]) # already validated in
+                                                      # __IS_ABS_ADDR()
                     # check length
                     if not 0x000 <= res[0] <= 0xFFF:
                         indx_s = line.index(lbl)
