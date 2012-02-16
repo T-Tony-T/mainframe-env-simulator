@@ -48,11 +48,15 @@ class D(InstructionType):
 ### Pseudo-Instruction Mapping
 
 PSEUDO_INS = {
+    'XDECI' : lambda argc: ('53', R(1).wo(), X(2).ro() ), # argc not used
+    'XDECO' : lambda argc: ('52', R(1).ro(), X(2).wo() ), # argc not used
+
     'XDUMP' : lambda argc: (
         ('E160', OpConst(S(1).ro(), 0), OpConst(D(2).ro(), 0), ),
         ('E060', S(1).ro(), OpConst(D(2).ro(), 4), ),
         ('E060', S(1).ro(), D(2).ro(), ),
         )[argc],
+
     'XPRNT' : lambda argc: (
         ('E020', S(1).ro(), OpConst(D(2).ro(), 133), ), # require at least 1 arg
         ('E020', S(1).ro(), OpConst(D(2).ro(), 133), ),
@@ -69,6 +73,8 @@ PSEUDO_INS = {
 ### Pseudo-Instruction OP-Code Mapping
 
 PSEUDO_OP = {
+    '52'   : ( 3, lambda s : __xdeco(s[0], s[1], s[2], s[3:6]) ),
+    '53'   : ( 3, lambda s : __xdeci(s[0], s[1], s[2], s[3:6]) ),
     'E000' : ( 4, lambda s : __xread(s[0], s[1:4], s[4:]) ),
     'E020' : ( 4, lambda s : __xprnt(s[0], s[1:4], s[4:]) ),
     'E160' : ( 4, lambda s : __xdump_reg() ),
@@ -78,7 +84,7 @@ PSEUDO_OP = {
 # internal functions supporting Pseudo-Instructions
 from zPE.core.reg import GPR, SPR, Register
 from zPE.core.mem import Memory
-from zPE.core.cpu import __addr_reg, __ref, __dump
+from zPE.core.cpu import __addr, __ref, __dump
 # Note: zPE.core.cpu.__dump is not a memory dump report, but the content dump
 
 X_MACRO_VAR = {
@@ -94,7 +100,7 @@ def __xdump_reg():
     return
 
 def __xdump(base, disp, size):
-    addr_start = int(int(disp, 16) + __addr_reg(base))
+    addr_start = int(__addr(disp, '0', base))
     addr_end   = int(addr_start + int(size, 16))
     __xsnap_header('STORAGE')
     ctrl = '0'
@@ -114,18 +120,13 @@ def __xsnap_header(xdump_type):
 
 
 def __xread(base, disp, size):
-    SPR['PSW'].CC = 0           # clear CC
-    line = __xin('XREAD')[:-1]
-    if line == None:
-        SPR['PSW'].CC = 1       # EoF
-    else:
-        try:
-            for offset in range(int(size, 16)):
-                __ref(disp, '0', base, zPE.c2x(line[offset]), offset)
-        except:
-            if zPE.debug_mode():
-                raise
-        SPR['PSW'].CC = 1       # read error            
+    try:
+        line = __xin('XREAD')[:-1]
+        for offset in range(int(size, 16)):
+            __ref(disp, '0', base, zPE.c2x(line[offset]), offset)
+        SPR['PSW'].CC = 0       # read success
+    except:
+        SPR['PSW'].CC = 1       # read error or EoF
     return
 
 def __xprnt(base, disp, size):
@@ -137,8 +138,59 @@ def __xprnt(base, disp, size):
     return
 
 
+def __xdeci(reg, base, indx, disp):
+    reg  = GPR[int(reg, 16)]
+    addr = __addr(disp, indx, base)
+
+    pg_i = addr / 4096          # index of the page containing the address
+    addr = addr % 4096          # relative address within the page
+    if pg_i not in Memory._pool_allocated:
+        raise zPE.newProtectionException()
+
+    received = []
+    while True:
+        byte = zPE.x2c(Memory._pool_allocated[pg_i][addr]) # get next byte
+        if not received  and  byte != ' ':
+            # first non-blank byte
+            if byte not in '1234567890-+':
+                # no number found, overflow
+                GPR[1].load(pg_i * 4096 + addr)
+                SPR['PSW'].CC = 3
+                break           # stop processing
+            if byte not in '-+':
+                # digit, positive
+                received.append('+')
+            received.append(byte)
+        elif len(received)  and  byte not in '1234567890':
+            # end of the digit string
+            GPR[1].load(pg_i * 4096 + addr)
+            if 2 <= len(received) <= 10: # sign + up to 9 digits
+                reg.load(int(''.join(received))).test()
+            else:                        # sign along / more than 9 digits
+                SPR['PSW'].CC = 3
+            break               # stop processing
+        elif len(received):
+            # parsing the number
+            received.append(byte)
+
+        # update addr
+        addr += 1
+        if addr >= 4096:
+            pg_i += 1
+            addr = 0
+            if pg_i not in Memory._pool_allocated:
+                raise zPE.newProtectionException()
+    return
+
+def __xdeco(reg, base, indx, disp):
+    num = '{0: >12}'.format(GPR[int(reg, 16)].int)
+    for i in range(len(num)):
+        __ref(disp, indx, base, zPE.c2x(num[i]), i)
+    return
+
+
 def __xin(spool):
-    return zPE.core.SPOOL.retrieve(spool).pop(0)[0]
+    return zPE.core.SPOOL.retrieve(spool).pop(0)[0] # on EoF, raise exception
 
 def __xout(spool, *words):
     zPE.core.SPOOL.retrieve(spool).append(*words)

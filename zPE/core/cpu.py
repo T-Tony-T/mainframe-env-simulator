@@ -102,13 +102,11 @@ def execute(ins):
 
 
 def __exec(ins):
-    if zPE.debug_mode() and ins[0] == '44': # print EX before it executed
+    if zPE.debug_mode():
         print 'Exec:', ins
-
     ins_op[ins[0]][1](ins[1]) # execute the instruction against the arguments
 
     if zPE.debug_mode() and ins[0] != '44': # skip EX
-        print 'Exec:', ins
         print '  '.join([ str(r) for r in GPR[:8] ]), '\t\t', SPR['PSW']
         print '  '.join([ str(r) for r in GPR[8:] ])
         print ''.join(Memory.allocation.values()[0].dump_all()),
@@ -241,7 +239,7 @@ def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
     addr = __addr(d, x, b) + offset * al
     if addr % al != 0:
         raise zPE.newSpecificationException()
-    
+
     pg_i = addr / 4096          # index of the page containing the address
     addr = addr % 4096          # relative address within the page
 
