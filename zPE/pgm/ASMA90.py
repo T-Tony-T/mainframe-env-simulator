@@ -1357,12 +1357,6 @@ def pass_2():
                                     reloc_neg[-1] = not reloc_neg[-1]
                                 continue
 
-                            if reloc_cnt > 1: # more than one relocatable symbol
-                                indx_s = line.index(lbl)
-                                __INFO('E', line_num,
-                                       ( 78, indx_s, indx_s + len(lbl), )
-                                       )
-                                break
                             if res[1][indx] == 'eq_constant':
                                 indx_s = line.index(res[0][indx])
                                 __INFO('E', line_num, (
@@ -1473,6 +1467,12 @@ def pass_2():
                                         92, 'Error: ', res[0][indx],
                                         ': Fail to parse the expression.\n'
                                               )
+                            if reloc_cnt > 1: # more than one relocatable symbol
+                                indx_s = line.index(lbl)
+                                __INFO('E', line_num,
+                                       ( 78, indx_s, indx_s + len(lbl), )
+                                       )
+                                break
                         # end of processing res
 
                         if INFO_GE(line_num, 'E'):
@@ -1695,12 +1695,6 @@ def pass_2():
                     reloc_arg = None # backup of the relocatable symbol
                     for indx in range(len(res[0])):
                         # for each element in the exp, try to envaluate
-                        if reloc_cnt > 1: # more than one relocatable symbol
-                            indx_s = line.index(lbl)
-                            __INFO('E', line_num,
-                                   ( 78, indx_s, indx_s + len(lbl), )
-                                   )
-                            break   # stop processing current res
 
                         if ( res[1][indx] == 'eq_constant'  or
                              res[1][indx] == 'location_ptr' or
@@ -1790,7 +1784,7 @@ def pass_2():
                                         ))
                                 break   # stop processing current res
                             reloc_arg = res[0][indx]
-                            res[0][indx] = "B'0'"
+                            res[0][indx] = '0'
                             reloc_cnt += 1
                         elif res[1][indx] == 'inline_const':
                             sd_info = zPE.core.asm.parse_sd(res[0][indx])
@@ -1819,6 +1813,13 @@ def pass_2():
                                 sd_info = (sd_info[0], sd_info[1], sd_info[2],
                                            0, sd_info[4], sd_info[3]
                                            )
+
+                        if reloc_cnt > 1: # more than one relocatable symbol
+                            indx_s = line.index(lbl)
+                            __INFO('E', line_num,
+                                   ( 78, indx_s, indx_s + len(lbl), )
+                                   )
+                            break   # stop processing current res
                 # end of processing res
                 if INFO_GE(line_num, 'E'):
                     break # if has error, stop processing args
