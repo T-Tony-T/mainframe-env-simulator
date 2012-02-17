@@ -163,8 +163,17 @@ def new(key, mode, f_type, path = [], real_path = []):
 
     SPOOL[key] = Spool([], [], mode, f_type, path, real_path)
     if f_type == 'file'  and  mode == 'i':
-        zPE.load_fb80(SPOOL[key])
+        load(key)
     return SPOOL[key]
+
+def load(key):
+    if key not in SPOOL:
+        zPE.abort(5, 'Error: ', key, ': invalid DD name.\n')
+    sp = SPOOL[key]
+    if sp.f_type != 'file'  or  sp.mode != 'i':
+        zPE.abort(5, 'Error: ', key, ': invalid try for loading input DD.\n')
+    zPE.load_fb80(SPOOL[key])
+
 
 def remove(key):
     if key in SPOOL:

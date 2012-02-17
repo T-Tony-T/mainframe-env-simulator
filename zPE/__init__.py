@@ -188,7 +188,7 @@ JCL = {
     'card_cnt'  : 0,            # cards read in
     }
 
-DD_STATUS = { 'init' : 0, 'normal' : 1, 'abnormal' : 2 }
+DD_STATUS = { 'init' : 0, 'normal' : 1, 'abnormal' : 2, 'instream' : '*' }
 DISP_STATUS = {                 # status : action_normal
     'NEW' : 'DELETE',
     'OLD' : 'KEEP',
@@ -222,10 +222,12 @@ class Step(object):             # for JCL['step'][*]
         # begining of inner class definition
         class DDlist(object):   # inner class for JCL['step'][*].dd
             def __init__(self):
-                self.__items = {} # { ddname : { 'DSN' : '*', 'DISP' = [,,] } }
+                self.__items = {} # { ddname : [ { 'DSN' : '*', 'DISP' = [,,] },
+                                  #              { ... }, # concatenated DD
+                                  #              ] }
                 self.__indxs = [] # [ ddname ]
 
-            def append(self, ddname, ddcard):
+            def append(self, ddname, ddcard, instream):
                 if not isinstance(ddname, str):
                     abort(9, 'Error: ', ddname, ': Invalid DD name.\n')
                 if ddname in self.__items:
@@ -254,9 +256,16 @@ class Step(object):             # for JCL['step'][*]
                 else:
                     ddcard['DISP'] = ['','','']
                 # add STAT
-                ddcard['STAT'] = DD_STATUS['init']
-                self.__items[ddname] = ddcard
-                self.__indxs.append(ddname)
+                if instream:
+                    ddcard['STAT'] = DD_STATUS['instream']
+                else:
+                    ddcard['STAT'] = DD_STATUS['init']
+                if ddname:      # new dd
+                    self.__indxs.append(ddname)
+                    self.__items[ddname] = [ ddcard ]
+                else:           # dd concatenation
+                    self.__indxs.append(self.__indxs[-1])
+                    self.__items[self.__indxs[-1]].append(ddcard)
 
             def remove(self, key):
                 if isinstance(key, str):
@@ -273,6 +282,9 @@ class Step(object):             # for JCL['step'][*]
             def list(self):
                 return self.__indxs
 
+            def is_concat(self, key):
+                return (len(self.__getitem__(key)) > 1)
+
             def index(self, key):
                 return self.__indxs.index(key)
 
@@ -280,16 +292,23 @@ class Step(object):             # for JCL['step'][*]
                 return self.__indxs[indx]
 
             def mode(self, key):
-                return DD_MODE[self.__items[key]['DISP'][0]]
+                ddcard = self.__items[key]
+                if len(ddcard) == 1:
+                    return DD_MODE[ddcard[0]['DISP'][0]]
+                else:
+                    return DD_MODE['SHR'] # concatenated DDs, read-only
 
             def get_act(self, key, rc = 0):
+                ddcard = self.__items[key]
+                if len(ddcard) > 1:
+                    return 'DELETE' # concatenated DDs, DELETE no matter what
                 if rc == 0:
-                    return self.__items[key]['DISP'][1]
+                    return ddcard[0]['DISP'][1]
                 else:
-                    return self.__items[key]['DISP'][2]
+                    return ddcard[0]['DISP'][2]
 
             def __len__(self):
-                return len(self.__indxs)
+                return len(self.__items)
 
             def __getitem__(self, key):
                 if isinstance(key, str):
@@ -303,11 +322,18 @@ class Step(object):             # for JCL['step'][*]
                 if isinstance(key, str):
                     if key not in self.__items:
                         abort(9, 'Error: ', key, ': DD name not found.\n')
-                    self.__items[key] = val
                 elif isinstance(key, int):
-                    self.__items[self.__indxs[key]] = val
+                    key = self.__indxs[key]
                 else:
                     abort(9, 'Error: ', key, ': Invalid key.\n')
+                # perform the replacement
+                cnt = self.__indxs.count(key)
+                if cnt > 1:     # concatenated DDs
+                    indx = self.__indxs.index(key)
+                    for i in range(cnt): # remove all dd name indexing
+                        self.__indxs.remove(key)
+                    self.__indxs.insert(indx, key) # add back the index
+                self.__items[key] = [ val ]
         # end of inner class definition
 
         self.name = name        # 'step_name'
@@ -338,6 +364,8 @@ def conv_path(fn):
 
 def conv_back(fn_list):
     '''Converts ["ABCD", "EFG"] to "ABCD.EFG"'''
+    while not fn_list[0]:       # remove leading empty nodes
+        del fn_list[0]
     return '.'.join(fn_list)
 
 def is_file(dsn):

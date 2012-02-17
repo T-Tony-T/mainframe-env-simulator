@@ -114,6 +114,7 @@ def parse(job):
 
     # main read loop
     nextline = fp.readline()
+    last_dd  = None             # for DD concatenation
     while line != '':
         if nextline == '':
             line = fp.readline()
@@ -148,6 +149,8 @@ def parse(job):
         # currently assumed parameter: cond=(0,NE)
         # see also: __COND_FAIL(step)
         if field[1] == 'EXEC':
+            last_dd = None
+
             args = re.split(',', field[2], 1)
             pgm = ''
             proc = ''
@@ -198,10 +201,20 @@ def parse(job):
             sysout = ''
             dsn = []
             disp = ''
+            instream = False
+            if field[0] == '//': # concatenated DD card
+                pass
+            elif field[0].startswith('//'): # new DD card
+                last_dd = field[0][2:] # record the dd name
+            else:
+                zPE.abort(9, 'Error: ', line[:-1], ': Invalid DD card.\n')
+
             if field[2] == '*' or field[2] == 'DATA':
-                nextline = __READ_UNTIL(fp, field[0][2:], '/*')
+                instream = True
+                nextline = __READ_UNTIL(fp, last_dd, '/*')
             elif field[2][:9] == 'DATA,DLM=\'':
-                nextline = __READ_UNTIL(fp, field[0][2:], field[2][9:11])
+                instream = True
+                nextline = __READ_UNTIL(fp, last_dd, field[2][9:11])
             elif field[2][:7] == 'SYSOUT=':
                 sysout = field[2][7:]
             else:
@@ -214,15 +227,18 @@ def parse(job):
                         zPE.abort(9, 'Error: ', part,
                                   ': Parameter not supported.\n')
                 if disp == '':
-                    zPE.abort(9, 'Error: ', field[0][2:],
+                    zPE.abort(9, 'Error: ', line[:-1],
                               ': Need DISP=[disp].\n')
 
             zPE.JCL['step'][-1].dd.append(
-                field[0][2:], {
+                field[0][2:], { # do not use last_dd, since it will be flaged
+                                # as duplicated DD names
                     'SYSOUT' : sysout,
-                    'DSN' : dsn,
-                    'DISP' : disp,
-                    })
+                    'DSN'    : dsn,
+                    'DISP'   : disp,
+                    },
+                instream
+                )
         else:                   # continuation
             zPE.mark4future('JCL Continuation')
 
@@ -305,52 +321,65 @@ def init_step(step):
     alloc = False               # whether allocated any file
 
     if 'STEPLIB' in step.dd.dict():
-        if not zPE.is_dir(step.dd['STEPLIB']['DSN']):
-            # STEPLIB cannot be instream, thus DSN= should always exist
-            sp3.pop()           # no file allocated
-            sp3.append(ctrl, 'IEF212I {0:<8} '.format(zPE.JCL['jobname']),
-                       step.name, ' STEPLIB - DATA SET NOT FOUND\n')
-            step.dd['STEPLIB']['STAT'] = zPE.DD_STATUS['abnormal']
-            zPE.JCL['jobstat'] = 'JOB FAILED - JCL ERROR'
+        for ddcard in step.dd['STEPLIB']:
+            if not zPE.is_dir(ddcard['DSN']):
+                # STEPLIB cannot be instream, thus DSN= should always exist
+                sp3.pop()       # no file allocated
+                sp3.append(ctrl, 'IEF212I {0:<8} '.format(zPE.JCL['jobname']),
+                           step.name, ' STEPLIB - DATA SET NOT FOUND\n')
+                ddcard['STAT'] = zPE.DD_STATUS['abnormal']
+                zPE.JCL['jobstat'] = 'JOB FAILED - JCL ERROR'
 
-            return 'steplib'
+                return 'steplib'
 
-        sp3.append(ctrl, 'IGD103I {0}'.format(zPE.JES['file']),
-                   ' ALLOCATED TO DDNAME STEPLIB\n')
-        step.dd['STEPLIB']['STAT'] = zPE.DD_STATUS['normal']
+            sp3.append(ctrl, 'IGD103I {0}'.format(zPE.JES['file']),
+                       ' ALLOCATED TO DDNAME STEPLIB\n')
+            ddcard['STAT'] = zPE.DD_STATUS['normal']
         alloc = True
 
+    ddindx_map = {}        # { ddname : index_into_dd_concatenation, }
     for ddname in step.dd.list():
-        if step.dd[ddname]['STAT'] != zPE.DD_STATUS['init']:
-            continue            # skip the allocated ones
+        if ddname not in ddindx_map:
+            ddindx_map[ddname] = 0
+        else:
+            ddindx_map[ddname] += 1
+        ddindx = ddindx_map[ddname]
 
         # check for the f_type
-        if ddname in zPE.core.SPOOL.list():
-            f_type = 'instream' # read in but not allocate, must be instream
+        if step.dd[ddname][ddindx]['STAT'] == zPE.DD_STATUS['instream']:
+            f_type = 'instream' # instream data, already read in
+        elif step.dd[ddname][ddindx]['STAT'] != zPE.DD_STATUS['init']:
+            continue            # skip the allocated ones
         else:
             v_path = []         # virtual path
             r_path = []         # real path
-            if step.dd[ddname]['SYSOUT'] != '':
+            if step.dd[ddname][ddindx]['SYSOUT'] != '':
                 # outstream
                 mode = 'o'
                 f_type = 'outstream'
                 r_path = [ ddname ]
             else:
-                if step.dd[ddname]['DSN'] != '':
+                if step.dd[ddname][ddindx]['DSN'] != '':
                     # file
                     f_type = 'file'
                     v_path = [ ddname ]
-                    r_path = step.dd[ddname]['DSN']
+                    r_path = step.dd[ddname][ddindx]['DSN']
                 else:
                     # tmp
                     f_type = 'tmp'
                     r_path = [ ddname ]
                 mode = step.dd.mode(ddname)
-            zPE.core.SPOOL.new(ddname, mode, f_type, v_path, r_path)
+            if ddindx:          # DD concatenation
+                zPE.core.SPOOL.load(ddname)
+            else:               # new DD
+                zPE.core.SPOOL.new(ddname, mode, f_type, v_path, r_path)
 
-        sp3.append(ctrl, 'IEF237I {0}'.format(zPE.JES[f_type]),
-                   ' ALLOCATED TO {0}\n'.format(ddname))
-        step.dd[ddname]['STAT'] = zPE.DD_STATUS['normal']
+        if ddindx:              # DD concatenation
+            msg = ' CONCAT    TO {0}\n'.format(ddname)
+        else:                   # new DD
+            msg = ' ALLOCATED TO {0}\n'.format(ddname)
+        sp3.append(ctrl, 'IEF237I {0}'.format(zPE.JES[f_type]), msg)
+        step.dd[ddname][ddindx]['STAT'] = zPE.DD_STATUS['normal']
         alloc = True
 
     if not alloc:
@@ -385,45 +414,63 @@ def finish_step(step):
                    ' COND CODE {0:0>4}\n'.format(step.rc))
 
         if 'STEPLIB' in step.dd.dict():
-            path = step.dd['STEPLIB']['DSN']
-            action = zPE.DISP_ACTION[step.dd.get_act('STEPLIB', step.rc)]
-            sp3.append(ctrl, 'IGD104I {0:<44} '.format(zPE.conv_back(path)),
-                       '{0:<10} DDNAME=STEPLIB\n'.format(action + ','))
+            for ddcard in step.dd['STEPLIB']:
+                path = ddcard['DSN']
+                action = zPE.DISP_ACTION[step.dd.get_act('STEPLIB', step.rc)]
+                sp3.append(ctrl, 'IGD104I {0:<44} '.format(zPE.conv_back(path)),
+                           '{0:<10} DDNAME=STEPLIB\n'.format(action + ','))
 
+        ddindx_map = {}    # { ddname : index_into_dd_concatenation, }
         for ddname in step.dd.list():
             if ddname in zPE.core.SPOOL.DEFAULT:        # skip default spools
                 continue
             if ddname == 'STEPLIB':                     # already processed
                 continue
-            if step.dd[ddname]['STAT'] != zPE.DD_STATUS['normal']:
+
+            if ddname not in ddindx_map:
+                ddindx_map[ddname] = 0
+            else:
+                ddindx_map[ddname] += 1
+            ddindx = ddindx_map[ddname]
+
+            if step.dd[ddname][ddindx]['STAT'] != zPE.DD_STATUS['normal']:
                 sys.error.write(''.join([
                             'Warning: ', ddname, ': File status is not',
-                            'normal. (', step.dd[ddname]['STAT'], ')\n',
+                            'normal. (', step.dd[ddname][ddindx]['STAT'], ')\n',
                             '        Ignored.\n'
                             ]))
                 continue
 
-            path = zPE.core.SPOOL.path_of(ddname)
-            action = zPE.core.SPOOL.MODE[zPE.core.SPOOL.mode_of(ddname)]
-            for i in range(len(path)):
-                if len(path[0]) == 0:
-                    del path[0]
+            if step.dd.is_concat(ddname):
+                if not ddindx:  # first DD concatenated
+                    path = zPE.core.SPOOL.path_of(ddname)
+                else:
+                    path = [ 'CONCATENATION' ]
+                action = zPE.core.SPOOL.MODE['i'] # must be input data
+            else:
+                path = zPE.core.SPOOL.path_of(ddname)
+                action = zPE.core.SPOOL.MODE[zPE.core.SPOOL.mode_of(ddname)]
             sp3.append(ctrl, 'IEF285I   {0:<44}'.format(zPE.conv_back(path)),
                        ' {0}\n'.format(action))
 
+            if ( step.dd.is_concat(ddname)  and      # concatenated DDs
+                 ddname not in zPE.core.SPOOL.list() # already removed
+                 ):
+                continue
             f_type = zPE.core.SPOOL.type_of(ddname)
             if f_type == 'outstream':    # register outstream for writting out
                 zPE.core.SPOOL.register_write(ddname, step.name)
             else:
-                if f_type == 'instream': # remove instream
+                if f_type == 'instream': # remove instream if not PASS
                     pass
-                elif f_type == 'tmp':    # remove tmp
+                elif f_type == 'tmp':    # remove tmp if not PASS
                     pass
                 else:                    # sync file if needed
                     if step.dd.get_act(ddname) in [ 'KEEP', 'PASS', 'CATLG' ]:
                         __WRITE_OUT([ddname])
 
-                zPE.core.SPOOL.remove(ddname) # remove SPOOLs of the step
+                if step.dd.get_act(ddname) != 'PASS':
+                    zPE.core.SPOOL.remove(ddname) # remove SPOOLs of the step
 
     sp3.append(' ', 'IEF373I STEP/{0:<8}/START '.format(step.name),
                strftime('%Y%j.%H%M\n', localtime(step.start)))
@@ -539,7 +586,10 @@ def __JES2_STAT(msg, job_time):
 
 def __READ_UNTIL(fp, fn, dlm):
     # prepare spool
-    sp = zPE.core.SPOOL.new(fn, 'i', 'instream', [])
+    if fn in zPE.core.SPOOL.list(): # DD concatenation
+        sp = zPE.core.SPOOL.retrieve(fn)
+    else:
+        sp = zPE.core.SPOOL.new(fn, 'i', 'instream', [])
 
     # read until encountering dlm
     while True:
