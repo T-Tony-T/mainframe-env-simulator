@@ -521,16 +521,25 @@ class zEntry(gtk.Entry):
 
 
     def insert_text(self, text):
-        # clear selection region, if any
-        sel = self.get_selection_bounds()
-        if sel:
-            self.delete_text(* sel)
+        if self.get_overwrite_mode():   # overwrite mode
+            # un-select selection region, if any
+            self.cancel_action()
 
-        # insert text
-        pos = self.get_position()
-        super(zEntry, self).insert_text(text, pos)
+            # replace text
+            pos = self.get_position()
+            self.delete_text(pos, pos + len(text))
+            super(zEntry, self).insert_text(text, pos)
+        else:                           # insert mode
+            # clear selection region, if any
+            sel = self.get_selection_bounds()
+            if sel:
+                self.delete_text(* sel)
+
+            # insert text
+            pos = self.get_position()
+            super(zEntry, self).insert_text(text, pos)
+        # move cursor over
         self.set_position(pos + len(text))
-
 
     # no overridden for is_focus()
     def grab_focus(self):
@@ -1602,13 +1611,30 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     def insert_text(self, text):
-        # clear selection region, if any
-        sel = self.get_selection_bounds()
-        if sel:
-            self.delete_selection()
+        if self.get_overwrite():        # overwrite mode
+            # un-select selection region, if any
+            self.cancel_action()
 
-        # insert text
-        self.buff['disp'].insert_at_cursor(text)
+            # replace text
+            start_iter = self.get_cursor_iter()
+            line_end   = self.get_cursor_iter()
+            self.forward_to_line_end(line_end)
+            end_iter   = self.get_cursor_iter()
+            end_iter.forward_chars(len(text))
+
+            if line_end.compare(end_iter) < 0:
+                self.buff['disp'].delete(start_iter, line_end)
+            else:
+                self.buff['disp'].delete(start_iter, end_iter)
+            self.buff['disp'].insert_at_cursor(text)
+        else:                           # insert mode
+            # clear selection region, if any
+            sel = self.get_selection_bounds()
+            if sel:
+                self.delete_selection()
+
+            # insert text
+            self.buff['disp'].insert_at_cursor(text)
 
     def get_text(self):
         return self.buff['disp'].get_text(self.buff['disp'].get_start_iter(), self.buff['disp'].get_end_iter(), False)
