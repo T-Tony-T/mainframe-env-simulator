@@ -124,6 +124,11 @@ def dict():
 def list():
     return SPOOL.keys()
 
+def pop_new(key, mode, f_type, path = [], real_path = []):
+    sp = new(key, mode, f_type, path, real_path)
+    remove(key)
+    return sp
+
 def new(key, mode, f_type, path = [], real_path = []):
     # check uniqueness
     if key in SPOOL:
@@ -166,13 +171,16 @@ def new(key, mode, f_type, path = [], real_path = []):
         load(key)
     return SPOOL[key]
 
-def load(key):
+def load(key, mode, f_type, real_path):
     if key not in SPOOL:
         zPE.abort(5, 'Error: ', key, ': invalid DD name.\n')
-    sp = SPOOL[key]
-    if sp.f_type != 'file'  or  sp.mode != 'i':
-        zPE.abort(5, 'Error: ', key, ': invalid try for loading input DD.\n')
-    zPE.load_fb80(SPOOL[key])
+    if mode == 'o':
+        zPE.abort(5, 'Error: ', key,
+                  ': try to load data into output SPOOL.\n')
+    if f_type != 'file':
+        zPE.abort(5, 'Error: ', key,
+                  ': try to load data from non-file object.\n')
+    zPE.fill(SPOOL[key], real_path)
 
 
 def remove(key):

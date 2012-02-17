@@ -188,7 +188,7 @@ JCL = {
     'card_cnt'  : 0,            # cards read in
     }
 
-DD_STATUS = { 'init' : 0, 'normal' : 1, 'abnormal' : 2, 'instream' : '*' }
+DD_STATUS = { 'init' : 0, 'normal' : 1, 'abnormal' : 2 }
 DISP_STATUS = {                 # status : action_normal
     'NEW' : 'DELETE',
     'OLD' : 'KEEP',
@@ -227,7 +227,7 @@ class Step(object):             # for JCL['step'][*]
                                   #              ] }
                 self.__indxs = [] # [ ddname ]
 
-            def append(self, ddname, ddcard, instream):
+            def append(self, ddname, ddcard, tmp_sp):
                 if not isinstance(ddname, str):
                     abort(9, 'Error: ', ddname, ': Invalid DD name.\n')
                 if ddname in self.__items:
@@ -236,6 +236,8 @@ class Step(object):             # for JCL['step'][*]
                     if k not in ['SYSOUT', 'DSN', 'DISP']:
                         abort(9, 'Error: ', k, '=', v,
                               ': Un-recognized option\n')
+                ddcard['TMP_SP'] = tmp_sp
+
                 # parse DISP
                 if ddcard['DISP'] != '':
                     if ddcard['DISP'][0] == '(':
@@ -256,10 +258,7 @@ class Step(object):             # for JCL['step'][*]
                 else:
                     ddcard['DISP'] = ['','','']
                 # add STAT
-                if instream:
-                    ddcard['STAT'] = DD_STATUS['instream']
-                else:
-                    ddcard['STAT'] = DD_STATUS['init']
+                ddcard['STAT'] = DD_STATUS['init']
                 if ddname:      # new dd
                     self.__indxs.append(ddname)
                     self.__items[ddname] = [ ddcard ]
@@ -378,22 +377,26 @@ def open_file(dsn, mode, f_type):
     '''Open the target file in regardless of the existance'''
     return eval(''.join(['core.', JES[f_type], '.open_file']))(dsn, mode)
 
-def load_fb80(sp):
+def fill(sp, path):
     '''Load the indicated SPOOL from the indicated file, treated as FB 80'''
     if sp.mode != 'i':
         return -1
 
-    fp = open_file(sp.real_path, 'rb', sp.f_type)
-
-    cnt = 0
-    rec = fp.read(80)           # initial read
-    while rec:
-        sp.append(rec)
-        cnt += 1
-
-        rec = fp.read(80)       # updating read
+    fp = open_file(path, 'rb', 'file')
+    content = fp.read()         # read the entire file as binary
     fp.close()
-    return cnt
+
+    if re.search(r'[^\x0a\x0d\x20-\x7e]', content):
+        # turely binary file, treated as Fixed-Block 80
+        lines = re.findall(r'.{80}|.+', content, re.S) # S for . to match all
+    else:
+        # actually ascii file, break lines on \r, \n, or both
+        lines = re.split(r'\r\n|\r|\n', content)
+        if not lines[-1]:
+            lines.pop()         # remove empty line at the end, if any
+    for line in lines:
+        sp.append(line, '\n')
+    return len(line)
 
 def flush(sp):
     '''Flush the indicated SPOOL to the indicated file'''

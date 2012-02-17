@@ -201,7 +201,7 @@ def parse(job):
             sysout = ''
             dsn = []
             disp = ''
-            instream = False
+            sp_in = None         # will hold the tmp SPOOL if instream
             if field[0] == '//': # concatenated DD card
                 pass
             elif field[0].startswith('//'): # new DD card
@@ -210,11 +210,9 @@ def parse(job):
                 zPE.abort(9, 'Error: ', line[:-1], ': Invalid DD card.\n')
 
             if field[2] == '*' or field[2] == 'DATA':
-                instream = True
-                nextline = __READ_UNTIL(fp, last_dd, '/*')
+                ( nextline, sp_in ) = __READ_UNTIL(fp, last_dd, '/*')
             elif field[2][:9] == 'DATA,DLM=\'':
-                instream = True
-                nextline = __READ_UNTIL(fp, last_dd, field[2][9:11])
+                ( nextline, sp_in ) = __READ_UNTIL(fp, last_dd, field[2][9:11])
             elif field[2][:7] == 'SYSOUT=':
                 sysout = field[2][7:]
             else:
@@ -237,7 +235,7 @@ def parse(job):
                     'DSN'    : dsn,
                     'DISP'   : disp,
                     },
-                instream
+                sp_in
                 )
         else:                   # continuation
             zPE.mark4future('JCL Continuation')
@@ -345,11 +343,27 @@ def init_step(step):
             ddindx_map[ddname] += 1
         ddindx = ddindx_map[ddname]
 
-        # check for the f_type
-        if step.dd[ddname][ddindx]['STAT'] == zPE.DD_STATUS['instream']:
-            f_type = 'instream' # instream data, already read in
-        elif step.dd[ddname][ddindx]['STAT'] != zPE.DD_STATUS['init']:
+        if step.dd[ddname][ddindx]['STAT'] != zPE.DD_STATUS['init']:
             continue            # skip the allocated ones
+
+        # check for the f_type
+        if step.dd[ddname][ddindx]['TMP_SP']:
+            # instream data
+            f_type = 'instream'
+            sp_in = step.dd[ddname][ddindx]['TMP_SP']
+
+            if ddindx:          # DD concatenation
+                sp_real = zPE.core.SPOOL.retrieve(ddname)
+                while not sp_in.empty():
+                    sp_real.push(sp_in.pop(0))
+            else:               # new DD
+                zPE.core.SPOOL.replace(ddname, sp_in)
+            step.dd[ddname][ddindx]['TMP_SP'] = {
+                'mode'         : sp_in.mode,
+                'f_type'       : sp_in.f_type,
+                'virtual_path' : sp_in.virtual_path,
+                'real_path'    : sp_in.real_path,
+                }
         else:
             v_path = []         # virtual path
             r_path = []         # real path
@@ -370,15 +384,21 @@ def init_step(step):
                     r_path = [ ddname ]
                 mode = step.dd.mode(ddname)
             if ddindx:          # DD concatenation
-                zPE.core.SPOOL.load(ddname)
+                zPE.core.SPOOL.load(ddname, mode, f_type, r_path)
             else:               # new DD
                 zPE.core.SPOOL.new(ddname, mode, f_type, v_path, r_path)
+            step.dd[ddname][ddindx]['TMP_SP'] = {
+                'mode'         : mode,
+                'f_type'       : f_type,
+                'virtual_path' : v_path,
+                'real_path'    : r_path,
+                }
 
         if ddindx:              # DD concatenation
             msg = ' CONCAT    TO {0}\n'.format(ddname)
         else:                   # new DD
             msg = ' ALLOCATED TO {0}\n'.format(ddname)
-        sp3.append(ctrl, 'IEF237I {0}'.format(zPE.JES[f_type]), msg)
+        sp3.append(ctrl, 'IEF237I {0:4}'.format(zPE.JES[f_type]), msg)
         step.dd[ddname][ddindx]['STAT'] = zPE.DD_STATUS['normal']
         alloc = True
 
@@ -445,7 +465,7 @@ def finish_step(step):
                 if not ddindx:  # first DD concatenated
                     path = zPE.core.SPOOL.path_of(ddname)
                 else:
-                    path = [ 'CONCATENATION' ]
+                    path = step.dd[ddname][ddindx]['TMP_SP']['real_path']
                 action = zPE.core.SPOOL.MODE['i'] # must be input data
             else:
                 path = zPE.core.SPOOL.path_of(ddname)
@@ -586,10 +606,7 @@ def __JES2_STAT(msg, job_time):
 
 def __READ_UNTIL(fp, fn, dlm):
     # prepare spool
-    if fn in zPE.core.SPOOL.list(): # DD concatenation
-        sp = zPE.core.SPOOL.retrieve(fn)
-    else:
-        sp = zPE.core.SPOOL.new(fn, 'i', 'instream', [])
+    spt = zPE.core.SPOOL.pop_new(fn, 'i', 'instream', [])
 
     # read until encountering dlm
     while True:
@@ -598,14 +615,14 @@ def __READ_UNTIL(fp, fn, dlm):
 
         # check end of stream
         if line[:2] == dlm:
-            return ''
+            return ( '', spt )
 
         if (line[:2] == '//'):
             # next JCL card, put it back
             zPE.JCL['read_cnt'] -= 1
-            return line
+            return ( line, spt, )
 
-        sp.append(line, deck_id = zPE.JCL['read_cnt'])
+        spt.append(line, deck_id = zPE.JCL['read_cnt'])
 
 def __WRITE_OUT(dd_list):
     for fn in dd_list:
