@@ -1356,7 +1356,12 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             'true' : None,
             }
 
-        self.buff['disp'].create_tag('selected', background = self.get_style().bg[gtk.STATE_SELECTED])
+        self.buff['disp'].create_tag(
+            'selected',
+            foreground = zTheme.color_map['text_selected'],
+            background = zTheme.color_map['base_selected']
+            )
+
         gobject.timeout_add(20, self.__watch_selection)
 
         self.__buff_watcher = {
@@ -1647,9 +1652,24 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
     def modify_base(self, state, color):
         super(zTextView, self).modify_base(state, color)
         if state == gtk.STATE_SELECTED:
-            old_tag = self.buff['disp'].get_tag_table().lookup('selected')
-            self.buff['disp'].get_tag_table().remove(old_tag)
-            self.buff['disp'].create_tag('selected', background = color)
+            tag_table = self.buff['disp'].get_tag_table()
+            tag_table.remove(tag_table.lookup('selected'))
+            self.buff['disp'].create_tag(
+                'selected',
+                foreground = zTheme.color_map['text_selected'],
+                background = zTheme.color_map['base_selected']
+                )
+
+    def modify_text(self, state, color):
+        super(zTextView, self).modify_text(state, color)
+        if state == gtk.STATE_SELECTED:
+            tag_table = self.buff['disp'].get_tag_table()
+            tag_table.remove(tag_table.lookup('selected'))
+            self.buff['disp'].create_tag(
+                'selected',
+                foreground = zTheme.color_map['text_selected'],
+                background = zTheme.color_map['base_selected']
+                )
 
 
     def get_buffer(self):
