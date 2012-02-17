@@ -32,8 +32,8 @@ POSSIBLE_ADDR_MODE = [ 16, 31, 64, ]
 DEFAULT = {
     'ADDR_MODE' : 31,           # hardware addressing mode: 31 bit
 
-    'TIME_LIMIT': 5,            # max cpu time for a step: 5 sec
-    'MEMORY_SZ' : '1024K',      # memory size: 1024 KB
+    'TIME_LIMIT': 2,            # max cpu time for the entire job: 2 sec
+    'MEMORY_SZ' : '16K',        # memory size: 16 KB
 
     'ICH70001I' : {             # config list for ICH70001I
         'atime' : '00:00:00 ON THURSDAY, JANUARY 18, 2011',

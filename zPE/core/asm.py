@@ -441,9 +441,13 @@ op_code = {
     'BCR'  : lambda: ('07', R(1).ro(), R(2).br()),
     'BCT'  : lambda: ('46', R(1).rw(), X(2).br().al('hw')),
     'BCTR' : lambda: ('06', R(1).rw(), R(2).br()),
+    'BXH'  : lambda: ('86', R(1).rw(), R(3).ro(), S(2).br().al('hw')),
+    'BXLE' : lambda: ('87', R(1).rw(), R(3).ro(), S(2).br().al('hw')),
 
     'C'    : lambda: ('59', R(1).ro(), X(2).ro().al('fw')),
     'CL'   : lambda: ('55', R(1).ro(), X(2).ro().al('fw')),
+    'CLC'  : lambda: ('D5', L(1,2).ro(), S(2).ro()), # LL + bddd format
+    'CLI'  : lambda: ('95', S(1).ro(), I(2).ro()),
     'CLR'  : lambda: ('15', R(1).ro(), R(2).ro()),
     'CR'   : lambda: ('19', R(1).ro(), R(2).ro()),
 

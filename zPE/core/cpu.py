@@ -63,7 +63,7 @@ def fetch(EX_addr = None, EX_reg = None):
             print '[ EX instruction ] receives:', op_code, arg
 
         # perform OR if needed
-        indx = __indx(EX_reg)
+        indx = __h2i(EX_reg)
         if indx:                # not R0
             if zPE.debug_mode():
                 print '  ORing with R{0} = {1:0>2}******'.format(
@@ -168,18 +168,35 @@ ins_op = {
     '5B'   : ( 3, lambda s : __reg(s[0])  - __deref(s[3:6], s[1], s[2]) ),
     '5C'   : ( 3, lambda s : __pair(s[0]) * __deref(s[3:6], s[1], s[2]) ),
     '5D'   : ( 3, lambda s : __pair(s[0]) / __deref(s[3:6], s[1], s[2]) ),
+    '86'   : ( 3, lambda s : (
+            lambda R1 = __reg(s[0]), R2_num = __h2i(s[1]) : [
+                R1 + GPR[R2_num],                           # add increment
+                R1.cmp(GPR[R2_num + (R2_num + 1) % 2]),     # cmp limit
+                __br([ 2 ], __addr(s[3:6], '0', s[2])),     # BH  addr
+                ]
+            )() ),
+    '87'   : ( 3, lambda s : (
+            lambda R1 = __reg(s[0]), R2_num = __h2i(s[1]) : [
+                R1 + GPR[R2_num],                           # add increment
+                R1.cmp(GPR[R2_num + (R2_num + 1) % 2]),     # cmp limit
+                __br([ 0, 1 ], __addr(s[3:6], '0', s[2])),  # BNH addr
+                ]
+            )() ),
     '90'   : ( 3, lambda s : [
             __reg(s[0], offset).store(* __page(s[3:6], '0', s[2], 4, offset))
             for offset in (
-                lambda R1 = __indx(s[0]), R2 = __indx(s[1]) :
+                lambda R1 = __h2i(s[0]), R2 = __h2i(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
     '92'   : ( 3, lambda s : __ref(s[3:6], '0', s[2], s[0:2]) ),
+    '95'   : ( 3, lambda s : __cmp_lgc(__deref(s[3:6], '0', s[2], 1),
+                                       __h2i(s[0:2])
+                                       ) ),
     '98'   : ( 3, lambda s : [
             __reg(s[0], offset).load(  __deref(s[3:6], '0', s[2], 4, offset))
             for offset in (
-                lambda R1 = __indx(s[0]), R2 = __indx(s[1]) :
+                lambda R1 = __h2i(s[0]), R2 = __h2i(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
@@ -200,28 +217,35 @@ ins_op = {
                    __deref(s[7:10], '0', s[6], 1, offset), # value
                    offset                                  # offset
                    )
-            for offset in range(int(s[0:2], 16) + 1) # length = length code + 1
+            for offset in range(__h2i(s[0:2]) + 1) # length = length code + 1
+            ] ),
+    'D5'   : ( 5, lambda s : [
+            __cmp_lgc(__deref(s[3:6],  '0', s[2], 1, offset),
+                      __deref(s[7:10], '0', s[6], 1, offset),
+                      offset and SPR['PSW'].CC
+                      )     # skip comparison if CC is set to non-zero
+            for offset in range(__h2i(s[0:2]) + 1) # length = length code + 1
             ] ),
     }
 ###
 
 ### Internal Functions
 
-def __indx(r):
+def __h2i(r):
     return int(r, 16)
 
 def __reg(r, offset = 0):
-    return GPR[ __indx(r) + offset - 16 ]
+    return GPR[ __h2i(r) + offset - 16 ]
 
 def __addr_reg(r):
-    reg_num = __indx(r)
+    reg_num = __h2i(r)
     if reg_num:
         return GPR[reg_num].addr()
     else:
         return None
 
 def __pair(r):
-    indx = __indx(r)
+    indx = __h2i(r)
     if indx % 2 != 0:
         raise zPE.newSpecificationException()
     return RegisterPair(GPR[indx], GPR[indx + 1])
@@ -233,7 +257,7 @@ def __addr(d, x, b):
     base = __addr_reg(b)
     if not base:
         base = 0
-    return indx + base + int(d, 16)
+    return indx + base + __h2i(d)
 
 def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
     addr = __addr(d, x, b) + offset * al
@@ -249,7 +273,7 @@ def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
 
 def __ref(d, x, b, byte, offset = 0):
     if isinstance(byte, str):
-        byte = int(byte, 16)
+        byte = __h2i(byte)
     ( page, addr ) = __page(d, x, b, 1, offset) # have to be byteword boundary
     page[addr] = byte
     return byte
@@ -259,7 +283,7 @@ def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
     return page.retrieve(addr, zPE.align_fmt_map[al])
 
 def __dump(d, b, size):
-    addr_start = int(d, 16) + __addr_reg(b)
+    addr_start = __h2i(d) + __addr_reg(b)
     addr_end   = addr_start + size
     try:
         val = Memory.deref_storage(addr_start, addr_end)
@@ -283,3 +307,13 @@ def __cnt(cnt_reg, addr):
         SPR['PSW'].Instruct_addr = addr
         return True
     return False
+
+def __cmp(val_l, val_r, skip = False):
+    if skip:
+        return None
+    return Register(val_l).cmp(val_r)
+
+def __cmp_lgc(val_l, val_r, skip = False):
+    if skip:
+        return None
+    return Register(val_l).cmp_lgc(val_r)
