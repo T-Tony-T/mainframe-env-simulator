@@ -397,11 +397,19 @@ def pass_1():
     const_left = 0              # number of =constant LTORG/END allocated
 
     skip_until = None
-    eoflag = False
+    eoflag  = False
+    autoeof = False
 
     # main read loop
-    while not spi.empty():
-        ( line, deck_id ) = spi.pop(0) # get next line
+    while True:
+        # check END
+        if spi.empty():         # encountered EOF before END
+            # manually insert an END instruction
+            spi.append('{0:<8} END\n'.format(''))
+            autoeof = True
+
+        # retrieve the next line
+        ( line, deck_id ) = spi.pop(0)
         line_num += 1                  # start at line No. 1
 
         field = zPE.resplit_sq('\s+', line[:-1], 3)
@@ -530,7 +538,6 @@ def pass_1():
             if len(field[0]) != 0: # has label
                 __INFO('W', line_num, ( 165, 0, None, ))
 
-            spi.push( ( line, deck_id, ), 0 ) # put back the END card
             if not eoflag:
                 # first time encounter END
                 eoflag = True
@@ -540,6 +547,7 @@ def pass_1():
                 MNEMONIC[line_num] = [ None, 0, ]               # type 2
             
             if const_plid:      # check left-over constants
+                spi.push( ( line, deck_id, ), 0 ) # put back the END card
                 spi.insert(0, ' LTORG\a') # hand left-over constants to LTORG
                                           # the generated LTORG will be removed
                 continue
@@ -552,6 +560,9 @@ def pass_1():
 
                 addr = 0    # reset program counter
                 prev_addr = None
+
+                if autoeof:
+                    __INFO('W', line_num, ( 140, 9, None, ))
                 break           # end of program
 
         # parse LTORG
@@ -981,15 +992,6 @@ def pass_1():
             MNEMONIC[line_num] = [ scope_id, ]                  # type 1
             spt.push( ( line, deck_id, ) )
     # end of main read loop
-
-    # check END
-    if spi.empty():             # encountered EOF before END
-        line_num += 1
-        __INFO('W', line_num, ( 140, 9, None, ))
-        # manually insert an END instruction
-        spt.append('{0:<8} END\n'.format(''))
-    else:
-        spi.pop(0)
 
     # prepare the offset look-up table of the addresses
     offset = RELOCATE_OFFSET
@@ -2402,7 +2404,7 @@ def __APPEND_RLD(pos_id = None, rel_id = None, data_field = None):
         df_list_memory['byte_cnt'] = 8
 
 
-def __APPEND_END(entry_csect):
+def __APPEND_END(entry_csect = None):
     if entry_csect:             # type 1 END
         entry = ESD[entry_csect][0]
         entry_pt = entry.addr
