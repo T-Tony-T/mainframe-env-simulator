@@ -700,7 +700,7 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     def exec_init_func(self):
-        if self.need_init:
+        if self.ui_init_func:
             self.ui_init_func(self)
 
     def exec_uninit_func(self):
@@ -710,8 +710,6 @@ class zEdit(z_ABC, gtk.VBox):
     def set_init_func(self, ui_init_func):
         self.ui_init_func = ui_init_func[0]
         self.ui_uninit_func = ui_init_func[1]
-        if self.ui_init_func:
-            self.need_init = True
 
 
     def get_buffer(self):
@@ -732,7 +730,7 @@ class zEdit(z_ABC, gtk.VBox):
              self.active_buffer.type != new_buff.type
              ):
             # widget need to be switched, mark for init unless no such func
-            if self.need_init != None:
+            if self.ui_init_func:
                 self.need_init = True
 
             # create widget
@@ -835,6 +833,7 @@ class zEdit(z_ABC, gtk.VBox):
 
         if self.need_init:
             self.exec_init_func()
+            self.need_init = False # init finished, don't do it again
 
         # focus self out and in since the context has changed
         self.center.emit('focus-out-event', gtk.gdk.Event(gtk.gdk.FOCUS_CHANGE))
