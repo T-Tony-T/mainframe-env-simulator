@@ -34,7 +34,10 @@ import zPE
 import re
 from time import time, strftime
 
-from assist_err_code_rc import * # read recourse file for err msg
+from asma90_config import *   # read resource file for ASM config + rc
+from hewldrgo_config import * # read resource file for LDR config + rc
+
+from assist_err_code_rc import *        # read recourse file for err msg
 from assist_pseudo_ins import PSEUDO_INS, PSEUDO_OP # load pseudo-instructions
 
 
@@ -76,11 +79,11 @@ def init(step):
 
 
     # load the user-supplied PARM and config into the default configuration
-    zPE.pgm.ASMA90.load_parm({
+    asm_load_parm({
             'AMODE'     : 24,
             'RMODE'     : 24,
             })
-    zPE.pgm.ASMA90.load_local_conf({
+    asm_load_config({
             'MEM_POS'   : 0,    # always start at 0x000000 for ASSIST
             'REGION'    : step.region,
             })
@@ -106,13 +109,13 @@ def init(step):
 
     # calculate memory needed to execute the module
     required_mem_sz = 0
-    for esd in zPE.pgm.ASMA90.ESD.itervalues():
+    for esd in ESD.itervalues():
         if esd[0]:
             sz = esd[0].addr + esd[0].length
             if sz > required_mem_sz:
                 required_mem_sz = sz
 
-    zPE.pgm.ASMA90.init_res()   # release resources
+    asm_init_res()              # release resources
     zPE.core.SPOOL.remove('SYSUT1')
 
     if err_cnt > limit:
@@ -128,12 +131,12 @@ def init(step):
     zPE.core.SPOOL.pretend('XSNAPOUT', 'SYSLOUT')  # XSNAPOUT -> SYSLOUT
 
     # load the user-supplied PARM and config into the default configuration
-    zPE.pgm.HEWLDRGO.load_parm({
+    ldr_load_parm({
             'AMODE'   : 24,
             'RMODE'   : 24,
             'PSWKEY'  : 12, # 12 is the key used by ASSIST on "marist"
             })
-    zPE.pgm.HEWLDRGO.load_local_conf({
+    ldr_load_config({
             'MEM_POS' : 0,      # always start at 0x000000 for ASSIST
             'MEM_LEN' : required_mem_sz,
             'TIME'    : min(
@@ -158,7 +161,7 @@ def init(step):
 
     __PARSE_OUT_LDR(rc)
 
-    zPE.pgm.HEWLDRGO.init_res()   # release resources
+    ldr_init_res()              # release resources
 
     zPE.core.SPOOL.remove('SYSLIN')
     zPE.core.SPOOL.remove('SYSLOUT')
@@ -198,11 +201,6 @@ def __MISSED_FILE(step, i):
 
     return cnt
 
-
-from ASMA90 import TITLE
-from ASMA90 import INFO, INFO_GE, MAP_INFO_GE
-from ASMA90 import ESD, ESD_ID, MNEMONIC, RLD, USING_MAP
-from ASMA90 import SYMBOL, SYMBOL_V, SYMBOL_EQ, NON_REF_SYMBOL, INVALID_SYMBOL
 
 def __PARSE_OUT_ASM(limit):
     spi = zPE.core.SPOOL.retrieve('SYSUT1')   # input SPOOL
@@ -554,12 +552,12 @@ def __PARSE_OUT_ASM(limit):
     print '\n\nObject Deck:'
     for line in zPE.core.SPOOL.retrieve('SYSLIN'):
         line = b2a_hex(line).upper()
-        print ' '.join(re.findall(r'(........)', line[0   :  32])), '  ',
-        print ' '.join(re.findall(r'(........)', line[32  :  64])), '  ',
-        print ' '.join(re.findall(r'(........)', line[64  :  96]))
+        print ' '.join(zPE.fixed_width_split(8, line[0   :  32])), '  ',
+        print ' '.join(zPE.fixed_width_split(8, line[32  :  64])), '  ',
+        print ' '.join(zPE.fixed_width_split(8, line[64  :  96]))
         print '{0:38}'.format(''),
-        print ' '.join(re.findall(r'(........)', line[96  : 128])), '  ',
-        print ' '.join(re.findall(r'(........)', line[128 : 160]))
+        print ' '.join(zPE.fixed_width_split(8, line[96  : 128])), '  ',
+        print ' '.join(zPE.fixed_width_split(8, line[128 : 160]))
         print
     print
     # end of debugging
@@ -584,7 +582,7 @@ def __PRINT_LINE(spool_out, title, line_words, line_num, page_num):
         and the new page number after the line is
         inserted
     '''
-    if line_num >= zPE.pgm.ASMA90.PARM['LN_P_PAGE']:
+    if line_num >= ASM_PARM['LN_P_PAGE']:
         page_num += 1           # new page
         line_num = __PRINT_HEADER(spool_out, title, 0, page_num)
     spool_out.append(* line_words)
@@ -621,12 +619,7 @@ def __PARSE_OUT_LDR(rc):
     spi = zPE.core.SPOOL.retrieve('SYSLOUT')  # LOADER output SPOOL
     spo = zPE.core.SPOOL.retrieve('SYSPRINT') # ASSIST output SPOOL
 
-    ldr_ins    = zPE.pgm.HEWLDRGO.INSTRUCTION
-    ldr_br     = zPE.pgm.HEWLDRGO.BRANCHING
-
     ldr_except = zPE.e_pop()    # get the last exception, is exists
-    mem_dump   = zPE.pgm.HEWLDRGO.MEM_DUMP
-
 
     ctrl = '0'
     spo.append(ctrl, '*** PROGRAM EXECUTION BEGINNING - ANY OUTPUT BEFORE EXECUTION TIME MESSAGE IS PRODUCED BY USER PROGRAM ***\n')
@@ -640,11 +633,11 @@ def __PARSE_OUT_LDR(rc):
 
     diff = TIME['exec_end'] - TIME['exec_start']
     if diff:
-        ins_p_sec = int(len(ldr_ins) / diff)
+        ins_p_sec = int(len(INSTRUCTION) / diff)
     else:
         ins_p_sec = 'INF'
     spo.append(ctrl, '*** EXECUTION TIME = {0:>8.3f} SECS. '.format(diff),
-               '{0:>9} INSTRUCTIONS EXECUTED - '.format(len(ldr_ins)),
+               '{0:>9} INSTRUCTIONS EXECUTED - '.format(len(INSTRUCTION)),
                '{0:>8} INSTRUCTIONS/SEC ***\n'.format(ins_p_sec))
     if rc >= zPE.RC['WARNING']:
         msg = 'ABNORMAL'
@@ -659,7 +652,7 @@ def __PARSE_OUT_LDR(rc):
         spo.append(ctrl, '  IM LOCATION    INSTRUCTION :  IM = PSW BITS 32-39(ILC,CC,MASK) BEFORE INSTRUCTION EXECUTED AT PROGRAM LOCATION SHOWN\n')
 
         code = [ ' ' * 4 ] * 3
-        for ins in ldr_ins[-10 : ]: # only show last 10 instructions
+        for ins in INSTRUCTION[-10 : ]: # only show last 10 instructions
             if len(ins[1]) == 12:
                 code[2] = ins[1][8:12]
             else:
@@ -683,7 +676,7 @@ def __PARSE_OUT_LDR(rc):
         spo.append('-', '** TRACE OF LAST 10 BRANCH INSTRUCTIONS EXECUTED: PSW BITS SHOWN ARE THOSE BEFORE CORRESPONDING INSTRUCTION DECODED ***\n')
         spo.append(ctrl, '  IM LOCATION    INSTRUCTION :  IM = PSW BITS 32-39(ILC,CC,MASK) BEFORE INSTRUCTION EXECUTED AT PROGRAM LOCATION SHOWN\n')
 
-        for ins in ldr_br[-10 : ]: # only show last 10 branches
+        for ins in BRANCHING[-10 : ]: # only show last 10 branches
             if len(ins[1]) == 8:
                 code = ' '.join([ ins[1][:4], ins[1][4:] ])
             else:
@@ -706,10 +699,10 @@ def __PARSE_OUT_LDR(rc):
 
         # storage dump
         spo.append('1', 'USER STORAGE\n')
-        if len(mem_dump):
-            spo.append(ctrl, mem_dump[0])
-        for indx in range(1, len(mem_dump)):
-            spo.append(' ', mem_dump[indx])
+        if len(MEM_DUMP):
+            spo.append(ctrl, MEM_DUMP[0])
+        for indx in range(1, len(MEM_DUMP)):
+            spo.append(' ', MEM_DUMP[indx])
         spo.append(ctrl, '\n')
     else:
         msg = 'NORMAL'

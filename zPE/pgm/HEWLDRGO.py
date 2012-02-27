@@ -42,6 +42,8 @@ from threading import Timer
 
 import zPE.core.cpu as CPU
 
+from hewldrgo_config import * # read resource file for LDR config + rc
+
 
 FILE_CHK = [                    # files to be checked
     'SYSLIN', 'SYSLOUT',
@@ -51,81 +53,6 @@ FILE_REQ = [                    # files that are required
     ]
 FILE_GEN = {                    # files that will be generated if missing
     }
-
-
-PARM = {
-    'AMODE'     : 31,
-    'RMODE'     : 31,
-    'PSWKEY'    : 8,            # 1st user-mode key
-}
-def load_parm(parm_dic):
-    for key in parm_dic:
-        if key in PARM:
-            PARM[key] = parm_dic[key]
-        else:
-            raise KeyError('{0}: Invalid PARM key.'.format(key))
-
-LOCAL_CONF = {
-    'MEM_POS'   : None,         # required; first available memory location
-    'MEM_LEN'   : None,         # required; length of memory required
-    'TIME'      : None,         # required; maximum execution time allowed
-    'REGION'    : None,         # required; maximum length allowed
-    'ENTRY_PT'  : None,         # entry point (specified by END)
-    'EXIT_PT'   : None,         # return address
-    }
-def load_local_conf(conf_dic):
-    for key in conf_dic:
-        if key in LOCAL_CONF:
-            LOCAL_CONF[key] = conf_dic[key]
-        else:
-            raise KeyError('{0}: Invalid configuration key.'.format(key))
-
-
-### resource definition
-
-INSTRUCTION = [                 # Instruction history
-    # [ PSW, MNEMONIC ]
-    ]
-BRANCHING = [                   # Branching history
-    # [ PSW, MNEMONIC ]
-    ]
-def record_ins(psw, ins):
-    INSTRUCTION.append([ psw, ''.join(ins) ])
-    if ins[0][0] in '04' and ins[0][1] in '567': # all branching stmts supported
-        record_br(psw, ins)
-    return ins
-def record_br(psw, ins):
-    BRANCHING.append([ psw, ''.join(ins) ])
-    return ins
-
-MEM_DUMP = [ ]                  # the entire memory dump at ABEND
-
-
-from ASMA90 import ExternalSymbol
-CSECT = {
-    # ( OBJMOD_id, ESD_ID ) : ( mem_loc,  ExternalSymbol, ESD_name )
-    #   mem_loc - the starting memory location where the OBJMOD is loaded into
-    }
-SCOPE = {
-    # ( mem_loc, addr, length ) : ( OBJMOD_id, ESD_ID )
-    #   addr    - the starting location of the CSECT relative to the OBJMOD
-    #   length  - the length of the CSECT 
-    }
-EXREF = {
-    # ( OBJMOD_id, ESD_ID ) : ( 0x000000, ExternalSymbol, ESD_name )
-    }
-### end of resource definition
-
-def init_res():
-    del INSTRUCTION[:]          # clear Instruction history
-    del BRANCHING[:]            # clear Branching history
-
-    CSECT.clear()               # clear Control SECTion records
-    SCOPE.clear()               # clear scope records
-    EXREF.clear()               # clear EXternal REFerence records
-
-    del MEM_DUMP[:]             # clear memory dump
-
 
 
 def run(step):
@@ -139,9 +66,9 @@ def init(step):
         return zPE.RC['CRITICAL']
 
     # load the user-supplied PARM and config into the default configuration
-    # load_parm({
+    # ldr_load_parm({
     #         })
-    load_local_conf({
+    ldr_load_local_conf({
             'MEM_POS' : randint(512*128, 4096*128) * 8, # random from 512K to 4M
             'MEM_LEN' : zPE.core.mem.max_sz_of(step.region),
                         # this is WAY to large;
@@ -158,20 +85,20 @@ def init(step):
 
     __PARSE_OUT(rc)
 
-    init_res() # release resources (by releasing their refs to enable gc)
+    ldr_init_res()              # release resources
 
     return rc
 
 
 def load():
     '''load all OBJECT MODULEs (statically) into memory'''
-    if LOCAL_CONF['MEM_LEN'] > zPE.core.mem.max_sz_of(LOCAL_CONF['REGION']):
-        zPE.abort(9, 'Error: ', LOCAL_CONF['REGION'],
+    if LDR_CONFIG['MEM_LEN'] > zPE.core.mem.max_sz_of(LDR_CONFIG['REGION']):
+        zPE.abort(9, 'Error: ', LDR_CONFIG['REGION'],
                   ': RIGEON is not big enough.\n')
 
     spi = zPE.core.SPOOL.retrieve('SYSLIN') # input SPOOL
-    mem = zPE.core.mem.Memory(LOCAL_CONF['MEM_POS'], LOCAL_CONF['MEM_LEN'])
-    LOCAL_CONF['EXIT_PT'] = mem.h_bound
+    mem = zPE.core.mem.Memory(LDR_CONFIG['MEM_POS'], LDR_CONFIG['MEM_LEN'])
+    LDR_CONFIG['EXIT_PT'] = mem.h_bound
 
     rec_tp = { # need to be all lowercase since b2a_hex() returns all lowercase
         'ESD' : zPE.c2x('ESD').lower(),
@@ -203,7 +130,7 @@ def load():
                           ":\n invalid OBJECT MODULE control statement.\n")
 
             if field[1] == 'ENTRY':
-                LOCAL_CONF['ENTRY_PT'] = '{0:<8}'.format(field[2])
+                LDR_CONFIG['ENTRY_PT'] = '{0:<8}'.format(field[2])
 
             elif field[1] == 'INCLUDE':
                 zPE.mark4future('OM INCLUDE statement')
@@ -248,7 +175,7 @@ def load():
                     length = int(length, 16)
                 esd = ExternalSymbol(
                     None, esd_id, addr, length,
-                    None, PARM['AMODE'],PARM['RMODE'], None
+                    None, LDR_PARM['AMODE'], LDR_PARM['RMODE'], None
                     )
                 esd.load_type(vf[16:18])        # vf byte 9: ESD type code
                 esd_name = zPE.x2c(vf[0:16])    # vf byte 1-8: ESD Name
@@ -256,8 +183,8 @@ def load():
                     CSECT[obj_id, esd.id] = ( mem_loc, esd, esd_name )
                     SCOPE[mem_loc, esd.addr, esd.length] = ( obj_id, esd.id )
 
-                    if esd_name == LOCAL_CONF['ENTRY_PT']:
-                        LOCAL_CONF['ENTRY_PT'] = mem_loc
+                    if esd_name == LDR_CONFIG['ENTRY_PT']:
+                        LDR_CONFIG['ENTRY_PT'] = mem_loc
 
                 elif esd.type == 'ER':
                     EXREF[obj_id, esd.id] = ( 0,       esd, esd_name)
@@ -339,7 +266,7 @@ def load():
         # parse END record
         elif rec[2:8] == rec_tp['END']: # byte 2-4
             # setup ENTRY POINT, if not offered by the user
-            if LOCAL_CONF['ENTRY_PT'] == None:
+            if LDR_CONFIG['ENTRY_PT'] == None:
                 # no ENTRY POINT offered, nor setup by a previous OBJMOD
                 entry = rec[10:16] # byte 6-8: entry point
                 if entry == zPE.c2x('   '): # 3 spaces
@@ -349,12 +276,12 @@ def load():
                     scope = int(rec[28:32], 16) # byte 15-16: ESD ID for EP
                     loc = int(entry, 16)
                 loc += CSECT[obj_id, scope][0] # add the offset of the OBJMOD
-                LOCAL_CONF['ENTRY_PT'] = loc
-            elif isinstance(LOCAL_CONF['ENTRY_PT'], str):
+                LDR_CONFIG['ENTRY_PT'] = loc
+            elif isinstance(LDR_CONFIG['ENTRY_PT'], str):
                 # CSECT name not found
                 sys.stderr.write(
                     'Error: {0}: Invalid Entry Point specified.\n'.format(
-                        LOCAL_CONF['ENTRY_PT']
+                        LDR_CONFIG['ENTRY_PT']
                         )
                     )
                 return zPE.RC['ERROR'] # OBJECT module format error
@@ -407,12 +334,12 @@ def go(mem):
 
     # initial program load
     prsv[0] = ldr_mem.min_pos        # load LOADER's RSV into register 13
-    rtrn[0] = LOCAL_CONF['EXIT_PT']  # load exit point into register 14
-    enty[0] = LOCAL_CONF['ENTRY_PT'] # load entry point into register 15
-    psw.Instruct_addr = LOCAL_CONF['ENTRY_PT'] # set PSW accordingly
+    rtrn[0] = LDR_CONFIG['EXIT_PT']  # load exit point into register 14
+    enty[0] = LDR_CONFIG['ENTRY_PT'] # load entry point into register 15
+    psw.Instruct_addr = LDR_CONFIG['ENTRY_PT'] # set PSW accordingly
 
     old_key = psw.PSW_key       # backup previous PSW key
-    psw.PSW_key = PARM['PSWKEY']
+    psw.PSW_key = LDR_PARM['PSWKEY']
     psw.M = 1                   # turn on "Machine check"
     psw.W = 0                   # content switch to the program
 
@@ -420,12 +347,12 @@ def go(mem):
     timeouted = [ ]
     def timeout():
         timeouted.append(True)
-    t = Timer(LOCAL_CONF['TIME'], timeout)
+    t = Timer(LDR_CONFIG['TIME'], timeout)
     try:
         t.start()               # start the timer
-        record_br(psw.snapshot(), ['00', '00']) # branch into the module
-        while not timeouted  and  psw.Instruct_addr != LOCAL_CONF['EXIT_PT']:
-            CPU.execute(record_ins(psw.snapshot(), CPU.fetch()))
+        RECORD_BR(psw.snapshot(), ['00', '00']) # branch into the module
+        while not timeouted  and  psw.Instruct_addr != LDR_CONFIG['EXIT_PT']:
+            CPU.execute(RECORD_INS(psw.snapshot(), CPU.fetch()))
         t.cancel()              # stop the timer
         rc = zPE.RC['NORMAL']
     except Exception as e:

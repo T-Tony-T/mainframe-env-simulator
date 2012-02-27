@@ -77,6 +77,10 @@ def dic_find_key(dic, val):
     return [k for (k, v) in dic.iteritems() if v == val][0]
 
 
+def fixed_width_split(width, src_str, flags = 0):
+    return re.findall(''.join([ r'.{', str(width), r'}|.+' ]), src_str, flags)
+
+
 def listify_mask(mask_hex):
     '''Convert an (hex) mask to an index list containing positions of 1-bit'''
     mask = '{0:0>4}'.format(bin(int(mask_hex, 16))[2:])
@@ -425,7 +429,7 @@ def fill(sp, path):
 
     if re.search(r'[^\x0a\x0d\x20-\x7e]', content):
         # turely binary file, treated as Fixed-Block 80
-        lines = re.findall(r'.{80}|.+', content, re.S) # S for . to match all
+        lines = fixed_width_split(80, content, re.S) # S for . to match all
     else:
         # actually ascii file, break lines on \r, \n, or both
         lines = re.split(r'\r\n|\r|\n', content)

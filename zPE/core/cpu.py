@@ -55,7 +55,7 @@ def fetch(EX_addr = None, EX_reg = None):
         raise zPE.newOperationException()
 
     # fetch the argument(s)
-    byte_cnt = ins_op[op_code][0] # get the byte_cnt of the argument(s)
+    byte_cnt = ins_op[op_code][1] # get the byte_cnt of the argument(s)
     if addr + byte_cnt > 4096:
         # retrieve next page, if available
         if pg_i + 1 not in Memory._pool_allocated:
@@ -91,7 +91,7 @@ def fetch(EX_addr = None, EX_reg = None):
                 if op_code not in ins_op:
                     raise zPE.newOperationException()
                 # validate arg length
-                if byte_cnt != ins_op[op_code][0]:
+                if byte_cnt != ins_op[op_code][1]:
                     raise zPE.newOperationException()
         else:
             if zPE.debug_mode():
@@ -107,8 +107,11 @@ def fetch(EX_addr = None, EX_reg = None):
 
 def execute(ins):
     if zPE.debug_mode():
-        print 'Exec:', ins
-    ins_op[ins[0]][1](ins[1]) # execute the instruction against the arguments
+        print 'Exec: {0}: {1}'.format(
+            ins_op[ins[0]][0],
+            ' '.join(zPE.fixed_width_split(4, ''.join(ins)))
+            )
+    ins_op[ins[0]][2](ins[1]) # execute the instruction against the arguments
 
     if zPE.debug_mode() and ins[0] != '44': # skip EX
         print '  '.join([ str(r) for r in GPR[:8] ]), '\t\t', SPR['PSW']
@@ -133,78 +136,98 @@ def parse_time(time):
 
 ### Instruction Look-up Tabel
 ins_op = {
-    '05'   : ( 1, lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
-                               __cnt(Register(0), __addr_reg(s[1]))
-                               ] ),
-    '06'   : ( 1, lambda s : __cnt(__reg(s[0]), __addr_reg(s[1])) ),
-    '07'   : ( 1, lambda s : __br(__mask(s[0]), __reg(s[1]).addr()) ),
-    '10'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).set_abs() ),
-    '11'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).neg_abs() ),
-    '12'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).test() ),
-    '13'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])).neg_val() ),
-    '14'   : ( 1, lambda s : __reg(s[0]) & __reg(s[1]) ),
-    '15'   : ( 1, lambda s : __reg(s[0]).cmp_lgc(__reg(s[1])) ),
-    '16'   : ( 1, lambda s : __reg(s[0]) | __reg(s[1]) ),
-    '17'   : ( 1, lambda s : __reg(s[0]) ^ __reg(s[1]) ),
-    '18'   : ( 1, lambda s : __reg(s[0]).load(__reg(s[1])) ),
-    '19'   : ( 1, lambda s : __reg(s[0]).cmp(__reg(s[1])) ),
-    '1A'   : ( 1, lambda s : __reg(s[0])  + __reg(s[1]) ),
-    '1B'   : ( 1, lambda s : __reg(s[0])  - __reg(s[1]) ),
-    '1C'   : ( 1, lambda s : __pair(s[0]) * __reg(s[1]) ),
-    '1D'   : ( 1, lambda s : __pair(s[0]) / __reg(s[1]) ),
-    '41'   : ( 3, lambda s : __reg(s[0]).load( __addr(s[3:6], s[1], s[2])) ),
-    '42'   : ( 3, lambda s : __reg(s[0]).stc(* __page(s[3:6], s[1], s[2], 1)) ),
-    '43'   : ( 3, lambda s : __reg(s[0]).inc( __deref(s[3:6], s[1], s[2], 1)) ),
-    '44'   : ( 3, lambda s : execute(fetch(__addr(s[3:6], s[1], s[2]), s[0])) ),
-    '45'   : ( 3, lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
-                               __cnt(Register(0), __addr(s[3:6], s[1], s[2]))
-                               ] ),
-    '46'   : ( 3, lambda s : __cnt(__reg(s[0]), __addr(s[3:6], s[1], s[2])) ),
-    '47'   : ( 3, lambda s : __br(__mask(s[0]), __addr(s[3:6], s[1], s[2])) ),
-    '50'   : ( 3, lambda s : __reg(s[0]).store(* __page(s[3:6], s[1], s[2])) ),
-    '54'   : ( 3, lambda s : __reg(s[0]) & __deref(s[3:6], s[1], s[2]) ),
-    '55'   : ( 3, lambda s : __reg(s[0]).cmp_lgc(__deref(s[3:6], s[1], s[2])) ),
-    '56'   : ( 3, lambda s : __reg(s[0]) | __deref(s[3:6], s[1], s[2]) ),
-    '57'   : ( 3, lambda s : __reg(s[0]) ^ __deref(s[3:6], s[1], s[2]) ),
-    '58'   : ( 3, lambda s : __reg(s[0]).load(__deref(s[3:6], s[1], s[2])) ),
-    '59'   : ( 3, lambda s : __reg(s[0]).cmp(__deref(s[3:6], s[1], s[2])) ),
-    '5A'   : ( 3, lambda s : __reg(s[0])  + __deref(s[3:6], s[1], s[2]) ),
-    '5B'   : ( 3, lambda s : __reg(s[0])  - __deref(s[3:6], s[1], s[2]) ),
-    '5C'   : ( 3, lambda s : __pair(s[0]) * __deref(s[3:6], s[1], s[2]) ),
-    '5D'   : ( 3, lambda s : __pair(s[0]) / __deref(s[3:6], s[1], s[2]) ),
-    '86'   : ( 3, lambda s : (
+    '05'   : ( 'BALR', 1,
+               lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
+                            __cnt(Register(0), __addr_reg(s[1]))
+                            ] ),
+    '06'   : ( 'BCTR', 1, lambda s : __cnt(__reg(s[0]), __addr_reg(s[1])) ),
+    '07'   : ( 'BCR',  1, lambda s : __br(__mask(s[0]), __reg(s[1]).addr()) ),
+    '10'   : ( 'LPR',  1, lambda s : __reg(s[0]).load(__reg(s[1])).set_abs() ),
+    '11'   : ( 'LNR',  1, lambda s : __reg(s[0]).load(__reg(s[1])).neg_abs() ),
+    '12'   : ( 'LTR',  1, lambda s : __reg(s[0]).load(__reg(s[1])).test() ),
+    '13'   : ( 'LCR',  1, lambda s : __reg(s[0]).load(__reg(s[1])).neg_val() ),
+    '14'   : ( 'NR',   1, lambda s : __reg(s[0]) & __reg(s[1]) ),
+    '15'   : ( 'CLR',  1, lambda s : __reg(s[0]).cmp_lgc(__reg(s[1])) ),
+    '16'   : ( 'OR',   1, lambda s : __reg(s[0]) | __reg(s[1]) ),
+    '17'   : ( 'XR',   1, lambda s : __reg(s[0]) ^ __reg(s[1]) ),
+    '18'   : ( 'LR',   1, lambda s : __reg(s[0]).load(__reg(s[1])) ),
+    '19'   : ( 'CR',   1, lambda s : __reg(s[0]).cmp(__reg(s[1])) ),
+    '1A'   : ( 'AR',   1, lambda s : __reg(s[0])  + __reg(s[1]) ),
+    '1B'   : ( 'SR',   1, lambda s : __reg(s[0])  - __reg(s[1]) ),
+    '1C'   : ( 'MR',   1, lambda s : __pair(s[0]) * __reg(s[1]) ),
+    '1D'   : ( 'DR',   1, lambda s : __pair(s[0]) / __reg(s[1]) ),
+    '41'   : ( 'LA',   3,
+               lambda s : __reg(s[0]).load( __addr(s[3:6],s[1],s[2])   )
+               ),
+    '42'   : ( 'STC',  3,
+               lambda s : __reg(s[0]).stc(* __page(s[3:6],s[1],s[2],1) )
+               ),
+    '43'   : ( 'IC',   3,
+               lambda s : __reg(s[0]).inc( __deref(s[3:6],s[1],s[2],1) )
+               ),
+    '44'   : ( 'EX',   3,
+               lambda s : execute(fetch(__addr(s[3:6],s[1],s[2]), s[0]))
+               ),
+    '45'   : ( 'BAL',  3,
+               lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
+                            __cnt(Register(0), __addr(s[3:6],s[1],s[2]))
+                            ] ),
+    '46'   : ( 'BCT',  3, lambda s : __cnt(__reg(s[0]),
+                                           __addr(s[3:6], s[1], s[2])
+                                           ) ),
+    '47'   : ( 'BC',   3, lambda s : __br(__mask(s[0]),
+                                          __addr(s[3:6], s[1], s[2])
+                                          ) ),
+    '50'   : ( 'ST',   3,
+               lambda s : __reg(s[0]).store(* __page(s[3:6],s[1],s[2]))
+               ),
+    '54'   : ( 'N',    3, lambda s : __reg(s[0]) & __deref(s[3:6],s[1],s[2]) ),
+    '55'   : ( 'CL',   3,
+               lambda s : __reg(s[0]).cmp_lgc(__deref(s[3:6],s[1],s[2]))
+               ),
+    '56'   : ( 'O',    3, lambda s : __reg(s[0]) | __deref(s[3:6],s[1],s[2]) ),
+    '57'   : ( 'X',    3, lambda s : __reg(s[0]) ^ __deref(s[3:6],s[1],s[2]) ),
+    '58'   : ( 'L',    3, lambda s : __reg(s[0]).load(__deref(s[3:6],s[1],s[2]))
+               ),
+    '59'   : ( 'C',    3, lambda s : __reg(s[0]).cmp(__deref(s[3:6],s[1],s[2]))
+               ),
+    '5A'   : ( 'A',    3, lambda s : __reg(s[0])  + __deref(s[3:6],s[1],s[2]) ),
+    '5B'   : ( 'S',    3, lambda s : __reg(s[0])  - __deref(s[3:6],s[1],s[2]) ),
+    '5C'   : ( 'M',    3, lambda s : __pair(s[0]) * __deref(s[3:6],s[1],s[2]) ),
+    '5D'   : ( 'D',    3, lambda s : __pair(s[0]) / __deref(s[3:6],s[1],s[2]) ),
+    '86'   : ( 'BXH',  3, lambda s : (
             lambda R1 = __reg(s[0]), R2_num = __h2i(s[1]) : [
                 R1 + GPR[R2_num],                           # add increment
                 R1.cmp(GPR[R2_num + (R2_num + 1) % 2]),     # cmp limit
-                __br([ 2 ], __addr(s[3:6], '0', s[2])),     # BH  addr
+                __br([ 2 ], __addr(s[3:6],'0',s[2])),       # BH  addr
                 ]
             )() ),
-    '87'   : ( 3, lambda s : (
+    '87'   : ( 'BXLE', 3, lambda s : (
             lambda R1 = __reg(s[0]), R2_num = __h2i(s[1]) : [
                 R1 + GPR[R2_num],                           # add increment
                 R1.cmp(GPR[R2_num + (R2_num + 1) % 2]),     # cmp limit
-                __br([ 0, 1 ], __addr(s[3:6], '0', s[2])),  # BNH addr
+                __br([ 0, 1 ], __addr(s[3:6],'0',s[2])),    # BNH addr
                 ]
             )() ),
-    '90'   : ( 3, lambda s : [
-            __reg(s[0], offset).store(* __page(s[3:6], '0', s[2], 4, offset))
+    '90'   : ( 'STM',  3, lambda s : [
+            __reg(s[0], offset).store(* __page(s[3:6],'0',s[2],4,offset))
             for offset in (
                 lambda R1 = __h2i(s[0]), R2 = __h2i(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
-    '92'   : ( 3, lambda s : __ref(s[3:6], '0', s[2], s[0:2]) ),
-    '95'   : ( 3, lambda s : __cmp_lgc(__deref(s[3:6], '0', s[2], 1),
-                                       __h2i(s[0:2])
-                                       ) ),
-    '98'   : ( 3, lambda s : [
-            __reg(s[0], offset).load(  __deref(s[3:6], '0', s[2], 4, offset))
+    '92'   : ( 'MVI',  3, lambda s : __ref(s[3:6],'0',s[2],s[0:2]) ),
+    '95'   : ( 'CLI',  3, lambda s : __cmp_lgc(__deref(s[3:6], '0', s[2], 1),
+                                               __h2i(s[0:2])
+                                               ) ),
+    '98'   : ( 'LM',   3, lambda s : [
+            __reg(s[0], offset).load(  __deref(s[3:6],'0',s[2],4,offset))
             for offset in (
                 lambda R1 = __h2i(s[0]), R2 = __h2i(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
-    'BE'   : ( 3, lambda s : (
+    'BE'   : ( 'STCM', 3, lambda s : (
             lambda mask = __mask(s[1]) : [
                 __reg(s[0]).stc(* __page(s[3:6], '0', s[2], 1, offset),
                                   pos = mask[offset] # keyword (named) arg
@@ -212,18 +235,18 @@ ins_op = {
                 for offset in range(len(mask))
                 ]
             )() ),
-    'BF'   : ( 3, lambda s : (
+    'BF'   : ( 'ICM',  3, lambda s : (
             lambda mask = __mask(s[1]) :
-                __reg(s[0]).inc(__dump(s[3:6], s[2], len(mask)), mask)
+                __reg(s[0]).inc(__dump(s[3:6],s[2],len(mask)), mask)
             )() ),
-    'D2'   : ( 5, lambda s : [
+    'D2'   : ( 'MVC',  5, lambda s : [
             __ref( s[3:6], '0', s[2],                      # d, i, b
                    __deref(s[7:10], '0', s[6], 1, offset), # value
                    offset                                  # offset
                    )
             for offset in range(__h2i(s[0:2]) + 1) # length = length code + 1
             ] ),
-    'D5'   : ( 5, lambda s : [
+    'D5'   : ( 'CLC',  5, lambda s : [
             __cmp_lgc(__deref(s[3:6],  '0', s[2], 1, offset),
                       __deref(s[7:10], '0', s[6], 1, offset),
                       offset and SPR['PSW'].CC
@@ -231,6 +254,9 @@ ins_op = {
             for offset in range(__h2i(s[0:2]) + 1) # length = length code + 1
             ] ),
     }
+
+def decode_op(mnem):
+    return ins_op[mnem][0]
 ###
 
 ### Internal Functions

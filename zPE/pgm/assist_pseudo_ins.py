@@ -73,12 +73,12 @@ PSEUDO_INS = {
 ### Pseudo-Instruction OP-Code Mapping
 
 PSEUDO_OP = {
-    '52'   : ( 3, lambda s : __xdeco(s[0], s[1], s[2], s[3:6]) ),
-    '53'   : ( 3, lambda s : __xdeci(s[0], s[1], s[2], s[3:6]) ),
-    'E000' : ( 4, lambda s : __xread(s[0], s[1:4], s[4:]) ),
-    'E020' : ( 4, lambda s : __xprnt(s[0], s[1:4], s[4:]) ),
-    'E160' : ( 4, lambda s : __xdump_reg() ),
-    'E060' : ( 4, lambda s : __xdump(s[0], s[1:4], s[4:]) ),
+    '52'   : ( 'XDECO', 3, lambda s : __xdeco(s[0], s[1], s[2], s[3:6]) ),
+    '53'   : ( 'XDECI', 3, lambda s : __xdeci(s[0], s[1], s[2], s[3:6]) ),
+    'E000' : ( 'XREAD', 4, lambda s : __xread(s[0], s[1:4], s[4:]) ),
+    'E020' : ( 'XPRNT', 4, lambda s : __xprnt(s[0], s[1:4], s[4:]) ),
+    'E160' : ( 'XDUMP', 4, lambda s : __xdump_reg() ),
+    'E060' : ( 'XDUMP', 4, lambda s : __xdump(s[0], s[1:4], s[4:]) ),
     }
 
 # internal functions supporting Pseudo-Instructions

@@ -563,6 +563,18 @@ def valid_op(instruction):
 
 def valid_pseudo(instruction):
     return (instruction in pseudo)
+
+def is_branching(instruction):
+    if not valid_op(instruction):
+        return None
+    if valid_pseudo(instruction):
+        op_code = get_op_from(instruction, 0)
+    else:
+        op_code = get_op(instruction)
+    for i in op_arg_indx(op_code):
+        if op_code[i].for_branch:
+            return True
+    return False
 ### end of Operation Code Definition
 
 
