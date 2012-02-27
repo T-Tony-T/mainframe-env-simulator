@@ -39,16 +39,23 @@ def fetch(EX_addr = None, EX_reg = None):
         raise zPE.newSystemException('0C3', 'EXECUTION EXCEPTION')
 
     # test if op-code is more than one byte
-    if len_op([ op_code ]) == 4: # must be a 2-byte instruction (4 hex digit)
-        op_code += page[addr]    # no need to check page, since aligned on hw
+    op_len = len_op([ op_code ]) / 2 # op_code_byte_cnt = num_of_hex_digit / 2
+
+    if op_len == 2:             # 2-byte op-code
+        op_code += page[addr]   # no need to check page, since aligned on hw
         addr += 1
+
+    if not EX_reg:
+        # update ILC and Address pointer
+        SPR['PSW'].ILC = op_len / 2 # num of halfwords
+        SPR['PSW'].Instruct_addr += op_len
 
     # validate op-code
     if op_code not in ins_op:
         raise zPE.newOperationException()
 
     # fetch the argument(s)
-    byte_cnt = ins_op[op_code][0]
+    byte_cnt = ins_op[op_code][0] # get the byte_cnt of the argument(s)
     if addr + byte_cnt > 4096:
         # retrieve next page, if available
         if pg_i + 1 not in Memory._pool_allocated:
@@ -69,13 +76,13 @@ def fetch(EX_addr = None, EX_reg = None):
                 print '  ORing with R{0} = {1:0>2}******'.format(
                     indx, hex(GPR[indx][1])[2:].upper()
                     )
-            if len(op_code) == 2:
-                # 1-byte instruction
+            if op_len == 1:
+                # 1-byte op-code
                 arg = '{0:0>2}{1}'.format(
                     hex( GPR[indx][1] | int(arg[0:2],16) )[2:].upper(), arg[2:]
                     ) # perform OR on 2nd byte of instruction (1st arg byte)
             else:
-                # 2-byte instruction
+                # 2-byte op-code
                 op_code = '{0}{1:0>2}{2}'.format(
                     op_code[:2],
                     hex( GPR[indx][1] | int(op_code[2:],16) )[2:].upper()
@@ -90,18 +97,15 @@ def fetch(EX_addr = None, EX_reg = None):
             if zPE.debug_mode():
                 print '  Register is R0, no instruction unchanged'
 
+    else:
+        # update ILC and Address pointer
+        SPR['PSW'].ILC += len(arg) / 4 # num of halfwords
+        SPR['PSW'].Instruct_addr += len(arg) / 2
+
     return ( op_code, arg )
 
 
 def execute(ins):
-    SPR['PSW'].ILC =  (len(ins[0]) + len(ins[1]) ) / 2 # num of bytes
-    SPR['PSW'].Instruct_addr += SPR['PSW'].ILC
-    SPR['PSW'].ILC /= 2     # further reduce to num of halfwords
-
-    return __exec(ins)
-
-
-def __exec(ins):
     if zPE.debug_mode():
         print 'Exec:', ins
     ins_op[ins[0]][1](ins[1]) # execute the instruction against the arguments
@@ -151,7 +155,7 @@ ins_op = {
     '41'   : ( 3, lambda s : __reg(s[0]).load( __addr(s[3:6], s[1], s[2])) ),
     '42'   : ( 3, lambda s : __reg(s[0]).stc(* __page(s[3:6], s[1], s[2], 1)) ),
     '43'   : ( 3, lambda s : __reg(s[0]).inc( __deref(s[3:6], s[1], s[2], 1)) ),
-    '44'   : ( 3, lambda s : __exec(fetch(__addr(s[3:6], s[1], s[2]), s[0])) ),
+    '44'   : ( 3, lambda s : execute(fetch(__addr(s[3:6], s[1], s[2]), s[0])) ),
     '45'   : ( 3, lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
                                __cnt(Register(0), __addr(s[3:6], s[1], s[2]))
                                ] ),
