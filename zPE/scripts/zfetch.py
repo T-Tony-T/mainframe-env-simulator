@@ -1,4 +1,5 @@
 from zPE.conf import CONFIG_PATH
+from zPE import spool_decode
 
 import os, sys
 
@@ -75,8 +76,8 @@ def main(argv = sys.argv):
             elif args.purge:
                 delete_jobs(conn, job_id)
             else:
-                for row in fetch_content(conn, job_id, dd_pttn):
-                    fetch_out.write(row[0])
+                for rec in fetch_content(conn, job_id, dd_pttn):
+                    fetch_out.write(rec)
                 need_new_line = False # fetch into an out-file, no need for \n
         else:
             # JOB ID is invalid
@@ -149,7 +150,9 @@ def fetch_content(conn, job_id, dd_pttn = '%'):
                  AND  Spool_key LIKE ?
             ORDER BY  row_id
            '''
-    return conn.execute(stmt, (job_id, dd_pttn))
+    return [ spool_decode(row[0])
+             for row in conn.execute(stmt, (job_id, dd_pttn))
+             ]
 
 def fetch_dd_list(conn, job_id):
     stmt = '''SELECT  Spool_key, Step_Name

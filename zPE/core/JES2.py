@@ -77,7 +77,7 @@ UPDATE  SPOOL
  WHERE  Job_id = ?
    AND  Spool_key = ?
 ''',
-            ( self.__buffer, self.__job_id, self.__spool_key )
+            ( zPE.spool_encode(self.__buffer), self.__job_id, self.__spool_key )
             )
 
         # clear buffer

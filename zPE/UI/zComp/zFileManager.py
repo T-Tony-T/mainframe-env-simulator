@@ -12,6 +12,7 @@ import io_encap
 #   new_dir(fn_list):           create the dir unless the fn_list corresponding to a directory
 #
 
+from zPE import spool_decode_printable
 from z_support import XPM, PIXBUF
 
 from zBase import zTheme
@@ -303,7 +304,10 @@ class zDisplayPanel(gtk.VBox):
                      AND  Spool_key LIKE ?
                 ORDER BY  row_id
                '''
-        return ''.join([ row[0] for row in self.__c.execute(stmt, (job_id, dd_pttn)) ])
+        return ''.join(
+            [ spool_decode_printable(row[0])
+              for row in self.__c.execute(stmt, (job_id, dd_pttn))
+              ])
 
     def fetch_dd_list(self, job_id):
         stmt = '''SELECT  Spool_key, Step_Name

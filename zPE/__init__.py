@@ -125,6 +125,43 @@ def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
     return __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit)
 
 
+SPOOL_ENCODE_MAP = {
+    '\0' : '^@',
+    '^'  : '^^',
+    }
+def spool_encode(src):
+    rv = []
+    while True:
+        res = re.search(r'[\0^]', src)
+        if res != None:         # search succeed
+            rv.append(src[:res.start()])
+            rv.append(SPOOL_ENCODE_MAP[src[res.start():res.end()]])
+            src = src[res.end():]
+        else:                   # search failed
+            rv.append(src)
+            break
+    return ''.join(rv)
+
+SPOOL_DECODE_MAP = {
+    '^@' : '\0',
+    '^^' : '^',
+    }
+def spool_decode(src):
+    rv = []
+    while True:
+        res = re.search(r'\^[@^]', src)
+        if res != None:         # search succeed
+            rv.append(src[:res.start()])
+            rv.append(SPOOL_DECODE_MAP[src[res.start():res.end()]])
+            src = src[res.end():]
+        else:                   # search failed
+            rv.append(src)
+            break
+    return ''.join(rv)
+def spool_decode_printable(src):
+    return re.sub(r'[^\x20-\x7e\n]', u'\u220e', spool_decode(src))
+
+
 ### Architectural Definition
 
 def bad_label(label):
