@@ -604,7 +604,7 @@ class C_(object):
         # convert encoding
         self.__vals = [ord(' '.encode('EBCDIC-CP-US'))] * length
                                 # initialize to all spaces
-        for indx in range(0, min(ch_len, length), 1):
+        for indx in range(0, min(ch_len, length), 1): # filling left to right
             self.__vals[indx] = ord(ch_str[indx].encode('EBCDIC-CP-US'))
 
     def dump(self):
@@ -616,10 +616,10 @@ class C_(object):
 
     @staticmethod
     def tr(dump):
-        ch_str = ''
+        ch_list = []
         for val in dump[0]:
-            ch_str += chr(val).decode('EBCDIC-CP-US')
-        return ch_str
+            ch_list.append(chr(val).decode('EBCDIC-CP-US'))
+        return ''.join(ch_list)
 
 # Exception:
 #   ValueError:  if the string contains invalid hex digit
@@ -651,7 +651,7 @@ class X_(object):
             length *= 2
         self.__vals = [0] * (length / 2)
                                 # initialize to all zeros
-        for indx in range(0, min(hex_len, length), 2):
+        for indx in range(0, min(hex_len, length), 2): # filling right to left
             end = hex_len - indx
             self.__vals[- indx / 2 - 1] = int(hex_str[end - 2 : end], 16)
 
@@ -664,10 +664,10 @@ class X_(object):
 
     @staticmethod
     def tr(dump):
-        hex_str = ''
+        hex_list = []
         for val in dump[0]:
-            hex_str += '{0:0>2}'.format(hex(val)[2:].upper())
-        return hex_str
+            hex_list.append('{0:0>2}'.format(hex(val)[2:].upper()))
+        return ''.join(hex_list)
 
 # Exception:
 #   ValueError:  if the string contains anything other than '0' and '1'
@@ -699,7 +699,7 @@ class B_(object):
             length *= 8
         self.__vals = [0] * (length / 8)
                                 # initialize to all zeros
-        for indx in range(0, min(bin_len, length), 8):
+        for indx in range(0, min(bin_len, length), 8): # filling right to left
             end = bin_len - indx
             self.__vals[- indx / 8 - 1] = int(bin_str[end - 8 : end], 2)
 
@@ -712,10 +712,10 @@ class B_(object):
 
     @staticmethod
     def tr(dump):
-        bin_str = ''
+        bin_list = []
         for val in dump[0]:
-            bin_str += '{0:0>8}'.format(bin(val)[2:].upper())
-        return bin_str
+            bin_list.append('{0:0>8}'.format(bin(val)[2:].upper()))
+        return ''.join(bin_list)
 
 # Exception:
 #   SyntaxError: if sign is not invalid
@@ -745,22 +745,22 @@ class P_(object):
         elif ch_str[0] == '+':
             ch_str = ch_str[1:]
         int(ch_str)             # check format
-        if length and length * 2 - 1 < len(ch_str): # check length
-            raise ValueError('Invalid length.')
-        self.fill__(X_(ch_str + sign_digit).dump())
+        self.fill__(X_(ch_str + sign_digit, length).dump())
 
     def pack(self, ch_str, length = 0):
         if length and length * 2 - 1 < len(ch_str): # check length
             raise ValueError('Invalid length.')
-        hex_str = ''
+        hex_list = []
         for ch in ch_str:
-            hex_str += hex(
-                ord(ch.encode('EBCDIC-CP-US'))
-                )[-1].upper()   # for each char, get the low digit
-        hex_str += '{0:0>2}'.format(
-            hex(ord(ch_str[-1].encode('EBCDIC-CP-US')))[2:]
-            )[0].upper()        # for the last char, add the high digit
-        self.fill__(X_(hex_str).dump())
+            hex_list.append(    # for each char, get the low digit
+                hex( ord(ch.encode('EBCDIC-CP-US')) )[-1].upper()
+                )
+        hex_list.append(        # for the last char, add the high digit
+            '{0:0>2}'.format(
+                hex( ord(ch_str[-1].encode('EBCDIC-CP-US')) )[2:]
+                )[0].upper()
+            )
+        self.fill__(X_(''.join(hex_list), length).dump())
 
     def dump(self):
         return (self.__vals, self.natual_len)
@@ -772,33 +772,34 @@ class P_(object):
     @staticmethod
     def tr(dump, sign = '-'):
         vals = dump[0]
-        ch_str = ''
+        ch_list = []
         for val in vals[:-1]:
             hex_val = '{0:0>2}'.format(hex(val)[2:].upper())
-            ch_str += chr(int('F' + hex_val[0], 16)).decode('EBCDIC-CP-US')
-            ch_str += chr(int('F' + hex_val[1], 16)).decode('EBCDIC-CP-US')
+            ch_list.append(chr(int('F'+ hex_val[0], 16)).decode('EBCDIC-CP-US'))
+            ch_list.append(chr(int('F'+ hex_val[1], 16)).decode('EBCDIC-CP-US'))
         hex_val = '{0:0>2}'.format(hex(vals[-1])[2:].upper())
-        ch_str += chr(int('F' + hex_val[0], 16)).decode('EBCDIC-CP-US')
-        int(ch_str)             # check format
+        ch_list.append(chr(int('F'+ hex_val[0], 16)).decode('EBCDIC-CP-US'))
+
+        int(''.join(ch_list))   # check format
         if hex_val[1] in 'FACE':
             if sign == '+':
-                ch_str += '+'
+                ch_list.append('+')
             elif sign == '-':
-                ch_str += ' '
+                ch_list.append(' ')
             elif sign in [ 'DB', 'CR' ]:
-                ch_str += '  '
+                ch_list.append('  ')
             else:
                 raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         elif hex_val[1] in 'BD':
             if sign in [ '+', '-' ]:
-                ch_str += '-'
+                ch_list.append('-')
             elif sign in [ 'DB', 'CR' ]:
-                ch_str += sign
+                ch_list.append(sign)
             else:
                 raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         else:
             raise ValueError('invalid hex value.')
-        return ch_str
+        return ''.join(ch_list)
 
 
 # Exception:
@@ -837,7 +838,7 @@ class Z_(object):
         # convert encoding
         self.__vals = [ord('0'.encode('EBCDIC-CP-US'))] * length
                                 # initialize to all zeros
-        for indx in range(0, min(ch_len, length), 1):
+        for indx in range(0, min(ch_len, length), 1): # filling right to left
             self.__vals[length - indx - 1] = ord(
                 ch_str[ch_len - indx - 1].encode('EBCDIC-CP-US')
                 )
@@ -854,31 +855,32 @@ class Z_(object):
     @staticmethod
     def tr(dump, sign = '-'):
         vals = dump[0]
-        ch_str = ''
+        ch_list = []
         for val in vals[:-1]:
-            ch_str += chr(val).decode('EBCDIC-CP-US')
+            ch_list.append(chr(val).decode('EBCDIC-CP-US'))
         hex_val = hex(vals[-1])[2:].upper()
-        ch_str += hex_val[1]
-        int(ch_str)             # check format
-        if hex_val[0] in 'FACE':
+        ch_list.append(hex_val[1])
+
+        int(''.join(ch_list))   # check format
+        if hex_val[1] in 'FACE':
             if sign == '+':
-                ch_str += '+'
+                ch_list.append('+')
             elif sign == '-':
-                ch_str += ' '
+                ch_list.append(' ')
             elif sign in [ 'DB', 'CR' ]:
-                ch_str += '  '
+                ch_list.append('  ')
             else:
                 raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
-        elif hex_val[0] in 'BD':
+        elif hex_val[1] in 'BD':
             if sign in [ '+', '-' ]:
-                ch_str += '-'
+                ch_list.append('-')
             elif sign in [ 'DB', 'CR' ]:
-                ch_str += sign
+                ch_list.append(sign)
             else:
                 raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         else:
             raise ValueError('invalid hex value.')
-        return ch_str
+        return ''.join(ch_list)
 
 
 
