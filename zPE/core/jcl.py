@@ -25,30 +25,37 @@ def parse(job):
     sp1.append('0', '\n')
     ctrl = ' '
 
-    # initial read
+    # initial read (for JOB card)
     line = fp.readline()
     zPE.JCL['read_cnt'] += 1
     zPE.JCL['card_cnt'] += 1
+    if zPE.debug_mode():
+        print line,
+
+    if not line.startswith('//'): # invalid JCL JOB card
+        zPE.abort(9, 'Error: ', line[:-1],
+                  ':\n       Not a valid JCL JOB card.\n')
+
     if len(line) > 72:
         zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
                   'Statement cannot exceed colomn 72.\n')
 
-    # field_0    field_1 field_2
-    # ---------- ------- ------------------------------------
+    #   field_0  field_1 field_2
+    #   -------- ------- ------------------------------------
     # //label    JOB     <args>
     # //         EXEC    <args>
     # //maxlabel DD      <args>
-    field = re.split('\s+', line, 2)
+    field = re.split('\s+', line[2:], 2)
 
     # check lable
-    if zPE.bad_label(field[0][2:]):
+    if zPE.bad_label(field[0]):
         invalid_lable.append(zPE.JCL['read_cnt'])
 
     # parse JOB card
     # currently supported parameter: region
     if field[1] != 'JOB':
         zPE.abort(9, 'Error: No JOB card found.\n')
-    zPE.JCL['jobname'] = field[0][2:]
+    zPE.JCL['jobname'] = field[0]
     if len(zPE.JCL['jobname']) != 8:
         zPE.abort(9, 'Error: JOB name is not 8 charactors long.\n')
     zPE.JCL['owner'] = zPE.JCL['jobname'][:7]
@@ -65,7 +72,7 @@ def parse(job):
     # AccInfo,'pgmer'[,parameters]
     args = zPE.resplit_sq(',', field[2], 2)
     if len(args) < 2:
-        zPE.abort(9, 'Error: Invalid JOB card.\n')
+        zPE.abort(9, 'Error: Invalid JOB card: missing parameter(s).\n')
     # parse AccInfo
     zPE.JCL['accinfo'] = args[0]
     if args[1][0] != '\'' or args[1][-1] != '\'':
@@ -113,42 +120,61 @@ def parse(job):
     ctrl = ' '
 
     # main read loop
-    nextline = fp.readline()
+    nextline = None             # for `__READ_UNTIL()` look-ahead buffer
     last_dd  = None             # for DD concatenation
-    while line != '':
-        if nextline == '':
+    jcl_continue = None         # for JCL continuation
+    while True:
+        if nextline == None:    # no left over line in the look-ahead buffer
             line = fp.readline()
-        else:
+        else:                   # line exist in the look-ahead buffer
             line = nextline
-            nextline = ''
-        zPE.JCL['read_cnt'] += 1
-        zPE.JCL['card_cnt'] += 1
+            nextline = None
 
+        # check JCL card length
+        if not line:
+            break
         if len(line) > 72:
             zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
                       'Statement cannot exceed colomn 72.\n')
 
+        # check implicit instream data
+        if not line.startswith('//'):
+            nextline = line           # store the line in the look-ahead buffer
+            line = '//SYSIN     DD *               GENERATED STATEMENT\n'
+
+        # check end of JCL marker
+        elif line[2:].isspace():
+            break
+
         # check comment
-        if line[:3] == '//*':
+        elif line.startswith('//*'):
+            if zPE.debug_mode():
+                print line,
             sp2.append(ctrl, '{0:>9} {1}'.format('', line))
             continue
 
-        field = re.split('\s+', line)
+        # starting from here, line will be guaranteed to start with "//"
+        # increment line counter only for non-comment lines
+        zPE.JCL['read_cnt'] += 1
+        zPE.JCL['card_cnt'] += 1
+        if zPE.debug_mode():
+            print line,
 
-        # check end of JCL
-        if len(field) == 1 or field[1] == '':
-            zPE.JCL['read_cnt'] -= 1 # "//" does not count
-            break
+        field = re.split('\s+', line[2:])
 
         # check lable
-        if zPE.bad_label(field[0][2:]):
+        if zPE.bad_label(field[0]):
             invalid_lable.append(zPE.JCL['read_cnt'])
+
+        # parse JCL continuation
+        if jcl_continue:
+            pass
 
         # parse EXEC card
         # currently supported parameter: parm, time, region
         # currently assumed parameter: cond=(0,NE)
         # see also: __COND_FAIL(step)
-        if field[1] == 'EXEC':
+        elif field[1] == 'EXEC':
             last_dd = None
 
             args = re.split(',', field[2], 1)
@@ -188,13 +214,14 @@ def parse(job):
 
             zPE.JCL['step'].append(
                 zPE.Step(
-                    name = field[0][2:],
+                    name = field[0],
                     pgm  = pgm,
                     proc = proc,
                     time = time,
                     region = region,
                     parm = parm
                     ))
+
         # parse DD card
         # currently supported parameter: dsn, disp, sysout, */data
         elif field[1] == 'DD':
@@ -202,15 +229,13 @@ def parse(job):
             dsn = []
             disp = ''
             sp_in = None         # will hold the tmp SPOOL if instream
-            if field[0] == '//': # concatenated DD card
+            if not field[0]:            # concatenated DD card
                 pass
-            elif field[0].startswith('//'): # new DD card
-                last_dd = field[0][2:] # record the dd name
-            else:
-                zPE.abort(9, 'Error: ', line[:-1], ': Invalid DD card.\n')
+            else:                       # new DD card
+                last_dd = field[0][2:]  # record the dd name
 
             if field[2] == '*' or field[2] == 'DATA':
-                ( nextline, sp_in ) = __READ_UNTIL(fp, last_dd, '/*')
+                ( nextline, sp_in ) = __READ_UNTIL(fp, last_dd, '/*', nextline)
             elif field[2][:9] == 'DATA,DLM=\'':
                 ( nextline, sp_in ) = __READ_UNTIL(fp, last_dd, field[2][9:11])
             elif field[2][:7] == 'SYSOUT=':
@@ -229,7 +254,7 @@ def parse(job):
                               ': Need DISP=[disp].\n')
 
             zPE.JCL['step'][-1].dd.append(
-                field[0][2:], { # do not use last_dd, since it will be flaged
+                field[0], {     # do not use last_dd, since it will be flaged
                                 # as duplicated DD names
                     'SYSOUT' : sysout,
                     'DSN'    : dsn,
@@ -237,8 +262,10 @@ def parse(job):
                     },
                 sp_in
                 )
-        else:                   # continuation
-            zPE.mark4future('JCL Continuation')
+
+        # ignore other types of cards
+        else:
+            zPE.mark4future(field[1])
 
         sp2.append(ctrl, '{0:>9} {1}'.format(zPE.JCL['card_cnt'], line))
     # end of the main read loop
@@ -604,25 +631,29 @@ def __JES2_STAT(msg, job_time):
     h_mm = '{0}.{1:0>2}'.format(int(job_time / 3600), int(job_time / 60) % 60)
     sp1.append(ctrl, '{0:>13}'.format(h_mm), ' MINUTES EXECUTION TIME\n')
 
-def __READ_UNTIL(fp, fn, dlm):
+def __READ_UNTIL(fp, fn, dlm, nextline = None):
     # prepare spool
     spt = zPE.core.SPOOL.pop_new(fn, 'i', 'instream', [])
 
     # read until encountering dlm
+    if nextline == None:        # initial read not occured already
+        line = fp.readline()    # perform initial read
+    else:
+        line = nextline         # retrieve initial read
     while True:
-        line = fp.readline()
         zPE.JCL['read_cnt'] += 1
 
         # check end of stream
         if line[:2] == dlm:
-            return ( '', spt )
+            return ( None, spt )
 
         if (line[:2] == '//'):
-            # next JCL card, put it back
+            # next JCL card, put it back to the buffer
             zPE.JCL['read_cnt'] -= 1
             return ( line, spt, )
 
         spt.append(line, deck_id = zPE.JCL['read_cnt'])
+        line = fp.readline()    # updating read
 
 def __WRITE_OUT(dd_list):
     for fn in dd_list:
