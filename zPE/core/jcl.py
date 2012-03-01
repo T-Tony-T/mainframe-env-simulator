@@ -36,9 +36,9 @@ def parse(job):
         zPE.abort(9, 'Error: ', line[:-1],
                   ':\n       Not a valid JCL JOB card.\n')
 
-    if len(line) > 72:
+    if len(line) > 73:          # 72+ char + '\n'
         zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
-                  'Statement cannot exceed colomn 72.\n')
+                  ': Statement cannot exceed colomn 72.\n')
 
     #   field_0  field_1 field_2
     #   -------- ------- ------------------------------------
@@ -89,7 +89,7 @@ def parse(job):
     zPE.JCL['time']   = zPE.conf.Config['time_limit']
     zPE.JCL['region'] = zPE.conf.Config['memory_sz']
     if len(args) == 3:
-        for part in re.split(',', args[2]):
+        for part in zPE.resplit_sp(',', args[2]):
             if part[:5] == 'TIME=':
                 try:
                     zPE.JCL['time'] = zPE.core.cpu.parse_time(part[5:])
@@ -122,7 +122,8 @@ def parse(job):
     # main read loop
     nextline = None             # for `__READ_UNTIL()` look-ahead buffer
     last_dd  = None             # for DD concatenation
-    jcl_continue = None         # for JCL continuation
+    card_lbl = None             # the label  the JCL card
+    jcl_continue = None         # the action the JCL card continues
     while True:
         if nextline == None:    # no left over line in the look-ahead buffer
             line = fp.readline()
@@ -133,66 +134,90 @@ def parse(job):
         # check JCL card length
         if not line:
             break
-        if len(line) > 72:
+        if len(line) > 73:      # 72+ char + '\n'
             zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
-                      'Statement cannot exceed colomn 72.\n')
+                      ': Statement cannot exceed colomn 72.\n')
 
+        zPE.JCL['read_cnt'] += 1
         # check implicit instream data
         if not line.startswith('//'):
-            nextline = line           # store the line in the look-ahead buffer
+            nextline = line     # store the line in the look-ahead buffer
             line = '//SYSIN     DD *               GENERATED STATEMENT\n'
 
         # check end of JCL marker
         elif line[2:].isspace():
+            zPE.JCL['read_cnt'] -= 1    # END mark does not count
             break
 
         # check comment
-        elif line.startswith('//*'):
+        elif line.startswith('//*')  or  jcl_continue == '*':
             if zPE.debug_mode():
                 print line,
             sp2.append(ctrl, '{0:>9} {1}'.format('', line))
+            if len(line) == 73  and  line[71] != ' ':
+                # 72+ char + '\n'   col 72 is non-space
+                jcl_continue = '*'
+            else:
+                jcl_continue = None
             continue
 
         # starting from here, line will be guaranteed to start with "//"
         # increment line counter only for non-comment lines
-        zPE.JCL['read_cnt'] += 1
-        zPE.JCL['card_cnt'] += 1
+        if not jcl_continue:
+            zPE.JCL['card_cnt'] += 1
         if zPE.debug_mode():
             print line,
 
         field = re.split('\s+', line[2:])
 
         # check lable
-        if zPE.bad_label(field[0]):
+        if jcl_continue and field[0]: # JCL concatenation cannot start at col 3
+            zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
+                      ': Cannot have labels on continuation lines.\n')
+        elif zPE.bad_label(field[0]):
             invalid_lable.append(zPE.JCL['read_cnt'])
 
-        # parse JCL continuation
         if jcl_continue:
-            pass
+            if line.index(field[1]) > 15:
+                zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
+                          ': JCL continuation must start before col 16.\n')
+        else:
+            card_lbl = field[0]
 
         # parse EXEC card
         # currently supported parameter: parm, time, region
         # currently assumed parameter: cond=(0,NE)
         # see also: __COND_FAIL(step)
-        elif field[1] == 'EXEC':
+        if field[1] == 'EXEC'  or  jcl_continue == 'EXEC':
+            if jcl_continue not in [ None, 'EXEC' ]:
+                zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
+                          ': Invalid JCL continuation.\n')
             last_dd = None
 
-            args = re.split(',', field[2], 1)
-            pgm = ''
-            proc = ''
-            if args[0][:4] == 'PGM=':
-                pgm = args[0][4:]
-            elif args[0][:5] == 'PROC=':
-                proc = args[0][5:]
-            else:
-                proc = args[0]
+            if not jcl_continue:
+                args = re.split(',', field[2], 1)
+                pgm = ''
+                proc = ''
+                if args[0][:4] == 'PGM=':
+                    pgm = args[0][4:]
+                elif args[0][:5] == 'PROC=':
+                    proc = args[0][5:]
+                else:
+                    proc = args[0]
 
-            parm = ''           # parameter list
-            time = zPE.JCL['time']
-            region = zPE.JCL['region']
+                parm = ''       # parameter list
+                time = zPE.JCL['time']
+                region = zPE.JCL['region']
+            else:
+                args = [ 'continuation', field[1] ]
+            jcl_continue = None
+
             if len(args) == 2:
-                for part in re.split(',', args[1]):
-                    if part[:5] == 'PARM=':
+                for part in zPE.resplit_sp(',', args[1]):
+                    if jcl_continue: # jcl_continue can only be set by last part
+                        zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
+                                  ': Invalid JCL card\n')
+                    elif part[:5] == 'PARM=':
                         parm = part[5:]
                     elif part[:5] == 'TIME=':
                         try:
@@ -210,58 +235,80 @@ def parse(job):
                             zPE.abort(9, 'Error: ', part,
                                       ': Region must be divisible ',
                                       'by 4K.\n')
-                #   elif part[:5] == 'COND=':
-
-            zPE.JCL['step'].append(
-                zPE.Step(
-                    name = field[0],
-                    pgm  = pgm,
-                    proc = proc,
-                    time = time,
-                    region = region,
-                    parm = parm
-                    ))
-
-        # parse DD card
-        # currently supported parameter: dsn, disp, sysout, */data
-        elif field[1] == 'DD':
-            sysout = ''
-            dsn = []
-            disp = ''
-            sp_in = None         # will hold the tmp SPOOL if instream
-            if not field[0]:            # concatenated DD card
-                pass
-            else:                       # new DD card
-                last_dd = field[0][2:]  # record the dd name
-
-            if field[2] == '*' or field[2] == 'DATA':
-                ( nextline, sp_in ) = __READ_UNTIL(fp, last_dd, '/*', nextline)
-            elif field[2][:9] == 'DATA,DLM=\'':
-                ( nextline, sp_in ) = __READ_UNTIL(fp, last_dd, field[2][9:11])
-            elif field[2][:7] == 'SYSOUT=':
-                sysout = field[2][7:]
-            else:
-                for part in re.split(',', field[2]):
-                    if part[:4] == 'DSN=':
-                        dsn = zPE.conv_path(part[4:])
-                    elif part[:5] == 'DISP=':
-                        disp = part[5:]
+                    elif part[:5] == 'COND=':
+                        pass    # assume COND=(0,NE)
+                    elif part == '':
+                        jcl_continue = 'EXEC'
                     else:
                         zPE.abort(9, 'Error: ', part,
                                   ': Parameter not supported.\n')
-                if disp == '':
+
+            if not jcl_continue:
+                zPE.JCL['step'].append(
+                    zPE.Step(
+                        name = card_lbl,
+                        pgm  = pgm,
+                        proc = proc,
+                        time = time,
+                        region = region,
+                        parm = parm
+                        ))
+
+        # parse DD card
+        # currently supported parameter: dsn, disp, sysout, */data
+        elif field[1] == 'DD'  or  jcl_continue == 'DD':
+            if jcl_continue not in [ None, 'DD' ]:
+                zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
+                          ': Invalid JCL continuation.\n')
+
+            if not jcl_continue:
+                sysout = ''
+                dsn = []
+                disp = ''
+                sp_in = None    # will hold the tmp SPOOL if instream
+                if not card_lbl:        # concatenated DD card
+                    pass
+                else:                   # new DD card
+                    last_dd = card_lbl  # record the dd name
+                args = field[2]
+            else:
+                args = field[1]
+            jcl_continue = None
+
+            if args == '*' or args == 'DATA':
+                ( nextline, sp_in ) = __READ_UNTIL(fp, last_dd, '/*', nextline)
+            elif args[:9] == 'DATA,DLM=\'':
+                ( nextline, sp_in ) = __READ_UNTIL(fp, last_dd, args[9:11])
+            elif args[:7] == 'SYSOUT=':
+                sysout = args[7:]
+            else:
+                for part in zPE.resplit_sp(',', args):
+                    if jcl_continue: # jcl_continue can only be set by last part
+                        zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
+                                  ': Invalid JCL card\n')
+                    elif part[:4] == 'DSN=':
+                        dsn = zPE.conv_path(part[4:])
+                    elif part[:5] == 'DISP=':
+                        disp = part[5:]
+                    elif part == '':
+                        jcl_continue = 'DD'
+                    else:
+                        zPE.abort(9, 'Error: ', part,
+                                  ': Parameter not supported.\n')
+                if not jcl_continue  and  disp == '':
                     zPE.abort(9, 'Error: ', line[:-1],
                               ': Need DISP=[disp].\n')
 
-            zPE.JCL['step'][-1].dd.append(
-                field[0], {     # do not use last_dd, since it will be flaged
+            if not jcl_continue:
+                zPE.JCL['step'][-1].dd.append(
+                    card_lbl, { # do not use last_dd, since it will be flaged
                                 # as duplicated DD names
-                    'SYSOUT' : sysout,
-                    'DSN'    : dsn,
-                    'DISP'   : disp,
-                    },
-                sp_in
-                )
+                        'SYSOUT' : sysout,
+                        'DSN'    : dsn,
+                        'DISP'   : disp,
+                        },
+                    sp_in
+                    )
 
         # ignore other types of cards
         else:
