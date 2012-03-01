@@ -281,14 +281,17 @@ def __PARSE_OUT_ASM(limit):
                     # skip the current iteration if no info need to be printed
                     continue
             loc = ' ' * 6       # do not print location for this type
-        elif len(MNEMONIC[line_num]) == 1: # type 1, no info to print
-            loc = ''
+        elif len(MNEMONIC[line_num]) == 1: # type 1
+            if MNEMONIC[line_num][0]:
+                loc = hex(MNEMONIC_LOC[line_num])[2:].upper()
+            else:               # no scope, no info to print
+                loc = ''
         elif MNEMONIC[line_num][0] == None: # no scope ==> END (type 2)
             loc = ''
         elif len(MNEMONIC[line_num]) == 4: # type 4, EQU
             loc = hex(MNEMONIC[line_num][3])[2:].upper()
         else:                       # type 2/3/5, inside CSECT or DSECT
-            loc = hex(MNEMONIC[line_num][1])[2:].upper()
+            loc = hex(MNEMONIC_LOC[line_num])[2:].upper()
 
         tmp_str = ''
 
@@ -410,65 +413,6 @@ def __PARSE_OUT_ASM(limit):
     #
     # debugging information
     #
-    from binascii import b2a_hex
-    print '\nExternal Symbol Dictionary:'
-    for key in sorted(ESD_ID.iterkeys()):
-        k = ESD_ID[key]
-        if ESD[k][0] and ESD[k][0].id == key:
-            v = ESD[k][0]
-        else:
-            v = ESD[k][1]
-        print '{0} => {1}'.format(k, v.__dict__)
-
-    print '\nRelocation Dictionary:'
-    print' Pos.Id   Rel.Id   Address  Type  Action'
-    for (pos_id, rel_id) in sorted(RLD):
-        for entry in RLD[pos_id, rel_id]:
-            print '{0:0>8} {1:0>8} {2:0>8}   {3} {4}  {5:>4}'.format(
-                hex(pos_id)[2:].upper(),
-                hex(rel_id)[2:].upper(),
-                hex(entry.addr)[2:].upper(),
-                entry.type,
-                entry.len,
-                entry.action
-                )
-
-    print '\nSymbol Cross Reference Table:'
-    for key in sorted(SYMBOL.iterkeys()):
-        if SYMBOL[key].value == None:
-            addr = 0xFFFFFF
-        else:
-            addr = SYMBOL[key].value
-        print '{0} (0x{1:0>6}) => {2}'.format(
-            key, hex(addr)[2:].upper(), SYMBOL[key].__dict__
-            )
-    print '\nSymbol Cross Reference ER Sub-Table:'
-    for key in sorted(SYMBOL_V.iterkeys()):
-        if SYMBOL_V[key].value == None:
-            addr = 0xFFFFFF
-        else:
-            addr = SYMBOL_V[key].value
-        print '{0} (0x{1:0>6}) => {2}'.format(
-            key, hex(addr)[2:].upper(), SYMBOL_V[key].__dict__
-            )
-    print '\nSymbol Cross Reference =Const Sub-Table:'
-    for key in sorted(SYMBOL_EQ.iterkeys()):
-        for indx in range(len(SYMBOL_EQ[key])):
-            if SYMBOL_EQ[key][indx].value == None:
-                addr = 0xFFFFFF
-            else:
-                addr = SYMBOL_EQ[key][indx].value
-            print '{0} (0x{1:0>6}) => {2}'.format(
-                key, hex(addr)[2:].upper(), SYMBOL_EQ[key][indx].__dict__
-                )
-    print '\nUnreferenced Symbol Defined in CSECTs:'
-    for (ln, key) in sorted(NON_REF_SYMBOL, key = lambda t: t[1]):
-        print '{0:>4} {1}'.format(ln, key)
-    print '\nInvalid Symbol Found in CSECTs:'
-    for (ln, key) in sorted(INVALID_SYMBOL, key = lambda t: t[1]):
-        print '{0:>4} {1}'.format(ln, key)
-
-
     print '\nMnemonic:'
     for key in sorted(MNEMONIC.iterkeys()):
         if len(MNEMONIC[key]) == 0: # type 0
@@ -533,22 +477,23 @@ def __PARSE_OUT_ASM(limit):
             loc,
             tmp_str
             )
+    print '\nMnemonic Location Remapping:'
+    for line_num in MNEMONIC_LOC:
+        if ( len(MNEMONIC[line_num]) < 2  or
+             MNEMONIC[line_num][1] != MNEMONIC_LOC[line_num]
+             ):
+            if len(MNEMONIC[line_num]) < 2:
+                org_loc = ''
+            elif MNEMONIC[line_num][1] == None:
+                org_loc = '[None]'
+            else:
+                org_loc = MNEMONIC[line_num][1]
+            print 'line {0:>4}: {1:0>6} => {2:0>6}'.format(
+                line_num, org_loc,
+                hex(MNEMONIC_LOC[line_num])[2:].upper()
+                )
 
-    print '\nInfomation:'
-    print INFO['I']
-    print '\nNotification:'
-    print INFO['N']
-    print '\nWarning:'
-    print INFO['W']
-    print '\nError:'
-    print INFO['E']
-    print '\nSevere Error:'
-    print INFO['S']
-
-    print '\nUsing Map:'
-    for (k, v) in USING_MAP.iteritems():
-        print k, v.__dict__
-
+    from binascii import b2a_hex
     print '\n\nObject Deck:'
     for line in zPE.core.SPOOL.retrieve('SYSLIN'):
         line = b2a_hex(line).upper()

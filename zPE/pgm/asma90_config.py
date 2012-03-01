@@ -94,6 +94,10 @@ MNEMONIC = {
     # Line_Num : [ scope, LOC, (OBJECT_CODE), ADDR1, ADDR2, ]   // type (len) 5
     }
 
+MNEMONIC_LOC = {
+    # Line_Num : LOC
+    }
+
 RELOCATE_OFFSET = {
     # scope_id : offset
     }
@@ -212,6 +216,76 @@ def ALLOC_EQ_SYMBOL(lbl, symbol):
     zPE.dic_append_list(SYMBOL_EQ, lbl, symbol) # mark =const as allocable
 INVALID_SYMBOL = []     # non-defined symbol
 NON_REF_SYMBOL = []     # non-referenced symbol
+
+
+class ScopeCounter(object):
+    def __init__(self):
+        self.__id  = 0          # current scope ID; init to zero
+        self.__lbl = None       # current csect label
+        self.__new = 1          # next available scope ID; starting at 1
+
+    def id(self, test = False):
+        if ( self.__lbl == None  and # no CSECT encountered so far
+             not test                # not in testing mode
+             ):
+            self.new_csect(None, None)
+        return self.__id
+
+    def label(self):
+        return self.__lbl
+
+    def next(self):
+        rv = self.__new         # get the next available scope
+        self.__new += 1         # increment the counter
+        return rv               # report the retrieved one
+
+    def type(self):
+        return [ 'SD', 'PC' ][self.__lbl.isspace()]
+
+    def new_csect(self, line_num, label):
+        if not label:
+            label = ''          # PC symbol
+        self.__lbl = '{0:<8}'.format(label)
+
+        self.__id = self.__new
+        self.__new += 1         # update the next scope_id ptr
+
+        if self.__lbl not in ESD: # global ESD defined above
+            ESD[self.__lbl] = (
+                ExternalSymbol(
+                    None, None, None, None,
+                    None, ASM_PARM['AMODE'], ASM_PARM['RMODE'], None,
+                    ),
+                ExternalSymbol(
+                    None, None, None, None,
+                    None, ASM_PARM['AMODE'], ASM_PARM['RMODE'], None,
+                    ),
+                )
+
+        if ESD[self.__lbl][0].id != None:
+            # continued CSECT, switch to it
+            self.__id = ESD[self.__lbl][0].id
+            self.__new -= 1                 # roll back the next scope id
+            addr = ESD[csect_lbl][0].length # retrieve program counter
+        else:
+            # new CSECT, update info
+            addr = 0                        # init program counter to 0
+
+            ESD[self.__lbl][0].id   = self.__id
+            ESD[self.__lbl][0].addr = addr
+
+            ESD_ID[self.__id] = self.__lbl
+
+            ESD[self.__lbl][0].type = self.type()
+            if not self.__lbl.isspace():
+                # labelled CSECT
+                SYMBOL[self.__lbl] = Symbol(
+                    1, addr, self.__id,
+                    '', 'J', '', '',
+                    line_num, []
+                    )
+        return addr     # report the program counter for the (new) CSECT
+
 
 class RelocationEntry(object):
     def __init__(self, addr, const_type, const_len, action

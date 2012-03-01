@@ -104,9 +104,7 @@ def pass_1():
     prev_addr = None            # previous program counter
     line_num = 0
 
-    scope_id = 0                # current scope ID; init to zero
-    scope_new = scope_id + 1    # next available scope ID; starting at 1
-    csect_lbl = None            # current csect label
+    scope = ScopeCounter()
 
     # memory heap for constant allocation
     const_pool = {}             # same format as SYMBOL
@@ -156,7 +154,7 @@ def pass_1():
         if len(field) < 2:
             __INFO('E', line_num, ( 142, 9, None, ))
 
-            MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
+            MNEMONIC[line_num] = [ scope.id(), addr, ]          # type 2
             spt.push( ( line, deck_id, ) )
             continue
         # end of checks
@@ -182,73 +180,29 @@ def pass_1():
         # parse CSECT
         elif field[1] == 'CSECT':
             # update the CSECT info
-            if scope_id:        # if not first CSECT
-                ESD[csect_lbl][0].length = addr
+            if scope.id(test = True): # if not first CSECT
+                ESD[scope.label()][0].length = addr
 
-            if ins_lbl == None: # no label detected
-                csect_lbl = '{0:<8}'.format('') # PC symbol
-            elif ins_lbl:       # invalid label
-                csect_lbl = '{0:<8}'.format('') # treat as PC symbol
+            # allocate scope id for new CSECT
+            if ins_lbl != 0:    # no label detected, or an invalid label
+                addr = scope.new_csect(line_num, None) # treat it as PC symbol
             else:               # valid label
-                csect_lbl = '{0:<8}'.format(field[0])
-
-            # parse the new CSECT
-            scope_id = scope_new
-            scope_new += 1      # update the next scope_id ptr
-            addr = 0            # reset program counter; not fixed yet
+                addr = scope.new_csect(line_num, field[0])
             prev_addr = None
 
-            if csect_lbl not in ESD:
-                ESD[csect_lbl] = (
-                    ExternalSymbol(
-                        None, None, None, None,
-                        None, ASM_PARM['AMODE'], ASM_PARM['RMODE'], None,
-                        ),
-                    ExternalSymbol(
-                        None, None, None, None,
-                        None, ASM_PARM['AMODE'], ASM_PARM['RMODE'], None,
-                        ),
-                    )
-
-            if ESD[csect_lbl][0].id != None:
-                # continued CSECT, switch to it
-                scope_id = ESD[csect_lbl][0].id
-                scope_new -= 1  # roll back the next scope id
-                addr = ESD[csect_lbl][0].length
-                prev_addr = None
-            else:
-                # new CSECT, update info
-                ESD[csect_lbl][0].id = scope_id
-                ESD[csect_lbl][0].addr = addr
-
-                ESD_ID[scope_id] = csect_lbl
-
-                if csect_lbl == '{0:<8}'.format(''):
-                    # unlabelled CSECT
-                    ESD[csect_lbl][0].type = 'PC'
-                else:
-                    # labelled CSECT
-                    ESD[csect_lbl][0].type = 'SD'
-
-                    SYMBOL[csect_lbl] = Symbol(
-                        1, addr, scope_id,
-                        '', 'J', '', '',
-                        line_num, []
-                        )
-
-            MNEMONIC[line_num] = [ scope_id, addr, ]            # type 2
+            MNEMONIC[line_num] = [ scope.id(), addr, ]          # type 2
             spt.push( ( line, deck_id, ) )
 
         # parse USING
         elif field[1] == 'USING':
             # actual parsing in pass 2
-            MNEMONIC[line_num] = [ scope_id, ]                  # type 1
+            MNEMONIC[line_num] = [ scope.id(), ]                # type 1
             spt.push( ( line, deck_id, ) )
 
         # parse DROP
         elif field[1] == 'DROP':
             # actual parsing in pass 2
-            MNEMONIC[line_num] = [ scope_id, ]                  # type 1
+            MNEMONIC[line_num] = [ scope.id(), ]                # type 1
             spt.push( ( line, deck_id, ) )
 
         # parse END
@@ -272,9 +226,7 @@ def pass_1():
 
             else:               # no left-over constant, end the program
                 # update the CSECT info
-                if csect_lbl == None:
-                    raise SyntaxError('No CSECT found.')
-                ESD[csect_lbl][0].length = addr
+                ESD[scope.label()][0].length = addr
 
                 addr = 0    # reset program counter
                 prev_addr = None
@@ -318,7 +270,7 @@ def pass_1():
                 # inserted LTORG, ignore it
                 line_num -= 1   # move back one line (since not LTORG)
             else:
-                MNEMONIC[line_num] = [ scope_id, addr, ]        # type 2
+                MNEMONIC[line_num] = [ scope.id(), addr, ]      # type 2
                 spt.push( ( line, deck_id, ) )
 
         # parse EQU
@@ -341,12 +293,12 @@ def pass_1():
                 __INFO('E', line_num, ( 43, 0, len(field[0]), ))
             elif ins_lbl == 0:  # valid label
                 SYMBOL[lbl_8] = Symbol(
-                    equ_len, equ_addr, scope_id,
+                    equ_len, equ_addr, scope.id(),
                     equ_reloc, 'U', '', '',
                     line_num, []
                     )
 
-            MNEMONIC[line_num] = [ scope_id,                    # type 4
+            MNEMONIC[line_num] = [ scope.id(),                  # type 4
                                    None, # need info
                                    None, # need info
                                    equ_addr,
@@ -379,12 +331,12 @@ def pass_1():
                     __INFO('E', line_num,
                            ( 141, indx_s, indx_s + len(field[1]), )
                            )
-                    MNEMONIC[line_num] = [ scope_id, ]          # type 1
+                    MNEMONIC[line_num] = [ scope.id(), ]        # type 1
                     spt.push( ( line, deck_id, ) )
                     continue
 
                 if field[1] in SYMBOL_EQ:
-                    symbol = __HAS_EQ(field[1], scope_id)
+                    symbol = __HAS_EQ(field[1], scope.id())
                     if symbol == None or symbol.defn != None:
                         zPE.abort(91, 'Error: ', field[1],
                                   ': Fail to find the allocation.\n')
@@ -419,7 +371,7 @@ def pass_1():
                             # update the Cross-References ER Sub-Table
                             if lbl_8 not in SYMBOL_V:
                                 SYMBOL_V[lbl_8] = Symbol(
-                                    1, 0, scope_id,
+                                    1, 0, scope.id(),
                                     '', 'T', '', '',
                                     line_num, [ ]
                                     )
@@ -443,10 +395,9 @@ def pass_1():
                                     )
                             if ESD[lbl_8][1].id == None:
                                 ESD[lbl_8][1].type = 'ER'
-                                ESD[lbl_8][1].id = scope_new
+                                ESD[lbl_8][1].id = scope.next()
 
-                                ESD_ID[scope_new] = lbl_8
-                                scope_new += 1 # update the next scope_id ptr
+                                ESD_ID[ESD[lbl_8][1].id] = lbl_8
 
                 elif sd_info[2] == 'A':
                     # check internal reference
@@ -463,7 +414,7 @@ def pass_1():
                 __INFO('E', line_num, ( 43, 0, len(field[0]), ))
             elif ins_lbl == 0:  # valid label
                 SYMBOL[lbl_8] = Symbol(
-                    sd_info[3], addr, scope_id,
+                    sd_info[3], addr, scope.id(),
                     '', sd_info[2], sd_info[2], '',
                     line_num, []
                     )
@@ -471,7 +422,7 @@ def pass_1():
             if field[1] == 'DC' and not zPE.core.asm.can_get_sd(sd_info):
                 zPE.abort(91, 'Error: ', field[2],
                           ': Cannot evaluate the constant.\n')
-            MNEMONIC[line_num] = [ scope_id, addr, sd_info, ]   # type 3
+            MNEMONIC[line_num] = [ scope.id(), addr, sd_info, ] # type 3
             spt.push( ( line, deck_id, ) )
 
             # update address
@@ -598,7 +549,7 @@ def pass_1():
                         # parse =constant
                         if not const_plid:
                             # allocate new pool
-                            const_plid = scope_id
+                            const_plid = scope.id()
 
                         if lbl in const_pool:
                             const_pool[lbl].references.append(
@@ -674,7 +625,7 @@ def pass_1():
                     __INFO('E', line_num, ( 43, 0, len(field[0]), ))
                 elif ins_lbl == 0:  # valid label
                     SYMBOL[lbl_8] = Symbol(
-                        zPE.core.asm.len_op(op_code), addr, scope_id,
+                        zPE.core.asm.len_op(op_code), addr, scope.id(),
                         '', 'I', '', '',
                         line_num, []
                         )
@@ -686,7 +637,7 @@ def pass_1():
                 if op_code[i].type in 'LSX': # address type
                     op_addr[op_code[i].pos] = op_code[i]
 
-            MNEMONIC[line_num] = [ scope_id, addr,              # type 5
+            MNEMONIC[line_num] = [ scope.id(), addr,            # type 5
                                    op_code, op_addr[1], op_addr[2],
                                    ]
             spt.push( ( line, deck_id, ) )
@@ -709,7 +660,7 @@ def pass_1():
         else:
             indx_s = line.index(field[1])
             __INFO('E', line_num, ( 57, indx_s, indx_s + len(field[1]), ))
-            MNEMONIC[line_num] = [ scope_id, ]                  # type 1
+            MNEMONIC[line_num] = [ scope.id(), ]                # type 1
             spt.push( ( line, deck_id, ) )
     # end of main read loop
 
@@ -730,24 +681,58 @@ def pass_1():
                 # update the pointer
                 prev_sym = symbol
 
-    # update the address in MNEMONIC table
-    line_num = 0
-    for line in spt:
-        line_num += 1
-        if line_num not in MNEMONIC  or  len(MNEMONIC[line_num]) == 0:
-            # comments               or      TITLE statement
-            continue
-        scope_id = MNEMONIC[line_num][0]        # retrieve scope ID
-        if scope_id:
-            if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]: # type 2/3/5
-                MNEMONIC[line_num][1] += RELOCATE_OFFSET[scope_id]
-
     # update symbol address
     for key in ESD:
         ESD[key][0].addr = offset[ESD[key][0].id]
     for key in SYMBOL:
         if not SYMBOL[key].reloc:
             SYMBOL[key].value += offset[SYMBOL[key].id]
+
+    # update the address in MNEMONIC table and record them in MNEMONIC_LOC table
+    line_num = 0
+    prev_scope = None
+    tmp_buff = []               # [ line_num, ... ]
+    keyed_buff = {}             # { scope_id : tmp_buff, ... }
+    for line in spt:
+        line_num += 1
+        if line_num not in MNEMONIC  or  len(MNEMONIC[line_num]) == 0:
+            # comments               or      TITLE statement
+            continue
+        scope_id = MNEMONIC[line_num][0]        # retrieve scope ID
+
+        if prev_scope == None:
+            prev_scope = scope_id
+
+        elif prev_scope != scope_id:
+            # scope switched, move tmp buff to keyed buff
+            keyed_buff[prev_scope] = tmp_buff
+            tmp_buff = []
+            prev_scope = scope
+
+        if not scope_id:
+            continue
+
+        tmp_buff.append(line_num)
+
+        if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]: # type 2/3/5
+            MNEMONIC[line_num][1] += offset[scope_id] # update loc ptr
+
+            # process tmp_buff
+            for i in tmp_buff:
+                MNEMONIC_LOC[i] = MNEMONIC[line_num][1]
+            tmp_buff = []
+
+            if scope_id in keyed_buff:
+                # process keyed_buff
+                for i in keyed_buff[scope_id]:
+                    MNEMONIC_LOC[i] = MNEMONIC[line_num][1]
+                del keyed_buff[scope_id]
+    # process leftover keyed_buff, since END will force scope switching
+    for scope_id in keyed_buff:
+        for i in keyed_buff[scope_id]:
+            esd = ESD[ESD_ID[scope_id]][0]
+            MNEMONIC_LOC[i] = esd.addr + esd.length
+    keyed_buff.clear()
 
     # update memory requirement for generating OBJECT MODULE
     sz_required = max(
@@ -800,6 +785,9 @@ def pass_1():
     else:
         rc_err = zPE.RC['NORMAL']
 
+    if zPE.debug_mode():
+        __PRINT_DEBUG_INFO(1)
+
     return max(rc_symbol, rc_err)
 # end of pass 1
 
@@ -811,7 +799,6 @@ def pass_2():
     mem = zPE.core.mem.Memory(ASM_CONFIG['MEM_POS'], ASM_CONFIG['MEM_LEN'])
 
     addr = 0                    # program counter
-    prev_addr = None            # previous program counter
     line_num = 0
 
     scope_id = 0                # scope id for current line
@@ -819,19 +806,19 @@ def pass_2():
     pos_start = None            # starting addr for last contiguous machine code
     pos_end   = None            # ending addr for last contiguous machine code
 
+    # append it to ESD records
+    __APPEND_ESD([ ESD_ID[1], ESD[ESD_ID[1]][0] ]) # append first ESD entry
+
     # main read loop
     for line in spi:
         line_num += 1
         if line_num not in MNEMONIC  or  len(MNEMONIC[line_num]) == 0:
             # comments               or      TITLE statement
             continue
-        scope_id = MNEMONIC[line_num][0] # retrieve scope ID
+        scope_id = MNEMONIC[line_num][0]        # retrieve scope ID
         if scope_id:
-            csect_lbl = ESD_ID[scope_id] # retrieve CSECT label
-            if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]:
-                # update & retrieve address
-                prev_addr = addr
-                addr = MNEMONIC[line_num][1]
+            csect_lbl = ESD_ID[scope_id]        # retrieve CSECT label
+            addr = MNEMONIC_LOC[line_num]       # retrieve address
         else:
             csect_lbl = None
 
@@ -880,21 +867,29 @@ def pass_2():
                     range_limit = 4096      # have to be 4096
 
                     bad_lbl = zPE.bad_label(args[0])
-                    if bad_lbl == None: # nothing before ','
+                    if args[0] == '*':
+                        # location counter
+                        using_value = addr
+                        using_scope = scope_id
+                    elif bad_lbl == None:
+                        # nothing before ','
                         indx_s = line.index(field[2])
                         __INFO('E', line_num,
                                ( 74, indx_s, indx_s + 1 + len(args[1]), )
                                )
-                    elif bad_lbl:       # not a valid label
-                        # not a relocatable address
+                    elif bad_lbl:
+                        # not a valid label
                         indx_s = line.index(field[2])
                         __INFO('E', line_num, ( 305, indx_s, None, ))
-                    else:               # a valid label
+                    else:
+                        # a valid label
                         lbl_8 = '{0:<8}'.format(args[0])
                         if lbl_8 in SYMBOL:
                             SYMBOL[lbl_8].references.append(
                                 '{0:>4}{1}'.format(line_num, 'U')
                                 )
+                            using_value = SYMBOL[lbl_8].value
+                            using_scope = SYMBOL[lbl_8].id
                         else:
                             indx_s = line.index(field[2])
                             __INFO('E', line_num,
@@ -946,8 +941,7 @@ def pass_2():
                 USING_MAP[line_num, parsed_args[1]] = Using(
                     addr, scope_id,
                     'USING',
-                    'ORDINARY', SYMBOL[lbl_8].value,
-                    range_limit, SYMBOL[lbl_8].id,
+                    'ORDINARY', using_value, range_limit, using_scope,
                     0, '{0:>5}'.format(''), field[2]
                     )
                 ACTIVE_USING[parsed_args[1]] = line_num # start domain of USING
@@ -956,8 +950,8 @@ def pass_2():
                     USING_MAP[line_num, parsed_args[indx]] = Using(
                         addr, scope_id,
                         'USING',
-                        'ORDINARY', SYMBOL[lbl_8].value + 4096 * (indx - 1),
-                        range_limit, SYMBOL[lbl_8].id,
+                        'ORDINARY', using.value + 4096 * (indx - 1),
+                        range_limit, using.id,
                         0, '{0:>5}'.format(''), ''
                         )
                     ACTIVE_USING[parsed_args[indx]] = line_num
@@ -1693,6 +1687,9 @@ def pass_2():
     else:
         rc_err = zPE.RC['NORMAL']
 
+    if zPE.debug_mode():
+        __PRINT_DEBUG_INFO(2)
+
     # generate object module if no error occured
     if rc_err <= zPE.RC['WARNING']:
         obj_mod_gen() # write the object module into the corresponding SPOOL
@@ -2054,16 +2051,24 @@ def __REDUCE_EXP(exp):
 
 
 vf_list = []
+csect_encountered = [] # this guard the function from appending duplicates
 def __APPEND_ESD(variable_field = None):
     if variable_field:
+        csect = variable_field[0]
+        if csect in csect_encountered:
+            return
+        csect_encountered.append(csect)
         vf_list.append(variable_field)  # append to variable field list
+
         force_flush = False             # natual append
     else:
         force_flush = len(vf_list)      # force flush if there is any pending vf
 
     if force_flush  or  len(vf_list) % 3 == 0:
         # force flush the list, or the list is full (len = 3)
-        OBJMOD['ESD'].append(OBJMOD_REC['ESD'](vf_list))
+        if zPE.debug_mode():
+            print '** building ESD record with', vf_list
+        OBJMOD['ESD'].append( OBJMOD_REC['ESD'](vf_list) )
         del vf_list[:]                  # clear variable field list
 
 
@@ -2078,10 +2083,10 @@ def __APPEND_TXT(mem, scope, pos_start, pos_end):
     p_s = pos_start
     p_e = min(pos_end, p_s + 56) # 56 Byte per TXT
     while p_s < p_e:
-        OBJMOD['TXT'].append(OBJMOD_REC['TXT'](
-                scope, p_s,
-                mem[mem.min_pos + p_s : mem.min_pos + p_e]
-                ))
+        content = mem[mem.min_pos + p_s : mem.min_pos + p_e]
+        if zPE.debug_mode():
+            print '** building TXT record with', content
+        OBJMOD['TXT'].append( OBJMOD_REC['TXT'](scope, p_s, content) )
         p_s = p_e
         p_e = min(pos_end, p_s + 56 * 2)
 
@@ -2113,13 +2118,17 @@ def __APPEND_RLD(pos_id = None, rel_id = None, data_field = None):
 
     if force_flush  or  df_list_memory['byte_cnt'] == 56:
         # force flush the list, or the list is full (len = 56)
-        OBJMOD['RLD'].append(OBJMOD_REC['RLD'](df_list))
+        if zPE.debug_mode():
+            print '** building RLD record with', df_list
+        OBJMOD['RLD'].append( OBJMOD_REC['RLD'](df_list) )
         del df_list[:]                 # clear data field list
         df_list_memory['byte_cnt'] = 0 # reset byte counter
 
     elif df_list_memory['byte_cnt'] > 56:
         # the list is overflowed
-        OBJMOD['RLD'].append(OBJMOD_REC['RLD'](df_list[-1]))
+        if zPE.debug_mode():
+            print '** building RLD record with', df_list[-1]
+        OBJMOD['RLD'].append( OBJMOD_REC['RLD'](df_list[-1]) )
         del df_list[:]                 # clear data field list
         df_list.append([ 8, data_field, pos_id, rel_id ]) # push back last one
         df_list_memory['byte_cnt'] = 8
@@ -2137,6 +2146,8 @@ def __APPEND_END(entry_csect = None):
         entry_sb = ASM_PARM['ENTRY']
 
     asm_time = localtime()
+    if zPE.debug_mode():
+        print '** building END record with ENTRY =', entry_pt
     OBJMOD['END'].append(OBJMOD_REC['END'](
             entry_pt, entry_id, entry_sb,
             '',                 # need info
@@ -2149,3 +2160,98 @@ def __APPEND_END(entry_csect = None):
                     },
               ]
             ))
+
+
+def __PRINT_DEBUG_INFO(phase):
+    print
+    print '*** HL-ASM Pass {0} Finished ***'.format(phase)
+
+    __PRINT_ASM_ESD()
+    if phase == 2:
+        __PRINT_ASM_RLD()
+        __PRINT_ASM_SCRT()
+        __PRINT_ASM_UM()
+    __PRINT_ASM_MSG()
+
+
+def __PRINT_ASM_ESD():
+    print '\nExternal Symbol Dictionary:'
+    for key in sorted(ESD_ID.iterkeys()):
+        k = ESD_ID[key]
+        if ESD[k][0] and ESD[k][0].id == key:
+            v = ESD[k][0]
+        else:
+            v = ESD[k][1]
+        print '{0} => {1}'.format(k, v.__dict__)
+
+def __PRINT_ASM_RLD():
+    print '\nRelocation Dictionary:'
+    print' Pos.Id   Rel.Id   Address  Type  Action'
+    for (pos_id, rel_id) in sorted(RLD):
+        for entry in RLD[pos_id, rel_id]:
+            print '{0:0>8} {1:0>8} {2:0>8}   {3} {4}  {5:>4}'.format(
+                hex(pos_id)[2:].upper(),
+                hex(rel_id)[2:].upper(),
+                hex(entry.addr)[2:].upper(),
+                entry.type,
+                entry.len,
+                entry.action
+                )
+
+def __PRINT_ASM_SCRT():
+    print '\nSymbol Cross Reference Table:'
+    for key in sorted(SYMBOL.iterkeys()):
+        if SYMBOL[key].value == None:
+            addr = 0xFFFFFF
+        else:
+            addr = SYMBOL[key].value
+        print '{0} (0x{1:0>6}) => {2}'.format(
+            key, hex(addr)[2:].upper(), SYMBOL[key].__dict__
+            )
+    print '\nSymbol Cross Reference ER Sub-Table:'
+    for key in sorted(SYMBOL_V.iterkeys()):
+        if SYMBOL_V[key].value == None:
+            addr = 0xFFFFFF
+        else:
+            addr = SYMBOL_V[key].value
+        print '{0} (0x{1:0>6}) => {2}'.format(
+            key, hex(addr)[2:].upper(), SYMBOL_V[key].__dict__
+            )
+    print '\nSymbol Cross Reference =Const Sub-Table:'
+    for key in sorted(SYMBOL_EQ.iterkeys()):
+        for indx in range(len(SYMBOL_EQ[key])):
+            if SYMBOL_EQ[key][indx].value == None:
+                addr = 0xFFFFFF
+            else:
+                addr = SYMBOL_EQ[key][indx].value
+            print '{0} (0x{1:0>6}) => {2}'.format(
+                key, hex(addr)[2:].upper(), SYMBOL_EQ[key][indx].__dict__
+                )
+    print '\nUnreferenced Symbol Defined in CSECTs:'
+    for (ln, key) in sorted(NON_REF_SYMBOL, key = lambda t: t[1]):
+        print '{0:>4} {1}'.format(ln, key)
+    print '\nInvalid Symbol Found in CSECTs:'
+    for (ln, key) in sorted(INVALID_SYMBOL, key = lambda t: t[1]):
+        print '{0:>4} {1}'.format(ln, key)
+
+def __PRINT_ASM_UM():
+    print '\nUsing Map:'
+    for (k, v) in USING_MAP.iteritems():
+        print k, v.__dict__
+
+def __PRINT_ASM_MSG():
+    __PRINT_ASM_MSG_FOR('Infomation')
+    __PRINT_ASM_MSG_FOR('Notification')
+    __PRINT_ASM_MSG_FOR('Warning')
+    __PRINT_ASM_MSG_FOR('Error')
+    __PRINT_ASM_MSG_FOR('Severe Error')
+
+def __PRINT_ASM_MSG_FOR(level):
+    print '\n{0}:'.format(level),
+    level = level[0]            # first char is index into INFO dict
+    if len(INFO[level]):
+        print
+        for line_num in INFO[level]:
+            print 'line {0} => {1}'.format(line_num, INFO[level][line_num])
+    else:
+        print 'N/A'
