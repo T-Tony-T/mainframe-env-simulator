@@ -244,15 +244,22 @@ ins_op = {
                    __deref(s[7:10], '0', s[6], 1, offset), # value
                    offset                                  # offset
                    )
-            for offset in range(__h2i(s[0:2]) + 1) # length = length code + 1
+            for offset in range(__dclen(s[0:2]))
             ] ),
     'D5'   : ( 'CLC',  5, lambda s : [
             __cmp_lgc(__deref(s[3:6],  '0', s[2], 1, offset),
                       __deref(s[7:10], '0', s[6], 1, offset),
                       offset and SPR['PSW'].CC
                       )     # skip comparison if CC is set to non-zero
-            for offset in range(__h2i(s[0:2]) + 1) # length = length code + 1
+            for offset in range(__dclen(s[0:2]))
             ] ),
+    'F2'   : ( 'PACK', 5, lambda s : (
+            lambda pack_lst = zPE.c2p(__dump(s[7:10], s[6], __dclen(s[1])),
+                                      __dclen(s[0])) :
+                [ __ref(s[3:6], '0', s[2], pack_lst[offset], offset)
+                  for offset in range(len(pack_lst))
+                  ]
+            )() ),
     }
 
 def decode_op(mnem):
@@ -261,26 +268,29 @@ def decode_op(mnem):
 
 ### Internal Functions
 
-def __h2i(r):
+def __h2i(r):                   # hex to integer convertor
     return int(r, 16)
 
-def __reg(r, offset = 0):
+def __dclen(lc):                # decode length-code to length
+    return __h2i(lc) + 1
+
+def __reg(r, offset = 0):       # register retriever
     return GPR[ __h2i(r) + offset - 16 ]
 
-def __addr_reg(r):
+def __addr_reg(r):              # addressing register retriever
     reg_num = __h2i(r)
     if reg_num:
         return GPR[reg_num].addr()
     else:
         return None
 
-def __pair(r):
+def __pair(r):                  # even-odd pair registers retriever
     indx = __h2i(r)
     if indx % 2 != 0:
         raise zPE.newSpecificationException()
     return RegisterPair(GPR[indx], GPR[indx + 1])
 
-def __addr(d, x, b):
+def __addr(d, x, b):            # address retriever
     indx = __addr_reg(x)
     if not indx:
         indx = 0

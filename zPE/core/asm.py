@@ -480,6 +480,8 @@ op_code = {
     'O'    : lambda: ('56', R(1).rw(), X(2).ro().al('fw')),
     'OR'   : lambda: ('16', R(1).rw(), R(2).ro()),
 
+    'PACK' : lambda: ('F2', L(1,1).rw(),L(2,1).ro()),
+
     'S'    : lambda: ('5B', R(1).rw(), X(2).ro().al('fw')),
     'SR'   : lambda: ('1B', R(1).rw(), R(2).ro()),
 
@@ -720,8 +722,7 @@ class B_(object):
 # Exception:
 #   SyntaxError: if sign is not invalid
 #   TypeError:   if the value is not packed
-#   ValueError:  if the range exceeds the length;
-#                if the string contains invalid digit (except pack())
+#   ValueError:  if the string contains invalid digit (except pack())
 class P_(object):
     def __init__(self, ch_str, length = 0):
         self.set(ch_str, length)
@@ -747,20 +748,17 @@ class P_(object):
         int(ch_str)             # check format
         self.fill__(X_(ch_str + sign_digit, length).dump())
 
-    def pack(self, ch_str, length = 0):
-        if length and length * 2 - 1 < len(ch_str): # check length
-            raise ValueError('Invalid length.')
+    @staticmethod
+    def pack(hex_str, length):
         hex_list = []
-        for ch in ch_str:
-            hex_list.append(    # for each char, get the low digit
-                hex( ord(ch.encode('EBCDIC-CP-US')) )[-1].upper()
-                )
-        hex_list.append(        # for the last char, add the high digit
-            '{0:0>2}'.format(
-                hex( ord(ch_str[-1].encode('EBCDIC-CP-US')) )[2:]
-                )[0].upper()
-            )
-        self.fill__(X_(''.join(hex_list), length).dump())
+        # align to byte
+        hex_len = len(hex_str)
+        hex_len += hex_len % 2
+        hex_str = '{0:0>{1}}'.format(hex_str, hex_len)
+        for indx in range(0, hex_len, 2):
+            hex_list.append(hex_str[indx+1]) # for each byte, get the low digit
+        hex_list.append(hex_str[-2])         # for last byte, add the high digit
+        return X_(''.join(hex_list), length).dump()[0]
 
     def dump(self):
         return (self.__vals, self.natual_len)
@@ -968,6 +966,28 @@ class SDNumericalType(object):
         '''translate the universal dump to the repr string of this class'''
         raise AssertionError('require overridden')
 
+class D_(SDNumericalType):
+    def __init__(self, int_str, length = 0):
+        super(D_, self).__init__(int_str, length, 8) # 8-byte natual length
+
+    def fill__(self, dump):      # no error checking
+        self.load_value(int(self.tr(dump)), dump[1])
+
+    @staticmethod
+    def tr(dump):
+        vals = dump[0]
+        int_val = vals[0]
+        for indx in range(1, len(vals)):
+            int_val *= 256
+            int_val += vals[indx]
+        int_val  %=  0xFFFFFFFFFFFFFFFF
+        if int_val > 0x7FFFFFFFFFFFFFFF:
+            int_str = '-{0}'.format(0x10000000000000000 - int_val)
+                                    # 2's complement
+        else:
+            int_str = str(int_val)
+        return int_str
+
 class F_(SDNumericalType):
     def __init__(self, int_str, length = 0):
         super(F_, self).__init__(int_str, length, 4) # 4-byte natual length
@@ -982,7 +1002,7 @@ class F_(SDNumericalType):
         for indx in range(1, len(vals)):
             int_val *= 256
             int_val += vals[indx]
-        int_val %= 0xFFFFFFFF
+        int_val  %=  0xFFFFFFFF
         if int_val > 0x7FFFFFFF:
             int_str = '-{0}'.format(0x100000000 - int_val) # 2's complement
         else:
@@ -1003,7 +1023,7 @@ class H_(SDNumericalType):
         for indx in range(1, len(vals)):
             int_val *= 256
             int_val += vals[indx]
-        int_val %= 0xFFFF
+        int_val  %=  0xFFFF
         if int_val > 0x7FFF:
             int_str = '-{0}'.format(0x10000 - int_val) # 2's complement
         else:
@@ -1064,11 +1084,12 @@ BOUNDARY = [
     [ 'C', 'X', 'B', 'P', 'Z', ], # no boundary
     [ 'H', ],                     # half-word boundary
     [ 'F', 'A', 'V', ],           # full-word boundary
-    [  ],                         # double-word boundary
+    [ 'D', ],                     # double-word boundary
     ]
 
 const_s = {
     'C' : lambda val = '0', sz = 0: C_(val, sz),
+    'D' : lambda val = '0', sz = 0: D_(val, sz),
     'X' : lambda val = '0', sz = 0: X_(val, sz),
     'B' : lambda val = '0', sz = 0: B_(val, sz),
     'F' : lambda val = '0', sz = 0: F_(val, sz),
