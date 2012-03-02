@@ -324,17 +324,11 @@ def __PARSE_OUT_ASM(limit):
                 )
             # appending to it the "ADDR1" and "ADDR2" fields, if applied
             if MNEMONIC[line_num][3]:
-                if MNEMONIC[line_num][3].valid:
-                    addr_1 = hex(MNEMONIC[line_num][3].get()[-1])[2:].upper()
-                else:
-                    addr_1 = '0'
+                addr_1 = hex(MNEMONIC[line_num][3])[2:].upper()
             else:
                 addr_1 = '     '
             if MNEMONIC[line_num][4]:
-                if MNEMONIC[line_num][4].valid:
-                    addr_2 = hex(MNEMONIC[line_num][4].get()[-1])[2:].upper()
-                else:
-                    addr_2 = '0'
+                addr_2 = hex(MNEMONIC[line_num][4])[2:].upper()
             else:
                 addr_2 = '     '
             tmp_str += '{0:0>5} {1:0>5}'.format(

@@ -46,7 +46,7 @@ def __scanning(spi, line_num = 0):
         line_num += 1           # start at line No. 1
         line = spi[line_num - 1]
 
-        field = zPE.resplit_sq('\s+', line[:-1], 3)
+        field = zPE.resplit_sq(r'\s+', line[:-1], 3)
 
         # non-instruction stuff
         if len(field) < 2:
@@ -66,7 +66,7 @@ def __scanning(spi, line_num = 0):
         line_num += 1           # start at line No. 1
         line = spi[line_num - 1]
 
-        field = zPE.resplit_sq('\s+', line[:-1], 3)
+        field = zPE.resplit_sq(r'\s+', line[:-1], 3)
 
         # non-instruction stuff
         if len(field) < 2:
@@ -94,7 +94,7 @@ def __defining(spi, line_num):
         line_num += 1           # start at line No. 1
         line = spi[line_num - 1]
 
-        field = zPE.resplit_sq('\s+', line[:-1], 3)
+        field = zPE.resplit_sq(r'\s+', line[:-1], 3)
 # try parsing .labels and &labels
 #        var_lbl = zPE.bad_(field[0])
 

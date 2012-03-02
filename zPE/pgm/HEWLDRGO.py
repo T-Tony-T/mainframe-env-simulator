@@ -124,7 +124,7 @@ def load():
     for r in spi.spool:
         rec = b2a_hex(r)
         if rec[:2] != '02':     # control statement
-            field = zPE.resplit_sq('\s+', rec, 3)
+            field = zPE.resplit_sq(r'\s+', rec, 3)
             if len(field) < 3  or  field[0] != '':
                 zPE.abort(13, "Error: ", rec,
                           ":\n invalid OBJECT MODULE control statement.\n")

@@ -128,7 +128,7 @@ def pass_1():
         ( line, deck_id ) = spi.pop(0)
         line_num += 1                  # start at line No. 1
 
-        field = zPE.resplit_sq('\s+', line[:-1], 3)
+        field = zPE.resplit_sq(r'\s+', line[:-1], 3)
 
         # check Macro definition
         if len(field) > 1 and field[1] == 'MACRO':
@@ -829,7 +829,7 @@ def pass_2():
             pos_start  = addr
             pos_end    = None
 
-        field = zPE.resplit_sq('\s+', line[:-1], 3)
+        field = zPE.resplit_sq(r'\s+', line[:-1], 3)
 
         # skip lines that handled in the first pass
         if len(field) < 2 or len(field[1]) == 0:
@@ -1413,7 +1413,7 @@ def pass_2():
 
                     reloc_cnt = 0    # number of relocatable symbol
                     reloc_arg = None # backup of the relocatable symbol
-                    for indx in range(len(res[0])):
+                    for indx in range(len(res[0]) - 1):
                         # for each element in the exp, try to envaluate
 
                         if ( res[1][indx] == 'eq_constant'  or
@@ -1441,33 +1441,18 @@ def pass_2():
                             elif res[1][indx] == 'location_ptr':
                                 pass # no special process required
                             else: # valid_symbol
-                                tmp = zPE.resplit_sq('[()]', res[0][indx])
-                                bad_lbl = zPE.bad_label(tmp[0])
-                                lbl_8 = '{0:<8}'.format(tmp[0])
+                                bad_lbl = zPE.bad_label(res[0][indx])
+                                lbl_8 = '{0:<8}'.format(res[0][indx])
 
-                                if ( len(tmp) > 1 and
-                                     op_code[op_args[lbl_i]].type == 'S'
-                                     ):
+                                if ( op_code[op_args[lbl_i]].type == 'S'  and
+                                     res[0][-1] != None
+                                     ): # S-type arg does not support index reg
                                     indx_s = line.index(lbl)
                                     __INFO('S', line_num, (
                                         173,
                                         indx_s + lbl.index('('),
                                         indx_s + len(lbl) + 1,
                                         ))
-                                    break   # stop processing current res
-                                elif len(tmp) > 1 and indx != len(res[0]) - 1:
-                                    # complex symbol must be last node of exp
-                                    indx_s = (
-                                        line.index(res[0][indx]) +
-                                        len(res[0][indx])
-                                        )
-                                    indx_e = (
-                                        line.index(lbl) +
-                                        len(lbl)
-                                        )
-                                    __INFO('S', line_num,
-                                           ( 173, indx_s, indx_e, )
-                                           )
                                     break   # stop processing current res
                                 elif bad_lbl:
                                     indx_s = (
@@ -1493,7 +1478,7 @@ def pass_2():
                             if ( ( indx-1 >= 0  and
                                    res[0][indx-1] in '*/()'
                                    ) or
-                                 ( indx+1 < len(res[0])  and
+                                 ( indx+1 < len(res[0]) - 1  and
                                    res[0][indx+1] in '*/()'
                                    ) ):
                                 indx_s = line.index(lbl)
@@ -1544,9 +1529,9 @@ def pass_2():
                 if INFO_GE(line_num, 'E'):
                     break # if has error, stop processing args
 
-                # calculate constant part
+                # calculate constant part for relocatable address
                 if not abs_values and reloc_cnt < 2:
-                    ex_disp = __REDUCE_EXP(''.join(res[0]))
+                    ex_disp = __REDUCE_EXP(''.join(res[0][:-1]))
                     if ex_disp == None:
                         zPE.abort(92, 'Error: ', ''.join(res[0]),
                                   ': Invalid expression.\n')
@@ -1576,17 +1561,9 @@ def pass_2():
                         reg_indx = 0
                     else:
                         # label
-                        tmp = zPE.resplit_sq('[()]', reloc_arg)
-                        lbl_8 = '{0:<8}'.format(tmp[0])
-
-                        if len(tmp) > 1:
-                            # [ symbol, indx, '' ]
-                            if op_code[op_args[lbl_i]].type == 'L':
-                                reg_indx = __PARSE_EQU_VALUE(tmp[1])[0]
-                            else:
-                                reg_indx = zPE.core.reg.parse_GPR(tmp[1])[0]
-                        else:
-                            # [ symbol ]
+                        lbl_8 = '{0:<8}'.format(reloc_arg)
+                        reg_indx = res[0][-1]
+                        if not reg_indx:
                             if op_code[op_args[lbl_i]].type == 'L':
                                 reg_indx = SYMBOL[lbl_8].length
                             else:
@@ -1644,6 +1621,17 @@ def pass_2():
                                ( 33, indx_s, indx_s + len(lbl), )
                                )
             # end of processing args
+
+            for indx in range(3, 5):
+                if MNEMONIC[line_num][indx]:
+                    if MNEMONIC[line_num][indx].valid:
+                        disp = MNEMONIC[line_num][indx].get()[-1]
+                        base = MNEMONIC[line_num][indx].get()[-2]
+                        if base in ACTIVE_USING:
+                            disp += USING_MAP[ACTIVE_USING[base], base].u_value
+                    else:
+                        disp = 0
+                    MNEMONIC[line_num][indx] = disp
 
             content = zPE.core.asm.prnt_op(MNEMONIC[line_num][2])
             if not INFO_GE(line_num, 'E'):
@@ -1859,100 +1847,98 @@ def __MISSED_FILE(step):
 def __PARSE_ARG(arg_str):
     parts = []                  # components of the expression
     descs = []                  # descriptions of the components
-    reminder = arg_str
+
+    if re.match(r'.*\(\w*,?\w*\)', arg_str):
+        exp_rmndr = arg_str[:arg_str.rindex('(')]
+        idx_rmndr = arg_str[arg_str.rindex('('):]
+    else:
+        exp_rmndr = arg_str
+        idx_rmndr = None
+    exp_len = len(exp_rmndr)
 
     while True:
-        if reminder[0] == '(':  # start of a sub-expression
+        if exp_rmndr[0] == '(':  # start of a sub-expression
             parts.append('(')
             descs.append('parenthesis')
-            reminder = reminder[1:]
+            exp_rmndr = exp_rmndr[1:]
 
-        if reminder[0] == '*':  # current location ptr
+        if exp_rmndr[0] == '*':  # current location ptr
             parts.append('*')
             descs.append('location_ptr')
-            reminder = reminder[1:]
+            exp_rmndr = exp_rmndr[1:]
         else:                   # number / symbol
-            res = zPE.resplit_sq('[*/+-]', reminder)[0]
-            _res = res          # do not change this copy
+            res = zPE.resplit_sq('[*/+-]', exp_rmndr)[0]
 
-            bad_lbl = zPE.bad_label(zPE.resplit_sq('\(', _res)[0])
+            bad_lbl = zPE.bad_label(res)
             if bad_lbl:
                 try:
-                    sd_info = zPE.core.asm.parse_sd(_res)
+                    sd_info = zPE.core.asm.parse_sd(res)
                 except:         # not a constant
                     sd_info = None
 
-                if _res.isdigit(): # pure number
-                    parts.append(_res)
+                if res.isdigit(): # pure number
+                    parts.append(res)
                     descs.append('regular_num')
-                elif ( _res[0] != '='  and
-                       len(zPE.resplit_sq('\)', _res)) > 1
+                elif ( res[0] != '='  and
+                       len(zPE.resplit_sq('\)', res)) > 1
                        ):       # abs addr + something
-                    return _res.index(')') + 1
+                    return res.index(')') + 1
                 elif sd_info:   # inline constant
                     try:
                         if sd_info[0] == 'a':
                             raise TypeError
                         zPE.core.asm.get_sd(sd_info)
-                        parts.append(_res)
+                        parts.append(res)
                         descs.append('inline_const')
                     except:     # invalid constant; return err pos
-                        return len(arg_str) - len(reminder)
-                elif _res[0] == '=': # =constant
-                    parts.append(_res)
+                        return exp_len - len(exp_rmndr)
+                elif res[0] == '=': # =constant
+                    parts.append(res)
                     descs.append('eq_constant')
                 else:           # invalid operand; return err pos
-                    return len(arg_str) - len(reminder)
+                    return exp_len - len(exp_rmndr)
             else:
-                tmp = zPE.resplit_sq('\(', _res) # search for '('
-                arg_lbl = tmp[0]
-                if len(tmp) > 1: # has '('
-                    tmp = zPE.resplit_sq(',', tmp[1]) # search for ','
-                    if len(tmp) > 1: # has ','
-                        return ( len(arg_str) - len(reminder) +
-                                 len(zPE.resplit_sq(',', _res)[0])
-                                 )
-                    tmp = zPE.resplit_sq('\)', tmp[0]) # search for ')'
-                    arg_val = tmp[0]
-                    if not arg_val:                   # no value
-                        return ( len(arg_str) - len(reminder) +
-                                 len(zPE.resplit_sq('\(', _res)[0])
-                                 )
-                    if len(tmp) != 2 or tmp[1] != '': # not end with ')'
-                        return ( len(arg_str) - len(reminder) +
-                                 len(zPE.resplit_sq('\)', _res)[0])
-                                 )
-                    # try parse as a register
-                    if zPE.core.reg.parse_GPR(arg_val)[0] >= 0:
-                        tmp = arg_val
-                    else:
-                        # try to reduce the value
-                        tmp = __REDUCE_EXP(arg_val)
-                        if tmp == None:
-                            try:
-                                tmp = eval(arg_val)
-                            except:
-                                return ( len(arg_str) - len(reminder) +
-                                         len(zPE.resplit_sq('\(', _res)[0])
-                                         ) # cannot reduce
-                    res = '{0}({1})'.format(arg_lbl, tmp)
                 parts.append(res)
                 descs.append('valid_symbol')
-            reminder = reminder[len(_res):]
+            exp_rmndr = exp_rmndr[len(res):]
 
-        if len(reminder) and reminder[0] == ')': # start of a sub-expression
+        if exp_rmndr and exp_rmndr[0] == ')': # end of a sub-expression
             parts.append(')')
             descs.append('parenthesis')
-            reminder = reminder[1:]
+            exp_rmndr = exp_rmndr[1:]
 
-        if len(reminder):       # operator
-            if reminder[0] not in '*/+-': # invalid operator; return err pos
-                return len(arg_str) - len(reminder)
-            parts.append(reminder[0])
+        if exp_rmndr:                      # operator
+            if exp_rmndr[0] not in '*/+-': # invalid operator; return err pos
+                return exp_len - len(exp_rmndr)
+            parts.append(exp_rmndr[0])
             descs.append('operator')
-            reminder = reminder[1:]
+            exp_rmndr = exp_rmndr[1:]
         else:                   # no more, stop
             break
+
+    if idx_rmndr:
+        tmp = zPE.resplit_sq(',', idx_rmndr) # search for ','
+        if len(tmp) > 1: # has ','
+            return exp_len + len(tmp[0])
+        idx_rmndr = idx_rmndr[1:-1] # remove ()
+        if not idx_rmndr:           # no value
+            return exp_len + 1
+
+        # try parse as a register
+        if zPE.core.reg.parse_GPR(idx_rmndr)[0] >= 0:
+            idx_val = int(idx_rmndr)
+        else:
+            # try to reduce the value
+            idx_val = __REDUCE_EXP(idx_rmndr)
+            if idx_val == None:
+                try:
+                    idx_val = eval(idx_rmndr)
+                except:
+                    return exp_len + 1
+    else:
+        idx_val = None
+    parts.append(idx_val)
+    descs.append('index_reg')
 
     return ( parts, descs, )
 
