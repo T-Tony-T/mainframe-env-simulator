@@ -490,6 +490,8 @@ op_code = {
     'STCM' : lambda: ('BE', R(1).ro(), R(3).ro(), S(2).rw()),
     'STM'  : lambda: ('90', R(1).ro(), R(3).ro(), S(2).wo().al('fw')),
 
+    'UNPK' : lambda: ('F3', L(1,1).rw(),L(2,1).ro()),
+
     'X'    : lambda: ('57', R(1).rw(), X(2).ro().al('fw')),
     'XR'   : lambda: ('17', R(1).rw(), R(2).ro()),
     }
@@ -722,7 +724,7 @@ class B_(object):
 # Exception:
 #   SyntaxError: if sign is not invalid
 #   TypeError:   if the value is not packed
-#   ValueError:  if the string contains invalid digit (except pack())
+#   ValueError:  if the string contains invalid digit (except pack() & unpk())
 class P_(object):
     def __init__(self, ch_str, length = 0):
         self.set(ch_str, length)
@@ -758,6 +760,19 @@ class P_(object):
         for indx in range(0, hex_len, 2):
             hex_list.append(hex_str[indx+1]) # for each byte, get the low digit
         hex_list.append(hex_str[-2])         # for last byte, add the high digit
+        return X_(''.join(hex_list), length).dump()[0]
+
+    @staticmethod
+    def unpk(hex_str, length):
+        hex_list = []
+        hex_str = '{0:0>{1}}'.format(hex_str, length + 1) # add leading 0s
+        for indx in range(0, len(hex_str) - 2):
+            # for each hex digit (except last byte), add 'F' in-front
+            hex_list.append('F')
+            hex_list.append(hex_str[indx])
+        # for last byte, reverse hex digits
+        hex_list.append(hex_str[-1])
+        hex_list.append(hex_str[-2])
         return X_(''.join(hex_list), length).dump()[0]
 
     def dump(self):

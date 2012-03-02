@@ -260,6 +260,13 @@ ins_op = {
                   for offset in range(len(pack_lst))
                   ]
             )() ),
+    'F3'   : ( 'UNPK', 5, lambda s : (
+            lambda pack_lst = zPE.p2c(__dump(s[7:10], s[6], __dclen(s[1])),
+                                      __dclen(s[0])) :
+                [ __ref(s[3:6], '0', s[2], pack_lst[offset], offset)
+                  for offset in range(len(pack_lst))
+                  ]
+            )() ),
     }
 
 def decode_op(mnem):

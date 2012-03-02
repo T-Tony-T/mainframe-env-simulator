@@ -63,6 +63,9 @@ def b2x(src):
 def c2p(src, length):
     return core.asm.P_.pack(src, length)
 
+def p2c(src, length):
+    return core.asm.P_.unpk(src, length)
+
 def h2x(src):
     return core.asm.X_.tr(core.asm.H_(src).dump())
 
