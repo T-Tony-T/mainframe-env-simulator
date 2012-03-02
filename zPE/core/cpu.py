@@ -4,7 +4,7 @@ import zPE
 
 from reg import GPR, SPR, Register, RegisterPair
 from mem import Memory
-from asm import len_op
+from asm import len_op, P_
 
 
 ### Interface Function Definition
@@ -254,14 +254,14 @@ ins_op = {
             for offset in range(__dclen(s[0:2]))
             ] ),
     'F2'   : ( 'PACK', 5, lambda s : (
-            lambda pack_lst = zPE.c2p(__dump(s[7:10], s[6], __dclen(s[1])),
+            lambda pack_lst = P_.pack(__dump(s[7:10], s[6], __dclen(s[1])),
                                       __dclen(s[0])) :
                 [ __ref(s[3:6], '0', s[2], pack_lst[offset], offset)
                   for offset in range(len(pack_lst))
                   ]
             )() ),
     'F3'   : ( 'UNPK', 5, lambda s : (
-            lambda pack_lst = zPE.p2c(__dump(s[7:10], s[6], __dclen(s[1])),
+            lambda pack_lst = P_.unpk(__dump(s[7:10], s[6], __dclen(s[1])),
                                       __dclen(s[0])) :
                 [ __ref(s[3:6], '0', s[2], pack_lst[offset], offset)
                   for offset in range(len(pack_lst))
