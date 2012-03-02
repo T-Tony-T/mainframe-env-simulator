@@ -4,7 +4,7 @@ import zPE
 
 from reg import GPR, SPR, Register, RegisterPair
 from mem import Memory
-from asm import len_op, P_
+from asm import len_op, X_, P_
 
 
 ### Interface Function Definition
@@ -267,6 +267,22 @@ ins_op = {
                   for offset in range(len(pack_lst))
                   ]
             )() ),
+    'F8'   : ( 'ZAP',  5, lambda s : __ref_dec(
+            s[3:6], __dclen(s[0]), s[2],
+            zPE.p2i(__dump(s[7:10],s[6],__dclen(s[1])))
+            ) ),
+    'FA'   : ( 'AP',   5, lambda s : __ref_dec(
+            s[3:6], __dclen(s[0]), s[2],
+            ( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) +
+              zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
+              )
+            ) ),
+    'FB'   : ( 'SP',   5, lambda s : __ref_dec(
+            s[3:6], __dclen(s[0]), s[2],
+            ( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) -
+              zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
+              )
+            ) ),
     }
 
 def decode_op(mnem):
@@ -324,6 +340,23 @@ def __ref(d, x, b, byte, offset = 0):
     ( page, addr ) = __page(d, x, b, 1, offset) # have to be byteword boundary
     page[addr] = byte
     return byte
+
+def __ref_dec(d, l, b, value):
+    if value > 0:
+        SPR['PSW'].CC = 2
+    elif value < 0:
+        SPR['PSW'].CC = 1
+    else:
+        SPR['PSW'].CC = 0
+    value = '{0:0>{1}}'.format(zPE.i2p(value), l * 2)
+    indx_s = len(value) / 2 - l
+    if indx_s:
+        SPR['PSW'].CC = 3
+
+    value = X_(value).dump()[0]
+    [ __ref(d, '0', b, value[offset], offset - indx_s)
+      for offset in range(indx_s, l)
+      ]
 
 def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
     ( page, addr ) = __page(d, x, b, al, offset)

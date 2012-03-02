@@ -449,17 +449,11 @@ def __PARSE_OUT_ASM(limit):
                 field_1, field_2, field_3
                 )
             if MNEMONIC[key][3]:
-                if MNEMONIC[key][3].valid:
-                    addr_1 = hex(MNEMONIC[key][3].get()[-1])[2:].upper()
-                else:
-                    addr_1 = '0'
+                addr_1 = hex(MNEMONIC[key][3])[2:].upper()
             else:
                 addr_1 = '     '
             if MNEMONIC[key][4]:
-                if MNEMONIC[key][4].valid:
-                    addr_2 = hex(MNEMONIC[key][4].get()[-1])[2:].upper()
-                else:
-                    addr_2 = '0'
+                addr_2 = hex(MNEMONIC[key][4])[2:].upper()
             else:
                 addr_2 = '     '
             tmp_str += '{0:0>5} {1:0>5}'.format(

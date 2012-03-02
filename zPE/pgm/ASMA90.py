@@ -246,12 +246,17 @@ def pass_1():
                 [],     # pool for constant with half-word alignment
                 [],     # pool for constant with byte alignment
                 ]
+            curr_pool_al = [ 8, 4, 2, 1 ]
+
             for lbl in const_pool_lbl:
                 alignment = zPE.core.asm.align_at(lbl[1])
-                for i in range(0,3):
-                    if alignment == 2 ** i:
-                        curr_pool[3 - i].append(lbl)
-                        break
+
+                sd_info = zPE.core.asm.parse_sd(lbl[1:])
+                sd_len  = sd_info[1] * sd_info[3]
+                if sd_len in curr_pool_al:
+                    alignment = max(alignment, sd_len)
+
+                curr_pool[curr_pool_al.index(alignment)].append(lbl)
 
             line_num_tmp = 0    # start insertion before next line
             for pool in curr_pool:

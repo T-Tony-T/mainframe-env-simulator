@@ -43,11 +43,11 @@ def mark4future(feature):
 
 
 ### Utility Mapping Definition
-fmt_name_map = {    'bw' : 'byte-word',    'hw' : 'half-word',
-                    'fw' : 'full-word',    'dw' : 'double-word',
-                    }
-fmt_align_map = {    'bw' : 1,    'hw' : 2,    'fw' : 4,    'dw' : 8,    }
-align_fmt_map = {    1 : 'bw',    2 : 'hw',    4 : 'fw',    8 : 'dw',    }
+fmt_name_map   = {    'bw' : 'byte-word',    'hw' : 'half-word',
+                      'fw' : 'full-word',    'dw' : 'double-word',
+                      }
+fmt_align_map  = {    'bw' : 1,    'hw' : 2,    'fw' : 4,    'dw' : 8,    }
+align_fmt_map  = {    1 : 'bw',    2 : 'hw',    4 : 'fw',    8 : 'dw',    }
 
 
 ### Utility Function Definition
@@ -65,6 +65,12 @@ def h2x(src):
 
 def f2x(src):
     return core.asm.X_.tr(core.asm.F_(src).dump())
+
+def p2i(src):
+    return core.asm.P_.tr_val(core.asm.X_(src).dump())
+
+def i2p(src):
+    return core.asm.X_.tr(core.asm.P_(str(src)).dump())
 
 
 def dic_append_list(dic, key, value):

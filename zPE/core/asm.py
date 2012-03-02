@@ -433,6 +433,7 @@ ext_mnem = {
 # Basic Instruction
 op_code = {
     'A'    : lambda: ('5A', R(1).rw(), X(2).ro().al('fw')),
+    'AP'   : lambda: ('FA', L(1,1).rw(),L(2,1).ro()),
     'AR'   : lambda: ('1A', R(1).rw(), R(2).ro()),
 
     'BAL'  : lambda: ('45', R(1).wo(), X(2).br().al('hw')),
@@ -483,6 +484,7 @@ op_code = {
     'PACK' : lambda: ('F2', L(1,1).rw(),L(2,1).ro()),
 
     'S'    : lambda: ('5B', R(1).rw(), X(2).ro().al('fw')),
+    'SP'   : lambda: ('FB', L(1,1).rw(),L(2,1).ro()),
     'SR'   : lambda: ('1B', R(1).rw(), R(2).ro()),
 
     'ST'   : lambda: ('50', R(1).ro(), X(2).wo().al('fw')),
@@ -494,6 +496,8 @@ op_code = {
 
     'X'    : lambda: ('57', R(1).rw(), X(2).ro().al('fw')),
     'XR'   : lambda: ('17', R(1).rw(), R(2).ro()),
+
+    'ZAP'  : lambda: ('F8', L(1,1).rw(),L(2,1).ro()),
     }
 
 
@@ -736,8 +740,7 @@ class P_(object):
         return self.tr(self.dump(), sign)
 
     def value(self):
-        ch_str = self.tr(self.dump(), '+')
-        return int(ch_str[-1] + ch_str[:-1])
+        return self.tr_val(self.dump())
 
     def set(self, ch_str, length = 0):
         # check sign
@@ -811,8 +814,13 @@ class P_(object):
             else:
                 raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         else:
-            raise ValueError('invalid hex value.')
+            raise ValueError('invalid sign digit.')
         return ''.join(ch_list)
+
+    @staticmethod
+    def tr_val(dump):
+        ch_str = P_.tr(dump, '+')
+        return int(ch_str[-1] + ch_str[:-1])
 
 
 # Exception:
