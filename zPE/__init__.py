@@ -7,6 +7,7 @@ from core.excptn import *       # pull all exceptions over
 from conf import RC             # pull Return Code definition over
 
 import os, sys, re
+import pkg_resources
 
 
 ### Diagnostic Function Definition
@@ -40,6 +41,9 @@ def abort(rc, *msg):
 def mark4future(feature):
     '''Mark the function as \"not implemented\".'''
     abort(1, ''.join(['\n\n!!! ', feature, ': feature not supported !!!\n\n']))
+
+def pkg_info():
+    return pkg_resources.require('mainframe-env-simulator')[0]
 
 
 ### Utility Mapping Definition

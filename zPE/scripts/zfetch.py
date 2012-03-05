@@ -1,5 +1,5 @@
 from zPE.conf import CONFIG_PATH
-from zPE import spool_decode
+from zPE import spool_decode, pkg_info
 
 import os, sys
 
@@ -11,6 +11,11 @@ def main(argv = sys.argv):
     prog_name = os.path.basename(argv[0])
     parser = prepare_option(prog_name)
     args = parser.parse_args(argv[1:])
+
+    if args.version:
+        info = pkg_info()
+        print info.project_name, info.version
+        return 0
 
     # check argument conflicts
     if args.list and args.purge:
@@ -199,17 +204,23 @@ def print_job_list(out, job_listing):
 
 def prepare_option(prog):
     parser = argparse.ArgumentParser(
-        prog = prog, usage = '',
-        formatter_class = argparse.RawDescriptionHelpFormatter,
-        description =
+        prog = prog, usage =
 '''
     %(prog)s  -l | -p [JOB_ID_PATTERN]
     %(prog)s [-o OUTPUT_FILE]  JOB_ID [DD_PATTERN]
 
-Note: JOB_ID_PATTERN can be a JOB ID, a pattern like '*1013?' (matches all
-      JOBs from 'JOB10130' to 'JOB10139'), or one of the following:
-          'first', 'last' : the first / last JOB in the JOB queue
-          'all'           : all JOBs in the JOB queue, same as '*'
+    %(prog)s  -h | -v
+''',
+        formatter_class = argparse.RawDescriptionHelpFormatter,
+        description =
+'''
+    Fetch the indicated job output into STDOUT, or OUTPUT_FILE if `-o`
+    presents.
+
+    Note: JOB_ID_PATTERN can be a JOB ID, a pattern like '*1013?' (matches
+          all JOBs from 'JOB10130' to 'JOB10139'), or one of the following:
+            'first', 'last' : the first / last JOB in the JOB queue
+            'all'           : all JOBs in the JOB queue, same as '*'
 '''
         )
 
@@ -267,6 +278,13 @@ Note: JOB_ID_PATTERN can be a JOB ID, a pattern like '*1013?' (matches all
         default = False,
         help = 'perge the indicated JOB(s) from the JOB queue',
         dest = 'purge'
+        )
+    parser.add_argument(
+        '-v', '--version',
+        action = 'store_true',
+        default = False,
+        help = 'display the version information',
+        dest = 'version'
         )
 
     return parser

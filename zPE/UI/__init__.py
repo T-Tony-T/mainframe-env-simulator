@@ -82,9 +82,9 @@ class BaseFrame(object):
         self.root.connect('destroy', self._sig_quit)
 
         self.root.set_title('zPE - Mainframe Programming Environment Simulator')
-        self.root.set_icon_from_file( os.path.join(
-                os.path.dirname(__file__), 'image', 'icon_zPE.gif'
-                ) )
+        self.root.set_icon( gtk.gdk.pixbuf_new_from_file(
+                os.path.join(os.path.dirname(__file__), 'image', 'icon_zPE.svg')
+                ))
         self.root.set_size_request(800, 560)
 
 
@@ -928,14 +928,21 @@ class ConfigWindow(gtk.Window):
         ct_editor_kr.set_label_widget(self.__label['FRAME'][-1])
         ct_editor.pack_start(ct_editor_kr, False, False, 10)
 
-        ct_editor_kr.add(gtk.Table(1, 2, False))
-        ct_editor_kr.child.set_col_spacings(5)
+        ct_editor_kr.add(gtk.Table(2, 3, False))
+        # ++-------------+-------+
+        # || label:      | entry |
+        # ++-------------+-------+
+        # || explanation | blank |
+        # ++-------------+-------+
+        ct_editor_kr.child.set_col_spacings(10)
 
         self.kill_ring_sz_entry = gtk.Entry()
-        self.__label['LABEL'].append(gtk.Label('Kill-Ring Size (maximum entries it can hold):'))
+        self.__label['LABEL'].append(gtk.Label('Kill-Ring Size:\n(maximum entries it can hold)'))
 
-        ct_editor_kr.child.attach(self.__label['LABEL'][-1], 0, 1, 1, 2, xoptions = gtk.SHRINK)
-        ct_editor_kr.child.attach(self.kill_ring_sz_entry,   1, 2, 1, 2, xoptions = gtk.FILL)
+        ct_editor_kr.child.attach(gtk.Label(''),             0, 1, 0, 2, xoptions = gtk.SHRINK)
+        ct_editor_kr.child.attach(self.__label['LABEL'][-1], 1, 2, 0, 2, xoptions = gtk.SHRINK)
+        ct_editor_kr.child.attach(self.kill_ring_sz_entry,   2, 3, 0, 1, xoptions = gtk.FILL)
+        ct_editor_kr.child.attach(gtk.Label(''),             2, 3, 1, 2, xoptions = gtk.FILL)
 
         self.kill_ring_sz_entry.connect('activate',        self._sig_kill_ring_sz_entered)
         self.kill_ring_sz_entry.connect('focus-out-event', self._sig_kill_ring_sz_entered)
@@ -1010,6 +1017,52 @@ class ConfigWindow(gtk.Window):
         ct_system_debug.child.pack_start(self.debug_zsub, False, False, 10)
 
         self.debug_zsub.connect('toggled', self._sig_debug_zsub)
+
+
+        ## About
+        ct_about = gtk.HBox()
+        self.__label['TAB'].append(gtk.Label('About'))
+        center.append_page(ct_about, self.__label['TAB'][-1])
+
+        # Icon
+        ct_about_icon = gtk.Image()
+        ct_about_icon.set_from_pixbuf(
+            gtk.gdk.pixbuf_new_from_file_at_size(
+                os.path.join(os.path.dirname(__file__), 'image', 'icon_zPE.svg'),
+                192, 192
+                ))
+        ct_about.pack_start(ct_about_icon, False, False, 25)
+
+        # Content
+        ct_about_content = gtk.VBox()
+        ct_about.pack_start(ct_about_content, False, False, 5)
+
+        ct_about_content_title = gtk.Label()
+        ct_about_content_title.set_markup(
+'''
+<span size="32000"><b>zPE</b></span>
+<span size="14000">Mainframe Programming\nEnvironment Simulator</span>
+''')
+        ct_about_content_title.set_alignment(0, 0.5)
+        ct_about_content.pack_start(ct_about_content_title, False, False, 5)
+
+        ct_about_content_version = gtk.Label()
+        ct_about_content_version.set_markup('<span size="14000">Version: {0}</span>'.format(zPE.pkg_info().version))
+        ct_about_content_version.set_alignment(0, 0.5)
+        ct_about_content.pack_start(ct_about_content_version, False, False, 5)
+
+        ct_about_content_license = gtk.Label()
+        ct_about_content_license.set_markup(
+'''
+<span size="10000">
+New BSD License
+Copyright (c) 2011,
+Northern Illinois University
+All rights reserved
+</span>
+''')
+        ct_about_content_license.set_alignment(0, 0.5)
+        ct_about_content.pack_start(ct_about_content_license, True, True, 5)
 
 
         ### separator

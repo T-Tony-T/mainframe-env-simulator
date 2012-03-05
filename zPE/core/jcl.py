@@ -145,7 +145,7 @@ def parse(job):
             line = '//SYSIN     DD *               GENERATED STATEMENT\n'
 
         # check end of JCL marker
-        elif line[2:].isspace():
+        elif len(line) == 2  or  line[2:].isspace():
             zPE.JCL['read_cnt'] -= 1    # END mark does not count
             break
 

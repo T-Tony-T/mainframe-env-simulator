@@ -9,13 +9,17 @@ def main(argv = sys.argv):
     parser = prepare_option(os.path.basename(argv[0]))
     args = parser.parse_args(argv[1:])
 
-    if args.list:
+    if args.version:
+        info = zPE.pkg_info()
+        print info.project_name, info.version
+        return 0
+    elif args.list:
         zPE.LIST_PGM()
         return 0
 
     if not args.job_file:
         parser.print_help()
-        return 0
+        return -1
 
     zPE.conf.read_rc()
     zPE.debug_mode(args.debug)
@@ -78,12 +82,21 @@ def submit(job):
 
 def prepare_option(prog):
     parser = argparse.ArgumentParser(
-        prog = prog, usage = '',
+        prog = prog, usage =
+'''
+    %(prog)s  [-o OUTPUT_FILE]  [--debug]  JOB_FILE
+
+    %(prog)s  -l
+    %(prog)s  -h | -v
+''',
         formatter_class = argparse.RawDescriptionHelpFormatter,
         description =
 '''
-    %(prog)s  -h | -l
-    %(prog)s  [-o OUTPUT_FILE]  [--debug]  JOB_FILE
+    Submit an JCL job to be executed. Fetch the output to OUTPUT_FILE if
+    `-o` is specified.
+
+    With `--debug` option, diagnostic infomation of the simulator itself
+    will be generated (on STDOUT).
 '''
         )
 
@@ -117,9 +130,19 @@ def prepare_option(prog):
         action = 'store',
         nargs = 1,
         default = [],
-        help = "fetch the current job's output to the indicated file after the submission",
+        help = ''.join([
+                "fetch the current job's output to the indicated file ",
+                'after the submission',
+                ]),
         metavar='OUTPUT_FILE',
         dest = 'output'
+        )
+    parser.add_argument(
+        '-v', '--version',
+        action = 'store_true',
+        default = False,
+        help = 'display the version information',
+        dest = 'version'
         )
 
     return parser
