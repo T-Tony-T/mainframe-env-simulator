@@ -269,19 +269,40 @@ ins_op = {
             )() ),
     'F8'   : ( 'ZAP',  5, lambda s : __ref_dec(
             s[3:6], __dclen(s[0]), s[2],
-            zPE.p2i(__dump(s[7:10],s[6],__dclen(s[1])))
+            zPE.p2i(__dump(s[7:10],s[6],__dclen(s[1]))),
+            cc = True, ex = None # set CC, no exception checking
+            ) ),
+    'F9'   : ( 'CP',   5, lambda s : __cmp_dec(
+            zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ),
+            zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
             ) ),
     'FA'   : ( 'AP',   5, lambda s : __ref_dec(
             s[3:6], __dclen(s[0]), s[2],
             ( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) +
               zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
-              )
+              ),
+            cc = True, ex = None # set CC, no exception checking
             ) ),
     'FB'   : ( 'SP',   5, lambda s : __ref_dec(
             s[3:6], __dclen(s[0]), s[2],
             ( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) -
               zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
-              )
+              ),
+            cc = True, ex = None # set CC, no exception checking
+            ) ),
+    'FC'   : ( 'MP',   5, lambda s : __ref_dec(
+            s[3:6], __dclen(s[0]), s[2],
+            ( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) *
+              zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
+              ),
+            cc = False, ex = __dclen(s[1])
+            ) ),
+    'FD'   : ( 'DP',   5, lambda s : __ref_dec(
+            s[3:6], __dclen(s[0]), s[2],
+            divmod( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ),
+                    zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
+                    ),
+            cc = False, ex = __dclen(s[1])
             ) ),
     }
 
@@ -341,18 +362,46 @@ def __ref(d, x, b, byte, offset = 0):
     page[addr] = byte
     return byte
 
-def __ref_dec(d, l, b, value):
-    if value > 0:
-        SPR['PSW'].CC = 2
-    elif value < 0:
-        SPR['PSW'].CC = 1
+def __ref_dec(d, l, b, value, cc = True, ex = None):
+    '''
+    value: result / (quotient, reminder)
+    cc:    True / False
+    ex:    None / L2 - required if value = (quotient, reminder)
+    '''
+    ex_action = 'M'             # will be ignored if ex == None
+    if isinstance(value, int) or isinstance(value, long):
+        value = '{0:0>{1}}'.format(zPE.i2p(value), l * 2)
+    elif not ex:
+        zPE.abort(-1, 'Error: zPE.core.cpu.__ref_dec(): invalid call.\n')
     else:
-        SPR['PSW'].CC = 0
-    value = '{0:0>{1}}'.format(zPE.i2p(value), l * 2)
+        value = '{0:0>{1}}{2:0>{3}}'.format(
+            zPE.i2p(value[0]), (l - ex) * 2, # store quotient in D1(L1-L2,B1)
+            zPE.i2p(value[1]), ex * 2        # store reminder in D1+L1-L2(L2,B2)
+            )
+        ex_action = 'D'
     indx_s = len(value) / 2 - l
-    if indx_s:
-        SPR['PSW'].CC = 3
-
+    if cc:                      # condition code is to be set
+        if indx_s:
+            SPR['PSW'].CC = 3
+        elif value > 0:
+            SPR['PSW'].CC = 2
+        elif value < 0:
+            SPR['PSW'].CC = 1
+        else:
+            SPR['PSW'].CC = 0
+    if ex:                      # exception is to be checked
+        if l <= ex:
+            raise zPE.newSpecificationException()
+        if ex_action == 'M':
+            if __h2i(__dump(d,b,ex)):
+                raise zPE.newDataException()
+        if ex_action == 'D':
+            if ex > 8:
+                raise zPE.newSpecificationException()
+            if indx_s:
+                raise zPE.newDecimalDivideException()
+            
+    # store back the new value
     value = X_(value).dump()[0]
     [ __ref(d, '0', b, value[offset], offset - indx_s)
       for offset in range(indx_s, l)
@@ -397,3 +446,12 @@ def __cmp_lgc(val_l, val_r, skip = False):
     if skip:
         return None
     return Register(val_l).cmp_lgc(val_r)
+
+def __cmp_dec(val_l, val_r):
+    if val_l == val_r:
+        SPR['PSW'].CC = 0
+    elif val_l < val_r:
+        SPR['PSW'].CC = 1
+    else:
+        SPR['PSW'].CC = 2
+    return SPR['PSW'].CC

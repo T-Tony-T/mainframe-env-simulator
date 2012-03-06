@@ -1563,7 +1563,10 @@ def pass_2():
                     elif reloc_arg[0] == '=':
                         # =constant
                         lbl_8 = reloc_arg
-                        reg_indx = 0
+                        if op_code[op_args[lbl_i]].type == 'L':
+                            reg_indx = __HAS_EQ(lbl_8, scope_id).length
+                        else:
+                            reg_indx = 0
                     else:
                         # label
                         lbl_8 = '{0:<8}'.format(reloc_arg)

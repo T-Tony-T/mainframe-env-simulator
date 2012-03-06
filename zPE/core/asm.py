@@ -450,9 +450,11 @@ op_code = {
     'CLC'  : lambda: ('D5', L(1,2).ro(), S(2).ro()), # LL + bddd format
     'CLI'  : lambda: ('95', S(1).ro(), I(2).ro()),
     'CLR'  : lambda: ('15', R(1).ro(), R(2).ro()),
+    'CP'   : lambda: ('F9', L(1,1).ro(),L(2,1).ro()),
     'CR'   : lambda: ('19', R(1).ro(), R(2).ro()),
 
     'D'    : lambda: ('5D', R(1).rw().al('hw'), X(2).ro().al('fw')),
+    'DP'   : lambda: ('FD', L(1,1).rw(),L(2,1).ro()),
     'DR'   : lambda: ('1D', R(1).rw().al('hw'), R(2).ro()),
 
     'EX'   : lambda: ('44', R(1).ro(), X(2).ex()),
@@ -470,6 +472,7 @@ op_code = {
     'LTR'  : lambda: ('12', R(1).rw(), R(2).ro()),
 
     'M'    : lambda: ('5C', R(1).rw().al('hw'), X(2).ro().al('fw')),
+    'MP'   : lambda: ('FC', L(1,1).rw(),L(2,1).ro()),
     'MR'   : lambda: ('1C', R(1).rw().al('hw'), R(2).ro()),
 
     'MVC'  : lambda: ('D2', L(1,2).rw(), S(2).ro()), # LL + bddd format
@@ -728,7 +731,7 @@ class B_(object):
 # Exception:
 #   SyntaxError: if sign is not invalid
 #   TypeError:   if the value is not packed
-#   ValueError:  if the string contains invalid digit (except pack() & unpk())
+#   DataException: if the string contains invalid digit (except pack() & unpk())
 class P_(object):
     def __init__(self, ch_str, length = 0):
         self.set(ch_str, length)
@@ -796,7 +799,12 @@ class P_(object):
         hex_val = '{0:0>2}'.format(hex(vals[-1])[2:].upper())
         ch_list.append(chr(int('F'+ hex_val[0], 16)).decode('EBCDIC-CP-US'))
 
-        int(''.join(ch_list))   # check format
+        # check format
+        ch_list = [ ''.join(ch_list) ]
+        if not ch_list[0].isdigit():
+            raise zPE.newDataException()
+
+        # check sign
         if hex_val[1] in 'FACE':
             if sign == '+':
                 ch_list.append('+')
@@ -814,7 +822,7 @@ class P_(object):
             else:
                 raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         else:
-            raise ValueError('invalid sign digit.')
+            raise zPE.newDataException()
         return ''.join(ch_list)
 
     @staticmethod
