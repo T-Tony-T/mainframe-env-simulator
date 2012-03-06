@@ -685,6 +685,11 @@ class zStrokeListener(gobject.GObject):
                 # only check SHIFT modifier when a function key is pressed
                 key_name = 'S-' + key_name
 
+        elif len(key_name) == 1 and key_name.isalpha():
+            # letters
+            if (event.state & gtk.gdk.LOCK_MASK) == gtk.gdk.LOCK_MASK:
+                key_name = key_name.swapcase()
+
         if (event.state & ctrl_mod_mask) == ctrl_mod_mask:
             stroke = 'C-M-' + key_name
 

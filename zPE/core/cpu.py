@@ -213,7 +213,7 @@ ins_op = {
             __reg(s[0], offset).store(* __page(s[3:6],'0',s[2],4,offset))
             for offset in (
                 lambda R1 = __h2i(s[0]), R2 = __h2i(s[1]) :
-                    range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
+                    range([ R1 + i for i in range(16) ][R2 - R1] - R1 + 1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
     '92'   : ( 'MVI',  3, lambda s : __ref(s[3:6],'0',s[2],s[0:2]) ),
@@ -224,7 +224,7 @@ ins_op = {
             __reg(s[0], offset).load(  __deref(s[3:6],'0',s[2],4,offset))
             for offset in (
                 lambda R1 = __h2i(s[0]), R2 = __h2i(s[1]) :
-                    range([ R1 + i for i in range(16) ][R2 - R1 + 1] - R1)
+                    range([ R1 + i for i in range(16) ][R2 - R1] - R1 + 1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
     'BE'   : ( 'STCM', 3, lambda s : (

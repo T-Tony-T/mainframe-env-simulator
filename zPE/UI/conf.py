@@ -464,7 +464,13 @@ def read_rc():
         (k, v) = re.split('[ \t]*=[ \t]*', line, maxsplit=1)
 
         if label == 'MISC':
-            if k == 'key_binding':
+            if k in [ 'tab_on', 'tab_grouped', 'debug_mode', ]:
+                if v and v not in STR_FALSE:
+                    Config[label][k] = 1
+                else:
+                    Config[label][k] = 0
+
+            elif k == 'key_binding':
                 if v in DEFAULT_FUNC_KEY_BIND_KEY:
                     Config[label][k] = v
                 else:
@@ -481,24 +487,6 @@ def read_rc():
                 except ValueError:
                     Config[label][k] = DEFAULT['MISC']['KILL_RING_SZ']
                     sys.stderr.write('CONFIG WARNING: {0}: Invalid kill-ring size.\n'.format(v))
-
-            elif k == 'tab_on':
-                if v and v not in STR_FALSE:
-                    Config[label][k] = 1
-                else:
-                    Config[label][k] = 0
-
-            elif k == 'tab_grouped':
-                if v and v not in STR_FALSE:
-                    Config[label][k] = 1
-                else:
-                    Config[label][k] = 0
-
-            elif k == 'debug_mode':
-                if v and v not in STR_FALSE:
-                    Config[label][k] = 1
-                else:
-                    Config[label][k] = 0
 
         elif label == 'FONT':
             if k == 'name':
@@ -545,7 +533,6 @@ def read_rc():
                 else:
                     Config[label][k] = zComp.io_encap.norm_path( DEFAULT['ENV']['STARTING_PATH'] )
                     sys.stderr.write('CONFIG WARNING: {0}: Invalid starting path.\n'.format(v))
-
     write_rc()
 
 

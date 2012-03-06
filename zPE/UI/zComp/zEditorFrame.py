@@ -134,21 +134,23 @@ class zEdit(z_ABC, gtk.VBox):
 
         # layout of the frame:
         #
-        #                      tabbar (can be turn off)
-        #   +--+--+---------+_/
-        #   +--+--+---------+_
-        #   ||              | \
-        #   ||              |  center_shell
-        #   ||    center    |
-        #   ||              |
-        #   |+--------------|
-        #   +-+-+--+--------+
-        #   |w|m|sw| bottom |
-        #   +-+-+--+--------+
-        #    | | |
+        #                          tabbar (can be turn off)
+        #   +--+--+--+----------+_/
+        #   +--+--+--+----------+_
+        #   ||                  | \
+        #   ||                  |  center_shell
+        #   ||      center      |
+        #   ||                  |
+        #   |+------------------|
+        #   +-+-+--+--+-+-------+
+        #   |w|m|sw|md|c|       |
+        #   +-+-+--+--+-+-------+
+        #    | | |  |  |
+        #    | | |  |  +- buffer caps on / off flag
+        #    | | |  +- buffer editing mode switcher
         #    | | +- buffer switcher
-        #    | +- modified flag
-        #    +- writeable flag
+        #    | +- buffer modified flag
+        #    +- buffer writeable flag
 
         # create tabbar if turned on
         self.tab_on_current = False
@@ -183,6 +185,21 @@ class zEdit(z_ABC, gtk.VBox):
 
         self.buffer_sw.set_row_separator_func(self.__separator)
 
+        # create editing-mode switcher
+        self.buffer_md = zComboBox()
+        self.bottom.pack_start(self.buffer_md, False, False, 0)
+
+        self.buffer_md.set_row_separator_func(self.__separator)
+        self.buffer_md.append(['Text Mode   ', False]) # mark for future implementation
+
+        # create caps-on flag button
+        self.buffer_c = zToolButton('C')
+        self.buffer_c.set_width_chars(8)
+        self.buffer_c.set_tooltip_markup('<tt>this has nothing to do with "Caps Lock" key</tt>')
+        self.bottom.pack_start(self.buffer_c, False, False, 0)
+
+        self.buffer_c.connect('clicked', self._sig_buffer_caps_toggled)
+
         # create the main window frame
         self.center_shell = None
         self.center = None
@@ -192,7 +209,9 @@ class zEdit(z_ABC, gtk.VBox):
         zEdit.register('update_tabbar', self._sig_update_tabbar, self)
 
         zEditBuffer.register('buffer_modified_set', self._sig_buffer_modified_set, None)
-        zEditBuffer.register('buffer_removed', self._sig_buffer_removed, None)
+        zEditBuffer.register('buffer_removed',      self._sig_buffer_removed,      None)
+
+        zEditBuffer.register('buffer_caps_set',     self._sig_buffer_caps_set,     None)
 
         zEditBuffer.register('buffer_list_modified', zEdit._sig_buffer_list_modified, self)
         zEdit._sig_buffer_list_modified(self)
@@ -346,9 +365,11 @@ class zEdit(z_ABC, gtk.VBox):
     def _sig_update_font(self, widget = None):
         if self.tab_on_current:
             zTheme._sig_update_font_modify(self.tabbar, 0.75)
-        zTheme._sig_update_font_modify(self.buffer_w, 0.85)
-        zTheme._sig_update_font_modify(self.buffer_m, 0.85)
+        zTheme._sig_update_font_modify(self.buffer_w,  0.85)
+        zTheme._sig_update_font_modify(self.buffer_m,  0.85)
         zTheme._sig_update_font_modify(self.buffer_sw, 0.85)
+        zTheme._sig_update_font_modify(self.buffer_md, 0.85)
+        zTheme._sig_update_font_modify(self.buffer_c,  0.85)
         self.resize()
 
     def _sig_update_color_map(self, widget = None):
@@ -382,6 +403,15 @@ class zEdit(z_ABC, gtk.VBox):
         self.buffer_sw.modify_fg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['text']))
         self.buffer_sw.modify_bg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['base']))          # for menu
         self.buffer_sw.modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['base_selected'])) # for combo
+
+        self.buffer_md.modify_fg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_md.modify_fg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_md.modify_bg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['base']))          # for menu
+        self.buffer_md.modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['base_selected'])) # for combo
+
+        self.buffer_c.modify_fg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_c.modify_fg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['text']))
+        self.buffer_c.modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
 
         # focus relevant
         if self.is_focus():
@@ -465,6 +495,7 @@ class zEdit(z_ABC, gtk.VBox):
             zEdit.reg_emit('buffer_focus_in')
         self.update_theme_focus_in()
         self._sig_buffer_modified_set()
+        self._sig_buffer_caps_set()
 
     def _sig_focus_out(self, widget, event):
         if len(zEdit._auto_update['buffer_focus_out']):
@@ -609,6 +640,12 @@ class zEdit(z_ABC, gtk.VBox):
             zEdit.focused_widget.grab_focus()
         else:
             self.grab_focus()
+
+    def _sig_buffer_caps_toggled(self, bttn):
+        self.active_buffer.toggle_caps_on()
+
+    def _sig_buffer_caps_set(self, widget = None):
+        self.buffer_c.set_label([ 'Caps Off', 'Caps On ' ][self.caps_on()])
     ### end of signal for bottom
 
 
@@ -896,6 +933,10 @@ class zEdit(z_ABC, gtk.VBox):
         return False
 
 
+    def caps_on(self):
+        return self.active_buffer.caps_on
+
+
     @staticmethod
     def get_last_line():
         return zEdit.__last_line
@@ -1014,6 +1055,7 @@ class zEditBuffer(z_ABC):
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'buffer_list_modified'    : [  ],
         'buffer_modified_set'     : [  ],
+        'buffer_caps_set'         : [  ],
         'buffer_removed'          : [  ],
         }
 
@@ -1115,10 +1157,13 @@ class zEditBuffer(z_ABC):
 
         # fetch content
         self.modified = None    # will be set after determining the content
+        self.caps_on  = None    # will be set after determining the content
+
         if self.type == 'file':
             self.buffer = gtk.TextBuffer()
             self.buffer.reloading = False
             self.__reload_buffer()
+            self.set_caps_on(True)
 
             # connect internal signals
             self.buffer.connect('changed', self._sig_buffer_content_changed)
@@ -1128,6 +1173,7 @@ class zEditBuffer(z_ABC):
             self.writable = False # whether can be saved
             self.editable = None  # whether can be modified
             self.set_modified(False)
+            self.set_caps_on(False)
 
         elif buffer_type == 'disp':
             self.buffer   = gtk.TextBuffer()
@@ -1135,9 +1181,9 @@ class zEditBuffer(z_ABC):
             self.writable = False # whether can be saved
             self.editable = None  # whether can be modified
             self.set_modified(False)
+            self.set_caps_on(False)
         else:
             raise TypeError
-
         return self
 
 
@@ -1151,6 +1197,14 @@ class zEditBuffer(z_ABC):
         if setting != self.modified:
             self.modified = setting
             zEditBuffer.reg_emit('buffer_modified_set')
+
+    def set_caps_on(self, setting):
+        if setting != self.caps_on:
+            self.caps_on = setting
+            zEditBuffer.reg_emit('buffer_caps_set')
+
+    def toggle_caps_on(self):
+        self.set_caps_on(not self.caps_on)
 
 
     @staticmethod

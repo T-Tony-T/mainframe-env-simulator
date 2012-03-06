@@ -1611,6 +1611,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     def insert_text(self, text):
+        if self.get_editor().caps_on():
+            text = text.upper()
         if self.get_overwrite():        # overwrite mode
             # un-select selection region, if any
             self.cancel_action()
