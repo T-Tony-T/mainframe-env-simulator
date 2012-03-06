@@ -41,6 +41,9 @@ class zEdit(z_ABC, gtk.VBox):
         'buffer_undo',
         'buffer_redo',
 
+        'caps_on',
+        'caps_off',
+
         'tabbar_mode',
         'tabbar_prev',
         'tabbar_next',
@@ -117,6 +120,9 @@ class zEdit(z_ABC, gtk.VBox):
 
             'buffer_undo'    : lambda msg: self.undo(),
             'buffer_redo'    : lambda msg: self.redo(),
+
+            'caps_on'        : lambda msg: self.active_buffer.set_caps_on(True),
+            'caps_off'       : lambda msg: self.active_buffer.set_caps_on(False),
 
             'tabbar_mode'    : lambda msg: zEdit.toggle_tabbar_mode(),
             'tabbar_prev'    : lambda msg: self.switch_tab_to('prev'),
