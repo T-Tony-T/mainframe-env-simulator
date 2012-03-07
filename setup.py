@@ -12,14 +12,38 @@ def read(fname):
 
 setup(
     name = "mainframe-env-simulator",
-    version = "0.1.2",
+    keywords = "simulator mainframe compiler",
+
+    # M.FFF{.dev-rR} / M.FFF-rcP / M.FFF[-B]
+    # where as:
+    #   M - Major Version Number (int)
+    #   F - Functional Update Number (alnum[3])
+    #   R - SVN Revision Number (int) [ developing version ]
+    #   P - Pre-Release Number (int)  [ release candidate  ]
+    #   B - Bug-Fix Number (int)      [ normal release     ]
+    version = "0.618",
+    # note:
+    #   Major version is considered as:
+    #     0 - None   Fully Functional - current
+    #     1 - ASSIST Fully Functional - coming
+    #     2 - HLASM  Fully Functional - planning
+    #     3 - COBOL  Fully Functional - planning
+    #     4 - ...
+    #   {.dev-rR} is appended by ./setup.cfg; remove it before packaging
+    #   [-B] is optional; add it only for bug-fixes
+
     author = "Tony C. Zhang",
     author_email = "niu.tony.c.zhang@gmail.com",
-    description = ("This software is a Mainframe Programming Environment Simulator running on PC (Linux, Max OS, Windows, etc.) that will compile / assemble source code written to be compiled / assembled on a Mainframe machine. The final goal is to let the developer work on their own PC when developing / testing their programs without worrying about internet connection or connection to a Mainframe machine. It is also aimed at reduce the teaching cost of IBM Assembler, COBOL, etc."),
-    license = "New BSD",
-    keywords = "Simulator mainframe compiler",
     url = "http://code.google.com/p/mainframe-env-simulator/",
-    packages=find_packages(),
+
+    description = ("This software is a Mainframe Programming Environment Simulator running on PC (Linux, Max OS, Windows, etc.) that will compile / assemble source code written to be compiled / assembled on a Mainframe machine. The final goal is to let the developer work on their own PC when developing / testing their programs without worrying about internet connection or connection to a Mainframe machine. It is also aimed at reduce the teaching cost of IBM Assembler, COBOL, etc."),
+    long_description=read('README'),
+    license = "New BSD",
+
+    packages = find_packages(),
+    include_package_data = True, # include every data file under SVN control
+    zip_safe = False,            # do NOT install as a zip file; install as dir
+
     entry_points = {
         'console_scripts': [
             'zsub = zPE.scripts.zsub:main',
@@ -29,9 +53,6 @@ setup(
             'zPE = zPE.zPE_gtk:main',
             ],
         },
-    include_package_data = True, # include every data file under SVN control
-    zip_safe = False,            # do NOT install as a zip file; install as dir
-    long_description=read('README'),
     )
 
 
