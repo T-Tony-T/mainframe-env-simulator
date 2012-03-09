@@ -156,6 +156,8 @@ ins_op = {
     '1B'   : ( 'SR',   1, lambda s : __reg(s[0])  - __reg(s[1]) ),
     '1C'   : ( 'MR',   1, lambda s : __pair(s[0]) * __reg(s[1]) ),
     '1D'   : ( 'DR',   1, lambda s : __pair(s[0]) / __reg(s[1]) ),
+    '1E'   : ( 'ALR',  1, lambda s : __reg(s[0]).add_lgc(__reg(s[1])) ),
+    '1F'   : ( 'SLR',  1, lambda s : __reg(s[0]).sub_lgc(__reg(s[1])) ),
     '41'   : ( 'LA',   3,
                lambda s : __reg(s[0]).load( __addr(s[3:6],s[1],s[2])   )
                ),
@@ -195,6 +197,12 @@ ins_op = {
     '5B'   : ( 'S',    3, lambda s : __reg(s[0])  - __deref(s[3:6],s[1],s[2]) ),
     '5C'   : ( 'M',    3, lambda s : __pair(s[0]) * __deref(s[3:6],s[1],s[2]) ),
     '5D'   : ( 'D',    3, lambda s : __pair(s[0]) / __deref(s[3:6],s[1],s[2]) ),
+    '5E'   : ( 'AL',   3,
+               lambda s : __reg(s[0]).add_lgc(__deref(s[3:6],s[1],s[2]))
+               ),
+    '5F'   : ( 'SL',   3,
+               lambda s : __reg(s[0]).sub_lgc(__deref(s[3:6],s[1],s[2]))
+               ),
     '86'   : ( 'BXH',  3, lambda s : (
             lambda R1 = __reg(s[0]), R2_num = __h2i(s[1]) : [
                 R1 + GPR[R2_num],                           # add increment

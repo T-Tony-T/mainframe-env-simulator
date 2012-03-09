@@ -49,6 +49,22 @@ class Register(Union):
             return self.__overflow()
         else:                   # no overflow, test sign
             return self.test()
+    def add_lgc(self, other):
+        '''
+        ALR  R1,R2      =>      R1.add_lgc(R2)
+        AL   R1,addr    =>      R1.add_lgc(value@addr)
+        '''
+        if not isinstance(other, Register):
+            other = Register(other) # try converting the argument to a register
+        carry = self.long + other.long # perform the addition
+        self.long = carry              # fill the register
+        carry >>= 32                   # get the carry
+        # 00 - carry 0, res 0
+        # 01 - carry 0, res non-zero
+        # 10 - carry 1, res 0
+        # 11 - carry 1, res non-zero
+        SPR['PSW'].CC = (bool(carry) << 1) + bool(self.int)
+        return SPR['PSW'].CC
 
     def __sub__(self, other):
         '''
@@ -59,6 +75,31 @@ class Register(Union):
             return self.__add__(Register(- other.int))
         else:
             return self.__add__(Register(- other))
+    def sub_lgc(self, other):
+        '''
+        SLR  R1,R2      =>      R1.sub_lgc(R2)
+        SL   R1,addr    =>      R1.sub_lgc(value@addr)
+        '''
+        # get the 2's complement
+        if not isinstance(other, Register):
+            other = Register(- other)
+        else:
+            other.long = (- other.int)
+        carry = self.long + other.long # perform the addition
+        self.long = carry              # fill the register
+        carry >>= 32                   # get the carry
+        # 00 - never
+        # 01 - carry 0, res non-zero
+        # 10 - res 0
+        # 11 - carry 1, res non-zero
+        if not self.int:
+            SPR['PSW'].CC = 2
+        else:
+            if carry:
+                SPR['PSW'].CC = 3
+            else:
+                SPR['PSW'].CC = 1
+        return SPR['PSW'].CC
 
 
     def __nonzero__(self):

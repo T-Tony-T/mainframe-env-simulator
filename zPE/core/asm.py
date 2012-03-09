@@ -433,6 +433,8 @@ ext_mnem = {
 # Basic Instruction
 op_code = {
     'A'    : lambda: ('5A', R(1).rw(), X(2).ro().al('fw')),
+    'AL'   : lambda: ('5E', R(1).rw(), X(2).ro().al('fw')),
+    'ALR'  : lambda: ('1E', R(1).rw(), R(2).ro()),
     'AP'   : lambda: ('FA', L(1,1).rw(),L(2,1).ro()),
     'AR'   : lambda: ('1A', R(1).rw(), R(2).ro()),
 
@@ -487,6 +489,8 @@ op_code = {
     'PACK' : lambda: ('F2', L(1,1).rw(),L(2,1).ro()),
 
     'S'    : lambda: ('5B', R(1).rw(), X(2).ro().al('fw')),
+    'SL'   : lambda: ('5F', R(1).rw(), X(2).ro().al('fw')),
+    'SLR'  : lambda: ('1F', R(1).rw(), R(2).ro()),
     'SP'   : lambda: ('FB', L(1,1).rw(),L(2,1).ro()),
     'SR'   : lambda: ('1B', R(1).rw(), R(2).ro()),
 
