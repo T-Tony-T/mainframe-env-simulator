@@ -7,7 +7,7 @@ import re
 
 ### Valid ASM Instruction
 ASM_INSTRUCTION = set([
-        'TITLE', 'EJECT'
+        'TITLE', 'EJECT', 'SPACE',
         'CSECT', 'DSECT',
         'USING', 'DROP',
         'END',

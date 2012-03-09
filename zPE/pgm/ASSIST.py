@@ -243,7 +243,29 @@ def __PARSE_OUT_ASM(limit):
         ctrl = ' '
 
         if line_num not in MNEMONIC:
-            # comments, MACRO definition, etc.
+            # comment, EJECT, SPACE, MACRO definition, etc.
+            field = zPE.resplit_sq(r'\s+', line[:-1], 3)
+
+            if len(field) > 1 and field[1] == 'EJECT':
+                ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
+                    spo, title, [ ], CNT['pln'], CNT['page'],
+                    new_page = True, print_none = True
+                    )
+                continue
+
+            elif len(field) > 1 and field[1] == 'SPACE':
+                p_line = [ ]
+                if len(field) > 2:
+                    space_n = int(field[2])
+                else:
+                    space_n = 1
+                line_left = ASM_PARM['LN_P_PAGE'] - CNT['pln']
+                for i in range(min(space_n, line_left)):
+                    ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
+                        spo, title, [ ' \n' ], CNT['pln'], CNT['page']
+                        )
+                continue
+
             if line_did == None:
                 p_line = [      # regular input line
                     ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
@@ -251,6 +273,7 @@ def __PARSE_OUT_ASM(limit):
                     '{0:8}'.format(''), # 8 spaces
                     '\n',
                     ]
+
             elif isinstance(line_did, int) or line_did.isdigit():
                 p_line = [      # regular input line
                     ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
@@ -258,6 +281,7 @@ def __PARSE_OUT_ASM(limit):
                     '{0:0>4}{1:0>4}'.format(line_did, '----'), # need info
                     '\n',
                     ]
+
             else:
                 p_line = [      # expanded line
                     ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
@@ -265,9 +289,10 @@ def __PARSE_OUT_ASM(limit):
                     line_did,   # deck ID
                     '\n',
                     ]
+
             ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
                 spo, title, p_line, CNT['pln'], CNT['page']
-                )                
+                )
             continue
 
 
@@ -436,7 +461,7 @@ def __PARSE_OUT_ASM(limit):
         elif len(MNEMONIC[key]) == 4: # type 4
             tmp_str += '{0:<14} {1:0>5} {0:>5}'.format(
                 '', loc
-                )            
+                )
         elif len(MNEMONIC[key]) == 5: # type 5
             code = zPE.core.asm.prnt_op(MNEMONIC[key][2])
             if len(code) == 12:
@@ -500,7 +525,8 @@ def __PARSE_OUT_ASM(limit):
     return cnt_err
 
 
-def __PRINT_LINE(spool_out, title, line_words, line_num, page_num):
+def __PRINT_LINE(spool_out, title, line_words, line_num, page_num,
+                 new_page = False, print_none = False):
     '''
     spool_out
         the spool that the header is written to
@@ -513,17 +539,26 @@ def __PRINT_LINE(spool_out, title, line_words, line_num, page_num):
     page_num
         the current page number
 
+    new_page
+        force the line to be printed on a new page
+    print_none
+        ignore the line to be printed. used with `new_page` to force page switch
+
     return value
         a two-tuple containing the new line number
         and the new page number after the line is
         inserted
     '''
-    if line_num >= ASM_PARM['LN_P_PAGE']:
+    if new_page or line_num >= ASM_PARM['LN_P_PAGE']:
         page_num += 1           # new page
         line_num = __PRINT_HEADER(spool_out, title, 0, page_num)
-    spool_out.append(* line_words)
+    if print_none:
+        ctrl = None
+    else:
+        spool_out.append(* line_words)
+        ctrl = line_words[0][0]
 
-    return ( line_num + zPE.SPOOL_CTRL_MAP[line_words[0][0]], page_num )
+    return ( line_num + zPE.SPOOL_CTRL_MAP[ctrl], page_num )
 
 
 def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):

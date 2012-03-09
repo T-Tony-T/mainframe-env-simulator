@@ -199,10 +199,11 @@ def bad_label(label):
 
 SPOOL_CTRL_MAP = {
     # ctrl : line spacing
-    '1' : 1,                    # single spacing, new page
-    ' ' : 1,                    # single spacing
-    '0' : 2,                    # double spacing
-    '-' : 3,                    # triple spacing
+    None : 0,                   # space holder (for EJECT/SPACE N)
+    '1'  : 1,                   # single spacing, new page
+    ' '  : 1,                   # single spacing
+    '0'  : 2,                   # double spacing
+    '-'  : 3,                   # triple spacing
     }
 
 

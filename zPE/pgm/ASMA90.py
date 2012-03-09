@@ -140,10 +140,21 @@ def pass_1():
             spt.push( ( line, deck_id, ) )
             continue
 
-        # check comment
-        if line[0] == '*':
+        # skip comment, EJECT
+        if ( line[0] == '*'  or
+             (len(field) > 1 and field[1] in [ 'EJECT', ])
+             ):
             spt.push( ( line, deck_id, ) )
             continue
+
+        # check SPACE
+        elif len(field) > 1 and field[1] == 'SPACE':
+            if len(field) > 2  and  not field[2].isdigit():
+                zPE.abort(91, 'Error: ', field[2],
+                          ': Argument is not a valid number')
+            spt.push( ( line, deck_id, ) )
+            continue
+
 
         # check label
         ins_lbl = zPE.bad_label(field[0])
@@ -818,7 +829,7 @@ def pass_2():
     for line in spi:
         line_num += 1
         if line_num not in MNEMONIC  or  len(MNEMONIC[line_num]) == 0:
-            # comments               or      TITLE statement
+            # comment, EJECT, SPACE  or      TITLE statement
             continue
         scope_id = MNEMONIC[line_num][0]        # retrieve scope ID
         if scope_id:
