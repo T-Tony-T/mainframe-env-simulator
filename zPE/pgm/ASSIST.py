@@ -96,14 +96,17 @@ def init(step):
     err_cnt = __PARSE_OUT_ASM(limit)
 
     # get instream data, if not specified in DD card
+    spo = zPE.core.SPOOL.retrieve('FT05F001')
     if 'FT05F001' in FILE_MISSING:
         spi = zPE.core.SPOOL.retrieve('SYSIN')
-        spo = zPE.core.SPOOL.retrieve('FT05F001')
         while not spi.empty():
             spo.append('{0:<72}{1:0>4}{2:0>4}\n'.format(
                     spi[0][:-1], spi.deck_id(0), '----' # need info
                     ))
             spi.pop(0)
+    else:
+        for indx in range(len(spo)):
+            spo[indx] = '{0:<80}\n'.format(spo[indx][:-1])
     spi = None                  # unlink spi
     spo = None                  # unlink spo
 

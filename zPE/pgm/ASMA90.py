@@ -1060,11 +1060,19 @@ def pass_2():
                                    )
                             break
 
+                        # check index / base register
+                        if res[0][-1] != None:
+                            indx_s = line.index(lbl)
+                            __INFO('E', line_num,
+                                   ( 32, indx_s, indx_s + len(lbl), )
+                                   )
+                            break
+
                         reloc_cnt = 0    # number of relocatable symbol
                         reloc_arg = None # backup of the relocatable symbol
                         reloc_neg = [ False ] # if negative of each level of ()
                         reloc_entry = None
-                        for indx in range(len(res[0])):
+                        for indx in range(len(res[0]) - 1):
                             # for each element in the exp, try to envaluate
 
                             if res[1][indx] == 'parenthesis':
@@ -1118,7 +1126,7 @@ def pass_2():
                                 if ( ( indx-1 >= 0  and
                                        res[0][indx-1] in '*/()'
                                        ) or
-                                     ( indx+1 < len(res[0])  and
+                                     ( indx+1 < len(res[0])-1  and
                                        res[0][indx+1] in '*/()'
                                        ) ):
                                     indx_s = line.index(lbl)
@@ -1203,9 +1211,9 @@ def pass_2():
                         # calculate constant part
                         if reloc_cnt < 2:
                             try:
-                                ex_disp = eval(''.join(res[0]))
+                                ex_disp = eval(''.join(res[0][:-1]))
                             except:
-                                zPE.abort( 92, 'Error: ', ''.join(res[0]),
+                                zPE.abort( 92, 'Error: ', ''.join(res[0][:-1]),
                                            ': Invalid expression.\n'
                                            )
                         # evaluate expression
@@ -1483,7 +1491,7 @@ def pass_2():
                             if ( ( indx-1 >= 0  and
                                    res[0][indx-1] in '*/()'
                                    ) or
-                                 ( indx+1 < len(res[0]) - 1  and
+                                 ( indx+1 < len(res[0])-1  and
                                    res[0][indx+1] in '*/()'
                                    ) ):
                                 indx_s = line.index(lbl)
@@ -1538,7 +1546,7 @@ def pass_2():
                 if not abs_values and reloc_cnt < 2:
                     ex_disp = __REDUCE_EXP(''.join(res[0][:-1]))
                     if ex_disp == None:
-                        zPE.abort(92, 'Error: ', ''.join(res[0]),
+                        zPE.abort(92, 'Error: ', ''.join(res[0][:-1]),
                                   ': Invalid expression.\n')
 
                 # evaluate expression

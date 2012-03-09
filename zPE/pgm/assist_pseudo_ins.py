@@ -125,8 +125,14 @@ def __xread(base, disp, size):
         for offset in range(int(size, 16)):
             __ref(disp, '0', base, zPE.c2x(line[offset]), offset)
         SPR['PSW'].CC = 0       # read success
+
+        if zPE.debug_mode():
+            print 'Line Read:', line
     except:
         SPR['PSW'].CC = 1       # read error or EoF
+
+        if zPE.debug_mode():
+            print 'Xread Error or EoF'
     return
 
 def __xprnt(base, disp, size):
