@@ -484,7 +484,7 @@ def pass_1():
                 for arg in argv:
                     res = __PARSE_ARG(arg, bypass_sym = True)
                     if isinstance(res, int):
-                        indx_e = line.index(field[2]) + res
+                        indx_e = line.index(arg) + res
                         __INFO('E', line_num, ( 41, indx_e - 1, indx_e, ))
                         break
 
@@ -1805,7 +1805,7 @@ def __PARSE_ARG(arg_str, bypass_sym = False):
     parts = []                  # components of the expression
     descs = []                  # descriptions of the components
 
-    if re.match(r'.*\(\w*,?\w*\)', arg_str):
+    if re.match(r".*\([\w']*,?[\w']*\)", arg_str):
         exp_rmndr = arg_str[:arg_str.rindex('(')]
         idx_rmndr = arg_str[arg_str.rindex('('):]
     else:
@@ -1973,48 +1973,14 @@ def __REDUCE_EXP(exp):
     if exp == '':
         return 0
 
-    exp_list = []
-    pattern = '[*/+-]'          # separator list
+    res = __PARSE_ARG_RECURSIVE(exp)
+    if isinstance(res, int):
+        return None
 
-    opnd = None                 # tmp operand holder
-    prev_opnd = None            # tmp previous operand holder
-    reminder = exp              # tmp reminder holder
-
-    p_level = 0                 # parentheses level
-    while True:
-        if reminder == '':
-            break   # end if there is no more reminder
-
-        prev_opnd = opnd
-
-        extra_pre = []
-
-        while reminder and reminder[0] == '(':  # start of a sub-expression
-            extra_pre.append('(')
-            reminder = reminder[1:]
-            p_level += 1
-
-        res = re.search(pattern, reminder)
-        if res:
-            part = reminder[:res.start()]
-            opnd = reminder[res.start():res.end()]
-            reminder = reminder[res.end():]
-        else:
-            part = reminder
-            opnd = ''
-            reminder = ''
-
-        extra_sur = []
-        while p_level and part.endswith(')'):
-            extra_sur.append(')')
-            part = part[:-1]
-            p_level -= 1
-
-        if part.isdigit():
-            val_str = part
-        elif zPE.core.asm.valid_sd(part):
+    for indx in range(len(res[0])):
+        if res[1][indx] == 'inline_const':
             try:
-                sd_info = zPE.core.asm.parse_sd(part)
+                sd_info = zPE.core.asm.parse_sd(res[0][indx])
                 if sd_info[4] == None:  # no (initial) value
                     return None
                 if not sd_info[5]:      # no limit on length
@@ -2022,31 +1988,16 @@ def __REDUCE_EXP(exp):
                                0, sd_info[4], sd_info[3]
                                )
                 (val, dummy) = zPE.core.asm.value_sd(sd_info) # get the value
-                val_str = str(val)
+                res[0][indx] = str(val)
             except:
                 return None
-        else:
+        elif res[1][indx] in [ 'eq_constant', 'valid_symbol', 'location_ptr' ]:
+            # relocatable value
             return None
-        if not prev_opnd:       # is the first part
-            if extra_sur:       # (d) is not allowed
-                return None
-            exp_list.extend( extra_pre + [ val_str ] )
-        else:
-            exp_list.extend(
-                [ prev_opnd ] +  extra_pre + [ val_str ] + extra_sur
-                )
-
-        while reminder and reminder[0] == ')': # end of a sub-expression
-            exp_list.append(')')
-            reminder = reminder[1:]
-            p_level -= 1
-        if p_level < 0:
-            return None
-
-    if len(exp_list) == 1:
-        val = int(exp_list[0])
+    if len(res[0]) == 1:
+        val = int(res[0][0])
     else:
-        val = eval(''.join(exp_list))
+        val = eval(''.join(res[0]))
     return val
 
 
