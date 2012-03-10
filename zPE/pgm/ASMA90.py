@@ -450,177 +450,104 @@ def pass_1():
             # align boundary
             addr = addr + addr % 2
 
+            if len(field) < 3  or  field[2] == '':
+                # no argument offered
+                argv = []
+                argc = 0
+            else:
+                # has argument(s), get the count
+                argv = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
+                argc = len(argv)
             if zPE.core.asm.valid_pseudo(field[1]):
-                if len(field) < 3  or  field[2] == '':
-                    # no argument offered
-                    argc = 0
-                else:
-                    # has argument(s), get the count
-                    argc = len(zPE.resplit(',', field[2], ['(',"'"], [')',"'"]))
                 op_code = zPE.core.asm.get_op_from(field[1], argc)
             else:
                 op_code = zPE.core.asm.get_op(field[1])
             op_args = zPE.core.asm.op_arg_indx(op_code)
 
-            if op_args:
-                args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
-            else:
-                args = ( )      # skip argumnet checking
-
             # check arguments
-            if not args:                    # no args required
+            if not op_args:                 # no args required
                 pass
-            elif len(op_args) > len(args):  # too few args
-                indx_s = line.index(args[-1]) + len(args[-1])
+            elif len(op_args) > len(argv):  # too few args
+                indx_s = line.index(argv[-1]) + len(argv[-1])
                 __INFO('S', line_num, ( 175, indx_s, indx_s, ))
                 arg_list = field[2]
-            elif len(op_args) < len(args):  # too many args
+            elif len(op_args) < len(argv):  # too many args
                 indx_e = line.index(field[2]) + len(field[2])
                 __INFO('S', line_num, (
                         173,
-                        indx_e - len(args[len(op_args)]) - 1, # -1 for ','
+                        indx_e - len(argv[len(op_args)]) - 1, # -1 for ','
                         indx_e,
                         ))
                 arg_list = field[2]
             else:                           # correct number of args
                 # check arguments
-                pattern = '[,()*/+-]' # separator list
-                sept = ''             # tmp separator holder
-                reminder = field[2]   # tmp reminder holder
+                for arg in argv:
+                    res = __PARSE_ARG(arg, bypass_sym = True)
+                    if isinstance(res, int):
+                        indx_e = line.index(field[2]) + res
+                        __INFO('E', line_num, ( 41, indx_e - 1, indx_e, ))
+                        break
 
-                while True:
-                    # process leftover separator
-                    if sept == ')':
-                        # preceding argument required
-                        if not last_lbl: # not offered
-                            indx_e = ( line.index(field[2])
-                                       + len(field[2]) # move to end of arg_list
-                                       - len(reminder) # move back to error pos
-                                       )
-                            __INFO('E', line_num, (
-                                    41, indx_e - 1, indx_e,
-                                    ))
+                    for indx in range(len(res[0]) - 1):
+                        lbl = res[0][indx]
+                        if res[1][indx] == 'eq_constant':
+                            # parse =constant
+                            if not const_plid:
+                                # allocate new pool
+                                const_plid = scope.id()
 
-                    # check end of arg_list
-                    if reminder == '':
-                        break   # end if there is no more reminder
-
-                    # split next argument
-                    res = re.search(pattern, reminder)
-                    if res:
-                        lbl = reminder[:res.start()]
-                        sept = reminder[res.start():res.end()]
-                        reminder = reminder[res.end():]
-                    else:
-                        lbl = reminder
-                        sept = ''
-                        reminder = ''
-                    if lbl.count("'") % 2 == 1:
-                        # quoted literal
-                        indx_s = reminder.index("'") + 1
-                        if indx_s == len(reminder):
-                            indx_e = indx_s
-                        else:
-                            indx_e = indx_s + 1
-                        lbl += sept + reminder[:indx_s]
-                        sept = reminder[indx_s:indx_e]
-                        reminder = reminder[indx_e:]
-                        if sept  and  not re.search(pattern, sept):
-                            # invalid separator
-                            indx_e = ( line.index(field[2])
-                                       + len(field[2]) # move to end of arg_list
-                                       - len(reminder) # move back to error pos
-                                       )
-                            __INFO('E', line_num, (
-                                    41, indx_e - 1, indx_e,
-                                    ))
-                    elif ( lbl.startswith('=')  and
-                           zPE.core.asm.valid_sd(lbl[1:]) == 'a'
-                           ):
-                        # address constant
-                        indx_s = reminder.index(')') + 1
-                        if indx_s == len(reminder):
-                            indx_e = indx_s
-                        else:
-                            indx_e = indx_s + 1
-                        lbl += sept + reminder[:indx_s]
-                        sept = reminder[indx_s:indx_e]
-                        reminder = reminder[indx_e:]
-                        if sept  and  not re.search(pattern, sept):
-                            # invalid separator
-                            indx_e = ( line.index(field[2])
-                                       + len(field[2]) # move to end of arg_list
-                                       - len(reminder) # move back to error pos
-                                       )
-                            __INFO('E', line_num, (
-                                    41, indx_e - 1, indx_e,
-                                    ))
-
-                    # validate splitted argument (lbl)
-                    if sept not in ')':
-                        last_lbl = lbl
-                    if lbl == '':
-                        continue # if no label, continue
-
-                    if lbl[0] == '=':
-                        # parse =constant
-                        if not const_plid:
-                            # allocate new pool
-                            const_plid = scope.id()
-
-                        if lbl in const_pool:
-                            const_pool[lbl].references.append(
-                                '{0:>4}{1}'.format(line_num, '')
-                                )
-                        elif zPE.core.asm.valid_sd(lbl[1:]):
-                            try:
-                                sd_info = zPE.core.asm.parse_sd(lbl[1:])
-                            except:
-                                zPE.abort( 91, 'Error: ', lbl[1:],
-                                           ': Invalid constant at line',
-                                           ' {0}.\n'.format(line_num)
-                                           )
-
-                            # validate =constant (not complete)
-                            if sd_info[4] == None:
-                                zPE.abort( 91, 'Error: ', lbl[1:],
-                                           ': Uninitialized constant at line',
-                                           ' {0}.\n'.format(line_num)
-                                           )
-                            if sd_info[0] == 'a':
-                                for tmp in sd_info[4]:
-                                    bad_lbl = zPE.bad_label(tmp)
-                                    if bad_lbl == None:
-                                        zPE.abort( 91, 'wrong value in sd:',
-                                                   '{0}.\n'.format(sd_info)
-                                                   )
-                                    elif bad_lbl:
-                                        indx_s = line.index(tmp) + bad_lbl - 1
-                                        __INFO( 'E', line_num, (
-                                                143,
-                                                indx_s,
-                                                indx_s + len(tmp),
-                                                ) )
-
-                            # add =constant to the constant pool, if all green
-                            if not INFO_GE(line_num, 'W'):
-                                const_pool[lbl] = Symbol(
-                                    None, None, const_plid,
-                                    '', lbl[1], '', '',
-                                    None, [
-                                        '{0:>4}{1}'.format(line_num, ''),
-                                        ]
+                            if lbl in const_pool:
+                                const_pool[lbl].references.append(
+                                    '{0:>4}{1}'.format(line_num, '')
                                     )
-                                const_pool_lbl.append(lbl)
-                        else:
-                            indx_s = line.index(lbl) + 1
-                            __INFO('E', line_num,
-                                   ( 65, indx_s, indx_s - 1 + len(lbl), )
-                                   )
+                            elif zPE.core.asm.valid_sd(lbl[1:]):
+                                try:
+                                    sd_info = zPE.core.asm.parse_sd(lbl[1:])
+                                except:
+                                    zPE.abort( 91, 'Error: ', lbl[1:],
+                                               ': Invalid constant at line',
+                                               ' {0}.\n'.format(line_num)
+                                               )
 
-                    elif zPE.core.asm.valid_sd(lbl):
-                        # try parse in-line constant
-                        try:
+                                # validate =constant (not complete)
+                                if sd_info[4] == None:
+                                    zPE.abort( 91, 'Error: ', lbl[1:],
+                                               ': Uninitialized constant at',
+                                               ' line {0}.\n'.format(line_num)
+                                               )
+                                if sd_info[0] == 'a':
+                                    for tmp in sd_info[4]:
+                                        bad_lbl = zPE.bad_label(tmp)
+                                        if bad_lbl == None:
+                                            zPE.abort( 91, 'wrong value in sd:',
+                                                       '{0}.\n'.format(sd_info)
+                                                       )
+                                        elif bad_lbl:
+                                            indx_s = line.index(tmp)+bad_lbl-1
+                                            __INFO( 'E', line_num, (
+                                                    143,
+                                                    indx_s,
+                                                    indx_s + len(tmp),
+                                                    ) )
+
+                                # add =constant to the constant pool
+                                if not INFO_GE(line_num, 'W'):
+                                    const_pool[lbl] = Symbol(
+                                        None, None, const_plid,
+                                        '', lbl[1], '', '',
+                                        None, [
+                                            '{0:>4}{1}'.format(line_num, ''),
+                                            ]
+                                        )
+                                    const_pool_lbl.append(lbl)
+                            else:
+                                indx_s = line.index(lbl) + 1
+                                __INFO('E', line_num,
+                                       ( 65, indx_s, indx_s - 1 + len(lbl), )
+                                       )
+
+                        elif res[1][indx] == 'inline_const':
+                            # in-line constant
                             sd_info = zPE.core.asm.parse_sd(lbl)
                             if not sd_info[5]:
                                 sd_info = (sd_info[0], sd_info[1], sd_info[2],
@@ -632,9 +559,7 @@ def pass_1():
                                 __INFO('E', line_num,
                                        ( 41, indx_s, indx_s - 1 + len(lbl), )
                                        )
-                        except:
-                            pass
-                ## end of normalizing arguments
+                ## end of checking arguments
 
                 # check lable
                 lbl_8 = '{0:<8}'.format(field[0])
@@ -1876,7 +1801,7 @@ def __MISSED_FILE(step):
 
 # rv: ( [ symbol_1, ... ], [ desc_1, ... ], )
 # or  err_indx  if error occurs
-def __PARSE_ARG(arg_str):
+def __PARSE_ARG(arg_str, bypass_sym = False):
     parts = []                  # components of the expression
     descs = []                  # descriptions of the components
 
@@ -1888,75 +1813,18 @@ def __PARSE_ARG(arg_str):
         idx_rmndr = None
     exp_len = len(exp_rmndr)
 
-    p_level = 0                 # parentheses level
-    while True:
-        while exp_rmndr[0] == '(': # start of a sub-expression
-            parts.append('(')
-            descs.append('parenthesis')
-            exp_rmndr = exp_rmndr[1:]
-            p_level += 1
+    # parse expression part
+    res = __PARSE_ARG_RECURSIVE(exp_rmndr)
+    if isinstance(res, int):
+        return res
+    else:
+        parts.extend(res[0])
+        descs.extend(res[1])
 
-        if exp_rmndr[0] == '*': # current location ptr
-            parts.append('*')
-            descs.append('location_ptr')
-            exp_rmndr = exp_rmndr[1:]
-        else:                   # number / symbol
-            res = zPE.resplit_sq('[*/+-]', exp_rmndr)[0]
-
-            bad_lbl = zPE.bad_label(res)
-            if bad_lbl:
-                try:
-                    sd_info = zPE.core.asm.parse_sd(res)
-                except:         # not a constant
-                    sd_info = None
-                    if res[0] != '=':
-                        tmp = zPE.resplit_sq('\)', res)
-                        if len(tmp) > 1  and  not p_level:
-                            # abs addr + something
-                            return res.index(')') + 1
-                        else:
-                            res = tmp[0]
-
-                if res.isdigit(): # pure number
-                    parts.append(res)
-                    descs.append('regular_num')
-                elif sd_info:   # inline constant
-                    try:
-                        if sd_info[0] == 'a':
-                            raise TypeError
-                        zPE.core.asm.get_sd(sd_info)
-                        parts.append(res)
-                        descs.append('inline_const')
-                    except:     # invalid constant; return err pos
-                        return exp_len - len(exp_rmndr)
-                elif res[0] == '=': # =constant
-                    parts.append(res)
-                    descs.append('eq_constant')
-                else:           # invalid operand; return err pos
-                    return exp_len - len(exp_rmndr)
-            else:
-                parts.append(res)
-                descs.append('valid_symbol')
-            exp_rmndr = exp_rmndr[len(res):]
-
-        while exp_rmndr and exp_rmndr[0] == ')': # end of a sub-expression
-            parts.append(')')
-            descs.append('parenthesis')
-            exp_rmndr = exp_rmndr[1:]
-            p_level -= 1
-            if p_level < 0:
-                return exp_len - len(exp_rmndr)
-
-        if exp_rmndr:                      # operator
-            if exp_rmndr[0] not in '*/+-': # invalid operator; return err pos
-                return exp_len - len(exp_rmndr)
-            parts.append(exp_rmndr[0])
-            descs.append('operator')
-            exp_rmndr = exp_rmndr[1:]
-        else:                   # no more, stop
-            break
-
-    if idx_rmndr:
+    # parse register part
+    if bypass_sym:
+        idx_val = 'bypass'
+    elif idx_rmndr:
         tmp = zPE.resplit_sq(',', idx_rmndr) # search for ','
         if len(tmp) > 1: # has ','
             return exp_len + len(tmp[0])
@@ -1981,6 +1849,85 @@ def __PARSE_ARG(arg_str):
     descs.append('index_reg')
 
     return ( parts, descs, )
+
+# used by __PARSE_ARG
+def __PARSE_ARG_RECURSIVE(arg_str):
+    parts = []                  # components of the expression
+    descs = []                  # descriptions of the components
+
+    for part in zPE.resplit('([*/+-])', arg_str, ['(',"'"], [')',"'"]):
+        if part.startswith('('):
+            if part.endswith(')'):
+                res = __PARSE_ARG_RECURSIVE(part[1:-1])
+                if isinstance(res, int):
+                    return len(''.join(parts)) + res
+                else:
+                    parts.extend(['('          ] + res[0] + [          ')'])
+                    descs.extend(['parenthesis'] + res[1] + ['parenthesis'])
+            else:
+                return len(''.join(parts)) + len(part) - 1
+
+        elif part in '*/+-':
+            parts.append(part)
+            descs.append('operator')
+
+        elif part.isdigit():
+            parts.append(part)
+            descs.append('regular_num')
+
+        elif part.startswith('='):
+            parts.append(part)
+            descs.append('eq_constant')            
+
+        elif zPE.core.asm.valid_sd(part):
+            try:
+                sd_info = zPE.core.asm.parse_sd(part)
+            except:         # not a constant
+                sd_info = None
+            if sd_info:
+                try:
+                    if sd_info[0] == 'a':
+                        raise TypeError
+                    zPE.core.asm.get_sd(sd_info)
+                    parts.append(part)
+                    descs.append('inline_const')
+                except:     # invalid constant; return err pos
+                    return len(''.join(parts))
+            else:
+                if not zPE.bad_label(part):
+                    parts.append(part)
+                    descs.append('valid_symbol')
+                else:
+                    return len(''.join(parts))
+        else:
+            if not zPE.bad_label(part):
+                parts.append(part)
+                descs.append('valid_symbol')
+            else:
+                return len(''.join(parts))
+    # check location ptr and form rv
+    rv = ([], [])
+    rv_skip = False
+    for indx in range(len(parts)):
+        if rv_skip:
+            rv_skip = False
+            continue
+        if parts[indx] == '*':
+            if ( ( indx > 0          and  parts[indx-1] == '' )  and
+                 ( indx < len(parts) and  parts[indx+1] == '' )
+                 ):
+                rv[0].pop()
+                rv[1].pop()
+                rv[0].append(parts[indx])
+                rv[1].append('location_ptr')
+                rv_skip = True
+            else:
+                rv[0].append(parts[indx])
+                rv[1].append(descs[indx])
+        else:
+            rv[0].append(parts[indx])
+            rv[1].append(descs[indx])
+    return rv
 
 
 def __PARSE_EQU_VALUE(equ):
