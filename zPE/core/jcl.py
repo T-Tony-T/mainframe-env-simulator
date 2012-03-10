@@ -89,7 +89,7 @@ def parse(job):
     zPE.JCL['time']   = zPE.conf.Config['time_limit']
     zPE.JCL['region'] = zPE.conf.Config['memory_sz']
     if len(args) == 3:
-        for part in zPE.resplit_sp(',', args[2]):
+        for part in zPE.resplit_pp(',', args[2]):
             if part[:5] == 'TIME=':
                 try:
                     zPE.JCL['time'] = zPE.core.cpu.parse_time(part[5:])
@@ -213,7 +213,7 @@ def parse(job):
             jcl_continue = None
 
             if len(args) == 2:
-                for part in zPE.resplit_sp(',', args[1]):
+                for part in zPE.resplit_pp(',', args[1]):
                     if jcl_continue: # jcl_continue can only be set by last part
                         zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
                                   ': Invalid JCL card\n')
@@ -282,7 +282,7 @@ def parse(job):
             elif args[:7] == 'SYSOUT=':
                 sysout = args[7:]
             else:
-                for part in zPE.resplit_sp(',', args):
+                for part in zPE.resplit_pp(',', args):
                     if jcl_continue: # jcl_continue can only be set by last part
                         zPE.abort(9, 'Error: line ', str(zPE.JCL['read_cnt']),
                                   ': Invalid JCL card\n')

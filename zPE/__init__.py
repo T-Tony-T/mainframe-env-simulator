@@ -105,7 +105,7 @@ def resplit_dq(pattern, string, maxsplit = 0):
     '''See resplit() for detials'''
     return resplit(pattern, string, '"', '"', maxsplit)
 
-def resplit_sp(pattern, string, maxsplit = 0):
+def resplit_pp(pattern, string, maxsplit = 0):
     '''See resplit() for detials'''
     return resplit(pattern, string, '(', ')', maxsplit)
 
@@ -117,25 +117,16 @@ def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
     There are three pre-defined skip-pattern:
       resplit_sq ==> single quotes
       resplit_dq ==> double quotes
-      resplit_sp ==> single pair of parentheses
+      resplit_pp ==> pair(s) of parentheses
 
 
     Note:
       - Only include the chars as they are in skip_l/r.
         do not escape special chars.
         (no '\' unless that is one of the boundary char)
-
-      - If the pattern contains the "skip pattern", then
-        the functions behaves exactly the same as re.split()
     '''
     if len(skip_l) != len(skip_r):
         raise ValueError
-    for ch in skip_l:
-        if ch in pattern:
-            return re.split(pattern, string, maxsplit)
-    for ch in skip_r:
-        if ch in pattern:
-            return re.split(pattern, string, maxsplit)
     return __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit)
 
 
@@ -494,34 +485,79 @@ def LIST_PGM():
 
 ### Supporting Function
 
-def __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit):
-    true_pttn = '^[^{0}{1}]*?(?:(?:'.format(
-        ''.join(skip_l), ''.join(skip_r)
-        )
-    for indx in range(len(skip_l)):
-        true_pttn += '(?:[{0}][^{0}{1}]*[{1}])|'.format(
-            skip_l[indx], skip_r[indx]
-            )
-    true_pttn = true_pttn[:-1]  # remove the last '|'
-    true_pttn += ')[^{0}{1}]*?)*({2})'.format(
-        ''.join(skip_l), ''.join(skip_r), pattern
-        )
-
+def __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit = 0):
+    '''skip_l/r must be iterable items with corresponding pairs of dlms'''
     rv = []
-    reminder = string
+    reminder = re.findall('.', string)
+    current  = []               # current parsing part
+    current_splitable = []      # ground level of current parsing part
+    current_splitless = []      # upper levels of current parsing part
+    expected = []               # expected dlm stack
 
-    while True:
-        if (maxsplit == 0) or len(rv) < maxsplit:
+    while reminder:
+        if maxsplit:
+            split_quota = maxsplit - len(rv)
+        else:
+            split_quota = 0
+        next_char = reminder.pop(0)
+
+        if split_quota >= 0:
             # more to go
-            res = re.search(true_pttn, reminder)
-            if res != None:     # search succeed
-                rv.append(reminder[:res.start(1)])
-                reminder = reminder[res.end(1):]
-            else:               # search failed
-                rv.append(reminder)
-                break
+            if expected:
+                # waiting for ending dlm, no checking for pattern
+                if next_char == expected[-1]:
+                    # ending dlm encountered, return previous level
+                    expected.pop()
+                elif next_char in skip_l:
+                    # starting dlm encountered, goto next level
+                    expected.append(skip_r[skip_l.index(next_char)])
+                current_splitless.append(next_char)
+
+            elif next_char in skip_l:
+                # starting dlm first encountered, check current
+                if current:
+                    res = re.split(
+                        pattern,
+                        ''.join(current_splitable),
+                        split_quota
+                        )
+                    if len(res) > 1:
+                        res[0] = ''.join(current_splitless + res[:1])
+                        rv.extend(res[:-1])
+
+                        current = res[-1:]
+                        current_splitable = []
+                        current_splitless = res[-1:]
+                        current_splitless.append(next_char)
+                    else:
+                        current_splitless.extend(current_splitable)
+                        current_splitable = []
+                        current_splitless.append(next_char)
+                # go to next level
+                expected.append(skip_r[skip_l.index(next_char)])
+
+            else:
+                # ground level
+                current_splitable.append(next_char)
+
+            current.append(next_char)
         else:
             # reach length limit
-            rv.append(reminder)
             break
+
+    if maxsplit:
+        split_quota = maxsplit - len(rv)
+    else:
+        split_quota = 0
+    if split_quota >= 0  and  current:
+        res = re.split(pattern, ''.join(current_splitable), split_quota)
+        if len(res) > 1:
+            res[0] = ''.join(current_splitless + res[:1])
+            rv.extend(res[:-1])
+            reminder = res[-1:] + reminder
+        else:
+            reminder = current + reminder
+    else:
+        reminder = current + reminder
+    rv.append(''.join(reminder))
     return rv

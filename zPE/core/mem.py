@@ -365,7 +365,7 @@ class Memory(object):
             raise IndexError('address out of boundary!')
         if length < 0:
             raise OverflowError('length should be positive!')
-        addr_e = min(addr_s + length, self.h_bound)
+        addr_e = min(addr_s + length - 1, self.h_bound)
 
         rv_list = self.__access(
             addr_s,
@@ -394,7 +394,9 @@ class Memory(object):
     @staticmethod
     def dump_storage(loc_s, loc_e):
         for key in sorted(Memory.allocation, key = lambda t: t[0]):
-            if key[0] <= loc_s < loc_e <= key[1]:
+            l_bound = (key[0] / 4096    ) * 4096 # get page start
+            h_bound = (key[1] / 4096 + 1) * 4096 # get page end
+            if l_bound <= loc_s < loc_e <= h_bound:
                 return Memory.allocation[key].dump(loc_s, loc_e - loc_s)
         raise MemoryError('Access denied: specific memory not available.')
 

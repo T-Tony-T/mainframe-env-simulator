@@ -213,10 +213,15 @@ class R(InstructionType):
         self.__val = val
         self.valid = True
 
+# int4 => (  'i', '' )
 # char => ( 'ii', '' )
 class I(InstructionType):
-    def __init__(self, arg_pos, val = None):
+    def __init__(self, arg_pos, lenfmt = 2, val = None):
         super(I, self).__init__('I', arg_pos)
+        if lenfmt != 2:
+            self.lenfmt = 1     # 1 : i
+        else:
+            self.lenfmt = 2     # 2 : ii
 
         if val == None:
             self.valid = False
@@ -225,7 +230,7 @@ class I(InstructionType):
             self.set(val)
 
     def __len__(self):
-        return 2                # number of half-bytes / hex-digits
+        return self.lenfmt      # number of half-bytes / hex-digits
 
     def get(self):
         if self.valid:
@@ -235,9 +240,9 @@ class I(InstructionType):
 
     def prnt(self):
         if self.valid:
-            rv = '{0:0>2}'.format(hex(self.__val)[2:].upper())
+            rv = '{0:0>{1}}'.format(hex(self.__val)[2:].upper(), self.lenfmt)
         else:
-            rv = '--'
+            rv = '{0:->{1}}'.format('', self.lenfmt)
         return ( rv, '', )
 
     def value(self):
@@ -248,10 +253,15 @@ class I(InstructionType):
         return rv
 
     def set(self, val):
-        if not 0x00 <= val <= 0xFF:
-            raise ValueError('immediate byte must be 8 bit long')
+        if not 0x0 <= val <= self.max_len_length():
+            raise ValueError('immediate byte must be between 0 and {0}'.format(
+                             self.max_len_length() - 1
+                             ))
         self.__val = val
         self.valid = True
+
+    def max_len_length(self):
+        return 0x1 << ( 4 * self.lenfmt )
 
 # int_12(int_4) => ( '', 'bddd' )
 class S(InstructionType):
@@ -378,10 +388,12 @@ class L(S):
     def value(self):
         return super(L, self).value()
 
-    def set(self, length, dsplc, base = 0):
-        if not 0x0 <= length <= self.max_len_length():
-            raise ValueError('length must be between 1 and ' + str(max_len))
-        self.__length = length
+    def set(self, len_code, dsplc, base = 0):
+        if not 0x0 <= len_code <= self.max_len_length():
+            raise ValueError('length must be between 1 and {0}'.format(
+                             self.max_len_length()
+                             ))
+        self.__length = len_code
         super(L, self).set(dsplc, base)
 
     def max_len_length(self):
@@ -450,7 +462,7 @@ op_code = {
     'C'    : lambda: ('59', R(1).ro(), X(2).ro().al('fw')),
     'CL'   : lambda: ('55', R(1).ro(), X(2).ro().al('fw')),
     'CLC'  : lambda: ('D5', L(1,2).ro(), S(2).ro()), # LL + bddd format
-    'CLI'  : lambda: ('95', S(1).ro(), I(2).ro()),
+    'CLI'  : lambda: ('95', S(1).ro(), I(2,2).ro()),
     'CLR'  : lambda: ('15', R(1).ro(), R(2).ro()),
     'CP'   : lambda: ('F9', L(1,1).ro(),L(2,1).ro()),
     'CR'   : lambda: ('19', R(1).ro(), R(2).ro()),
@@ -458,6 +470,9 @@ op_code = {
     'D'    : lambda: ('5D', R(1).rw().al('hw'), X(2).ro().al('fw')),
     'DP'   : lambda: ('FD', L(1,1).rw(),L(2,1).ro()),
     'DR'   : lambda: ('1D', R(1).rw().al('hw'), R(2).ro()),
+
+    'ED'   : lambda: ('DE', L(1,2).rw(), S(2).ro()), # LL + bddd format
+    'EDMK' : lambda: ('DF', L(1,2).rw(), S(2).ro()), # LL + bddd format
 
     'EX'   : lambda: ('44', R(1).ro(), X(2).ex()),
 
@@ -478,7 +493,7 @@ op_code = {
     'MR'   : lambda: ('1C', R(1).rw().al('hw'), R(2).ro()),
 
     'MVC'  : lambda: ('D2', L(1,2).rw(), S(2).ro()), # LL + bddd format
-    'MVI'  : lambda: ('92', S(1).rw(), I(2).ro()),
+    'MVI'  : lambda: ('92', S(1).rw(), I(2,2).ro()),
 
     'N'    : lambda: ('54', R(1).rw(), X(2).ro().al('fw')),
     'NR'   : lambda: ('14', R(1).rw(), R(2).ro()),
@@ -493,6 +508,8 @@ op_code = {
     'SLR'  : lambda: ('1F', R(1).rw(), R(2).ro()),
     'SP'   : lambda: ('FB', L(1,1).rw(),L(2,1).ro()),
     'SR'   : lambda: ('1B', R(1).rw(), R(2).ro()),
+
+    'SRP'  : lambda: ('F0', L(1,1).rw(), S(2).ro(), I(3,1).ro()),
 
     'ST'   : lambda: ('50', R(1).ro(), X(2).wo().al('fw')),
     'STC'  : lambda: ('42', R(1).ro(), X(2).rw()),

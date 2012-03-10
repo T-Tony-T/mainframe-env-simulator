@@ -261,6 +261,13 @@ ins_op = {
                       )     # skip comparison if CC is set to non-zero
             for offset in range(__dclen(s[0:2]))
             ] ),
+    'DE'   : ( 'ED',   5,
+               lambda s : __ed(s[3:6], s[2], __dclen(s[0:2]), s[7:10], s[6])
+               ),
+    'DF'   : ( 'EDMK', 5,
+               lambda s : __ed(s[3:6], s[2], __dclen(s[0:2]), s[7:10], s[6], 1)
+               ),
+    'F0'   : ( 'SRP',  5, lambda s : None ),
     'F2'   : ( 'PACK', 5, lambda s : (
             lambda pack_lst = P_.pack(__dump(s[7:10], s[6], __dclen(s[1])),
                                       __dclen(s[0])) :
@@ -462,4 +469,80 @@ def __cmp_dec(val_l, val_r):
         SPR['PSW'].CC = 1
     else:
         SPR['PSW'].CC = 2
+    return SPR['PSW'].CC
+
+def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
+    significance_indicator = False
+    num_sign = 0                # for CC calculation
+
+    fill = __deref(pttn_disp, '0', pttn_base, 1, 0)
+    if fill not in [ 0x20, 0x21 ]:
+        indx_s = 1
+    else:
+        indx_s = 0
+
+    src_field_swap = {
+        'buff'   : '',          # buffer for src field
+        'offset' : 0,           # offset for src field
+        }
+    def get_next_src_digit(look_ahead = False):
+        if not src_field_swap['buff']:
+            # no buffered src digits, read next byte
+            src_field_swap['buff'] = '{0:0>2}'.format(hex(__deref(
+                        src_disp, '0', src_base, 1, src_field_swap['offset']
+                        ))[2:].upper())
+            src_field_swap['offset'] += 1
+        rv = src_field_swap['buff'][0]
+        if not look_ahead:
+            src_field_swap['buff'] = src_field_swap['buff'][1:] # pop the digit
+        return rv
+
+    for indx in range(indx_s, ed_len):
+        pttn = __deref(pttn_disp, '0', pttn_base, 1, indx)
+
+        if pttn in [ 0x20, 0x21 ]:
+            # digit selector / significance indicator
+
+            # get the next src digit
+            src_digit = get_next_src_digit()
+            if not src_digit.isdigit():
+                raise zPE.newDataException()
+            src_digit = int(src_digit)
+            if src_digit:
+                num_sign = 1    # mark as non-zero
+
+            if significance_indicator  or  src_digit:
+                __ref(pttn_disp, '0', pttn_base, 0xF0 + src_digit, indx)
+                significance_indicator = True
+            else:
+                __ref(pttn_disp, '0', pttn_base, fill, indx)
+                if pttn == 0x21:
+                    significance_indicator = True
+
+            # check sign
+            if src_field_swap['buff'] and src_field_swap['buff'][0] in 'FACE':
+                significance_indicator = False
+
+        elif pttn == 0x22:
+            # field separator
+            __ref(pttn_disp, '0', pttn_base, fill, indx)
+            significance_indicator = False
+            num_sign = 0        # reset sign field
+
+        else:
+            # message character
+            if not significance_indicator:
+                __ref(pttn_disp, '0', pttn_base, fill, indx)
+
+    # get the next src digit
+    if significance_indicator:
+        num_sign = (- num_sign) # mark negative
+
+    if num_sign == 0:
+        SPR['PSW'].CC = 0
+    elif num_sign < 0:
+        SPR['PSW'].CC = 1
+    else:
+        SPR['PSW'].CC = 2
+
     return SPR['PSW'].CC

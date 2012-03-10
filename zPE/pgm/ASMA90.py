@@ -557,7 +557,8 @@ def pass_1():
                                     ))
 
                     # validate splitted argument (lbl)
-                    last_lbl = lbl
+                    if sept not in ')':
+                        last_lbl = lbl
                     if lbl == '':
                         continue # if no label, continue
 
@@ -1781,18 +1782,22 @@ def __IS_ABS_ADDR(addr_arg):
     reminder = addr_arg
 
     # parse displacement
-    res = re.search('\(', reminder)
+    res = re.search(r'\(', reminder)
     if res != None:     # search succeed
         disp     = reminder[:res.start()]
         reminder = reminder[res.end():]
     else:
         disp     = reminder
         reminder = ''
+    if not disp:                # (disp exp)(...)
+        ( disp, reminder ) = zPE.resplit_pp(r'\)', reminder, 1)
+        if not disp:
+            return None
     if __REDUCE_EXP(disp) == None: # disp cannot be reduced
         return None
 
     # parse index
-    res = re.search('[,)]', reminder)
+    res = re.search(r'[,)]', reminder)
     if res != None:     # search succeed
         matched_ch = reminder[res.start():res.end()]
 
@@ -1807,7 +1812,7 @@ def __IS_ABS_ADDR(addr_arg):
         indx = '0'
 
     # parse base
-    res = re.search('\)', reminder)
+    res = re.search(r'\)', reminder)
     if res != None:     # search succeed
         base     = reminder[:res.start()]
         reminder = reminder[res.end():]
@@ -1883,13 +1888,15 @@ def __PARSE_ARG(arg_str):
         idx_rmndr = None
     exp_len = len(exp_rmndr)
 
+    p_level = 0                 # parentheses level
     while True:
-        if exp_rmndr[0] == '(':  # start of a sub-expression
+        while exp_rmndr[0] == '(': # start of a sub-expression
             parts.append('(')
             descs.append('parenthesis')
             exp_rmndr = exp_rmndr[1:]
+            p_level += 1
 
-        if exp_rmndr[0] == '*':  # current location ptr
+        if exp_rmndr[0] == '*': # current location ptr
             parts.append('*')
             descs.append('location_ptr')
             exp_rmndr = exp_rmndr[1:]
@@ -1902,14 +1909,17 @@ def __PARSE_ARG(arg_str):
                     sd_info = zPE.core.asm.parse_sd(res)
                 except:         # not a constant
                     sd_info = None
+                    if res[0] != '=':
+                        tmp = zPE.resplit_sq('\)', res)
+                        if len(tmp) > 1  and  not p_level:
+                            # abs addr + something
+                            return res.index(')') + 1
+                        else:
+                            res = tmp[0]
 
                 if res.isdigit(): # pure number
                     parts.append(res)
                     descs.append('regular_num')
-                elif ( res[0] != '='  and
-                       len(zPE.resplit_sq('\)', res)) > 1
-                       ):       # abs addr + something
-                    return res.index(')') + 1
                 elif sd_info:   # inline constant
                     try:
                         if sd_info[0] == 'a':
@@ -1929,10 +1939,13 @@ def __PARSE_ARG(arg_str):
                 descs.append('valid_symbol')
             exp_rmndr = exp_rmndr[len(res):]
 
-        if exp_rmndr and exp_rmndr[0] == ')': # end of a sub-expression
+        while exp_rmndr and exp_rmndr[0] == ')': # end of a sub-expression
             parts.append(')')
             descs.append('parenthesis')
             exp_rmndr = exp_rmndr[1:]
+            p_level -= 1
+            if p_level < 0:
+                return exp_len - len(exp_rmndr)
 
         if exp_rmndr:                      # operator
             if exp_rmndr[0] not in '*/+-': # invalid operator; return err pos
@@ -2019,11 +2032,21 @@ def __REDUCE_EXP(exp):
     opnd = None                 # tmp operand holder
     prev_opnd = None            # tmp previous operand holder
     reminder = exp              # tmp reminder holder
+
+    p_level = 0                 # parentheses level
     while True:
         if reminder == '':
             break   # end if there is no more reminder
 
         prev_opnd = opnd
+
+        extra_pre = []
+
+        while reminder and reminder[0] == '(':  # start of a sub-expression
+            extra_pre.append('(')
+            reminder = reminder[1:]
+            p_level += 1
+
         res = re.search(pattern, reminder)
         if res:
             part = reminder[:res.start()]
@@ -2033,6 +2056,12 @@ def __REDUCE_EXP(exp):
             part = reminder
             opnd = ''
             reminder = ''
+
+        extra_sur = []
+        while p_level and part.endswith(')'):
+            extra_sur.append(')')
+            part = part[:-1]
+            p_level -= 1
 
         if part.isdigit():
             val_str = part
@@ -2052,9 +2081,20 @@ def __REDUCE_EXP(exp):
         else:
             return None
         if not prev_opnd:       # is the first part
-            exp_list.append(val_str)
+            if extra_sur:       # (d) is not allowed
+                return None
+            exp_list.extend( extra_pre + [ val_str ] )
         else:
-            exp_list.extend( [ prev_opnd, val_str, ] )
+            exp_list.extend(
+                [ prev_opnd ] +  extra_pre + [ val_str ] + extra_sur
+                )
+
+        while reminder and reminder[0] == ')': # end of a sub-expression
+            exp_list.append(')')
+            reminder = reminder[1:]
+            p_level -= 1
+        if p_level < 0:
+            return None
 
     if len(exp_list) == 1:
         val = int(exp_list[0])
