@@ -26,7 +26,7 @@ class D(InstructionType):
 
     def prnt(self):
         if self.valid:
-            rv = '{0:0>4}'.format(hex(self.__val)[2:].upper())
+            rv = '{0:0>4}'.format(zPE.i2h(self.__val))
         else:
             rv = '----'
         return ( '', rv, )
@@ -101,7 +101,7 @@ def __xdump_reg():
 
 def __xdump(base, disp, size):
     addr_start = int(__addr(disp, '0', base))
-    addr_end   = int(addr_start + int(size, 16))
+    addr_end   = int(addr_start + zPE.h2i(size))
     __xsnap_header('STORAGE')
     ctrl = '0'
     for line in Memory.dump_storage(addr_start, addr_end):
@@ -122,7 +122,7 @@ def __xsnap_header(xdump_type):
 def __xread(base, disp, size):
     try:
         line = __xin('XREAD')[:-1]
-        for offset in range(int(size, 16)):
+        for offset in range(zPE.h2i(size)):
             __ref(disp, '0', base, zPE.c2x(line[offset]), offset)
         SPR['PSW'].CC = 0       # read success
 
@@ -137,7 +137,7 @@ def __xread(base, disp, size):
 
 def __xprnt(base, disp, size):
     ctrl = ' '
-    line = zPE.x2c(__dump(disp, base, int(size, 16)))
+    line = zPE.x2c(__dump(disp, base, zPE.h2i(size)))
     if line[0] in ' 01-':
         ctrl = line[0]
     __xout('XPRNT', ctrl, line[1:], '\n')
@@ -145,7 +145,7 @@ def __xprnt(base, disp, size):
 
 
 def __xdeci(reg, base, indx, disp):
-    reg  = GPR[int(reg, 16)]
+    reg  = GPR[zPE.h2i(reg)]
     addr = __addr(disp, indx, base)
 
     pg_i = addr / 4096          # index of the page containing the address
@@ -189,7 +189,7 @@ def __xdeci(reg, base, indx, disp):
     return
 
 def __xdeco(reg, base, indx, disp):
-    num = '{0: >12}'.format(GPR[int(reg, 16)].int)
+    num = '{0: >12}'.format(GPR[zPE.h2i(reg)].int)
     for i in range(len(num)):
         __ref(disp, indx, base, zPE.c2x(num[i]), i)
     return

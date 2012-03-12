@@ -1,4 +1,4 @@
-from zPE.__init__ import c2x    # for conversion
+from zPE.__init__ import c2x, i2h # for conversion
 
 
 # general
@@ -23,7 +23,7 @@ def deck_id(title, sequence):# 73-80 : Deck ID + sequence number
 def esd_id(sym):
     if sym.type == 'LD':
         return c2x('  ')        # blank
-    return '{0:0>4}'.format(hex(sym.id)[2:])
+    return '{0:0>4}'.format(i2h(sym.id))
 
 def esd_vf(vf, indx):
     if indx >= len(vf):
@@ -40,20 +40,14 @@ def esd_vf(vf, indx):
     if sym.type == 'ER':
         last = c2x(' ' * 3)
     elif sym.type == 'LD':
-        last = '{0:0>6}'.format(
-            hex(sym.id)[2:]
-            )
+        last = '{0:0>6}'.format(i2h(sym.id))
     else:
-        last = '{0:0>6}'.format(
-            hex(sym.length)[2:]
-            )
+        last = '{0:0>6}'.format(i2h(sym.length))
 
     return ''.join([
             c2x(vf[indx][0]),           # 01-08 : External symbol name
             sym.type_code(),            # 09    : ESD type code
-            '{0:0>6}'.format(           # 10-12 : Address
-                hex(addr)[2:]
-                ),
+            '{0:0>6}'.format(i2h(addr)),# 10-12 : Address
             sym.flags(),                # 13    : Flag
             last,                       # 14-16 : Length, LDID, or space
             ])
@@ -76,7 +70,7 @@ def rld_flag(df, indx):
     if indx + 1 < len(df) and df[indx + 1][0] == 4:
         # next entry uses pack format
         bits += 1
-    return hex(bits)[-1].upper()
+    return i2h(bits)[-1]
 
 def rld_df(df):
     df_list = []
@@ -84,16 +78,16 @@ def rld_df(df):
         if df[indx][0] == 8:
             # full record
             df_list.append(             # 01-02 : Relocation ESDID
-                '{0:0>4}'.format(hex(df[indx][3])[2:].upper())
+                '{0:0>4}'.format(i2h(df[indx][3]))
                 )
             df_list.append(             # 03-04 : Position ESDID
-                '{0:0>4}'.format(hex(df[indx][2])[2:].upper())
+                '{0:0>4}'.format(i2h(df[indx][2]))
                 )
         df_list.append(                 # 05    : Flag
             '{0}{1}'.format('AV'.index(df[indx][1].type), rld_flag(df, indx))
             )
         df_list.append(                 # 06-08 : Address
-            '{0:0>6}'.format(hex(df[indx][1].addr)[2:].upper())
+            '{0:0>6}'.format(i2h(df[indx][1].addr))
             )
 
     rv = ''.join(df_list)
@@ -105,7 +99,7 @@ def rld_df(df):
 # for END record
 def end_fill(src, length):
     if isinstance(src, int):
-        return '{0:0>{1}}'.format(hex(src)[2:].upper(), length * 2)
+        return '{0:0>{1}}'.format(i2h(src), length * 2)
     else:
         return c2x('{0:<{1}}'.format(src, length))
 
@@ -142,7 +136,7 @@ REC_FMT = {                 # record formatter
             c2x('ESD'),                 # 02-04 : ESD
             c2x('{0:6}'.format('')),    # 05-10 : Space
             '{0:0>4}'.format(           # 11-12 : Variable field count
-                hex(len(vf) * 16)[2:]   #         (number of bytes of vf)
+                i2h(len(vf) * 16)       #         (number of bytes of vf)
                 ),
             c2x('{0:2}'.format('')),    # 13-14 : Space
             esd_id(vf[0][1]),           # 15-16 : ESDID of first SD, XD,
@@ -161,17 +155,13 @@ REC_FMT = {                 # record formatter
             '02',                       # 01    : X'02'
             c2x('TXT'),                 # 02-04 : TXT
             c2x(' '),                   # 05    : Space
-            '{0:0>6}'.format(           # 06-08 : Relative address of instrction
-                hex(loc)[2:]
-                ),
+            '{0:0>6}'.format(i2h(loc)), # 06-08 : Relative address of instrction
             c2x('{0:2}'.format('')),    # 09-10 : Space
             '{0:0>4}'.format(           # 11-12 : Byte count
-                hex(len(ds) / 2)[2:]
+                i2h(len(ds) / 2)
                 ),
             c2x('{0:2}'.format('')),    # 13-14 : Space
-            '{0:0>4}'.format(           # 15-16 : ESDID (scope id)
-                hex(scp)[2:]
-                ),
+            '{0:0>4}'.format(i2h(scp)), # 15-16 : ESDID (scope id)
             txt_ds(ds),                 # 17-72 : Data Stream
             ]),
     # Relocation dictionary provide information required to relocate
@@ -184,9 +174,9 @@ REC_FMT = {                 # record formatter
             c2x('RLD'),                 # 02-04 : RLD
             c2x('{0:6}'.format('')),    # 05-10 : Space
             '{0:0>4}'.format(           # 11-12 : Data field count
-                hex(sum([               #         (number of bytes of df)
+                i2h(sum([               #         (number of bytes of df)
                             entry[0] for entry in df
-                            ]))[2:]
+                            ]))
                 ),
             c2x('{0:4}'.format('')),    # 13-16 : Space
             rld_df(df),                 # 17-72 : Data fields
@@ -225,7 +215,7 @@ REC_FMT = {                 # record formatter
             c2x('SYM'),                 # 02-04 : SYM
             c2x('{0:6}'.format('')),    # 05-10 : Space
             '{0:0>4}'.format(           # 11-12 : Variable field byte count
-                hex(len(vf) * 8)[2:]    #         (number of bytes of text)
+                i2h(len(vf) * 8)        #         (number of bytes of text)
                 ),
             c2x('{0:4}'.format('')),    # 13-16 : Space
             sym_vf(vf),                 # 17-72 : Variable fields

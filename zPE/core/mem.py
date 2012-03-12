@@ -40,14 +40,13 @@ class Page(Structure):
 
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, long):
-            rv = '{0:0>2}'.format(hex(self.bytes[key])[2:])
-            return rv.upper()
+            return '{0:0>2}'.format(zPE.i2h(self.bytes[key]))
         else: # slice
             (in_s, in_e, step) = key.indices(len(self.bytes))
             rv = []
             for indx in range(in_s, in_e):
-                rv.append('{0:0>2}'.format(hex(self.bytes[indx])[2:]))
-            return ''.join(rv).upper()
+                rv.append('{0:0>2}'.format(zPE.i2h(self.bytes[indx])))
+            return ''.join(rv)
 
     def __setitem__(self, key, val):
         if isinstance(key, int) or isinstance(key, long):
@@ -115,7 +114,7 @@ class Page(Structure):
         rv = []
         while True:
             char_arr = ''
-            line = '{0:0>6}   '.format(hex(pos_s)[2:].upper())
+            line = '{0:0>6}   '.format(zPE.i2h(pos_s))
 
             for indx in range(0, 4):
                 line += self.__getitem__(slice(pos_s, pos_s + 4)) + ' '
@@ -275,7 +274,7 @@ class Memory(object):
         if self.l_bound < 0 or self.h_bound >= zPE.conf.Config['addr_max']:
             raise MemoryError('{0} 0x{1:0>6} ~ 0x{2:0>6}'.format(
                     'Addressing Exception: Valid address range is:',
-                    0, hex(zPE.conf.Config['addr_max'])[2:].upper()
+                    0, zPE.i2h(zPE.conf.Config['addr_max'])
                     ))
 
         # allocate the memory
@@ -297,10 +296,8 @@ class Memory(object):
 
     def __str__(self):
         return "0x{0:0>6} ~ 0x{1:0>6} (0x{2:0>6} ~ 0x{3:0>6}) : {4}".format(
-            hex(self.l_bound)[2:].upper(),
-            hex(self.h_bound)[2:].upper(),
-            hex(self.min_pos)[2:].upper(),
-            hex(self.max_pos)[2:].upper(),
+            zPE.i2h(self.l_bound), zPE.i2h(self.h_bound),
+            zPE.i2h(self.min_pos), zPE.i2h(self.max_pos),
             self.memory
             )
 
@@ -383,8 +380,7 @@ class Memory(object):
 
         rv.insert(0, '{0}{1:0>6} TO {2:0>6}\n'.format(
                 '                             CORE ADDRESSES SPECIFIED-     ',
-                hex(addr_s)[2:].upper(),
-                hex(addr_e)[2:].upper()
+                zPE.i2h(addr_s), zPE.i2h(addr_e)
                 ))              # prepend the header
         return rv
 
@@ -488,7 +484,7 @@ class Memory(object):
         dup = 0                 # degree of duplication
         for line in dump:
             line = '{0:0>6}{1}'.format( # update address
-                hex(int(line[:6], 16) + addr_offset)[2:].upper(),
+                zPE.i2h(int(line[:6], 16) + addr_offset),
                 line[6:]
                 )
             if line[6:] != prev[6:]: # if content differs

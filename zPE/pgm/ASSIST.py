@@ -311,15 +311,15 @@ def __PARSE_OUT_ASM(limit):
             loc = ' ' * 6       # do not print location for this type
         elif len(MNEMONIC[line_num]) == 1: # type 1
             if MNEMONIC[line_num][0]:
-                loc = hex(MNEMONIC_LOC[line_num])[2:].upper()
+                loc = zPE.i2h(MNEMONIC_LOC[line_num])
             else:               # no scope, no info to print
                 loc = ''
         elif MNEMONIC[line_num][0] == None: # no scope ==> END (type 2)
             loc = ''
         elif len(MNEMONIC[line_num]) == 4: # type 4, EQU
-            loc = hex(MNEMONIC[line_num][3])[2:].upper()
+            loc = zPE.i2h(MNEMONIC[line_num][3])
         else:                       # type 2/3/5, inside CSECT or DSECT
-            loc = hex(MNEMONIC_LOC[line_num])[2:].upper()
+            loc = zPE.i2h(MNEMONIC_LOC[line_num])
 
         tmp_str = ''
 
@@ -352,11 +352,11 @@ def __PARSE_OUT_ASM(limit):
                 )
             # appending to it the "ADDR1" and "ADDR2" fields, if applied
             if MNEMONIC[line_num][3]:
-                addr_1 = hex(MNEMONIC[line_num][3])[2:].upper()
+                addr_1 = zPE.i2h(MNEMONIC[line_num][3])
             else:
                 addr_1 = '     '
             if MNEMONIC[line_num][4]:
-                addr_2 = hex(MNEMONIC[line_num][4])[2:].upper()
+                addr_2 = zPE.i2h(MNEMONIC[line_num][4])
             else:
                 addr_2 = '     '
             tmp_str += '{0:0>5} {1:0>5}'.format(
@@ -449,9 +449,9 @@ def __PARSE_OUT_ASM(limit):
         elif len(MNEMONIC[key]) == 1: # type 1
             loc = ''
         elif len(MNEMONIC[key]) == 4: # type 4
-            loc = hex(MNEMONIC[key][3])[2:].upper()
+            loc = zPE.i2h(MNEMONIC[key][3])
         else:
-            loc = hex(MNEMONIC[key][1])[2:]
+            loc = zPE.i2h(MNEMONIC[key][1])
         tmp_str = ''
         if ( len(MNEMONIC[key]) == 3  and # type 3
              zPE.core.asm.can_get_sd(MNEMONIC[key][2]) # DC/=const
@@ -477,11 +477,11 @@ def __PARSE_OUT_ASM(limit):
                 field_1, field_2, field_3
                 )
             if MNEMONIC[key][3]:
-                addr_1 = hex(MNEMONIC[key][3])[2:].upper()
+                addr_1 = zPE.i2h(MNEMONIC[key][3])
             else:
                 addr_1 = '     '
             if MNEMONIC[key][4]:
-                addr_2 = hex(MNEMONIC[key][4])[2:].upper()
+                addr_2 = zPE.i2h(MNEMONIC[key][4])
             else:
                 addr_2 = '     '
             tmp_str += '{0:0>5} {1:0>5}'.format(
@@ -506,7 +506,7 @@ def __PARSE_OUT_ASM(limit):
                 org_loc = MNEMONIC[line_num][1]
             print 'line {0:>4}: {1:0>6} => {2:0>6}'.format(
                 line_num, org_loc,
-                hex(MNEMONIC_LOC[line_num])[2:].upper()
+                zPE.i2h(MNEMONIC_LOC[line_num])
                 )
 
     from binascii import b2a_hex
@@ -636,7 +636,7 @@ def __PARSE_OUT_LDR(rc):
             spo.append(
                 ctrl, '  ', zPE.b2x(ins[0][32:39]),
                 '  {0:0>6}     {1} {2} {3}\n'.format(
-                    hex(ins[0].Instruct_addr)[2:].upper(), * code
+                    zPE.i2h(ins[0].Instruct_addr), * code
                     )
                 )
         # append the following words to the end of the last instruction
@@ -655,7 +655,7 @@ def __PARSE_OUT_LDR(rc):
             spo.append(
                 ctrl, '  ', zPE.b2x(ins[0][32:39]),
                 '  {0:0>6}     {1}\n'.format(
-                    hex(ins[0].Instruct_addr)[2:].upper(), code))
+                    zPE.i2h(ins[0].Instruct_addr), code))
 
         # register dump
         spo.append(ctrl, ' REGS 0-7      ',

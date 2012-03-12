@@ -55,6 +55,9 @@ align_fmt_map  = {    1 : 'bw',    2 : 'hw',    4 : 'fw',    8 : 'dw',    }
 
 
 ### Utility Function Definition
+
+## constant type conversion
+
 def c2x(src):
     return core.asm.X_.tr(core.asm.C_(src).dump())
 
@@ -70,12 +73,23 @@ def h2x(src):
 def f2x(src):
     return core.asm.X_.tr(core.asm.F_(src).dump())
 
+
+## interger conversion
+
 def p2i(src):
     return core.asm.P_.tr_val(core.asm.X_(src).dump())
 
 def i2p(src):
     return core.asm.X_.tr(core.asm.P_(str(src)).dump())
 
+def h2i(src):
+    return int(src, 16)
+
+def i2h(src):
+    return re.split(r'[xL]', hex(src))[1].upper()
+
+
+## dictionary manipulation
 
 def dic_append_list(dic, key, value):
     if key not in dic:
@@ -87,15 +101,18 @@ def dic_find_key(dic, val):
     return [k for (k, v) in dic.iteritems() if v == val][0]
 
 
-def fixed_width_split(width, src_str, flags = 0):
-    return re.findall(''.join([ r'.{', str(width), r'}|.+' ]), src_str, flags)
-
+## mask manipulation
 
 def listify_mask(mask_hex):
     '''Convert an (hex) mask to an index list containing positions of 1-bit'''
     mask = '{0:0>4}'.format(bin(int(mask_hex, 16))[2:])
     return [ i for i in range(4) if mask[i] == '1' ]
 
+
+## string manipulation
+
+def fixed_width_split(width, src_str, flags = 0):
+    return re.findall(''.join([ r'.{', str(width), r'}|.+' ]), src_str, flags)
 
 def resplit_sq(pattern, string, maxsplit = 0):
     '''See resplit() for detials'''

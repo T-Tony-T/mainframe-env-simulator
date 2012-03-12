@@ -195,7 +195,7 @@ class R(InstructionType):
 
     def prnt(self):
         if self.valid:
-            rv = hex(self.__val)[-1].upper()
+            rv = zPE.i2h(self.__val)[-1]
         else:
             rv = '-'
         return ( rv, '', )
@@ -240,7 +240,7 @@ class I(InstructionType):
 
     def prnt(self):
         if self.valid:
-            rv = '{0:0>{1}}'.format(hex(self.__val)[2:].upper(), self.lenfmt)
+            rv = '{0:0>{1}}'.format(zPE.i2h(self.__val), self.lenfmt)
         else:
             rv = '{0:->{1}}'.format('', self.lenfmt)
         return ( rv, '', )
@@ -290,8 +290,8 @@ class S(InstructionType):
     def prnt(self):
         if self.valid:
             rv = '{0}{1:0>3}'.format(
-                hex(self.__base)[-1].upper(),
-                hex(self.__dsplc)[2:].upper()
+                zPE.i2h(self.__base)[-1],
+                zPE.i2h(self.__dsplc)
                 )
         else:
             rv = '----'
@@ -335,7 +335,7 @@ class X(S):
 
     def prnt(self):
         if self.valid:
-            rv = hex(self.__indx)[-1].upper()
+            rv = zPE.i2h(self.__indx)[-1]
         else:
             rv = '-'
         return ( rv, super(X, self).prnt()[1], )
@@ -380,7 +380,7 @@ class L(S):
                 encoded_len = self.__length - 1 # length code = length - 1
             else:               # zero
                 encoded_len = self.__length     # length code = 0
-            rv = '{0:0>{1}}'.format(hex(encoded_len)[2:].upper(), self.lenfmt)
+            rv = '{0:0>{1}}'.format(zPE.i2h(encoded_len), self.lenfmt)
         else:
             rv = '{0:->{1}}'.format('', self.lenfmt)
         return ( rv, super(L, self).prnt()[1], )
@@ -467,6 +467,9 @@ op_code = {
     'CP'   : lambda: ('F9', L(1,1).ro(),L(2,1).ro()),
     'CR'   : lambda: ('19', R(1).ro(), R(2).ro()),
 
+    'CVB'  : lambda: ('4F', R(1).wo(), X(2).ro().al('dw')),
+    'CVD'  : lambda: ('4E', R(1).ro(), X(2).wo().al('dw')),
+
     'D'    : lambda: ('5D', R(1).rw().al('hw'), X(2).ro().al('fw')),
     'DP'   : lambda: ('FD', L(1,1).rw(),L(2,1).ro()),
     'DR'   : lambda: ('1D', R(1).rw().al('hw'), R(2).ro()),
@@ -476,15 +479,15 @@ op_code = {
 
     'EX'   : lambda: ('44', R(1).ro(), X(2).ex()),
 
-    'IC'   : lambda: ('43', R(1).rw(), X(2).ro()),
-    'ICM'  : lambda: ('BF', R(1).rw(), R(3).ro(), S(2).ro()),
+    'IC'   : lambda: ('43', R(1).wo(), X(2).ro()),
+    'ICM'  : lambda: ('BF', R(1).wo(), R(3).ro(), S(2).ro()),
 
     'L'    : lambda: ('58', R(1).wo(), X(2).ro().al('fw')),
     'LA'   : lambda: ('41', R(1).wo(), X(2).ro()),
-    'LCR'  : lambda: ('13', R(1).rw(), R(2).ro()),
+    'LCR'  : lambda: ('13', R(1).wo(), R(2).ro()),
     'LM'   : lambda: ('98', R(1).wo(), R(3).wo(), S(2).ro().al('fw')),
-    'LNR'  : lambda: ('11', R(1).rw(), R(2).ro()),
-    'LPR'  : lambda: ('10', R(1).rw(), R(2).ro()),
+    'LNR'  : lambda: ('11', R(1).wo(), R(2).ro()),
+    'LPR'  : lambda: ('10', R(1).wo(), R(2).ro()),
     'LR'   : lambda: ('18', R(1).wo(), R(2).ro()),
     'LTR'  : lambda: ('12', R(1).rw(), R(2).ro()),
 
@@ -492,8 +495,8 @@ op_code = {
     'MP'   : lambda: ('FC', L(1,1).rw(),L(2,1).ro()),
     'MR'   : lambda: ('1C', R(1).rw().al('hw'), R(2).ro()),
 
-    'MVC'  : lambda: ('D2', L(1,2).rw(), S(2).ro()), # LL + bddd format
-    'MVI'  : lambda: ('92', S(1).rw(), I(2,2).ro()),
+    'MVC'  : lambda: ('D2', L(1,2).wo(), S(2).ro()), # LL + bddd format
+    'MVI'  : lambda: ('92', S(1).wo(), I(2,2).ro()),
 
     'N'    : lambda: ('54', R(1).rw(), X(2).ro().al('fw')),
     'NR'   : lambda: ('14', R(1).rw(), R(2).ro()),
@@ -698,7 +701,7 @@ class X_(object):
     def tr(dump):
         hex_list = []
         for val in dump[0]:
-            hex_list.append('{0:0>2}'.format(hex(val)[2:].upper()))
+            hex_list.append('{0:0>2}'.format(zPE.i2h(val)))
         return ''.join(hex_list)
 
 # Exception:
@@ -814,10 +817,10 @@ class P_(object):
         vals = dump[0]
         ch_list = []
         for val in vals[:-1]:
-            hex_val = '{0:0>2}'.format(hex(val)[2:].upper())
+            hex_val = '{0:0>2}'.format(zPE.i2h(val))
             ch_list.append(chr(int('F'+ hex_val[0], 16)).decode('EBCDIC-CP-US'))
             ch_list.append(chr(int('F'+ hex_val[1], 16)).decode('EBCDIC-CP-US'))
-        hex_val = '{0:0>2}'.format(hex(vals[-1])[2:].upper())
+        hex_val = '{0:0>2}'.format(zPE.i2h(vals[-1]))
         ch_list.append(chr(int('F'+ hex_val[0], 16)).decode('EBCDIC-CP-US'))
 
         # check format
@@ -893,7 +896,7 @@ class Z_(object):
                 ch_str[ch_len - indx - 1].encode('EBCDIC-CP-US')
                 )
         # set sign for the last digit
-        self.__vals[-1] = int(sign_digit + hex(self.__vals[-1])[-1], 16)
+        self.__vals[-1] = int(sign_digit + zPE.i2h(self.__vals[-1])[-1], 16)
 
     def dump(self):
         return (self.__vals, self.natual_len)
@@ -908,7 +911,7 @@ class Z_(object):
         ch_list = []
         for val in vals[:-1]:
             ch_list.append(chr(val).decode('EBCDIC-CP-US'))
-        hex_val = hex(vals[-1])[2:].upper()
+        hex_val = zPE.i2h(vals[-1])
         ch_list.append(hex_val[1])
 
         int(''.join(ch_list))   # check format
@@ -990,12 +993,12 @@ class SDNumericalType(object):
     def dump(self):
         if self.__val >= 0:
             hex_str = '{0:0>{1}}'.format(
-                hex(self.__val)[2:],
+                zPE.i2h(self.__val),
                 self._byte_len_ * 2
                 )
         else:
             hex_str = '{0:0>{1}}'.format( # display 2's complement
-                hex((0x1 << self.natual_len) + self.__val)[2:],
+                zPE.i2h((0x1 << self.natual_len) + self.__val),
                 self._byte_len_ * 2
                 )
         hex_str = hex_str[ : self.room_used() * 2] # get the actually used bytes
@@ -1106,7 +1109,7 @@ class A_(SDNumericalType):
         self.apply_append(int_val, length)
 
     def dump(self):
-        hex_str = '{0:0>8}'.format(hex(self.value())[2:])
+        hex_str = '{0:0>8}'.format(zPE.i2h(self.value()))
         hex_str = hex_str[ : self.room_used() * 2] # get the actually used bytes
         return ( [ int(hex_str[ i : i+2 ], 16)
                    for i in [ i * 2 for i in range(len(hex_str)/2) ]
@@ -1126,7 +1129,7 @@ class A_(SDNumericalType):
             int_val += vals[indx]
         return '0x{0}'.format(
             '{0:0>8}'.format(
-                hex(int_val % 0xFFFFFFFF)[2:-1].upper()
+                zPE.i2h(int_val % 0xFFFFFFFF)
                 )[ 8 - dump[1] / 4 : ] # only show the real length
             )
 

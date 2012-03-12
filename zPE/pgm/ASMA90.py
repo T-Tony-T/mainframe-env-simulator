@@ -1114,10 +1114,7 @@ def pass_2():
                                     sd = zPE.core.asm.get_sd(tmp)[0]
                                     parsed_addr = zPE.core.asm.X_.tr(sd.dump())
                                     if len(parsed_addr) <= len(
-                                        re.split(
-                                            '[xL]',
-                                            hex(2 ** ASM_PARM['AMODE'] - 1)
-                                            )[1] # (0)x(.+)L() => \1
+                                        zPE.i2h((2 ** ASM_PARM['AMODE'] - 1))
                                         ):
                                         res[0][indx] = str(int(parsed_addr, 16))
                                     else:
@@ -2141,12 +2138,8 @@ def __PRINT_ASM_RLD():
     for (pos_id, rel_id) in sorted(RLD):
         for entry in RLD[pos_id, rel_id]:
             print '{0:0>8} {1:0>8} {2:0>8}   {3} {4}  {5:>4}'.format(
-                hex(pos_id)[2:].upper(),
-                hex(rel_id)[2:].upper(),
-                hex(entry.addr)[2:].upper(),
-                entry.type,
-                entry.len,
-                entry.action
+                zPE.i2h(pos_id), zPE.i2h(rel_id), zPE.i2h(entry.addr),
+                entry.type,      entry.len,       entry.action
                 )
 
 def __PRINT_ASM_SCRT():
@@ -2157,7 +2150,7 @@ def __PRINT_ASM_SCRT():
         else:
             addr = SYMBOL[key].value
         print '{0} (0x{1:0>6}) => {2}'.format(
-            key, hex(addr)[2:].upper(), SYMBOL[key].__dict__
+            key, zPE.i2h(addr), SYMBOL[key].__dict__
             )
     print '\nSymbol Cross Reference ER Sub-Table:'
     for key in sorted(SYMBOL_V.iterkeys()):
@@ -2166,7 +2159,7 @@ def __PRINT_ASM_SCRT():
         else:
             addr = SYMBOL_V[key].value
         print '{0} (0x{1:0>6}) => {2}'.format(
-            key, hex(addr)[2:].upper(), SYMBOL_V[key].__dict__
+            key, zPE.i2h(addr), SYMBOL_V[key].__dict__
             )
     print '\nSymbol Cross Reference =Const Sub-Table:'
     for key in sorted(SYMBOL_EQ.iterkeys()):
@@ -2176,7 +2169,7 @@ def __PRINT_ASM_SCRT():
             else:
                 addr = SYMBOL_EQ[key][indx].value
             print '{0} (0x{1:0>6}) => {2}'.format(
-                key, hex(addr)[2:].upper(), SYMBOL_EQ[key][indx].__dict__
+                key, zPE.i2h(addr), SYMBOL_EQ[key][indx].__dict__
                 )
     print '\nUnreferenced Symbol Defined in CSECTs:'
     for (ln, key) in sorted(NON_REF_SYMBOL, key = lambda t: t[1]):

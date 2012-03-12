@@ -31,7 +31,7 @@ class Register(Union):
             self.bytes[(4-key)%4] = val
 
     def __str__(self):
-        return '{0:0>8}'.format(hex(self.long)[2:-1].upper())
+        return '{0:0>8}'.format(zPE.i2h(self.long))
 
 
     def __add__(self, other):
@@ -318,7 +318,7 @@ class RegisterPair(object):
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
-        res = '{0:0>16}'.format(hex(self.odd.long * other.long)[2:-1].upper())
+        res = '{0:0>16}'.format(zPE.i2h(self.odd.long * other.long))
         self.even.long = int(res[ :8], 16)
         self.odd.long  = int(res[8: ], 16)
         return self
@@ -449,18 +449,7 @@ class PSW(object):
                 )
 
     def dump_hex(self):
-        (w1, w2) = self.dump_bin()
-        h1 = hex(int(w1, 2))
-        if h1[-1] == 'L':       # check the 'L' appended by int()
-            h1 = h1[2:-1]
-        else:
-            h1 = h1[2:]
-        h2 = hex(int(w2, 2))
-        if h2[-1] == 'L':       # check the 'L' appended by int()
-            h2 = h2[2:-1]
-        else:
-            h2 = h2[2:]
-        return ( '{0:0>8}'.format(h1.upper()), '{0:0>8}'.format(h2.upper()) )
+        return [ zPE.b2x(bin_str) for bin_str in self.dump_bin() ]
 
     def __str__(self):
         (w1, w2) = self.dump_hex()
