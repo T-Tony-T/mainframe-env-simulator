@@ -267,7 +267,11 @@ ins_op = {
     'DF'   : ( 'EDMK', 5,
                lambda s : __ed(s[3:6], s[2], __dclen(s[0:2]), s[7:10], s[6], 1)
                ),
-    'F0'   : ( 'SRP',  5, lambda s : None ),
+    'F0'   : ( 'SRP',  5, lambda s : __shft_dec(
+            s[3:6], s[2], __dclen(s[0]),
+            __addr(s[7:10],'0',s[6]), # encoded shift code
+            __h2i(s[1])               # rounding factor
+            ) ),
     'F2'   : ( 'PACK', 5, lambda s : (
             lambda pack_lst = P_.pack(__dump(s[7:10], s[6], __dclen(s[1])),
                                       __dclen(s[0])) :
@@ -377,6 +381,58 @@ def __ref(d, x, b, byte, offset = 0):
     page[addr] = byte
     return byte
 
+def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
+    ( page, addr ) = __page(d, x, b, al, offset)
+    return page.retrieve(addr, zPE.align_fmt_map[al])
+
+def __dump(d, b, size):
+    addr_start = __h2i(d) + __addr_reg(b)
+    addr_end   = addr_start + size
+    try:
+        val = Memory.deref_storage(addr_start, addr_end)
+    except:
+        raise zPE.newProtectionException()
+    return val
+
+def __mask(m):
+    return zPE.listify_mask(m)
+
+
+def __br(mask, addr):
+    if SPR['PSW'].CC in mask:
+        SPR['PSW'].Instruct_addr = addr
+        return True
+    return False
+
+def __cnt(cnt_reg, addr):
+    cnt_reg.decrement()
+    if addr != None:
+        SPR['PSW'].Instruct_addr = addr
+        return True
+    return False
+
+def __cmp(val_l, val_r, skip = False):
+    if skip:
+        return None
+    return Register(val_l).cmp(val_r)
+
+def __cmp_lgc(val_l, val_r, skip = False):
+    if skip:
+        return None
+    return Register(val_l).cmp_lgc(val_r)
+
+
+## packed decimal operation
+
+def __cmp_dec(val_l, val_r):
+    if val_l == val_r:
+        SPR['PSW'].CC = 0
+    elif val_l < val_r:
+        SPR['PSW'].CC = 1
+    else:
+        SPR['PSW'].CC = 2
+    return SPR['PSW'].CC
+
 def __ref_dec(d, l, b, value, cc = True, ex = None):
     '''
     value: result / (quotient, reminder)
@@ -421,54 +477,48 @@ def __ref_dec(d, l, b, value, cc = True, ex = None):
     [ __ref(d, '0', b, value[offset], offset - indx_s)
       for offset in range(indx_s, l)
       ]
+    return SPR['PSW'].CC
 
-def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
-    ( page, addr ) = __page(d, x, b, al, offset)
-    return page.retrieve(addr, zPE.align_fmt_map[al])
+def __shft_dec(d, b, l, shft_code, rounding):
+    val_str = __dump(d, b, l)
+    val_len = len(val_str) - 1  # length of the digit string
 
-def __dump(d, b, size):
-    addr_start = __h2i(d) + __addr_reg(b)
-    addr_end   = addr_start + size
-    try:
-        val = Memory.deref_storage(addr_start, addr_end)
-    except:
-        raise zPE.newProtectionException()
-    return val
+    # (0 < l < 16)  =>  (0 < byte_cnt < 32)  =>  (0 < digit_cnt < 31)
+    buff = '{0:0>32}{1:0>32}'.format(val_str[:-1], '') # val_32|zero_32
+    buff = buff[shft_code:] + buff[:shft_code]         # spin the circular array
 
-def __mask(m):
-    return zPE.listify_mask(m)
+    overflow = False
+    if shft_code > 32:
+        # right shift, add rounding factor
+        val_str = '{0:0>{1}}'.format(int(buff[:33]) + rounding, val_len)[:-1]
+    else:
+        # left shift, check overflow
+        val_str = buff[32 - val_len : 32]
+        if int(buff[32:]):      # zero_32 != all_zero, overflow occured
+            overflow = True
 
+    # determine and append sign digit
+    val = int(val_str)
+    if val < 0:
+        val_str += 'D'
+    else:
+        val_str += 'C'
 
-def __br(mask, addr):
-    if SPR['PSW'].CC in mask:
-        SPR['PSW'].Instruct_addr = addr
-        return True
-    return False
-
-def __cnt(cnt_reg, addr):
-    cnt_reg.decrement()
-    if addr != None:
-        SPR['PSW'].Instruct_addr = addr
-        return True
-    return False
-
-def __cmp(val_l, val_r, skip = False):
-    if skip:
-        return None
-    return Register(val_l).cmp(val_r)
-
-def __cmp_lgc(val_l, val_r, skip = False):
-    if skip:
-        return None
-    return Register(val_l).cmp_lgc(val_r)
-
-def __cmp_dec(val_l, val_r):
-    if val_l == val_r:
-        SPR['PSW'].CC = 0
-    elif val_l < val_r:
+    # set CC
+    if overflow:
+        SPR['PSW'].CC = 3
+    elif val > 0:
+        SPR['PSW'].CC = 2
+    elif val < 0:
         SPR['PSW'].CC = 1
     else:
-        SPR['PSW'].CC = 2
+        SPR['PSW'].CC = 0
+
+    # store back the new value
+    value = X_(val_str).dump()[0]
+    [ __ref(d, '0', b, value[offset], offset)
+      for offset in range(l)
+      ]
     return SPR['PSW'].CC
 
 def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
@@ -544,5 +594,4 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
         SPR['PSW'].CC = 1
     else:
         SPR['PSW'].CC = 2
-
     return SPR['PSW'].CC
