@@ -168,7 +168,7 @@ def new(key, mode, f_type, path = [], real_path = []):
 
     SPOOL[key] = Spool([], [], mode, f_type, path, real_path)
     if f_type == 'file'  and  mode == 'i':
-        load(key)
+        load(key, mode, f_type, real_path)
     return SPOOL[key]
 
 def load(key, mode, f_type, real_path):

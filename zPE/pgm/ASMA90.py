@@ -257,17 +257,22 @@ def pass_1():
                 [],     # pool for constant with half-word alignment
                 [],     # pool for constant with byte alignment
                 ]
-            curr_pool_al = [ 8, 4, 2, 1 ]
+            curr_pool_al = {
+                0b000 : 0,      # evenly dividable by 8, [0] into above list
+                0b100 : 1,      # evenly dividable by 4, etc.
+                0b010 : 2, 0b110 : 2,
+                0b001 : 3, 0b011 : 3, 0b101 : 3, 0b111 : 3,
+                }
 
             for lbl in const_pool_lbl:
                 alignment = zPE.core.asm.align_at(lbl[1])
 
                 sd_info = zPE.core.asm.parse_sd(lbl[1:])
                 sd_len  = sd_info[1] * sd_info[3]
-                if sd_len in curr_pool_al:
+                if (sd_len & 0b111) in curr_pool_al:
                     alignment = max(alignment, sd_len)
 
-                curr_pool[curr_pool_al.index(alignment)].append(lbl)
+                curr_pool[curr_pool_al[alignment & 0b111]].append(lbl)
 
             line_num_tmp = 0    # start insertion before next line
             for pool in curr_pool:
@@ -353,10 +358,15 @@ def pass_1():
 
                 if field[1] in SYMBOL_EQ:
                     symbol = __HAS_EQ(field[1], scope.id())
-                    if symbol == None or symbol.defn != None:
+                    if symbol == None:
                         zPE.abort(91, 'Error: ', field[1],
                                   ': Fail to find the allocation.\n')
                     else:       # found successfully
+                        if symbol.defn != None:
+                            zPE.warn('** Warning: ', field[1],
+                                     ': =Const redefined at line ',
+                                     str(line_num), '; was at line ',
+                                     str(symbol.defn), '\n')
                         const_left -= 1
                         symbol.length = sd_info[3]
                         symbol.value  = addr
@@ -1802,11 +1812,18 @@ def __PARSE_ARG(arg_str, bypass_sym = False):
     parts = []                  # components of the expression
     descs = []                  # descriptions of the components
 
-    if re.match(r".*\([\w']*,?[\w']*\)", arg_str):
-        exp_rmndr = arg_str[:arg_str.rindex('(')]
+    res = re.match(r".*=[AV]\([^()]+\)", arg_str)
+    if res:
+        exp_rmndr = arg_str[:res.end()]
+        arg_str   = arg_str[res.end():]
+    else:
+        exp_rmndr = ''
+
+    if re.match(r"(.*(=[AV]\([^()]+\)))*.*\([\w']*,?[\w']*\)", arg_str):
+        exp_rmndr += arg_str[:arg_str.rindex('(')]
         idx_rmndr = arg_str[arg_str.rindex('('):]
     else:
-        exp_rmndr = arg_str
+        exp_rmndr += arg_str
         idx_rmndr = None
     exp_len = len(exp_rmndr)
 

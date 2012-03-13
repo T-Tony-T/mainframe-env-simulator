@@ -351,11 +351,11 @@ def __PARSE_OUT_ASM(limit):
                 field_1, field_2, field_3
                 )
             # appending to it the "ADDR1" and "ADDR2" fields, if applied
-            if MNEMONIC[line_num][3]:
+            if MNEMONIC[line_num][3] != None:
                 addr_1 = zPE.i2h(MNEMONIC[line_num][3])
             else:
                 addr_1 = '     '
-            if MNEMONIC[line_num][4]:
+            if MNEMONIC[line_num][4] != None:
                 addr_2 = zPE.i2h(MNEMONIC[line_num][4])
             else:
                 addr_2 = '     '
@@ -476,11 +476,11 @@ def __PARSE_OUT_ASM(limit):
             tmp_str = '{0} {1} {2} '.format(
                 field_1, field_2, field_3
                 )
-            if MNEMONIC[key][3]:
+            if MNEMONIC[key][3] != None:
                 addr_1 = zPE.i2h(MNEMONIC[key][3])
             else:
                 addr_1 = '     '
-            if MNEMONIC[key][4]:
+            if MNEMONIC[key][4] != None:
                 addr_2 = zPE.i2h(MNEMONIC[key][4])
             else:
                 addr_2 = '     '

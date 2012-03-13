@@ -577,6 +577,9 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
 
             if significance_indicator  or  src_digit:
                 __ref(pttn_disp, '0', pttn_base, 0xF0 + src_digit, indx)
+                if mark_reg  and  not significance_indicator:
+                    # from off to on, mark it if required
+                    GPR[mark_reg].load(__addr(pttn_disp,'0',pttn_base) + indx)
                 significance_indicator = True
             else:
                 __ref(pttn_disp, '0', pttn_base, fill, indx)

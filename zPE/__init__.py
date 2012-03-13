@@ -18,6 +18,8 @@ def debug_mode(enable_debug = None):
     else:
         DEBUG_MODE[0] = enable_debug
 
+def warn(*msg):
+    sys.stderr.write(''.join(msg))
 
 def abort(rc, *msg):
     '''
