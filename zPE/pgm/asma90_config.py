@@ -217,6 +217,11 @@ def ALLOC_EQ_SYMBOL(lbl, symbol):
 INVALID_SYMBOL = []     # non-defined symbol
 NON_REF_SYMBOL = []     # non-referenced symbol
 
+DSECT_CR = []           # DSECT Cross Reference Table; build during pass 1
+def GET_DSECT_LABEL(line_num):
+    for (k, ls, le) in DSECT_CR:
+        if ls <= line_num < le:
+            return k
 
 class ScopeCounter(object):
     def __init__(self):
@@ -228,7 +233,7 @@ class ScopeCounter(object):
         if ( self.__lbl == None  and # no CSECT encountered so far
              not test                # not in testing mode
              ):
-            self.new_csect(None, None)
+            self.new('CSECT', None, None)
         return self.__id
 
     def label(self):
@@ -242,14 +247,30 @@ class ScopeCounter(object):
     def type(self):
         return [ 'SD', 'PC' ][self.__lbl.isspace()]
 
-    def new_csect(self, line_num, label):
+    def new(self, sectype, line_num, label):
+        # end the previous DSECT, if any
+        if DSECT_CR  and  DSECT_CR[-1][-1] == None:
+            DSECT_CR[-1][-1] = line_num
+
+        # normalize section symbol
         if not label:
-            label = ''          # PC symbol
+            if sectype == 'CSECT':
+                label = ''      # PC symbol
+            elif sectype == 'DSECT':
+                zPE.abort(91, 'Error: line ', str(line_num),
+                          ': Label is required.\n')
         self.__lbl = '{0:<8}'.format(label)
+        if sectype == 'DSECT':
+            DSECT_CR.append([ self.__lbl, line_num, None ])
 
-        self.__id = self.__new
-        self.__new += 1         # update the next scope_id ptr
+        # generate the section id
+        if sectype == 'CSECT':
+            self.__id = self.__new
+            self.__new += 1     # update the next scope_id ptr
+        elif sectype == 'DSECT':
+            self.__id = -1      # 0xFFFFFFFF
 
+        # insert the symbol into ESD table
         if self.__lbl not in ESD: # global ESD defined above
             ESD[self.__lbl] = (
                 ExternalSymbol(
@@ -263,12 +284,17 @@ class ScopeCounter(object):
                 )
 
         if ESD[self.__lbl][0].id != None:
+            if ESD[self.__lbl][0].id < 0:
+                # continued DSECT, not allowed
+                zPE.abort(91, 'Error: ', self.__lbl,
+                          ': DSECT redefined at line ',
+                          str(line_num), '.\n')
             # continued CSECT, switch to it
             self.__id = ESD[self.__lbl][0].id
             self.__new -= 1                 # roll back the next scope id
             addr = ESD[csect_lbl][0].length # retrieve program counter
         else:
-            # new CSECT, update info
+            # new CSECT/DSECT, update info
             addr = 0                        # init program counter to 0
 
             ESD[self.__lbl][0].id   = self.__id
@@ -353,6 +379,8 @@ def asm_init_res():
     SYMBOL_EQ.clear()
     del INVALID_SYMBOL[:]
     del NON_REF_SYMBOL[:]
+
+    del DSECT_CR[:]
 
     RLD.clear()
 

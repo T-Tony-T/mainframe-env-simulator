@@ -116,8 +116,6 @@ def execute(ins):
     if zPE.debug_mode() and ins[0] != '44': # skip EX
         print '  '.join([ str(r) for r in GPR[:8] ]), '\t\t', SPR['PSW']
         print '  '.join([ str(r) for r in GPR[8:] ]), '\t\tCC =', SPR['PSW'].CC
-        print ''.join(Memory.allocation.values()[0].dump_all()),
-        print ''.join(Memory.allocation.values()[1].dump_all())
         print
     return
 
@@ -415,8 +413,7 @@ def __br(mask, addr):
     return False
 
 def __cnt(cnt_reg, addr):
-    cnt_reg.decrement()
-    if addr != None:
+    if cnt_reg.decrement() and addr != None:
         SPR['PSW'].Instruct_addr = addr
         return True
     return False

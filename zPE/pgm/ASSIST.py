@@ -246,14 +246,18 @@ def __PARSE_OUT_ASM(limit):
             # comment, EJECT, SPACE, MACRO definition, etc.
             field = zPE.resplit_sq(r'\s+', line[:-1], 3)
 
-            if len(field) > 1 and field[1] == 'EJECT':
+            # check for EJECT and SPACE
+            if line.startswith('*')  or  len(field) < 2:
+                pass            # cannot be EJECT / SPACE, pass
+
+            elif field[1] == 'EJECT':
                 ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
                     spo, title, [ ], CNT['pln'], CNT['page'],
                     new_page = True, print_none = True
                     )
                 continue
 
-            elif len(field) > 1 and field[1] == 'SPACE':
+            elif field[1] == 'SPACE':
                 p_line = [ ]
                 if len(field) > 2:
                     space_n = int(field[2])
@@ -266,6 +270,7 @@ def __PARSE_OUT_ASM(limit):
                         )
                 continue
 
+            # not EJECT / SPACE
             if line_did == None:
                 p_line = [      # regular input line
                     ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
@@ -310,8 +315,12 @@ def __PARSE_OUT_ASM(limit):
                     continue
             loc = ' ' * 6       # do not print location for this type
         elif len(MNEMONIC[line_num]) == 1: # type 1
-            if MNEMONIC[line_num][0]:
+            if MNEMONIC[line_num][0]  and  MNEMONIC_LOC[line_num] != None:
+                # has recorded location, use it
                 loc = zPE.i2h(MNEMONIC_LOC[line_num])
+            elif MNEMONIC[line_num][0]:
+                # has invalid location, indicate it
+                loc = '-' * 6
             else:               # no scope, no info to print
                 loc = ''
         elif MNEMONIC[line_num][0] == None: # no scope ==> END (type 2)

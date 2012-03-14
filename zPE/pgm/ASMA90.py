@@ -188,17 +188,18 @@ def pass_1():
             MNEMONIC[line_num] = [  ]                           # type 0
             spt.push( ( line, deck_id, ) )
 
-        # parse CSECT
-        elif field[1] == 'CSECT':
-            # update the CSECT info
-            if scope.id(test = True): # if not first CSECT
+        # parse CSECT/DSECT
+        elif field[1] in [ 'CSECT', 'DSECT', ]:
+            # update the current CSECT/DSECT info, if any
+            if scope.id(test = True):
                 ESD[scope.label()][0].length = addr
 
-            # allocate scope id for new CSECT
+            # allocate scope id for new CSECT/DSECT
             if ins_lbl != 0:    # no label detected, or an invalid label
-                addr = scope.new_csect(line_num, None) # treat it as PC symbol
+                # treat it as PC symbol
+                addr = scope.new(field[1], line_num, None)
             else:               # valid label
-                addr = scope.new_csect(line_num, field[0])
+                addr = scope.new(field[1], line_num, field[0])
             prev_addr = None
 
             MNEMONIC[line_num] = [ scope.id(), addr, ]          # type 2
@@ -207,7 +208,7 @@ def pass_1():
         # parse USING
         elif field[1] == 'USING':
             # actual parsing in pass 2
-            MNEMONIC[line_num] = [ scope.id(), ]                # type 1
+            MNEMONIC[line_num] = [ scope.id(), ]                # type 1 **
             spt.push( ( line, deck_id, ) )
 
         # parse DROP
@@ -616,6 +617,9 @@ def pass_1():
             spt.push( ( line, deck_id, ) )
     # end of main read loop
 
+    # remove left-over DSECT from the ESD-index table
+    if -1 in ESD_ID:
+        del ESD_ID[-1]
     # prepare the offset look-up table of the addresses
     offset = RELOCATE_OFFSET
     for key in sorted(ESD_ID.iterkeys()):
@@ -635,9 +639,10 @@ def pass_1():
 
     # update symbol address
     for key in ESD:
-        ESD[key][0].addr = offset[ESD[key][0].id]
+        if ESD[key][0].id > 0:
+            ESD[key][0].addr = offset[ESD[key][0].id]
     for key in SYMBOL:
-        if not SYMBOL[key].reloc:
+        if not SYMBOL[key].reloc  and  SYMBOL[key].id > 0:
             SYMBOL[key].value += offset[SYMBOL[key].id]
 
     # update the address in MNEMONIC table and record them in MNEMONIC_LOC table
@@ -659,7 +664,7 @@ def pass_1():
             # scope switched, move tmp buff to keyed buff
             keyed_buff[prev_scope] = tmp_buff
             tmp_buff = []
-            prev_scope = scope
+            prev_scope = scope_id
 
         if not scope_id:
             continue
@@ -667,7 +672,8 @@ def pass_1():
         tmp_buff.append(line_num)
 
         if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]: # type 2/3/5
-            MNEMONIC[line_num][1] += offset[scope_id] # update loc ptr
+            if scope_id > 0:
+                MNEMONIC[line_num][1] += offset[scope_id] # update loc ptr
 
             # process tmp_buff
             for i in tmp_buff:
@@ -768,11 +774,18 @@ def pass_2():
             # comment, EJECT, SPACE  or      TITLE statement
             continue
         scope_id = MNEMONIC[line_num][0]        # retrieve scope ID
-        if scope_id:
-            csect_lbl = ESD_ID[scope_id]        # retrieve CSECT label
+        if scope_id == None:
+            sect_lbl = None
+        elif scope_id > 0:
+            # CSECT
+            sect_lbl = ESD_ID[scope_id]         # retrieve CSECT label
+            addr = MNEMONIC_LOC[line_num]       # retrieve address
+        elif scope_id < 0:
+            # DSECT
+            sect_lbl = GET_DSECT_LABEL(line_num)# retrieve DSECT label
             addr = MNEMONIC_LOC[line_num]       # retrieve address
         else:
-            csect_lbl = None
+            pass                # scope = 0, no change to addr
 
         if scope_id != prev_scope: # swiching scope, append to TXT records
             __APPEND_TXT(mem, prev_scope, pos_start, pos_end)
@@ -791,18 +804,19 @@ def pass_2():
 
         # parse CSECT
         if field[1] == 'CSECT':
-            if ( csect_lbl != '{0:<8}'.format(field[0]) and
-                 csect_lbl != '{0:<8}'.format('') # in case of PC
+            if ( sect_lbl != '{0:<8}'.format(field[0]) and
+                 sect_lbl != '{0:<8}'.format('') # in case of PC
                  ):
                 zPE.abort(92, 'Error: Fail to retrieve CSECT label.\n')
-            if scope_id != ESD[csect_lbl][0].id:
+            if scope_id != ESD[sect_lbl][0].id:
                 zPE.abort(92, 'Error: Fail to retrieve scope ID.\n')
 
             # append it to ESD records
-            __APPEND_ESD([ csect_lbl, ESD[csect_lbl][0] ])
+            __APPEND_ESD([ sect_lbl, ESD[sect_lbl][0] ])
 
         # parse USING
         elif field[1] == 'USING':
+            using_value = None  # for "upgrading" USING to type 2
             if len(field[0]) != 0:
                 zPE.mark4future('Labeled USING')
             if len(field) < 3:
@@ -907,6 +921,8 @@ def pass_2():
                         0, '{0:>5}'.format(''), ''
                         )
                     ACTIVE_USING[parsed_args[indx]] = line_num
+            # "upgrade" USING
+            MNEMONIC_LOC[line_num] = using_value  # record USING location
 
         # parse DROP
         elif field[1] == 'DROP':
@@ -1529,10 +1545,10 @@ def pass_2():
                             else:
                                 reg_indx = 0
 
-                    if __IS_ADDRESSABLE(lbl_8, csect_lbl, ex_disp):
+                    if __IS_ADDRESSABLE(lbl_8, sect_lbl, ex_disp):
                         # update Using Map
                         addr_res = __ADDRESSING(
-                            lbl_8, csect_lbl, ex_disp
+                            lbl_8, sect_lbl, ex_disp
                             )
                         using = USING_MAP[addr_res[1]]
                         using.max_disp = max(
@@ -1668,12 +1684,12 @@ def obj_mod_gen():
 
     
 ### Supporting Functions
-def __ADDRESSING(lbl, csect_lbl, ex_disp = 0):
+def __ADDRESSING(lbl, sect_lbl, ex_disp = 0):
     rv = [ 4096, None, -1, ]  # init to least priority USING (non-exsit)
-    eq_const = __HAS_EQ(lbl, ESD[csect_lbl][0].id)
+    eq_const = __HAS_EQ(lbl, ESD[sect_lbl][0].id)
 
     for (k, v) in ACTIVE_USING.iteritems():
-        if __IS_IN_RANGE(lbl, ex_disp, USING_MAP[v,k], ESD[csect_lbl][0]):
+        if __IS_IN_RANGE(lbl, ex_disp, USING_MAP[v,k], ESD[sect_lbl][0]):
             if lbl[0] == '*':
                 disp = MNEMONIC[ int( lbl[1:] ) ][1] - USING_MAP[v,k].u_value
             elif lbl[0] == '=':
@@ -1695,13 +1711,13 @@ def __HAS_EQ(lbl, scope_id):
             return symbol
     return None                 # nor found
 
-def __IS_ADDRESSABLE(lbl, csect_lbl, ex_disp = 0):
+def __IS_ADDRESSABLE(lbl, sect_lbl, ex_disp = 0):
     if (lbl[0] != '*') and (lbl not in SYMBOL) and (lbl not in SYMBOL_EQ):
         return False            # not an *, a symbol, nor a =constant
     if len(ACTIVE_USING) == 0:
         return False            # not in domain of any USING
     for (k, v) in ACTIVE_USING.iteritems():
-        if __IS_IN_RANGE(lbl, ex_disp, USING_MAP[v,k], ESD[csect_lbl][0]):
+        if __IS_IN_RANGE(lbl, ex_disp, USING_MAP[v,k], ESD[sect_lbl][0]):
             return True
     return False                # not in the range of any USING
 
@@ -1765,15 +1781,19 @@ def __IS_IN_RANGE(lbl, ex_disp, using, csect):
         )
     eq_const = __HAS_EQ(lbl, csect.id)
 
-    if ( ( (lbl[0] == '*')              and # is loc_ptr
-           (int(lbl[1:]) + ex_disp < u_range)
-           )  or
-         ( (lbl[0] == '=')              and # is =constant
-           (MNEMONIC[eq_const.defn][1] + ex_disp < u_range)
-           )  or
-         ( (SYMBOL[lbl].type != 'U')    and # is symbol
-           (MNEMONIC[SYMBOL[lbl].defn][1] + ex_disp < u_range)
-           )):
+    if lbl[0] == '*':
+        # is loc_ptr, encoded disp
+        disp = int(lbl[1:])
+    elif lbl[0] == '=':
+        # is =constant, retrieve definition location
+        disp = MNEMONIC[eq_const.defn][1]
+    elif SYMBOL[lbl].type != 'U':
+        # is symbol, retrieve definition location
+        disp = MNEMONIC[SYMBOL[lbl].defn][1]
+    else:
+        return False
+
+    if using.u_value <= disp + ex_disp < u_range:
         return True
     else:
         return False
@@ -2016,29 +2036,36 @@ def __REDUCE_EXP(exp):
 
 
 vf_list = []
-csect_encountered = [] # this guard the function from appending duplicates
+csect_encountered = { # this guard the function from appending duplicates
+    'ER' : [],
+    'SD' : [],
+    'PC' : [],
+}
 def __APPEND_ESD(variable_field = None):
     if variable_field:
-        csect = variable_field[0]
-        if csect in csect_encountered:
+        csect_lbl  = variable_field[0]
+        csect_type = variable_field[1].type
+        if csect_lbl in csect_encountered[csect_type]:
             return
-        csect_encountered.append(csect)
+        csect_encountered[csect_type].append(csect_lbl)
         vf_list.append(variable_field)  # append to variable field list
 
         force_flush = False             # natual append
     else:
         force_flush = len(vf_list)      # force flush if there is any pending vf
 
-    if force_flush  or  len(vf_list) % 3 == 0:
+    if force_flush  or  len(vf_list) == 3:
         # force flush the list, or the list is full (len = 3)
         if zPE.debug_mode():
-            print '** building ESD record with', vf_list
+            print '** building ESD record with', [ ( k, v.__dict__, )
+                                                   for (k,v) in vf_list
+                                                   ]
         OBJMOD['ESD'].append( OBJMOD_REC['ESD'](vf_list) )
         del vf_list[:]                  # clear variable field list
 
 
 def __APPEND_TXT(mem, scope, pos_start, pos_end):
-    if ( scope == None     or
+    if ( scope < 0         or   # None is also considered '< 0'
          pos_start == None or
          pos_end == None   or
          pos_start >= pos_end
@@ -2050,7 +2077,7 @@ def __APPEND_TXT(mem, scope, pos_start, pos_end):
     while p_s < p_e:
         content = mem[mem.min_pos + p_s : mem.min_pos + p_e]
         if zPE.debug_mode():
-            print '** building TXT record with', content
+            print '** building TXT record (scope', scope, ') with', content
         OBJMOD['TXT'].append( OBJMOD_REC['TXT'](scope, p_s, content) )
         p_s = p_e
         p_e = min(pos_end, p_s + 56 * 2)
@@ -2092,8 +2119,8 @@ def __APPEND_RLD(pos_id = None, rel_id = None, data_field = None):
     elif df_list_memory['byte_cnt'] > 56:
         # the list is overflowed
         if zPE.debug_mode():
-            print '** building RLD record with', df_list[-1]
-        OBJMOD['RLD'].append( OBJMOD_REC['RLD'](df_list[-1]) )
+            print '** building RLD record with', df_list[:-1]
+        OBJMOD['RLD'].append( OBJMOD_REC['RLD'](df_list[:-1]) )
         del df_list[:]                 # clear data field list
         df_list.append([ 8, data_field, pos_id, rel_id ]) # push back last one
         df_list_memory['byte_cnt'] = 8
@@ -2136,6 +2163,7 @@ def __PRINT_DEBUG_INFO(phase):
         __PRINT_ASM_RLD()
         __PRINT_ASM_SCRT()
         __PRINT_ASM_UM()
+    __PRINT_ASM_DCR()
     __PRINT_ASM_MSG()
 
 
@@ -2199,6 +2227,13 @@ def __PRINT_ASM_UM():
     print '\nUsing Map:'
     for (k, v) in USING_MAP.iteritems():
         print k, v.__dict__
+
+def __PRINT_ASM_DCR():
+    print '\nDSECT Cross Reference:'
+    for (k, ls, le) in DSECT_CR:
+        print '{0} (ln: {1:>4} ~ {2:<4}) => {3}'.format(
+            k, ls, le, ESD[k][0].__dict__
+            )
 
 def __PRINT_ASM_MSG():
     __PRINT_ASM_MSG_FOR('Infomation')

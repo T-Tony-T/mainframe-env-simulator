@@ -201,13 +201,12 @@ def load():
             scope = int(rec[28:32], 16)    # byte 15-16: scope id
 
             if ( obj_id, scope ) not in CSECT:
-                zPE.abort(13, 'Error: ', scope,
+                zPE.abort(13, 'Error: ', str(scope),
                           ': Invalid ESD ID in TXT record(s).\n')
 
             # calculate the actual location
             loc = ( CSECT[obj_id, scope][0] +      # start of OBJMOD
-                    CSECT[obj_id, scope][1].addr + # start of CSECT
-                    addr                           # addr into CSECT
+                    addr                           # addr into OBJMOD
                     )
             mem[loc] = rec[32 : 32 + byte_cnt * 2]
 
