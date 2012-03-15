@@ -563,6 +563,8 @@ op_code = {
     'STCM' : lambda: ('BE', R(1).ro(), R(3).ro(), S(2).rw()),
     'STM'  : lambda: ('90', R(1).ro(), R(3).ro(), S(2).wo().al('fw')),
 
+    'TM'   : lambda: ('91', S(1).ro(), I(2,2).ro()),
+
     'UNPK' : lambda: ('F3', L(1,1).rw(),L(2,1).ro()),
 
     'X'    : lambda: ('57', R(1).rw(), X(2).ro().al('fw')),

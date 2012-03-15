@@ -117,7 +117,8 @@ class Register(Union):
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
         self.long &= other.long
-        return bool(self)
+        SPR['PSW'].CC = bool(self)
+        return self
 
     def __or__(self, other):
         '''
@@ -127,7 +128,8 @@ class Register(Union):
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
         self.long |= other.long
-        return bool(self)
+        SPR['PSW'].CC = bool(self)
+        return self
 
     def __xor__(self, other):
         '''
@@ -137,7 +139,8 @@ class Register(Union):
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
         self.long ^= other.long
-        return bool(self)
+        SPR['PSW'].CC = bool(self)
+        return self
 
 
     def cmp(self, other):

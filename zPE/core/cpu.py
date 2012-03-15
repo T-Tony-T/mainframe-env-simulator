@@ -235,6 +235,9 @@ ins_op = {
                     range([ R1 + i for i in range(16) ][R2 - R1] - R1 + 1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
+    '91'   : ( 'TM',   3, lambda s : __tst_bit(__deref(s[3:6], '0', s[2], 1),
+                                               zPE.h2i(s[0:2])
+                                               ) ),
     '92'   : ( 'MVI',  3, lambda s : __ref(s[3:6],'0',s[2],s[0:2]) ),
     '94'   : ( 'NI',   3, lambda s : __refmod(s[3:6],'0',s[2],'N',s[0:2])) ),
     '95'   : ( 'CLI',  3, lambda s : __cmp_lgc(__deref(s[3:6], '0', s[2], 1),
@@ -426,7 +429,7 @@ def __refmod(d, x, b, action, byte, offset = 0, skip_CC = False):
     page[addr] = byte
 
     if not skip_CC:
-        SPR['PSW'].CC = int(byte != 0)
+        SPR['PSW'].CC = bool(byte)
     return byte    
 
 def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
@@ -461,12 +464,23 @@ def __cnt(cnt_reg, addr):
 def __cmp(val_l, val_r, skip = False):
     if skip:
         return None
-    return Register(val_l).cmp(val_r)
+    return Register(val_l).cmp(val_r)     # CC is set in Register.cmp()
 
 def __cmp_lgc(val_l, val_r, skip = False):
     if skip:
         return None
-    return Register(val_l).cmp_lgc(val_r)
+    return Register(val_l).cmp_lgc(val_r) # CC is set in Register.cmp_lgc()
+
+
+def __tst_bit(val_l, val_r):
+    val_and = val_l & val_r
+    if not val_and:             # bits tested are all 0s
+        SPR['PSW'].CC = 0
+    elif val_and == val_r:      # bits tested are all 1s
+        SPR['PSW'].CC = 3
+    else:
+        SPR['PSW'].CC = 1       # bits tested are mixed 0(s) and 1(s)
+    return SPR['PSW'].CC
 
 
 ## packed decimal operation
