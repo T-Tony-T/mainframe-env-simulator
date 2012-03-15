@@ -173,10 +173,10 @@ class OpConst(object):
         return self.ins_type.flag()
 
 
-# int_4 => ( 'r', '' )
-class R(InstructionType):
+# int_16 => ( '', 'dddd' )
+class D(InstructionType):
     def __init__(self, arg_pos, val = None):
-        super(R, self).__init__('R', arg_pos)
+        super(D, self).__init__('D', arg_pos)
 
         if val == None:
             self.valid = False
@@ -185,7 +185,7 @@ class R(InstructionType):
             self.set(val)
 
     def __len__(self):
-        return 1                # number of half-bytes / hex-digits
+        return 4                # number of half-bytes / hex-digits
 
     def get(self):
         if self.valid:
@@ -195,10 +195,10 @@ class R(InstructionType):
 
     def prnt(self):
         if self.valid:
-            rv = zPE.i2h(self.__val)[-1]
+            rv = '{0:0>4}'.format(zPE.i2h(self.__val))
         else:
-            rv = '-'
-        return ( rv, '', )
+            rv = '----'
+        return ( '', rv, )
 
     def value(self):
         if self.valid:
@@ -208,8 +208,8 @@ class R(InstructionType):
         return rv
 
     def set(self, val):
-        if not 0x0 <= val <= 0xF:
-            raise ValueError('register number must be between 0 and 15')
+        if not 0x0000 <= val <= 0xFFFF:
+            raise ValueError('length offset must be between 0 and 65535')
         self.__val = val
         self.valid = True
 
@@ -262,6 +262,46 @@ class I(InstructionType):
 
     def max_len_length(self):
         return 0x1 << ( 4 * self.lenfmt )
+
+# int_4 => ( 'r', '' )
+class R(InstructionType):
+    def __init__(self, arg_pos, val = None):
+        super(R, self).__init__('R', arg_pos)
+
+        if val == None:
+            self.valid = False
+            self.__val = None
+        else:
+            self.set(val)
+
+    def __len__(self):
+        return 1                # number of half-bytes / hex-digits
+
+    def get(self):
+        if self.valid:
+            return self.__val
+        else:
+            raise ValueError('value is invalid (non-initialized).')
+
+    def prnt(self):
+        if self.valid:
+            rv = zPE.i2h(self.__val)[-1]
+        else:
+            rv = '-'
+        return ( rv, '', )
+
+    def value(self):
+        if self.valid:
+            rv = self.__val
+        else:
+            rv = None
+        return rv
+
+    def set(self, val):
+        if not 0x0 <= val <= 0xF:
+            raise ValueError('register number must be between 0 and 15')
+        self.__val = val
+        self.valid = True
 
 # int_12(int_4) => ( '', 'bddd' )
 class S(InstructionType):

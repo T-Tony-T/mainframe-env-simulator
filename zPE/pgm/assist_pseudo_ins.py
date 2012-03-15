@@ -2,47 +2,7 @@
 import zPE
 
 ### add types supporting Pseudo-Instructions
-from zPE.core.asm import InstructionType, OpConst, R, I, S, X, L
-
-# int_16 => ( '', 'dddd' )
-class D(InstructionType):
-    def __init__(self, arg_pos, val = None):
-        super(D, self).__init__('D', arg_pos)
-
-        if val == None:
-            self.valid = False
-            self.__val = None
-        else:
-            self.set(val)
-
-    def __len__(self):
-        return 4                # number of half-bytes / hex-digits
-
-    def get(self):
-        if self.valid:
-            return self.__val
-        else:
-            raise ValueError('value is invalid (non-initialized).')
-
-    def prnt(self):
-        if self.valid:
-            rv = '{0:0>4}'.format(zPE.i2h(self.__val))
-        else:
-            rv = '----'
-        return ( '', rv, )
-
-    def value(self):
-        if self.valid:
-            rv = self.__val
-        else:
-            rv = None
-        return rv
-
-    def set(self, val):
-        if not 0x0000 <= val <= 0xFFFF:
-            raise ValueError('length offset must be between 0 and 65535')
-        self.__val = val
-        self.valid = True
+from zPE.core.asm import InstructionType, OpConst, D, I, R, S, L, X
 
 
 ### Pseudo-Instruction Mapping

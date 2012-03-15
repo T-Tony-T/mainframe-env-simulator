@@ -82,7 +82,7 @@ def init(step):
         asm_init_res()          # release resources
 
         if rc >= RC['ERROR']:
-            return rc        
+            return rc
     return rc
 
 
@@ -229,7 +229,7 @@ def pass_1():
                 # the scope ID of END is always None, and
                 # the location counter is always 0
                 MNEMONIC[line_num] = [ None, 0, ]               # type 2
-            
+
             if const_plid:      # check left-over constants
                 spi.push( ( line, deck_id, ), 0 ) # put back the END card
                 spi.insert(0, ' LTORG\a') # hand left-over constants to LTORG
@@ -391,9 +391,9 @@ def pass_1():
                                 )
                         elif bad_lbl:
                             indx_s = line.index(lbl) + bad_lbl - 1
-                            __INFO( 'E', line_num,
-                                    ( 143, indx_s, indx_s + len(lbl), )
-                                    )
+                            __INFO('E', line_num,
+                                   ( 143, indx_s, indx_s + len(lbl), )
+                                   )
                         else:
                             # update the Cross-References ER Sub-Table
                             if lbl_8 not in SYMBOL_V:
@@ -495,14 +495,18 @@ def pass_1():
                 for arg in argv:
                     res = __PARSE_ARG(arg, bypass_sym = True)
                     if isinstance(res, int):
-                        indx_e = line.index(arg) + res
-                        __INFO('E', line_num, ( 41, indx_e - 1, indx_e, ))
+                        ( err_num, err_indx ) = __DECODE_ERRCODE(res)
+                        indx_e = line.index(arg) + err_indx
+                        __INFO(None, line_num, # let system determine err level
+                               ( err_num, indx_e - 1, indx_e, )
+                               )
                         break
 
                     for indx in range(len(res[0]) - 1):
                         lbl = res[0][indx]
                         if res[1][indx] == 'eq_constant':
-                            # parse =constant
+                            # parse =constant, this is the only thing checked
+                            # during the 1st pass
                             if not const_plid:
                                 # allocate new pool
                                 const_plid = scope.id()
@@ -535,11 +539,11 @@ def pass_1():
                                                        )
                                         elif bad_lbl:
                                             indx_s = line.index(tmp)+bad_lbl-1
-                                            __INFO( 'E', line_num, (
+                                            __INFO('E', line_num, (
                                                     143,
                                                     indx_s,
                                                     indx_s + len(tmp),
-                                                    ) )
+                                                    ))
 
                                 # add =constant to the constant pool
                                 if not INFO_GE(line_num, 'W'):
@@ -555,20 +559,6 @@ def pass_1():
                                 indx_s = line.index(lbl) + 1
                                 __INFO('E', line_num,
                                        ( 65, indx_s, indx_s - 1 + len(lbl), )
-                                       )
-
-                        elif res[1][indx] == 'inline_const':
-                            # in-line constant
-                            sd_info = zPE.core.asm.parse_sd(lbl)
-                            if not sd_info[5]:
-                                sd_info = (sd_info[0], sd_info[1], sd_info[2],
-                                           0, sd_info[4], sd_info[3]
-                                           )
-                            if sd_info[2] not in 'BCX':
-                                # in-line constant need to be variable length
-                                indx_s = line.index(lbl)
-                                __INFO('E', line_num,
-                                       ( 41, indx_s, indx_s - 1 + len(lbl), )
                                        )
                 ## end of checking arguments
 
@@ -969,7 +959,7 @@ def pass_2():
 
         # parse LTORG
         elif field[1] == 'LTORG':
-            if pos_end and pos_start < pos_end: 
+            if pos_end and pos_start < pos_end:
                 # effective LTORG, append to TXT records
                 __APPEND_TXT(mem, prev_scope, pos_start, pos_end)
                 prev_scope = None # virtually switch scope to reset "buffer"
@@ -991,8 +981,10 @@ def pass_2():
 
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
+                item_addr = addr # used to specify address for each item
+
                 if sd_info[2] == 'V':
-                    # check internal reference
+                    # check external reference
                     for lbl in sd_info[4]:
                         lbl_8 = '{0:<8}'.format(lbl)
                         if lbl_8 in SYMBOL_V: # fully processed in pass 1
@@ -1003,9 +995,13 @@ def pass_2():
                                 scope_id,         # position   ESDID
                                 ESD[lbl_8][1].id, # relocation ESDID
                                 RelocationEntry(  # relocation entry
-                                    addr, 'V', sd_info[3], 'ST'
+                                    item_addr, 'V', sd_info[3], 'ST'
                                     )
                                 )
+                            item_addr += sd_info[3]
+                        else:
+                            zPE.abort(92, 'Error: ', lbl,
+                                      ': Invalid V-constant.\n')
 
                 elif sd_info[2] == 'A':
                     # check internal reference
@@ -1014,144 +1010,183 @@ def pass_2():
                         lbl = sd_info[4][lbl_i]
                         sd_info[4][lbl_i] = '0'
 
-                        res = __PARSE_ARG(lbl)
+                        parsed_arg = __PARSE_ARG(lbl)
 
-                        if isinstance(res, int):
+                        if isinstance(parsed_arg, int):
                             indx_s = line.index(lbl)
-                            __INFO('S', line_num,
-                                   ( 35, indx_s + res, indx_s + len(lbl), )
-                                   )
+                            __INFO('S', line_num, (
+                                    35,
+                                    indx_s + parsed_arg,
+                                    indx_s + len(lbl),
+                                    ))
                             break
 
                         # check index / base register
-                        if res[0][-1] != None:
+                        if len(parsed_arg[0][-1]) > 0:
                             indx_s = line.index(lbl)
                             __INFO('E', line_num,
                                    ( 32, indx_s, indx_s + len(lbl), )
                                    )
                             break
+                        parsed_arg[0].pop() # []
+                        parsed_arg[1].pop() # index_reg
 
-                        reloc_cnt = 0    # number of relocatable symbol
-                        reloc_arg = None # backup of the relocatable symbol
+                        # try parsing absolute expression
+                        abs_values = __REDUCE_EXP(parsed_arg, scope_id, addr)
+                        if abs_values:
+                            sd_info[4][lbl_i] = abs_values
+                            # check reference
+                            __REF_SYMBOL_IN(parsed_arg, scope_id, line_num)
+                            continue # bypass relocatable expression checking
+
+                        # is relocatable expression
+                        rel_values = []
+
+                        reloc_cnt = 0         # number of relocatable symbol
+                        reloc_arg = None      # backup of the relocatable symbol
                         reloc_neg = [ False ] # if negative of each level of ()
-                        reloc_entry = None
-                        for indx in range(len(res[0]) - 1):
+
+                        curr_lvl = 0    # current level of parenthesis
+                        chk_item = {
+                            # level : item eligible for complex addressing check
+                            0 : None, 1 : None, 2 : None,
+                            3 : None, 4 : None, 5 : None, 
+                            }
+
+                        indx = 0 # loop cnt; has nothing to do with indx_[se]
+                        while indx < len(parsed_arg[0]):
                             # for each element in the exp, try to envaluate
 
-                            if res[1][indx] == 'parenthesis':
-                                if res[0][indx] == '(':
-                                    reloc_neg.append(False) # push down 1 level
+                            if parsed_arg[0][indx] == '(':
+                                for indx_e in range(indx, len(parsed_arg[0])):
+                                    if ( parsed_arg[0][indx_e] == ')'  and
+                                         int( parsed_arg[1][indx_e][-1]
+                                              ) == curr_lvl
+                                         ):
+                                        indx_e += 1
+                                        break
+                                res = __REDUCE_EXP(
+                                    ( parsed_arg[0][indx:indx_e],
+                                      parsed_arg[1][indx:indx_e]
+                                      ),
+                                    scope_id, addr
+                                    )
+                                if res >= 0:
+                                    # bypass regular recording of the value
+                                    rel_values.append(str(res))
+                                    indx = indx_e # skip all intermediate items
+                                    continue
                                 else:
-                                    reloc_neg.pop()         # pop  back 1 level
-                                continue
-                            elif res[1][indx] == 'operator':
-                                if res[0][indx] == '-':
-                                    reloc_neg[-1] = not reloc_neg[-1]
-                                continue
+                                    # push down 1 level
+                                    curr_lvl += 1
+                                    reloc_neg.append(reloc_neg[-1])
 
-                            if res[1][indx] == 'eq_constant':
-                                indx_s = line.index(res[0][indx])
+                            elif parsed_arg[0][indx] == ')':
+                                # pop back 1 level
+                                curr_lvl -= 1
+                                reloc_neg.pop()
+
+                            elif parsed_arg[1][indx] == 'operator':
+                                if parsed_arg[0][indx] in '*/':
+                                    # symbol not allowed prior '*' or '/'
+                                    if chk_item[curr_lvl] == 'symbol':
+                                        indx_s = line.index(lbl)
+                                        __INFO('E', line_num, (
+                                                32, indx_s, indx_s + len(lbl),
+                                                ))
+                                        break
+                                    # symbol not allowed after '*' or '/'
+                                    chk_item[curr_lvl] = parsed_arg[0][indx]
+                                elif parsed_arg[0][indx] == '-':
+                                    # flip sign on the current level
+                                    reloc_neg[-1] = not reloc_neg[-1]
+                                    # '-' is OK all the time
+                                    chk_item[curr_lvl] = None
+                                else:
+                                    # '+' is OK all the time
+                                    chk_item[curr_lvl] = None
+
+                            elif parsed_arg[1][indx] == 'eq_constant':
+                                indx_s = line.index(parsed_arg[0][indx])
                                 __INFO('E', line_num, (
                                         30,
                                         indx_s,
-                                        indx_s + len(res[0][indx]),
+                                        indx_s + len(parsed_arg[0][indx]),
                                         ))
                                 break
 
-                            if ( res[1][indx] == 'location_ptr' or
-                                 res[1][indx] == 'valid_symbol'
-                                 ):
-                                if res[1][indx] == 'location_ptr':
-                                    pass # no special process required
-                                else:
-                                    bad_lbl = zPE.bad_label(res[0][indx])
-                                    lbl_8 = '{0:<8}'.format(res[0][indx])
-
-                                    if bad_lbl:
-                                        indx_s = line.index(
-                                            res[0][indx]
-                                            )
-                                        __INFO('E', line_num, (
-                                                74,
-                                                indx_s,
-                                                indx_s + len(res[0][indx]),
-                                                ))
-                                    elif lbl_8 not in SYMBOL:
-                                        indx_s = line.index(
-                                            res[0][indx]
-                                            )
-                                        __INFO('E', line_num, (
-                                                44,
-                                                indx_s,
-                                                indx_s + len(res[0][indx]),
-                                                ))
+                            elif ( parsed_arg[1][indx] == 'location_ptr' or
+                                   parsed_arg[1][indx] == 'valid_symbol'
+                                   ):
                                 # check complex addressing
-                                if ( ( indx-1 >= 0  and
-                                       res[0][indx-1] in '*/()'
-                                       ) or
-                                     ( indx+1 < len(res[0])-1  and
-                                       res[0][indx+1] in '*/()'
-                                       ) ):
-                                    indx_s = line.index(lbl)
-                                    __INFO('E', line_num, (
-                                            32,
-                                            indx_s,
-                                            indx_s + len(lbl),
-                                            ))
-                                    break
-                                reloc_arg = res[0][indx]
-                                res[0][indx] = '0'
+                                for lvl in range(curr_lvl + 1):
+                                    if chk_item[lvl]:
+                                        indx_s = line.index(lbl)
+                                        __INFO('E', line_num, (
+                                                32, indx_s, indx_s + len(lbl),
+                                                ))
+                                        break
+                                reloc_arg = parsed_arg[0][indx]
                                 reloc_cnt += 1
-                            elif res[1][indx] == 'inline_const':
-                                tmp = zPE.core.asm.parse_sd(res[0][indx])
-                                if tmp[2] not in 'BCX': # variable length const
-                                    indx_s = line.index(
-                                        res[0][indx]
-                                        )
-                                    __INFO('E', line_num, (
-                                            41,
-                                            indx_s,
-                                            indx_s + len(res[0][indx]),
-                                            )
-                                           )
-                                    break
-                                elif res[0][indx][0] != tmp[2]: # e.g. 2B'10'
-                                    indx_s = line.index(
-                                        res[0][indx]
-                                        )
+                                chk_item[curr_lvl] = 'symbol'
+
+                                # bypass regular recording of the value
+                                rel_values.append('0')
+                                indx += 1
+                                continue
+
+                            elif parsed_arg[1][indx] == 'const_symbol':
+                                # bypass regular recording of the value
+                                lbl_8 = '{0:<8}'.format(parsed_arg[0][indx])
+                                rel_values.append(str(SYMBOL[lbl_8].value))
+                                indx += 1
+                                continue
+
+                            elif parsed_arg[1][indx] == 'inline_const':
+                                sd_info = zPE.core.asm.parse_sd(
+                                    parsed_arg[0][indx]
+                                    )
+                                if parsed_arg[0][indx][0] != sd_info[2]:
+                                    # e.g. 2B'10'
+                                    indx_s = line.index(parsed_arg[0][indx])
                                     __INFO('E', line_num, (
                                             145,
                                             indx_s,
-                                            indx_s + len(res[0][indx]),
+                                            indx_s + len(parsed_arg[0][indx]),
                                             ))
                                     break
-                                elif res[0][indx][1] != "'": # e.g. BL2'1'
-                                    indx_s = line.index(
-                                        res[0][indx]
-                                        )
+                                elif parsed_arg[0][indx][1] != "'":
+                                    # e.g. BL2'1'
+                                    indx_s = line.index(parsed_arg[0][indx])
                                     __INFO('E', line_num, (
                                             150,
                                             indx_s,
-                                            indx_s + len(res[0][indx]),
+                                            indx_s + len(parsed_arg[0][indx]),
                                             ))
                                     break
                                 # parse inline constant, length check required
                                 try:
-                                    sd = zPE.core.asm.get_sd(tmp)[0]
+                                    sd = zPE.core.asm.get_sd(sd_info)[0]
                                     parsed_addr = zPE.core.asm.X_.tr(sd.dump())
                                     if len(parsed_addr) <= len(
                                         zPE.i2h((2 ** ASM_PARM['AMODE'] - 1))
                                         ):
-                                        res[0][indx] = str(int(parsed_addr, 16))
+                                        # bypass regular recording of the value
+                                        rel_values.append(
+                                            str(zPE.h2i(parsed_addr))
+                                            )
+                                        indx += 1
+                                        continue
                                     else:
                                         indx_s = line.index(
-                                            res[0][indx]
+                                            parsed_addr[0][indx]
                                             )
-                                        __INFO('E', line_num, (
-                                                146,
-                                                indx_s,
-                                                indx_s + len(res[0][indx]),
-                                                ))
+                                        indx_e = (
+                                            indx_s + len(parsed_addr[0][indx])
+                                            )
+                                        __INFO('E', line_num,
+                                               (146, indx_s, indx_e,)
+                                               )
                                 except:
                                     zPE.abort(
                                         92, 'Error: ', res[0][indx],
@@ -1163,32 +1198,50 @@ def pass_2():
                                        ( 78, indx_s, indx_s + len(lbl), )
                                        )
                                 break
-                        # end of processing res
+
+                            # record the item just parsed
+                            rel_values.append(parsed_arg[0][indx])
+                            indx += 1
+                        # end of processing arguments
 
                         if INFO_GE(line_num, 'E'):
                             break # if has error, stop processing
 
-                        # calculate constant part
-                        if reloc_cnt < 2:
-                            try:
-                                ex_disp = eval(''.join(res[0][:-1]))
-                            except:
-                                zPE.abort( 92, 'Error: ', ''.join(res[0][:-1]),
-                                           ': Invalid expression.\n'
-                                           )
+                        # check reference
+                        __REF_SYMBOL_IN(parsed_arg, scope_id, line_num)
+
                         # evaluate expression
                         if reloc_cnt == 0:      # no relocatable symbol
-                            sd_info[4][lbl_i] = str(ex_disp)
+                            zPE.abort(
+                                -1, 'Error: line ', str(line_num),
+                                 ': Fail to parse relocatable expression.\n')
                         elif reloc_cnt == 1:    # one relocatable symbol
-                            if reloc_arg == '*':
-                                lbl_8 = '*{0}'.format(line_num)
-                            else:
-                                lbl_8 = '{0:<8}'.format(reloc_arg)
-
-                            sd_info[4][lbl_i] = str(SYMBOL[lbl_8].value)
-                            reloc_entry = RelocationEntry(
-                                addr, 'A', sd_info[3], '+-'[reloc_neg[-1]]
+                            # calculate constant part for relocatable address
+                            ex_disp = __REDUCE_EXP(
+                                ''.join(rel_values), scope_id, addr
                                 )
+                            if ex_disp == None:
+                                zPE.abort(92, 'Error: ', ''.join(parsed_arg[0]),
+                                          ': Invalid expression.\n')
+
+                            if reloc_arg == '*':
+                                tmp = MNEMONIC[line_num][1]
+                            else:
+                                tmp = SYMBOL['{0:<8}'.format(reloc_arg)].value
+
+                            sd_info[4][lbl_i] = str(tmp + ex_disp)
+
+                            # add to relocation dictionary
+                            lbl_8 = '{0:<8}'.format(reloc_arg)
+                            RECORD_RL_SYMBOL(
+                                scope_id,         # position   ESDID
+                                SYMBOL[lbl_8].id, # relocation ESDID
+                                RelocationEntry(
+                                    item_addr, 'A', sd_info[3],
+                                    '+-'[reloc_neg[-1]]
+                                    )
+                                )
+                        item_addr += sd_info[3]
                     # end of processing args
 
                     # update the A-const information
@@ -1197,13 +1250,6 @@ def pass_2():
                             MNEMONIC[line_num][2][:3] + sd_info[3:5] +
                             MNEMONIC[line_num][2][5:]
                             )
-                        # add to relocation dictionary
-                        if reloc_entry:
-                            RECORD_RL_SYMBOL(
-                                scope_id,         # position   ESDID
-                                SYMBOL[lbl_8].id, # relocation ESDID
-                                reloc_entry       # relocation entry
-                                )
                 # end of parsing A-const
 
             if INFO_GE(line_num, 'E'):
@@ -1239,36 +1285,36 @@ def pass_2():
             for lbl_i in range(len(args)):
                 if INFO_GE(line_num, 'E'): # could already be flagged in pass 1
                     break # if has error, stop processing args
-                abs_values = False # assume no absolute values
 
                 lbl = args[lbl_i]
-                res = __IS_ABS_ADDR(lbl)
+                parsed_arg = __PARSE_ARG(lbl)
 
-                if op_code[op_args[lbl_i]].type in 'LSX' and res != None:
-                    # absolute address found
-                    abs_values = True
+                if isinstance(parsed_arg, int):
+                    indx_s = line.index(args[lbl_i])
+                    ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
 
-                    equ_info = __PARSE_EQU_VALUE(res[0])
-                    if equ_info[0] != None:
-                        res[0] = equ_info[0]
-                        if equ_info[1]:
-                            equ_info[1].references.append(
-                                '{0:>4}{1}'.format(line_num, '')
-                                )
-                    else:
-                        res[0] = __REDUCE_EXP(res[0]) # already validated in
-                                                      # __IS_ABS_ADDR()
-                    # check length
-                    if not 0x000 <= res[0] <= 0xFFF:
-                        indx_s = line.index(lbl)
-                        if '(' in lbl:
-                            tmp = lbl.index('(')
+                    if err_num == 174: # expect comma or blank
+                        if lbl_i < len(op_args) - 1:
+                            err_num = 175 # expect comma
                         else:
-                            tmp = len(lbl)
-                        __INFO('E', line_num,
-                               ( 28, indx_s, indx_s + tmp, )
-                               )
-                        break   # stop processing current res
+                            err_num = 173 # expect blank
+                    __INFO('S', line_num, (
+                            err_num,
+                            indx_s + err_indx,
+                            indx_s + len(args[lbl_i]),
+                            ))
+                    break   # stop processing current argument
+
+                abs_values = __IS_ABS_ADDR(parsed_arg, scope_id, addr)
+                rel_values = []
+
+                if op_code[op_args[lbl_i]].type in 'LSX' and abs_values:
+                    # absolute address found, check length
+                    if not 0x0 <= abs_values[0] <= 0xFFF:
+                        indx_s = line.index(lbl)
+                        indx_e = indx_s + len(''.join(parsed_arg[0][:-1]))
+                        __INFO('E', line_num, ( 28, indx_s, indx_e, ))
+                        break   # stop processing current argument
 
                     # validate registers
                     if op_code[op_args[lbl_i]].type == 'L':
@@ -1276,61 +1322,50 @@ def pass_2():
                         max_len = op_code[op_args[lbl_i]].max_len_length()
 
                         # ture validation of length
-                        equ_info = __PARSE_EQU_VALUE(res[1]) # length @ indx
-                        reg_indx = equ_info[0]  # type 'L' will use reg_indx
-                                                # instead of res[1]
-                        if equ_info[0] != None  and  0 <= reg_indx <= max_len:
-                            res[1] =  0 # skip the register check
-                            if equ_info[1]:
-                                equ_info[1].references.append(
-                                    '{0:>4}{1}'.format(line_num, '')
-                                    )
+                        reg_indx = abs_values[1]
+                        # type 'L' will use reg_indx instead of abs_values[1]
+
+                        if 0 <= reg_indx <= max_len:
+                            abs_values[1] =  0  # skip the register check
                         else:
-                            res[1] = -1 # invalidate the register check
+                            abs_values[1] = -1  # invalidate the register check
 
                     elif op_code[op_args[lbl_i]].type == 'S':
-                        del res[2] # remove the extra item (real base in indx)
-                        indx_range = [ 1 ] # only validate indx (real base)
+                        del abs_values[2]       # remove the extra item
+                                                # (real base in indx)
+                        indx_range = [ 1 ]      # only validate indx (real base)
 
-                        if ',' in lbl:
-                            indx_s = line.index(lbl)
-                            __INFO('S', line_num, (
-                                179,
-                                indx_s + lbl.index(','),
-                                indx_s + len(lbl) + 1,
-                                ))
-                            break   # stop processing current res
-                    else:
+                        if len(parsed_arg[0][-1]) > 1:
+                            indx_e = line.index(lbl) + len(lbl)
+                            indx_s = indx_e - len(
+                                ''.join(parsed_arg[0][-1][0][1])
+                                ) - 1 # -1 to skip ','
+                            __INFO('S', line_num, ( 179, indx_s, indx_e, ))
+                            break   # stop processing current argument
+
+                    else:                     #  type == 'X'
                         indx_range = [ 1, 2 ] # validate indx and base
 
-                    if ',' in lbl:
+                    if len(parsed_arg[0][-1]) > 1:
+                        tmp0 = len(''.join(parsed_arg[0][:-1]))
+                        tmp1 = tmp0 + 1 + len(''.join(parsed_arg[0][-1][0][0]))
+                        tmp2 = tmp1 + 1 + len(''.join(parsed_arg[0][-1][1][0]))
                         indx_os = [ # index offset for error msg generation
-                            None,
-                            ( lbl.index('('), lbl.index(',') ),
-                            ( lbl.index(','), lbl.index(')') ),
+                            None, ( tmp0, tmp1 ), ( tmp1, tmp2 ),
                             ]
-                    elif '(' in lbl:
+                    elif len(parsed_arg[0][-1]) > 0:
+                        tmp0 = len(''.join(parsed_arg[0][:-1]))
+                        tmp1 = tmp0 + 1 + len(''.join(parsed_arg[0][-1][0][0]))
                         indx_os = [
-                            None,
-                            ( lbl.index('('), lbl.index(')') ),
-                            None, # no base offered
+                            None, ( tmp0, tmp1 ), None, # no base offered
                             ]
                     else:
                         indx_os = [
-                            None,
-                            None, # no indx offered
-                            None, # no base offered
+                            None, None, None, # no index nor base offered
                             ]
                     for i in indx_range:
                         # validate each register
-                        reg_info = zPE.core.reg.parse_GPR(res[i])
-                        if reg_info[0] >= 0:
-                            res[i] = reg_info[0]
-                            if reg_info[1]:
-                                reg_info[1].references.append(
-                                    '{0:>4}{1}'.format(line_num, '')
-                                    )
-                        else:
+                        if not 0 <= abs_values[i] < zPE.core.reg.GPR_NUM:
                             indx_s = line.index(lbl) + 1
                             __INFO('E', line_num,
                                    ( 29,
@@ -1338,192 +1373,210 @@ def pass_2():
                                      indx_s + indx_os[i][1],
                                      )
                                    )
-                            break   # stop processing current res
+                            break   # stop processing current argument
 
-                elif op_code[op_args[lbl_i]].type == 'R':
-                    # register found
-                    abs_values = True
+                    # check reference
+                    __REF_SYMBOL_IN(parsed_arg, scope_id, line_num)
 
-                    res = [ lbl ]
-                    res[0] = __REDUCE_EXP(lbl)
-                    if res[0] == None: # label cannot be reduced
-                        res[0] = lbl
-                    # validate register
-                    reg_info = zPE.core.reg.parse_GPR(res[0])
-                    if reg_info[0] >= 0:
-                        res[0] = reg_info[0]
-                        if reg_info[1]:
-                            reg_info[1].references.append(
+                elif op_code[op_args[lbl_i]].type in 'DIR':
+                    # displacement/immediate/register found
+                    abs_values = [ __REDUCE_EXP(lbl, scope_id, addr) ]
+
+                    # validate range
+                    if op_code[op_args[lbl_i]].type == 'D':
+                        max_len = 0xFFFF
+                    elif op_code[op_args[lbl_i]].type == 'I':
+                        max_len = op_code[op_args[lbl_i]].max_len_length()
+                    else:       # type == 'R'
+                        max_len = zPE.core.reg.GPR_NUM
+                    if 0 <= abs_values[0] < max_len:
+                        # check reference
+                        lbl_8 = '{0:<8}'.format(lbl)
+                        if lbl_8 in SYMBOL  and  SYMBOL[lbl_8].type == 'U':
+                            SYMBOL[lbl_8].references.append(
                                 '{0:>4}{1}'.format(
                                     line_num,
                                     op_code[op_args[lbl_i]].flag()
                                     )
                                 )
+                        else:
+                            __REF_SYMBOL_IN(parsed_arg, scope_id, line_num)
                     else:
                         indx_s = line.index(lbl) + 1
                         __INFO('E', line_num,
                                ( 29, indx_s, indx_s + len(lbl), )
                                )
-                        break   # stop processing current res
+                        break   # stop processing current argument
                 else:
-                    res = __PARSE_ARG(lbl)
-                    if isinstance(res, int):
-                        # delimiter error, S035, S173-175, S178-179
-                        indx_s = line.index(args[lbl_i])
-                        if line[indx_s + res - 1] in ')':
-                            if lbl_i < len(op_args) - 1:
-                                err_num = 175 # expect comma
-                            else:
-                                err_num = 173 # expect blank
-                        else:
-                            err_num = 35 # cannot determine
-                        __INFO('S', line_num, (
-                                err_num,
-                                indx_s + res,
-                                indx_s + len(args[lbl_i]),
-                                ))
-                        break   # stop processing current res
+                    # relocatable address found
+                    reloc_cnt = 0       # number of relocatable symbol
+                    reloc_arg = None    # backup of the relocatable symbol
 
-                    reloc_cnt = 0    # number of relocatable symbol
-                    reloc_arg = None # backup of the relocatable symbol
-                    for indx in range(len(res[0]) - 1):
+                    curr_lvl = 0        # current level of parenthesis
+                    chk_item = {
+                        # level : item eligible for complex addressing check
+                        0 : None, 1 : None, 2 : None,
+                        3 : None, 4 : None, 5 : None, 
+                        }
+
+                    indx = 0 # loop cnt; has nothing to do with indx_[se]
+                    while indx < len(parsed_arg[0]) - 1:
                         # for each element in the exp, try to envaluate
 
-                        if ( res[1][indx] == 'eq_constant'  or
-                             res[1][indx] == 'location_ptr' or
-                             res[1][indx] == 'valid_symbol'
-                             ):
-                            if res[1][indx] == 'eq_constant':
+                        if parsed_arg[0][indx] == '(':
+                            curr_lvl += 1
+                            for indx_e in range(indx, len(parsed_arg[0]) - 1):
+                                if ( parsed_arg[0][indx_e] == ')'  and
+                                     int(parsed_arg[1][indx_e][-1]) == curr_lvl
+                                     ):
+                                    indx_e += 1
+                                    break
+                            res = __REDUCE_EXP(
+                                ( parsed_arg[0][indx:indx_e],
+                                  parsed_arg[1][indx:indx_e]
+                                  ),
+                                scope_id, addr
+                                )
+                            if res >= 0:
+                                # bypass regular recording of the value
+                                rel_values.append(str(res))
+                                indx = indx_e # skip all intermediate items
+                                continue
+
+                        elif parsed_arg[0][indx] == ')':
+                            curr_lvl -= 1
+
+                        elif parsed_arg[1][indx] == 'operator':
+                            if parsed_arg[0][indx] in '*/':
+                                # symbol not allowed prior '*' or '/'
+                                if chk_item[curr_lvl] == 'symbol':
+                                    indx_s = line.index(lbl)
+                                    __INFO('E', line_num,
+                                           ( 32, indx_s, indx_s + len(lbl), )
+                                           )
+                                    break   # stop processing current argument
+                                # symbol not allowed after '*' or '/'
+                                chk_item[curr_lvl] = parsed_arg[0][indx]
+                            elif parsed_arg[0][indx] == '-':
+                                # symbol not allowed after '-'
+                                chk_item[curr_lvl] = '-'
+                            else:
+                                # '+' is OK all the time
+                                chk_item[curr_lvl] = None
+
+                        elif ( parsed_arg[1][indx] == 'eq_constant'  or
+                               parsed_arg[1][indx] == 'location_ptr' or
+                               parsed_arg[1][indx] == 'valid_symbol'
+                               ):
+                            if parsed_arg[1][indx] == 'eq_constant':
                                 if op_code[op_args[lbl_i]].for_write:
-                                    indx_s = line.index(res[0][indx])
+                                    indx_s = line.index(parsed_arg[0][indx])
                                     __INFO('E', line_num, (
                                             30,
                                             indx_s,
-                                            indx_s + len(res[0][indx]),
+                                            indx_s + len(parsed_arg[0][indx]),
                                             ))
-                                    break   # stop processing current res
+                                    break   # stop processing current argument
 
-                                symbol = __HAS_EQ(lbl, scope_id)
-                                if symbol == None:
-                                    if not INFO_GE(line_num, 'E'):
-                                        zPE.abort(91, 'Error: ', lbl,
-                                                  ': symbol not in EQ table.\n')
-                                elif symbol.defn == None:
-                                    zPE.abort(91, 'Error: ', lbl,
-                                              ': symbol not allocated.\n')
-                            elif res[1][indx] == 'location_ptr':
+                            elif parsed_arg[1][indx] == 'location_ptr':
                                 pass # no special process required
-                            else: # valid_symbol
-                                bad_lbl = zPE.bad_label(res[0][indx])
-                                lbl_8 = '{0:<8}'.format(res[0][indx])
 
+                            else: # valid_symbol
                                 if ( op_code[op_args[lbl_i]].type == 'S'  and
-                                     res[0][-1] != None
+                                     len(parsed_arg[0][-1]) > 0
                                      ): # S-type arg does not support index reg
-                                    indx_s = line.index(lbl)
-                                    __INFO('S', line_num, (
-                                        173,
-                                        indx_s + lbl.index('('),
-                                        indx_s + len(lbl) + 1,
-                                        ))
-                                    break   # stop processing current res
-                                elif bad_lbl:
-                                    indx_s = (
-                                        line.index(res[0][indx])
-                                        )
-                                    __INFO('E', line_num, (
-                                            74,
-                                            indx_s,
-                                            indx_s + len(res[0][indx]),
-                                            ))
-                                    break   # stop processing current res
-                                elif lbl_8 not in SYMBOL:
-                                    indx_s = (
-                                        line.index(res[0][indx])
-                                        )
-                                    __INFO('E', line_num, (
-                                            44,
-                                            indx_s,
-                                            indx_s + len(res[0][indx]),
-                                            ))
-                                    break   # stop processing current res
+                                    indx_e = line.index(lbl) + len(lbl)
+                                    indx_s = indx_e - len(
+                                        ''.join(parsed_arg[0][-1][0][0])
+                                        ) - 1 # -1 to skip '('
+                                    __INFO('S', line_num,
+                                           ( 173, indx_s, indx_e, )
+                                           )
+                                    break   # stop processing current argument
+
                             # check complex addressing
-                            if ( ( indx-1 >= 0  and
-                                   res[0][indx-1] in '*/()'
-                                   ) or
-                                 ( indx+1 < len(res[0])-1  and
-                                   res[0][indx+1] in '*/()'
-                                   ) ):
-                                indx_s = line.index(lbl)
-                                __INFO('E', line_num, (
-                                        32,
-                                        indx_s,
-                                        indx_s + len(lbl),
-                                        ))
-                                break   # stop processing current res
-                            reloc_arg = res[0][indx]
-                            res[0][indx] = '0'
+                            for lvl in range(curr_lvl + 1):
+                                if chk_item[lvl]:
+                                    indx_s = line.index(lbl)
+                                    __INFO('E', line_num,
+                                           ( 32, indx_s, indx_s + len(lbl), )
+                                           )
+                                    break   # stop processing current argument
+                            reloc_arg = parsed_arg[0][indx]
                             reloc_cnt += 1
-                        elif res[1][indx] == 'inline_const':
-                            sd_info = zPE.core.asm.parse_sd(res[0][indx])
-                            if res[0][indx][0] != sd_info[2]: # e.g. 2B'10'
-                                indx_s = (
-                                    line.index(res[0][indx])
-                                    )
+                            chk_item[curr_lvl] = 'symbol'
+
+                            # bypass regular recording of the value
+                            rel_values.append('0')
+                            indx += 1
+                            continue
+
+                        elif parsed_arg[1][indx] == 'const_symbol':
+                            # bypass regular recording of the value
+                            lbl_8 = '{0:<8}'.format(parsed_arg[0][indx])
+                            rel_values.append(str(SYMBOL[lbl_8].value))
+                            indx += 1
+                            continue
+
+                        elif parsed_arg[1][indx] == 'inline_const':
+                            sd_info = zPE.core.asm.parse_sd(parsed_arg[0][indx])
+                            if parsed_arg[0][indx][0] != sd_info[2]:
+                                # e.g. 2B'10'
+                                indx_s = line.index(parsed_arg[0][indx])
                                 __INFO('E', line_num, (
                                         145,
                                         indx_s,
-                                        indx_s + len(res[0][indx]),
+                                        indx_s + len(parsed_arg[0][indx]),
                                         ))
-                                break   # stop processing current res
-                            elif res[0][indx][1] != "'": # e.g. BL2'1'
-                                indx_s = (
-                                    line.index(res[0][indx])
-                                    )
+                                break   # stop processing current argument
+                            elif parsed_arg[0][indx][1] != "'":
+                                # e.g. BL2'1'
+                                indx_s = line.index(parsed_arg[0][indx])
                                 __INFO('E', line_num, (
                                         150,
                                         indx_s,
-                                        indx_s + len(res[0][indx]),
+                                        indx_s + len(parsed_arg[0][indx]),
                                         ))
-                                break   # stop processing current res
-
-                            if not sd_info[5]:
-                                sd_info = (sd_info[0], sd_info[1], sd_info[2],
-                                           0, sd_info[4], sd_info[3]
-                                           )
+                                break   # stop processing current argument
 
                         if reloc_cnt > 1: # more than one relocatable symbol
                             indx_s = line.index(lbl)
                             __INFO('E', line_num,
                                    ( 78, indx_s, indx_s + len(lbl), )
                                    )
-                            break   # stop processing current res
-                # end of processing res
+                            break   # stop processing current argument
+
+                        # record the item just parsed
+                        rel_values.append(parsed_arg[0][indx])
+                        indx += 1
+
+                    # check reference is deferred until addressing the exp
+                # end of processing arguments
                 if INFO_GE(line_num, 'E'):
                     break # if has error, stop processing args
 
-                # calculate constant part for relocatable address
-                if not abs_values and reloc_cnt < 2:
-                    ex_disp = __REDUCE_EXP(''.join(res[0][:-1]))
+                # evaluate expression
+                if abs_values:
+                    # absolute expression
+                    if op_code[op_args[lbl_i]].type == 'L':
+                        op_code[op_args[lbl_i]].set(
+                            reg_indx, abs_values[0], abs_values[2]
+                            )
+                    else:
+                        op_code[op_args[lbl_i]].set(* abs_values)
+
+                # relocatable expression
+                elif reloc_cnt == 0:    # no relocatable symbol
+                    zPE.abort(-1, 'Error: line ', str(line_num),
+                               ': Fail to parse relocatable expression.\n')
+
+                elif reloc_cnt == 1:    # one relocatable symbol
+                    # calculate constant part for relocatable address
+                    ex_disp = __REDUCE_EXP(''.join(rel_values), scope_id, addr)
                     if ex_disp == None:
-                        zPE.abort(92, 'Error: ', ''.join(res[0][:-1]),
+                        zPE.abort(92, 'Error: ', ''.join(parsed_arg[0][:-1]),
                                   ': Invalid expression.\n')
 
-                # evaluate expression
-                if abs_values:    # absolute values
-                    if op_code[op_args[lbl_i]].type == 'L':
-                        op_code[op_args[lbl_i]].set(reg_indx, res[0], res[2])
-                    else:
-                        op_code[op_args[lbl_i]].set(*res)
-                elif reloc_cnt == 0:    # no relocatable symbol
-                    try:
-                        op_code[op_args[lbl_i]].set(ex_disp)
-                    except:
-                        indx_s = line.index(lbl)
-                        __INFO('E', line_num,
-                               ( 29, indx_s, indx_s + len(lbl), )
-                               )
-                elif reloc_cnt == 1:    # one relocatable symbol
                     if reloc_arg == '*':
                         # current location ptr
                         lbl_8 = '*{0}'.format(line_num)
@@ -1538,8 +1591,11 @@ def pass_2():
                     else:
                         # label
                         lbl_8 = '{0:<8}'.format(reloc_arg)
-                        reg_indx = res[0][-1]
-                        if not reg_indx:
+                        if len(parsed_arg[0][-1]) > 0:
+                            reg_indx = __REDUCE_EXP(
+                                parsed_arg[0][-1][0], scope_id, addr
+                                )
+                        else:
                             if op_code[op_args[lbl_i]].type == 'L':
                                 reg_indx = SYMBOL[lbl_8].length
                             else:
@@ -1555,10 +1611,9 @@ def pass_2():
                             using.max_disp, addr_res[0]
                             )
                         using.last_stmt = '{0:>5}'.format(line_num)
+
                         # update CR table
-                        if reloc_arg == '*':
-                            pass # no reference of any symbol
-                        else:
+                        if lbl_8.strip() == ''.join(parsed_arg[0][:-1]):
                             if reloc_arg[0] == '=':
                                 symbol = __HAS_EQ(lbl_8, scope_id)
                             else:
@@ -1569,6 +1624,12 @@ def pass_2():
                                     op_code[op_args[lbl_i]].flag()
                                     )
                                 )
+                        else:
+                            __REF_SYMBOL_IN(parsed_arg, scope_id, line_num)
+                        for item in parsed_arg[0][-1]:
+                            __REF_SYMBOL_IN(item, scope_id, line_num)
+
+                        # addressing the exp
                         if op_code[op_args[lbl_i]].type == 'L':
                             op_code[op_args[lbl_i]].set(
                                 reg_indx, addr_res[0], addr_res[2]
@@ -1682,7 +1743,7 @@ def obj_mod_gen():
         obj_dump.spool = spo.spool
         zPE.flush(obj_dump)
 
-    
+
 ### Supporting Functions
 def __ADDRESSING(lbl, sect_lbl, ex_disp = 0):
     rv = [ 4096, None, -1, ]  # init to least priority USING (non-exsit)
@@ -1707,7 +1768,7 @@ def __HAS_EQ(lbl, scope_id):
     if lbl not in SYMBOL_EQ:
         return None
     for symbol in SYMBOL_EQ[lbl]:
-        if symbol.id == scope_id:
+        if scope_id > 0  and  scope_id == symbol.id:
             return symbol
     return None                 # nor found
 
@@ -1720,59 +1781,6 @@ def __IS_ADDRESSABLE(lbl, sect_lbl, ex_disp = 0):
         if __IS_IN_RANGE(lbl, ex_disp, USING_MAP[v,k], ESD[sect_lbl][0]):
             return True
     return False                # not in the range of any USING
-
-# rv:
-#   [ disp_str, indx_str, base_str ]
-#   None    if error happened during parsing
-#
-# Note: no length check nor register validating involved
-def __IS_ABS_ADDR(addr_arg):
-    reminder = addr_arg
-
-    # parse displacement
-    res = re.search(r'\(', reminder)
-    if res != None:     # search succeed
-        disp     = reminder[:res.start()]
-        reminder = reminder[res.end():]
-    else:
-        disp     = reminder
-        reminder = ''
-    if not disp:                # (disp exp)(...)
-        ( disp, reminder ) = zPE.resplit_pp(r'\)', reminder, 1)
-        if not disp:
-            return None
-    if __REDUCE_EXP(disp) == None: # disp cannot be reduced
-        return None
-
-    # parse index
-    res = re.search(r'[,)]', reminder)
-    if res != None:     # search succeed
-        matched_ch = reminder[res.start():res.end()]
-
-        indx = reminder[:res.start()]
-        reminder = reminder[res.end():]
-        if not indx:
-            if matched_ch == ',': # omitted indx
-                indx = '0'
-            else:                 # nothing in parenthesis
-                return None
-    else:
-        indx = '0'
-
-    # parse base
-    res = re.search(r'\)', reminder)
-    if res != None:     # search succeed
-        base     = reminder[:res.start()]
-        reminder = reminder[res.end():]
-        if not base:
-            base = '0'
-    else:
-        base = '0'
-
-    # check reminder
-    if reminder != '':
-        return None
-    return [ disp, indx, base ]
 
 def __IS_IN_RANGE(lbl, ex_disp, using, csect):
     u_range = min(
@@ -1799,9 +1807,356 @@ def __IS_IN_RANGE(lbl, ex_disp, using, csect):
         return False
 
 def __INFO(err_level, line, item):
+    if not err_level:           # type not specified, search for it
+        err_level = search_msg_type(item[0])
+    if err_level not in INFO:   # type not valid
+        zPE.abort(-1, 'Error: ', err_level, ': Invalid Error Level.\n')
     if line not in INFO[err_level]:
         INFO[err_level][line] = []
     INFO[err_level][line].append(item)
+
+
+def __ENCODE_ERRCODE(err_num, err_indx):
+    return err_num * 100 + err_indx
+
+def __DECODE_ERRCODE(err_code):
+    return divmod(err_code, 100)
+
+# rv: ( [ symbol_1, ... ], [ desc_1, ... ], )
+#     where desc_x is in [
+#         'parenLEVEL', 'operator',
+#         'regular_num', 'inline_const', 'const_symbol',
+#         'eq_constant', 'location_ptr', 'valid_symbol',
+#         'symbol_candidate',
+#         'index_reg',
+#         ]
+# or  error_code  if error occurs (see __DECODE_ERRCODE() for more info)
+def __PARSE_ARG(arg_str, bypass_sym = False):
+    parts = []                  # components of the expression
+    descs = []                  # descriptions of the components
+
+    res = re.match(r".*=[AV]\([^()]+\)", arg_str)
+    if res:
+        exp_rmndr = arg_str[:res.end()]
+        arg_str   = arg_str[res.end():]
+    else:
+        exp_rmndr = ''
+
+    if re.match(r".*[^(*/+-]\(.+\)", arg_str):
+        exp_rmndr += arg_str[:arg_str.rindex('(')]
+        idx_rmndr = arg_str[arg_str.rindex('('):]
+    else:
+        exp_rmndr += arg_str
+        idx_rmndr = None
+    exp_len = len(exp_rmndr)
+
+    # parse expression part
+    res = __PARSE_ARG_RECURSIVE(exp_rmndr)
+
+    if isinstance(res, int):
+        return res              # __PARSE_ARG_RECURSIVE will encode the error
+    else:
+        parts.extend(res[0])
+        descs.extend(res[1])
+
+    # test absolute addressing
+    abs_disp = __IS_ABS_EXP(( parts, descs, ))
+
+    # parse register part
+    idx_list = []
+    if bypass_sym:
+        idx_list.append('bypass')
+    elif idx_rmndr:
+        pl_cnt = idx_rmndr.count('(')
+        pr_cnt = idx_rmndr.count(')')
+        if pl_cnt > pr_cnt:     # e.g. (something
+            if abs_disp  and  ',' not in idx_rmndr: # comma is allowed
+                return __ENCODE_ERRCODE(178, exp_len + len(idx_rmndr))
+            else:
+                return __ENCODE_ERRCODE(179, exp_len + len(idx_rmndr))
+
+        for indx in range(len(idx_rmndr)):
+            if idx_rmndr.count(')', 0, indx + 1) == pl_cnt:
+                break
+        indx += 1
+        if indx < len(idx_rmndr): # e.g. (something)something_else
+            return __ENCODE_ERRCODE(174, exp_len + indx)
+
+        idx_rmndr = idx_rmndr[1:-1] # remove ()
+        idx_len = 1                 # starting parenthesis
+        if not idx_rmndr:           # no value
+            return __ENCODE_ERRCODE(41, exp_len + idx_len)
+
+        res = zPE.resplit_sq(',', idx_rmndr) # search for ','
+        if not abs_disp  and  len(res) > 1:
+            # relocatable symbol cannot have base specified
+            return __ENCODE_ERRCODE(
+                179, exp_len + idx_len + len(res[0])
+                )
+        if len(res) > 2:
+            # at most 2 indexing register (index,base)
+            return __ENCODE_ERRCODE(
+                179, exp_len + idx_len + len(res[0]) + 1 + len(res[1])
+                )
+
+        # try parsing each register
+        for indx in range(len(res)):
+            reg_arg = __PARSE_ARG_RECURSIVE(res[indx])
+            if isinstance(reg_arg, int):
+                # cannot parse the register expression
+                return __ENCODE_ERRCODE( # re-encode the error
+                    29, exp_len + idx_len + __DECODE_ERRCODE(reg_arg)[1]
+                    )
+            if not __IS_ABS_EXP(reg_arg):
+                # register should be absolute expression
+                return __ENCODE_ERRCODE(29, exp_len + idx_len)
+
+            idx_list.append(reg_arg)
+            idx_len += len(res[indx])
+    parts.append(idx_list)
+    descs.append('index_reg')
+
+    return ( parts, descs, )
+
+# used by __PARSE_ARG
+def __PARSE_ARG_RECURSIVE(arg_str, level = 0):
+    rv = ([], [])
+    if not arg_str:
+        return rv
+    if level > 5:
+        return __ENCODE_ERRCODE(146, 0)
+
+    parts = []                  # components of the expression
+    descs = []                  # descriptions of the components
+
+    for part in zPE.resplit('([*/+-])', arg_str, ['(',"'"], [')',"'"]):
+        bad_lbl = -1            # disable symbol check by default
+
+        if part.startswith('('):
+            if part.endswith(')'):
+                res = __PARSE_ARG_RECURSIVE(part[1:-1], level + 1)
+                if isinstance(res, int):
+                    return len(''.join(parts)) + res
+                else:
+                    paren_desc = 'paren{0}'.format(level)
+                    parts.extend(['('       ] + res[0] + [       ')'])
+                    descs.extend([paren_desc] + res[1] + [paren_desc])
+            else:
+                return __ENCODE_ERRCODE(41, len(''.join(parts)) + len(part) - 1)
+
+        elif part in '*/+-':
+            parts.append(part)
+            descs.append('operator')
+
+        elif part.isdigit():
+            if int(part) > 0xFFFFFF:
+                return __ENCODE_ERRCODE(146, len(''.join(parts)))
+            parts.append(part)
+            descs.append('regular_num')
+
+        elif part.startswith('='):
+            parts.append(part)
+            descs.append('eq_constant')
+
+        elif zPE.core.asm.valid_sd(part):
+            try:
+                sd_info = zPE.core.asm.parse_sd(part)
+            except:         # not a constant
+                sd_info = None
+            if sd_info:
+                try:
+                    if sd_info[2] not in 'BCX':
+                        raise TypeError
+                    zPE.core.asm.get_sd(sd_info)
+                    parts.append(part)
+                    descs.append('inline_const')
+                except:     # invalid constant; return err pos
+                    return __ENCODE_ERRCODE(41, len(''.join(parts)))
+            else:
+                bad_lbl = zPE.bad_label(part) # enable symbol check
+        else:
+            bad_lbl = zPE.bad_label(part) # enable symbol check
+
+        if bad_lbl >= 0:
+            if bad_lbl == 1  and  part[0].isdigit():
+                for i in range(len(part)):
+                    if not part[i].isdigit():
+                        return __ENCODE_ERRCODE(145, len(''.join(parts)) + i)
+                zPE.abort(-1, 'Error: ', part, ': Unexpacted Symbol.\n')
+            elif bad_lbl:
+                return __ENCODE_ERRCODE(150, len(''.join(parts)) + bad_lbl)
+            else:
+                parts.append(part)
+                lbl_8 = '{0:<8}'.format(part)
+                if lbl_8 in SYMBOL:
+                    if SYMBOL[lbl_8].reloc == 'A':
+                        descs.append('const_symbol')
+                    else:
+                        descs.append('valid_symbol')
+                else:
+                    descs.append('symbol_candidate')
+   # check location ptr and form rv
+    rv_skip = False
+    self_defining_cnt = 0
+
+    for indx in range(len(parts)):
+        if rv_skip:
+            rv_skip = False
+            continue
+        if parts[indx] == '*':
+            if ( ( indx > 0          and  parts[indx-1] == '' )  and
+                 ( indx < len(parts) and  parts[indx+1] == '' )
+                 ):
+                rv[0].pop()
+                rv[1].pop()
+                rv[0].append(parts[indx])
+                rv[1].append('location_ptr')
+                rv_skip = True
+
+                if not level:   # top level
+                    self_defining_cnt += 1
+            else:
+                rv[0].append(parts[indx])
+                rv[1].append(descs[indx])
+        else:
+            rv[0].append(parts[indx])
+            rv[1].append(descs[indx])
+
+        if not level:   # top level
+            if ( descs[indx] != 'operator'  and      # not operator
+                 not descs[indx].startswith('paren') # not parenthesis
+                 ):             # must be a self-defining item
+                self_defining_cnt += 1
+
+    if self_defining_cnt > 16:
+        return __ENCODE_ERRCODE(146, 0)
+    return rv
+
+
+# exp should be returned from __PARSE_ARG_RECURSIVE(), or a string to be parsed
+# return the reduced value of the expression, or None if not absolute
+def __REDUCE_EXP(exp, current_scope, current_addr):
+    if isinstance(exp, str):
+        exp_list = __PARSE_ARG_RECURSIVE(exp)
+    else:
+        exp_list = ( exp[0][:], exp[1][:] ) # make a deep copy
+
+    if isinstance(exp_list, int):
+        return None
+    elif not exp_list[0]:
+        return 0
+
+    reloc = 0xFFFFFFFF          # virtual relocate factor
+    for indx in range(len(exp_list[0])):
+        if exp_list[1][indx] == 'inline_const':
+            try:
+                sd_info = zPE.core.asm.parse_sd(exp_list[0][indx])
+                if sd_info[4] == None:  # no (initial) value
+                    return None
+                if not sd_info[5]:      # no limit on length
+                    sd_info = (sd_info[0], sd_info[1], sd_info[2],
+                               0, sd_info[4], sd_info[3]
+                               )
+                (val, dummy) = zPE.core.asm.value_sd(sd_info) # get the value
+                if val > 0xFFFFFF:
+                    return None
+                exp_list[0][indx] = str(val)
+            except:
+                return None
+
+        elif exp_list[1][indx] == 'eq_constant':
+            symbol = __HAS_EQ('{0:<8}'.format(exp_list[0][indx]), current_scope)
+            if symbol:
+                exp_list[0][indx] = str(symbol.value + reloc)
+            else:
+                return None
+
+        elif exp_list[1][indx] == 'location_ptr':
+            exp_list[0][indx] = str(current_addr + reloc)
+
+        elif exp_list[1][indx] in [ 'const_symbol', 'valid_symbol' ]:
+            symbol = SYMBOL['{0:<8}'.format(exp_list[0][indx])]
+            exp_list[0][indx] = symbol.value
+            if exp_list[1][indx] == 'valid_symbol':
+                exp_list[0][indx] += reloc
+            exp_list[0][indx] = str(exp_list[0][indx])
+
+        elif exp_list[1][indx] == 'symbol_candidate':
+            return None         # cannot tell
+
+    if len(exp_list[0]) == 1:
+        val = int(exp_list[0][0])
+    else:
+        val = eval(''.join(exp_list[0]))
+    if not -0x7FFFFFFF <= val <= 0x7FFFFFFF: # relocatable expression
+        return None
+    if val >= 0:
+        return val & 0xFFFFFF   # truncate to 24-bit
+    else:
+        return -(-val & 0xFFFFFF) # truncate to 24-bi
+
+
+def __IS_ABS_EXP(exp):
+    return ( __REDUCE_EXP(exp, -1, 0) != None )
+
+# rv:
+#   [ disp, indx, base ]
+#   None    if error happened during parsing
+#
+# Note: no length check nor register validating involved
+def __IS_ABS_ADDR(exp, current_scope, current_addr):
+    if isinstance(exp, str):
+        parsed_arg = __PARSE_ARG(exp)
+    else:
+        parsed_arg = exp        # make reference
+    if isinstance(parsed_arg, int):
+        return None
+
+    disp = __REDUCE_EXP(
+        ( parsed_arg[0][:-1], parsed_arg[1][:-1], ),
+        current_scope,
+        current_addr
+        )
+    if disp < 0:
+        return None
+
+    indx = 0
+    base = 0
+    if len(parsed_arg[0][-1]) == 1:
+        indx = __REDUCE_EXP(parsed_arg[0][-1][0], current_scope, current_addr)
+    elif len(parsed_arg[0][-1]) > 1:
+        indx = __REDUCE_EXP(parsed_arg[0][-1][0], current_scope, current_addr)
+        base = __REDUCE_EXP(parsed_arg[0][-1][1], current_scope, current_addr)
+
+    if indx < 0  or  base < 0:
+        return None
+
+    return [ disp, indx, base ]
+
+def __REF_SYMBOL_IN(exp, current_scope, line_num):
+    if isinstance(exp, str):
+        parsed_arg = __PARSE_ARG(exp)
+    else:
+        parsed_arg = exp        # make reference
+    if isinstance(parsed_arg, int):
+        return None
+
+    ref_cnt = 0
+    for indx in range(len(parsed_arg[1])):
+        if parsed_arg[1][indx] == 'eq_constant':
+            lbl_8  = parsed_arg[0][indx]
+            symbol = __HAS_EQ(lbl_8, current_scope)
+        elif parsed_arg[1][indx] == 'valid_symbol':
+            lbl_8  = '{0:<8}'.format(parsed_arg[0][indx])
+            symbol = SYMBOL[lbl_8]
+        else:
+            continue
+
+        symbol.references.append(
+            '{0:>4}{1}'.format(line_num, '')
+            )
+        ref_cnt += 1
+    return ref_cnt
 
 
 def __MISSED_FILE(step):
@@ -1824,157 +2179,6 @@ def __MISSED_FILE(step):
                 FILE_GEN[fn]()
 
     return cnt
-
-
-# rv: ( [ symbol_1, ... ], [ desc_1, ... ], )
-# or  err_indx  if error occurs
-def __PARSE_ARG(arg_str, bypass_sym = False):
-    parts = []                  # components of the expression
-    descs = []                  # descriptions of the components
-
-    res = re.match(r".*=[AV]\([^()]+\)", arg_str)
-    if res:
-        exp_rmndr = arg_str[:res.end()]
-        arg_str   = arg_str[res.end():]
-    else:
-        exp_rmndr = ''
-
-    if re.match(r"(.*(=[AV]\([^()]+\)))*.*\([\w']*,?[\w']*\)", arg_str):
-        exp_rmndr += arg_str[:arg_str.rindex('(')]
-        idx_rmndr = arg_str[arg_str.rindex('('):]
-    else:
-        exp_rmndr += arg_str
-        idx_rmndr = None
-    exp_len = len(exp_rmndr)
-
-    # parse expression part
-    res = __PARSE_ARG_RECURSIVE(exp_rmndr)
-    if isinstance(res, int):
-        return res
-    else:
-        parts.extend(res[0])
-        descs.extend(res[1])
-
-    # parse register part
-    if bypass_sym:
-        idx_val = 'bypass'
-    elif idx_rmndr:
-        tmp = zPE.resplit_sq(',', idx_rmndr) # search for ','
-        if len(tmp) > 1: # has ','
-            return exp_len + len(tmp[0])
-        idx_rmndr = idx_rmndr[1:-1] # remove ()
-        if not idx_rmndr:           # no value
-            return exp_len + 1
-
-        # try parse as a register
-        if zPE.core.reg.parse_GPR(idx_rmndr)[0] >= 0:
-            idx_val = int(idx_rmndr)
-        else:
-            # try to reduce the value
-            idx_val = __REDUCE_EXP(idx_rmndr)
-            if idx_val == None:
-                try:
-                    idx_val = eval(idx_rmndr)
-                except:
-                    return exp_len + 1
-    else:
-        idx_val = None
-    parts.append(idx_val)
-    descs.append('index_reg')
-
-    return ( parts, descs, )
-
-# used by __PARSE_ARG
-def __PARSE_ARG_RECURSIVE(arg_str):
-    parts = []                  # components of the expression
-    descs = []                  # descriptions of the components
-
-    for part in zPE.resplit('([*/+-])', arg_str, ['(',"'"], [')',"'"]):
-        if part.startswith('('):
-            if part.endswith(')'):
-                res = __PARSE_ARG_RECURSIVE(part[1:-1])
-                if isinstance(res, int):
-                    return len(''.join(parts)) + res
-                else:
-                    parts.extend(['('          ] + res[0] + [          ')'])
-                    descs.extend(['parenthesis'] + res[1] + ['parenthesis'])
-            else:
-                return len(''.join(parts)) + len(part) - 1
-
-        elif part in '*/+-':
-            parts.append(part)
-            descs.append('operator')
-
-        elif part.isdigit():
-            parts.append(part)
-            descs.append('regular_num')
-
-        elif part.startswith('='):
-            parts.append(part)
-            descs.append('eq_constant')            
-
-        elif zPE.core.asm.valid_sd(part):
-            try:
-                sd_info = zPE.core.asm.parse_sd(part)
-            except:         # not a constant
-                sd_info = None
-            if sd_info:
-                try:
-                    if sd_info[0] == 'a':
-                        raise TypeError
-                    zPE.core.asm.get_sd(sd_info)
-                    parts.append(part)
-                    descs.append('inline_const')
-                except:     # invalid constant; return err pos
-                    return len(''.join(parts))
-            else:
-                if not zPE.bad_label(part):
-                    parts.append(part)
-                    descs.append('valid_symbol')
-                else:
-                    return len(''.join(parts))
-        else:
-            if not zPE.bad_label(part):
-                parts.append(part)
-                descs.append('valid_symbol')
-            else:
-                return len(''.join(parts))
-    # check location ptr and form rv
-    rv = ([], [])
-    rv_skip = False
-    for indx in range(len(parts)):
-        if rv_skip:
-            rv_skip = False
-            continue
-        if parts[indx] == '*':
-            if ( ( indx > 0          and  parts[indx-1] == '' )  and
-                 ( indx < len(parts) and  parts[indx+1] == '' )
-                 ):
-                rv[0].pop()
-                rv[1].pop()
-                rv[0].append(parts[indx])
-                rv[1].append('location_ptr')
-                rv_skip = True
-            else:
-                rv[0].append(parts[indx])
-                rv[1].append(descs[indx])
-        else:
-            rv[0].append(parts[indx])
-            rv[1].append(descs[indx])
-    return rv
-
-
-def __PARSE_EQU_VALUE(equ):
-    if isinstance(equ, int):
-        return ( equ, None, )
-    if equ.isdigit():
-        return ( int(equ), None, )
-    # search for equates
-    lbl_8 = '{0:<8}'.format(equ)
-    if lbl_8 in SYMBOL  and  SYMBOL[lbl_8].type == 'U':
-        return ( SYMBOL[lbl_8].value, SYMBOL[lbl_8], )
-    else:
-        return ( None, None, )
 
 
 def __PARSE_OUT():
@@ -2001,38 +2205,6 @@ def __PARSE_OUT():
 
     ### summary portion of the report
 
-
-
-def __REDUCE_EXP(exp):
-    if exp == '':
-        return 0
-
-    res = __PARSE_ARG_RECURSIVE(exp)
-    if isinstance(res, int):
-        return None
-
-    for indx in range(len(res[0])):
-        if res[1][indx] == 'inline_const':
-            try:
-                sd_info = zPE.core.asm.parse_sd(res[0][indx])
-                if sd_info[4] == None:  # no (initial) value
-                    return None
-                if not sd_info[5]:      # no limit on length
-                    sd_info = (sd_info[0], sd_info[1], sd_info[2],
-                               0, sd_info[4], sd_info[3]
-                               )
-                (val, dummy) = zPE.core.asm.value_sd(sd_info) # get the value
-                res[0][indx] = str(val)
-            except:
-                return None
-        elif res[1][indx] in [ 'eq_constant', 'valid_symbol', 'location_ptr' ]:
-            # relocatable value
-            return None
-    if len(res[0]) == 1:
-        val = int(res[0][0])
-    else:
-        val = eval(''.join(res[0]))
-    return val
 
 
 vf_list = []

@@ -3,10 +3,10 @@ def __format(msg, pos):
         offset = 0
     else:
         offset = len(msg) - 28
-    if pos - offset:            # at least 1 '-' before '$'
+    if pos - offset > 0:        # at least 1 '-' before '$'
         return '{0:<28}{1:->{2}}${1:->{3}} <-ERROR'.format(msg, '-', pos - offset, 71 - pos)
     else:                       # start with '$'
-        return '{0:<28}${1:->71} <-ERROR'.format(msg, '-')
+        return '{0:<28}${1:->71} <-ERROR'.format(msg[:27], '-')
 
 __I_MSG = {                     # ASMAxxxI
     33  : lambda info, line: __format('W-ALIGNMENT ERROR-IMPROPER BOUNDARY', info[1]),

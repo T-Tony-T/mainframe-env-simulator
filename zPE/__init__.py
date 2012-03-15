@@ -547,12 +547,11 @@ def __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit = 0):
                         current = res[-1:]
                         current_splitable = []
                         current_splitless = res[-1:]
-                        current_splitless.append(next_char)
                     else:
                         current_splitless.extend(current_splitable)
                         current_splitable = []
-                        current_splitless.append(next_char)
                 # go to next level
+                current_splitless.append(next_char)
                 expected.append(skip_r[skip_l.index(next_char)])
 
             else:
