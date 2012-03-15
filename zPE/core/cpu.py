@@ -236,9 +236,18 @@ ins_op = {
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
     '92'   : ( 'MVI',  3, lambda s : __ref(s[3:6],'0',s[2],s[0:2]) ),
+    '94'   : ( 'NI',   3,
+               lambda s : __refmod(s[3:6],'0',s[2],'N',zPE.h2i(s[0:2]))
+               ),
     '95'   : ( 'CLI',  3, lambda s : __cmp_lgc(__deref(s[3:6], '0', s[2], 1),
                                                zPE.h2i(s[0:2])
                                                ) ),
+    '96'   : ( 'OI',   3,
+               lambda s : __refmod(s[3:6],'0',s[2],'O',zPE.h2i(s[0:2]))
+               ),
+    '97'   : ( 'XI',   3,
+               lambda s : __refmod(s[3:6],'0',s[2],'X',zPE.h2i(s[0:2]))
+               ),
     '98'   : ( 'LM',   3, lambda s : [
             __reg(s[0], offset).load(  __deref(s[3:6],'0',s[2],4,offset))
             for offset in (
@@ -383,11 +392,24 @@ def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
     return ( Memory._pool_allocated[pg_i], int(addr) )
 
 def __ref(d, x, b, byte, offset = 0):
+    return __refmod(d, x, b, '=', byte, offset)
+
+def __refmod(d, x, b, action, byte, offset = 0):
     if isinstance(byte, str):
         byte = zPE.h2i(byte)
     ( page, addr ) = __page(d, x, b, 1, offset) # have to be byteword boundary
+
+    if action == 'N':
+        byte &= page[addr]
+    elif action == 'O':
+        byte |= page[addr]
+    elif action == 'X':
+        byte ^= page[addr]
     page[addr] = byte
-    return byte
+
+    if action in 'NOX':
+        SPR['PSW'].CC = int(byte != 0)
+    return byte    
 
 def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
     ( page, addr ) = __page(d, x, b, al, offset)

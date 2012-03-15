@@ -539,9 +539,11 @@ op_code = {
     'MVI'  : lambda: ('92', S(1).wo(), I(2,2).ro()),
 
     'N'    : lambda: ('54', R(1).rw(), X(2).ro().al('fw')),
+    'NI'   : lambda: ('94', S(1).rw(), I(2,2).ro()),
     'NR'   : lambda: ('14', R(1).rw(), R(2).ro()),
 
     'O'    : lambda: ('56', R(1).rw(), X(2).ro().al('fw')),
+    'OI'   : lambda: ('96', S(1).rw(), I(2,2).ro()),
     'OR'   : lambda: ('16', R(1).rw(), R(2).ro()),
 
     'PACK' : lambda: ('F2', L(1,1).rw(),L(2,1).ro()),
@@ -562,6 +564,7 @@ op_code = {
     'UNPK' : lambda: ('F3', L(1,1).rw(),L(2,1).ro()),
 
     'X'    : lambda: ('57', R(1).rw(), X(2).ro().al('fw')),
+    'XI'   : lambda: ('97', S(1).rw(), I(2,2).ro()),
     'XR'   : lambda: ('17', R(1).rw(), R(2).ro()),
 
     'ZAP'  : lambda: ('F8', L(1,1).rw(),L(2,1).ro()),
