@@ -236,18 +236,12 @@ ins_op = {
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
     '92'   : ( 'MVI',  3, lambda s : __ref(s[3:6],'0',s[2],s[0:2]) ),
-    '94'   : ( 'NI',   3,
-               lambda s : __refmod(s[3:6],'0',s[2],'N',zPE.h2i(s[0:2]))
-               ),
+    '94'   : ( 'NI',   3, lambda s : __refmod(s[3:6],'0',s[2],'N',s[0:2])) ),
     '95'   : ( 'CLI',  3, lambda s : __cmp_lgc(__deref(s[3:6], '0', s[2], 1),
                                                zPE.h2i(s[0:2])
                                                ) ),
-    '96'   : ( 'OI',   3,
-               lambda s : __refmod(s[3:6],'0',s[2],'O',zPE.h2i(s[0:2]))
-               ),
-    '97'   : ( 'XI',   3,
-               lambda s : __refmod(s[3:6],'0',s[2],'X',zPE.h2i(s[0:2]))
-               ),
+    '96'   : ( 'OI',   3, lambda s : __refmod(s[3:6],'0',s[2],'O',s[0:2]) ),
+    '97'   : ( 'XI',   3, lambda s : __refmod(s[3:6],'0',s[2],'X',s[0:2]) ),
     '98'   : ( 'LM',   3, lambda s : [
             __reg(s[0], offset).load(  __deref(s[3:6],'0',s[2],4,offset))
             for offset in (
@@ -274,11 +268,35 @@ ins_op = {
                    )
             for offset in range(__dclen(s[0:2]))
             ] ),
+    'D4'   : ( 'NC',   5, lambda s : [
+            __refmod( s[3:6], '0', s[2], 'N'                  # d, i, b, AND
+                      __deref(s[7:10], '0', s[6], 1, offset), # value
+                      offset,                                 # offset
+                      offset and SPR['PSW'].CC
+                      )         # skip zero-check if CC is already 1
+            for offset in range(__dclen(s[0:2]))
+            ] ),
     'D5'   : ( 'CLC',  5, lambda s : [
             __cmp_lgc(__deref(s[3:6],  '0', s[2], 1, offset),
                       __deref(s[7:10], '0', s[6], 1, offset),
                       offset and SPR['PSW'].CC
                       )     # skip comparison if CC is set to non-zero
+            for offset in range(__dclen(s[0:2]))
+            ] ),
+    'D6'   : ( 'OC',   5, lambda s : [
+            __refmod( s[3:6], '0', s[2], 'O'                  # d, i, b, OR
+                      __deref(s[7:10], '0', s[6], 1, offset), # value
+                      offset,                                 # offset
+                      offset and SPR['PSW'].CC
+                      )         # skip zero-check if CC is already 1
+            for offset in range(__dclen(s[0:2]))
+            ] ),
+    'D7'   : ( 'XC',   5, lambda s : [
+            __refmod( s[3:6], '0', s[2], 'X'                  # d, i, b, XOR
+                      __deref(s[7:10], '0', s[6], 1, offset), # value
+                      offset,                                 # offset
+                      offset and SPR['PSW'].CC
+                      )         # skip zero-check if CC is already 1
             for offset in range(__dclen(s[0:2]))
             ] ),
     'DE'   : ( 'ED',   5,
@@ -392,9 +410,9 @@ def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
     return ( Memory._pool_allocated[pg_i], int(addr) )
 
 def __ref(d, x, b, byte, offset = 0):
-    return __refmod(d, x, b, '=', byte, offset)
+    return __refmod(d, x, b, '=', byte, offset, skip_CC = True)
 
-def __refmod(d, x, b, action, byte, offset = 0):
+def __refmod(d, x, b, action, byte, offset = 0, skip_CC = False):
     if isinstance(byte, str):
         byte = zPE.h2i(byte)
     ( page, addr ) = __page(d, x, b, 1, offset) # have to be byteword boundary
@@ -407,7 +425,7 @@ def __refmod(d, x, b, action, byte, offset = 0):
         byte ^= page[addr]
     page[addr] = byte
 
-    if action in 'NOX':
+    if not skip_CC:
         SPR['PSW'].CC = int(byte != 0)
     return byte    
 

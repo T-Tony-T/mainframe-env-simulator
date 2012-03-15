@@ -539,10 +539,12 @@ op_code = {
     'MVI'  : lambda: ('92', S(1).wo(), I(2,2).ro()),
 
     'N'    : lambda: ('54', R(1).rw(), X(2).ro().al('fw')),
+    'NC'   : lambda: ('D4', L(1,2).rw(), S(2).ro()), # LL + bddd format
     'NI'   : lambda: ('94', S(1).rw(), I(2,2).ro()),
     'NR'   : lambda: ('14', R(1).rw(), R(2).ro()),
 
     'O'    : lambda: ('56', R(1).rw(), X(2).ro().al('fw')),
+    'OC'   : lambda: ('D6', L(1,2).rw(), S(2).ro()), # LL + bddd format
     'OI'   : lambda: ('96', S(1).rw(), I(2,2).ro()),
     'OR'   : lambda: ('16', R(1).rw(), R(2).ro()),
 
@@ -564,6 +566,7 @@ op_code = {
     'UNPK' : lambda: ('F3', L(1,1).rw(),L(2,1).ro()),
 
     'X'    : lambda: ('57', R(1).rw(), X(2).ro().al('fw')),
+    'XC'   : lambda: ('D7', L(1,2).rw(), S(2).ro()), # LL + bddd format
     'XI'   : lambda: ('97', S(1).rw(), I(2,2).ro()),
     'XR'   : lambda: ('17', R(1).rw(), R(2).ro()),
 
