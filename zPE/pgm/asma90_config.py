@@ -92,6 +92,7 @@ MNEMONIC = {
     # Line_Num : [ scope, LOC, sd_info, ]                       // type (len) 3
     # Line_Num : [ scope,  ,  , equates, ]                      // type (len) 4
     # Line_Num : [ scope, LOC, (OBJECT_CODE), ADDR1, ADDR2, ]   // type (len) 5
+    # Line_Num : [ scope, LOC,  None,         ADDR1, ADDR2, ]   // type (len) 5
     }
 
 MNEMONIC_LOC = {

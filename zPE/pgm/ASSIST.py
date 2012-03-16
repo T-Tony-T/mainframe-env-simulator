@@ -344,8 +344,11 @@ def __PARSE_OUT_ASM(limit):
                 '', loc
                 )
         elif len(MNEMONIC[line_num]) == 5: # type 5
-            # breaking up the op-mnemonic field
-            code = zPE.core.asm.prnt_op(MNEMONIC[line_num][2])
+            # breaking up the op-mnemonic field, if any
+            if MNEMONIC[line_num][2]:
+                code = zPE.core.asm.prnt_op(MNEMONIC[line_num][2])
+            else:
+                code = ''
             if len(code) == 12:
                 field_3 = code[8:12]
             else:
@@ -354,8 +357,10 @@ def __PARSE_OUT_ASM(limit):
                 field_2 = code[4:8]
             else:
                 field_2 = ' ' * 4
-            field_1 = code[0:4]
-
+            if code:
+                field_1 = code[0:4]
+            else:
+                field_1 = ' ' * 4
             tmp_str = '{0} {1} {2} '.format(
                 field_1, field_2, field_3
                 )
@@ -472,16 +477,22 @@ def __PARSE_OUT_ASM(limit):
                 '', loc
                 )
         elif len(MNEMONIC[key]) == 5: # type 5
-            code = zPE.core.asm.prnt_op(MNEMONIC[key][2])
+            if MNEMONIC[key][2]:
+                code = zPE.core.asm.prnt_op(MNEMONIC[key][2])
+            else:
+                code = ''
             if len(code) == 12:
                 field_3 = code[8:12]
             else:
-                field_3 = '    '
+                field_3 = ' ' * 4
             if len(code) >= 8:
                 field_2 = code[4:8]
             else:
-                field_2 = '    '
-            field_1 = code[0:4]
+                field_2 = ' ' * 4
+            if code:
+                field_1 = code[0:4]
+            else:
+                field_1 = ' ' * 4
             tmp_str = '{0} {1} {2} '.format(
                 field_1, field_2, field_3
                 )

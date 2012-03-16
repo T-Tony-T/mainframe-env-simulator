@@ -101,7 +101,7 @@ def pass_1():
 #
 
     addr = 0                    # program counter
-    prev_addr = None            # previous program counter
+    org_addr = None             # back-up program counter for ORG
     line_num = 0
 
     scope = ScopeCounter()
@@ -200,7 +200,6 @@ def pass_1():
                 addr = scope.new(field[1], line_num, None)
             else:               # valid label
                 addr = scope.new(field[1], line_num, field[0])
-            prev_addr = None
 
             MNEMONIC[line_num] = [ scope.id(), addr, ]          # type 2
             spt.push( ( line, deck_id, ) )
@@ -241,7 +240,6 @@ def pass_1():
                 ESD[scope.label()][0].length = addr
 
                 addr = 0    # reset program counter
-                prev_addr = None
 
                 if autoeof:
                     __INFO('W', line_num, ( 140, 9, None, ))
@@ -294,6 +292,46 @@ def pass_1():
             else:
                 MNEMONIC[line_num] = [ scope.id(), addr, ]      # type 2
                 spt.push( ( line, deck_id, ) )
+
+        # parse ORG
+        elif field[1] == 'ORG':
+            from_addr = addr
+            if len(field) > 2:  # has argument
+                parsed_arg = __PARSE_ARG(field[2])
+                if ( len(parsed_arg[0][-1]) > 0      or  # has index/base
+                     'eq_constant' in parsed_arg[1]  or  # has =constant
+                     'symbol_candidate' in parsed_arg[1] # has undefined symbol
+                     ):
+                    indx_s = line.index(field[2])
+                    __INFO('E', line_num,
+                           ( 32, indx_s, indx_s + len(field[2]), )
+                           )
+                else:
+                    parsed_arg[0].pop() # []
+                    parsed_arg[1].pop() # index_reg
+                    for indx in range(len(parsed_arg[1])):
+                        if parsed_arg[1][indx] == 'valid_symbol':
+                            lbl_8 = '{0:<8}'.format(parsed_arg[0][indx])
+                            parsed_arg[0][indx] = str(SYMBOL[lbl_8].value)
+                            parsed_arg[1][indx] = 'regular_num'
+                        elif parsed_arg[1][indx] == 'location_ptr':
+                            parsed_arg[0][indx] = str(from_addr)
+                            parsed_arg[1][indx] = 'regular_num'
+                    addr = __REDUCE_EXP(parsed_arg, scope.id(), from_addr)
+                    if addr < 0: # fail to reduce expression
+                        addr = from_addr # restore old location counter
+                        indx_s = line.index(field[2])
+                        __INFO('E', line_num,
+                               ( 32, indx_s, indx_s + len(field[2]), )
+                               )
+                    else:       # successfully modified location counter
+                        org_addr = max(from_addr, org_addr) # update backup
+            else:
+                addr = max(addr, org_addr)
+            MNEMONIC[line_num] = [                              # type 5
+                scope.id(), from_addr, None, from_addr, addr
+                ]
+            spt.push( ( line, deck_id, ) )
 
         # parse EQU
         elif field[1] == 'EQU':
@@ -453,7 +491,6 @@ def pass_1():
             spt.push( ( line, deck_id, ) )
 
             # update address
-            prev_addr = addr
             addr += sd_info[1] * sd_info[3]
 
         # parse op-code
@@ -586,7 +623,6 @@ def pass_1():
             spt.push( ( line, deck_id, ) )
 
             # update address
-            prev_addr = addr
             length = 0
             for code in op_code:
                 length += len(code)
@@ -664,6 +700,11 @@ def pass_1():
         if len(MNEMONIC[line_num]) in [ 2, 3, 5 ]: # type 2/3/5
             if scope_id > 0:
                 MNEMONIC[line_num][1] += offset[scope_id] # update loc ptr
+                if ( len(MNEMONIC[line_num]) == 5  and    # type 5
+                     MNEMONIC[line_num][2] == None        # no op-code, ORG
+                     ):
+                    MNEMONIC[line_num][3] += offset[scope_id] # update ORG-from
+                    MNEMONIC[line_num][4] += offset[scope_id] # update ORG-to
 
             # process tmp_buff
             for i in tmp_buff:
@@ -699,7 +740,9 @@ def pass_1():
             MNEMONIC[ln][1] + len(zPE.core.asm.prnt_op(MNEMONIC[ln][2])) / 2
             # starting loc  + length of the mathine code
             for ln in MNEMONIC
-            if len(MNEMONIC[ln]) == 5 # type 5
+            if ( len(MNEMONIC[ln]) == 5  and # type 5
+                 MNEMONIC[ln][2]             # has op-code
+                 )
             ] +
         [ 0 ]   # just in case no statement at all
         )
@@ -941,7 +984,7 @@ def pass_2():
 
         # parse END
         elif field[1] == 'END':
-            if len(field) == 3: # has CSECT name
+            if len(field) > 2: # has CSECT name
                 lbl_8 = '{0:<8}'.format(field[2])
                 if lbl_8 in SYMBOL:
                     SYMBOL[lbl_8].references.append(
@@ -965,7 +1008,7 @@ def pass_2():
                 prev_scope = None # virtually switch scope to reset "buffer"
 
         # skip any line that do not need second pass
-        elif field[1] in [ 'EQU', ]:
+        elif field[1] in [ 'EQU', 'ORG', ]:
             continue
 
         # parse DC/DS/=constant
