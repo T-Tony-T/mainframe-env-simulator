@@ -105,6 +105,26 @@ def i2h_sign(src, precision):
         res = i2h(src)
     return '{0:0>{1}}'.format(res[-precision:], precision)
 
+def i2i_sign(src, precision_in, precision_out):
+    '''precision is measured in number of hex digits'''
+    if precision_in == precision_out: # no need to convert
+        return src
+
+    cmp2_in   = 0b1 << (precision_in  * 4)
+    cmp2_out  = 0b1 << (precision_out * 4)
+
+    mask_in   = cmp2_in  - 1    # all 1s
+    mask_out  = cmp2_out - 1    # all 1s
+
+    if precision_in > precision_out: # reduce precision, mask off extra bits
+        return src & mask_out
+
+    sign_in = cmp2_in >> 1      # sign bit of src
+
+    if src & sign_in:           # src negative
+        src = cmp2_out - ((cmp2_in - src) & mask_in) # 2's complement
+    return src & mask_out
+
 
 ## dictionary manipulation
 

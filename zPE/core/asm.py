@@ -484,11 +484,12 @@ ext_mnem = {
 
 # Basic Instruction
 op_code = {
-    'A'    : lambda: ('5A', R(1).rw(), X(2).ro().al('fw')),
-    'AL'   : lambda: ('5E', R(1).rw(), X(2).ro().al('fw')),
-    'ALR'  : lambda: ('1E', R(1).rw(), R(2).ro()),
-    'AP'   : lambda: ('FA', L(1,1).rw(),L(2,1).ro()),
-    'AR'   : lambda: ('1A', R(1).rw(), R(2).ro()),
+    'A'    : lambda: ('5A', R(1).rw(),   X(2).ro().al('fw')),
+    'AH'   : lambda: ('4A', R(1).rw(),   X(2).ro().al('hw')),
+    'AL'   : lambda: ('5E', R(1).rw(),   X(2).ro().al('fw')),
+    'ALR'  : lambda: ('1E', R(1).rw(),   R(2).ro()),
+    'AP'   : lambda: ('FA', L(1,1).rw(), L(2,1).ro()),
+    'AR'   : lambda: ('1A', R(1).rw(),   R(2).ro()),
 
     'BAL'  : lambda: ('45', R(1).wo(), X(2).br().al('hw')),
     'BALR' : lambda: ('05', R(1).wo(), R(2).br()),
@@ -499,19 +500,20 @@ op_code = {
     'BXH'  : lambda: ('86', R(1).rw(), R(3).ro(), S(2).br().al('hw')),
     'BXLE' : lambda: ('87', R(1).rw(), R(3).ro(), S(2).br().al('hw')),
 
-    'C'    : lambda: ('59', R(1).ro(), X(2).ro().al('fw')),
-    'CL'   : lambda: ('55', R(1).ro(), X(2).ro().al('fw')),
+    'C'    : lambda: ('59', R(1).ro(),   X(2).ro().al('fw')),
+    'CH'   : lambda: ('49', R(1).ro(),   X(2).ro().al('hw')),
+    'CL'   : lambda: ('55', R(1).ro(),   X(2).ro().al('fw')),
     'CLC'  : lambda: ('D5', L(1,2).ro(), S(2).ro()), # LL + bddd format
-    'CLI'  : lambda: ('95', S(1).ro(), I(2,2).ro()),
-    'CLR'  : lambda: ('15', R(1).ro(), R(2).ro()),
-    'CP'   : lambda: ('F9', L(1,1).ro(),L(2,1).ro()),
-    'CR'   : lambda: ('19', R(1).ro(), R(2).ro()),
+    'CLI'  : lambda: ('95', S(1).ro(),   I(2,2).ro()),
+    'CLR'  : lambda: ('15', R(1).ro(),   R(2).ro()),
+    'CP'   : lambda: ('F9', L(1,1).ro(), L(2,1).ro()),
+    'CR'   : lambda: ('19', R(1).ro(),   R(2).ro()),
 
     'CVB'  : lambda: ('4F', R(1).wo(), X(2).ro().al('dw')),
     'CVD'  : lambda: ('4E', R(1).ro(), X(2).wo().al('dw')),
 
     'D'    : lambda: ('5D', R(1).rw().al('hw'), X(2).ro().al('fw')),
-    'DP'   : lambda: ('FD', L(1,1).rw(),L(2,1).ro()),
+    'DP'   : lambda: ('FD', L(1,1).rw(),        L(2,1).ro()),
     'DR'   : lambda: ('1D', R(1).rw().al('hw'), R(2).ro()),
 
     'ED'   : lambda: ('DE', L(1,2).rw(), S(2).ro()), # LL + bddd format
@@ -525,6 +527,7 @@ op_code = {
     'L'    : lambda: ('58', R(1).wo(), X(2).ro().al('fw')),
     'LA'   : lambda: ('41', R(1).wo(), X(2).ro()),
     'LCR'  : lambda: ('13', R(1).wo(), R(2).ro()),
+    'LH'   : lambda: ('48', R(1).wo(), X(2).ro().al('hw')),
     'LM'   : lambda: ('98', R(1).wo(), R(3).wo(), S(2).ro().al('fw')),
     'LNR'  : lambda: ('11', R(1).wo(), R(2).ro()),
     'LPR'  : lambda: ('10', R(1).wo(), R(2).ro()),
@@ -532,55 +535,58 @@ op_code = {
     'LTR'  : lambda: ('12', R(1).rw(), R(2).ro()),
 
     'M'    : lambda: ('5C', R(1).rw().al('hw'), X(2).ro().al('fw')),
-    'MP'   : lambda: ('FC', L(1,1).rw(),L(2,1).ro()),
+    'MH'   : lambda: ('4C', R(1).rw(),          X(2).ro().al('hw')),
+    'MP'   : lambda: ('FC', L(1,1).rw(),        L(2,1).ro()),
     'MR'   : lambda: ('1C', R(1).rw().al('hw'), R(2).ro()),
 
     'MVC'  : lambda: ('D2', L(1,2).wo(), S(2).ro()), # LL + bddd format
-    'MVI'  : lambda: ('92', S(1).wo(), I(2,2).ro()),
+    'MVI'  : lambda: ('92', S(1).wo(),   I(2,2).ro()),
 
-    'N'    : lambda: ('54', R(1).rw(), X(2).ro().al('fw')),
+    'N'    : lambda: ('54', R(1).rw(),   X(2).ro().al('fw')),
     'NC'   : lambda: ('D4', L(1,2).rw(), S(2).ro()), # LL + bddd format
-    'NI'   : lambda: ('94', S(1).rw(), I(2,2).ro()),
-    'NR'   : lambda: ('14', R(1).rw(), R(2).ro()),
+    'NI'   : lambda: ('94', S(1).rw(),   I(2,2).ro()),
+    'NR'   : lambda: ('14', R(1).rw(),   R(2).ro()),
 
-    'O'    : lambda: ('56', R(1).rw(), X(2).ro().al('fw')),
+    'O'    : lambda: ('56', R(1).rw(),   X(2).ro().al('fw')),
     'OC'   : lambda: ('D6', L(1,2).rw(), S(2).ro()), # LL + bddd format
-    'OI'   : lambda: ('96', S(1).rw(), I(2,2).ro()),
-    'OR'   : lambda: ('16', R(1).rw(), R(2).ro()),
+    'OI'   : lambda: ('96', S(1).rw(),   I(2,2).ro()),
+    'OR'   : lambda: ('16', R(1).rw(),   R(2).ro()),
 
-    'PACK' : lambda: ('F2', L(1,1).rw(),L(2,1).ro()),
+    'PACK' : lambda: ('F2', L(1,1).rw(), L(2,1).ro()),
 
     'S'    : lambda: ('5B', R(1).rw(), X(2).ro().al('fw')),
+    'SH'   : lambda: ('4B', R(1).rw(), X(2).ro().al('hw')),
     'SL'   : lambda: ('5F', R(1).rw(), X(2).ro().al('fw')),
     'SLR'  : lambda: ('1F', R(1).rw(), R(2).ro()),
-    'SP'   : lambda: ('FB', L(1,1).rw(),L(2,1).ro()),
+    'SP'   : lambda: ('FB', L(1,1).rw(), L(2,1).ro()),
     'SR'   : lambda: ('1B', R(1).rw(), R(2).ro()),
 
-    'SLA'  : lambda: ('8B', R(1).rw(), OpConst(R(3),0), S(2).ro()),
+    'SLA'  : lambda: ('8B', R(1).rw(),          OpConst(R(3),0), S(2).ro()),
     'SLDA' : lambda: ('8F', R(1).rw().al('hw'), OpConst(R(3),0), S(2).ro()),
     'SLDL' : lambda: ('8D', R(1).rw().al('hw'), OpConst(R(3),0), S(2).ro()),
-    'SLL'  : lambda: ('89', R(1).rw(), OpConst(R(3),0), S(2).ro()),
-    'SRA'  : lambda: ('8A', R(1).rw(), OpConst(R(3),0), S(2).ro()),
+    'SLL'  : lambda: ('89', R(1).rw(),          OpConst(R(3),0), S(2).ro()),
+    'SRA'  : lambda: ('8A', R(1).rw(),          OpConst(R(3),0), S(2).ro()),
     'SRDA' : lambda: ('8E', R(1).rw().al('hw'), OpConst(R(3),0), S(2).ro()),
     'SRDL' : lambda: ('8C', R(1).rw().al('hw'), OpConst(R(3),0), S(2).ro()),
-    'SRL'  : lambda: ('88', R(1).rw(), OpConst(R(3),0), S(2).ro()),
+    'SRL'  : lambda: ('88', R(1).rw(),          OpConst(R(3),0), S(2).ro()),
     'SRP'  : lambda: ('F0', L(1,1).rw(), S(2).ro(), I(3,1).ro()),
 
     'ST'   : lambda: ('50', R(1).ro(), X(2).wo().al('fw')),
     'STC'  : lambda: ('42', R(1).ro(), X(2).rw()),
     'STCM' : lambda: ('BE', R(1).ro(), R(3).ro(), S(2).rw()),
+    'STH'  : lambda: ('40', R(1).ro(), X(2).wo().al('hw')),
     'STM'  : lambda: ('90', R(1).ro(), R(3).ro(), S(2).wo().al('fw')),
 
     'TM'   : lambda: ('91', S(1).ro(), I(2,2).ro()),
 
-    'UNPK' : lambda: ('F3', L(1,1).rw(),L(2,1).ro()),
+    'UNPK' : lambda: ('F3', L(1,1).rw(), L(2,1).ro()),
 
-    'X'    : lambda: ('57', R(1).rw(), X(2).ro().al('fw')),
+    'X'    : lambda: ('57', R(1).rw(),   X(2).ro().al('fw')),
     'XC'   : lambda: ('D7', L(1,2).rw(), S(2).ro()), # LL + bddd format
-    'XI'   : lambda: ('97', S(1).rw(), I(2,2).ro()),
-    'XR'   : lambda: ('17', R(1).rw(), R(2).ro()),
+    'XI'   : lambda: ('97', S(1).rw(),   I(2,2).ro()),
+    'XR'   : lambda: ('17', R(1).rw(),   R(2).ro()),
 
-    'ZAP'  : lambda: ('F8', L(1,1).rw(),L(2,1).ro()),
+    'ZAP'  : lambda: ('F8', L(1,1).rw(), L(2,1).ro()),
     }
 
 

@@ -101,24 +101,31 @@ class Register(Union):
                 SPR['PSW'].CC = 1
         return SPR['PSW'].CC
 
+    def __mul__(self, other):
+        '''
+        MH   R1,addr    =>      R1 * value@addr
+        '''
+        self.int *= Register(zPE.i2i_sign(other,4,8)).int
+        return self
+
 
     def __lshift__(self, other):
         '''
-        SLL   R1,addr    =>      R1 << addr
+        SLL   R1,addr   =>      R1 << addr
         '''
         self.long <<= (other & 0b111111)
         return self
 
     def __rshift__(self, other):
         '''
-        SRL   R1,addr    =>      R1 >> addr
+        SRL   R1,addr   =>      R1 >> addr
         '''
         self.long >>= (other & 0b111111)
         return self
 
     def lshft(self, other):
         '''
-        SLA   R1,addr    =>      R1.lshft(addr)
+        SLA   R1,addr   =>      R1.lshft(addr)
         '''
         res  = self.long << (other & 0b111111)
         self.long &= 0x80000000 # only preserve sign bit
@@ -134,7 +141,7 @@ class Register(Union):
 
     def rshft(self, other):
         '''
-        SRA   R1,addr    =>      R1.rshft(addr)
+        SRA   R1,addr   =>      R1.rshft(addr)
         '''
         self.int >>= (other & 0b111111)
         return self.test()      # overflow will never occur
@@ -182,6 +189,7 @@ class Register(Union):
         '''
         CR   R1,R2      =>      R1.cmp(R2)
         C    R1,addr    =>      R1.cmp(value@addr)
+        CH   R1,addr    =>      R1.cmp(value@addr)
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
@@ -199,11 +207,12 @@ class Register(Union):
         return SPR['PSW'].CC
 
 
-    def load(self, other):
+    def load(self, other, hw = False):
         '''
         LR   R1,R2      =>      R1.load(R2)
         LA   R1,addr    =>      R1.load(addr)
         L    R1,addr    =>      R1.load(value@addr)
+        LH   R1,addr    =>      R1.load(value@addr, hw = True)
         LM   R1,R2,addr =>    [ GPR[(R1+offset)%16].load(value@addr+offset*4)
                                 for offset in range( [
                                     R1 + i for i in range(16)
@@ -212,7 +221,7 @@ class Register(Union):
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
-        self.long = other.long
+        self.long = zPE.i2i_sign(other.long, 8 - hw * 4, 8)
         return self
 
     def inc(self, value, pos_mask = None):
@@ -237,9 +246,10 @@ class Register(Union):
                 value = value[2:]
         return self
 
-    def store(self, page, addr):
+    def store(self, page, addr, hw = False):
         '''
         ST   R1,addr    =>      R1.stort(Page, addr_into_page)
+        STH  R1,addr    =>      R1.stort(Page, addr_into_page, hw = True)
         STM  R1,R2,addr =>    [ GPR[(R1+offset)%16].store(Page, addr_into_page)
                                 for offset in range( [
                                     R1 + i for i in range(16)
@@ -251,7 +261,7 @@ class Register(Union):
              not 0 <= addr < 4096
              ):
             raise TypeError('Operands must be of type `Page` and `int`.')
-        page.store(addr, self.long)
+        page.store(addr, zPE.i2i_sign(self.long, 8, 8 - hw * 4))
         return self
 
     def stc(self, page, addr, pos = 3):
@@ -392,7 +402,7 @@ class RegisterPair(object):
 
     def __lshift__(self, other):
         '''
-        SLDL  R2,addr    =>      RegisterPair(R2,R2+1) << addr
+        SLDL  R2,addr   =>      RegisterPair(R2,R2+1) << addr
         '''
         res = ((self.even.long << 32) + self.odd.long) << (other & 0b111111)
         self.even.long = res >> 32
@@ -401,7 +411,7 @@ class RegisterPair(object):
 
     def __rshift__(self, other):
         '''
-        SRDL  R2,addr    =>      RegisterPair(R2,R2+1) >> addr
+        SRDL  R2,addr   =>      RegisterPair(R2,R2+1) >> addr
         '''
         res = ((self.even.long << 32) + self.odd.long) >> (other & 0b111111)
         self.even.long = res >> 32
@@ -410,7 +420,7 @@ class RegisterPair(object):
 
     def lshft(self, other):
         '''
-        SLDA  R2,addr    =>      RegisterPair(R2,R2+1).lshft(addr)
+        SLDA  R2,addr   =>      RegisterPair(R2,R2+1).lshft(addr)
         '''
         res = ((self.even.long << 32) + self.odd.long) << (other & 0b111111)
         self.even.long &= 0x80000000 # only preserve sign bit
@@ -427,7 +437,7 @@ class RegisterPair(object):
 
     def rshft(self, other):
         '''
-        SRDA  R2,addr    =>      RegisterPair(R2,R2+1).rshft(addr)
+        SRDA  R2,addr   =>      RegisterPair(R2,R2+1).rshft(addr)
         '''
         res = zPE.h2i_sign(str(self.even)+str(self.odd)) >> (other & 0b111111)
         self.even.long = res >> 32

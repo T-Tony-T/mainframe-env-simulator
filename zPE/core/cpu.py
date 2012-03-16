@@ -158,6 +158,10 @@ ins_op = {
     '1D'   : ( 'DR',   1, lambda s : __pair(s[0]) / __reg(s[1]) ),
     '1E'   : ( 'ALR',  1, lambda s : __reg(s[0]).add_lgc(__reg(s[1])) ),
     '1F'   : ( 'SLR',  1, lambda s : __reg(s[0]).sub_lgc(__reg(s[1])) ),
+    '40'   : ( 'STH',  3,
+               lambda s : __reg(s[0]).store( hw = True,
+                                             * __page(s[3:6],s[1],s[2],2)
+                                             ) ),
     '41'   : ( 'LA',   3,
                lambda s : __reg(s[0]).load( __addr(s[3:6],s[1],s[2])   )
                ),
@@ -180,6 +184,19 @@ ins_op = {
     '47'   : ( 'BC',   3, lambda s : __br(__mask(s[0]),
                                           __addr(s[3:6], s[1], s[2])
                                           ) ),
+    '48'   : ( 'LH',   3,
+               lambda s : __reg(s[0]).load( __deref(s[3:6],s[1],s[2],2),
+                                            hw = True
+                                            ) ),
+    '49'   : ( 'CH',   3,
+               lambda s : __reg(s[0]).cmp(__deref(s[3:6],s[1],s[2],2))
+               ),
+    '4A'   : ( 'AH',   3, lambda s : __reg(s[0]) + __deref(s[3:6],s[1],s[2],2)
+               ),
+    '4B'   : ( 'SH',   3, lambda s : __reg(s[0]) - __deref(s[3:6],s[1],s[2],2)
+               ),
+    '4C'   : ( 'MH',   3, lambda s : __reg(s[0]) * __deref(s[3:6],s[1],s[2],2)
+               ),
     '4E'   : ( 'CVD',  3, lambda s : (
             lambda val_str = '{0:0>16}'.format(zPE.i2p(__reg(s[0]).int)),
             ( page, addr ) = __page(s[3:6],s[1],s[2],8) :
