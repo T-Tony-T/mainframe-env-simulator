@@ -1652,22 +1652,24 @@ def pass_2():
                 if ( not INFO_GE(line_num, 'E')  and
                      not op_code[op_args[lbl_i]].is_aligned(1)
                      ): # no other error, and op code arg require an alignment
-                    if not op_code[op_args[lbl_i]].is_aligned():
-                        indx_s = line.index(lbl)
-                        __INFO('I', line_num,
-                               ( 33, indx_s, indx_s + len(lbl), )
-                               )
+                    disp = __GUESS_DISP(op_code[op_args[lbl_i]])
+                    if not op_code[op_args[lbl_i]].is_aligned(disp):
+                        if op_code[op_args[lbl_i]].type == 'R':
+                            indx_s = line.index(lbl)
+                            __INFO('E', line_num,
+                                   ( 29, indx_s, indx_s + len(lbl), )
+                                   )
+                        else:
+                            indx_s = line.index(lbl)
+                            __INFO('I', line_num,
+                                   ( 33, indx_s, indx_s + len(lbl), )
+                                   )
             # end of processing args
 
+            # generate addr1 and addr2
             for indx in range(3, 5):
                 if MNEMONIC[line_num][indx]:
-                    if MNEMONIC[line_num][indx].valid:
-                        disp = MNEMONIC[line_num][indx].get()[-1]
-                        base = MNEMONIC[line_num][indx].get()[-2]
-                        if base in ACTIVE_USING:
-                            disp += USING_MAP[ACTIVE_USING[base], base].u_value
-                    else:
-                        disp = 0
+                    disp = __GUESS_DISP(MNEMONIC[line_num][indx])
                     MNEMONIC[line_num][indx] = disp
 
             content = zPE.core.asm.prnt_op(MNEMONIC[line_num][2])
@@ -1805,6 +1807,19 @@ def __IS_IN_RANGE(lbl, ex_disp, using, csect):
         return True
     else:
         return False
+
+def __GUESS_DISP(insType):
+    if insType.type in 'SLX'  and  insType.valid:
+        disp = insType.get()[-1] # same as .value()
+        base = insType.get()[-2]
+        if base in ACTIVE_USING:
+            disp += USING_MAP[ACTIVE_USING[base], base].u_value
+    elif insType.valid:
+        disp = insType.value()
+    else:
+        disp = 0
+    return disp
+
 
 def __INFO(err_level, line, item):
     if not err_level:           # type not specified, search for it

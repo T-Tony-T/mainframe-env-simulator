@@ -47,7 +47,8 @@ def fetch(EX_addr = None, EX_reg = None):
 
     if not EX_reg:
         # update ILC and Address pointer
-        SPR['PSW'].ILC = op_len / 2 # num of halfwords
+        SPR['PSW'].ILC = (op_len + 1) / 2       # num of halfwords
+                                                # (including half-filled one)
         SPR['PSW'].Instruct_addr += op_len
 
     # validate op-code
@@ -99,7 +100,8 @@ def fetch(EX_addr = None, EX_reg = None):
 
     else:
         # update ILC and Address pointer
-        SPR['PSW'].ILC += len(arg) / 4 # num of halfwords
+        SPR['PSW'].ILC += len(arg) / 4  # num of additional halfword(s)
+                                        # (not including half-filled one)
         SPR['PSW'].Instruct_addr += len(arg) / 2
 
     return ( op_code, arg )
@@ -135,7 +137,7 @@ def parse_time(time):
 ### Instruction Look-up Tabel
 ins_op = {
     '05'   : ( 'BALR', 1,
-               lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
+               lambda s : [ __reg(s[0]).load(zPE.h2i(SPR['PSW'].dump_hex(2))),
                             __cnt(Register(0), __addr_reg(s[1]))
                             ] ),
     '06'   : ( 'BCTR', 1, lambda s : __cnt(__reg(s[0]), __addr_reg(s[1])) ),
@@ -169,7 +171,7 @@ ins_op = {
                lambda s : execute(fetch(__addr(s[3:6],s[1],s[2]), s[0]))
                ),
     '45'   : ( 'BAL',  3,
-               lambda s : [ __reg(s[0]).load(SPR['PSW'].Instruct_addr),
+               lambda s : [ __reg(s[0]).load(zPE.h2i(SPR['PSW'].dump_hex(2))),
                             __cnt(Register(0), __addr(s[3:6],s[1],s[2]))
                             ] ),
     '46'   : ( 'BCT',  3, lambda s : __cnt(__reg(s[0]),
@@ -228,6 +230,22 @@ ins_op = {
                 __br([ 0, 1 ], __addr(s[3:6],'0',s[2])),    # BNH addr
                 ]
             )() ),
+    '88'   : ( 'SRL',  3, lambda s : __reg(s[0])  >> __addr(s[3:6],'0',s[2]) ),
+    '89'   : ( 'SLL',  3, lambda s : __reg(s[0])  << __addr(s[3:6],'0',s[2]) ),
+    '8A'   : ( 'SRA',  3,
+               lambda s : __reg(s[0]).rshft(__addr(s[3:6],'0',s[2]))
+               ),
+    '8B'   : ( 'SLA',  3,
+               lambda s : __reg(s[0]).lshft(__addr(s[3:6],'0',s[2]))
+               ),
+    '8C'   : ( 'SRDL', 3, lambda s : __pair(s[0]) >> __addr(s[3:6],'0',s[2]) ),
+    '8D'   : ( 'SLDL', 3, lambda s : __pair(s[0]) << __addr(s[3:6],'0',s[2]) ),
+    '8E'   : ( 'SRDA', 3,
+               lambda s : __pair(s[0]).rshft(__addr(s[3:6],'0',s[2]))
+               ),
+    '8F'   : ( 'SLDA', 3,
+               lambda s : __pair(s[0]).lshft(__addr(s[3:6],'0',s[2]))
+               ),
     '90'   : ( 'STM',  3, lambda s : [
             __reg(s[0], offset).store(* __page(s[3:6],'0',s[2],4,offset))
             for offset in (
@@ -239,7 +257,7 @@ ins_op = {
                                                zPE.h2i(s[0:2])
                                                ) ),
     '92'   : ( 'MVI',  3, lambda s : __ref(s[3:6],'0',s[2],s[0:2]) ),
-    '94'   : ( 'NI',   3, lambda s : __refmod(s[3:6],'0',s[2],'N',s[0:2])) ),
+    '94'   : ( 'NI',   3, lambda s : __refmod(s[3:6],'0',s[2],'N',s[0:2]) ),
     '95'   : ( 'CLI',  3, lambda s : __cmp_lgc(__deref(s[3:6], '0', s[2], 1),
                                                zPE.h2i(s[0:2])
                                                ) ),
@@ -272,7 +290,7 @@ ins_op = {
             for offset in range(__dclen(s[0:2]))
             ] ),
     'D4'   : ( 'NC',   5, lambda s : [
-            __refmod( s[3:6], '0', s[2], 'N'                  # d, i, b, AND
+            __refmod( s[3:6], '0', s[2], 'N',                 # d, i, b, AND
                       __deref(s[7:10], '0', s[6], 1, offset), # value
                       offset,                                 # offset
                       offset and SPR['PSW'].CC
@@ -287,7 +305,7 @@ ins_op = {
             for offset in range(__dclen(s[0:2]))
             ] ),
     'D6'   : ( 'OC',   5, lambda s : [
-            __refmod( s[3:6], '0', s[2], 'O'                  # d, i, b, OR
+            __refmod( s[3:6], '0', s[2], 'O',                 # d, i, b, OR
                       __deref(s[7:10], '0', s[6], 1, offset), # value
                       offset,                                 # offset
                       offset and SPR['PSW'].CC
@@ -295,7 +313,7 @@ ins_op = {
             for offset in range(__dclen(s[0:2]))
             ] ),
     'D7'   : ( 'XC',   5, lambda s : [
-            __refmod( s[3:6], '0', s[2], 'X'                  # d, i, b, XOR
+            __refmod( s[3:6], '0', s[2], 'X',                 # d, i, b, XOR
                       __deref(s[7:10], '0', s[6], 1, offset), # value
                       offset,                                 # offset
                       offset and SPR['PSW'].CC

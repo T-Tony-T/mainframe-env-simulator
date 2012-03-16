@@ -12,19 +12,19 @@ PSEUDO_INS = {
     'XDECO' : lambda argc: ('52', R(1).ro(), X(2).wo() ), # argc not used
 
     'XDUMP' : lambda argc: (
-        ('E160', OpConst(S(1).ro(), 0), OpConst(D(2).ro(), 0), ),
-        ('E060', S(1).ro(), OpConst(D(2).ro(), 4), ),
+        ('E160', OpConst(S(1).ro(),0), OpConst(D(2).ro(),0), ),
+        ('E060', S(1).ro(), OpConst(D(2).ro(),4), ),
         ('E060', S(1).ro(), D(2).ro(), ),
         )[argc],
 
     'XPRNT' : lambda argc: (
-        ('E020', S(1).ro(), OpConst(D(2).ro(), 133), ), # require at least 1 arg
-        ('E020', S(1).ro(), OpConst(D(2).ro(), 133), ),
+        ('E020', S(1).ro(), OpConst(D(2).ro(),133), ), # require at least 1 arg
+        ('E020', S(1).ro(), OpConst(D(2).ro(),133), ),
         ('E020', S(1).ro(), D(2).ro(), ),
         )[argc],
     'XREAD' : lambda argc: (
-        ('E000', S(1).ro(), OpConst(D(2).ro(), 80), ), # require at least 1 arg
-        ('E000', S(1).ro(), OpConst(D(2).ro(), 80), ),
+        ('E000', S(1).ro(), OpConst(D(2).ro(),80), ), # require at least 1 arg
+        ('E000', S(1).ro(), OpConst(D(2).ro(),80), ),
         ('E000', S(1).ro(), D(2).ro(), ),
         )[argc],
     }

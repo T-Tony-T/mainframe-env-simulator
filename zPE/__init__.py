@@ -87,8 +87,23 @@ def i2p(src):
 def h2i(src):
     return int(src, 16)
 
+def h2i_sign(src):
+    res = h2i(src)
+    if h2i(src[0]) & 0b1000:    # sign bit on, negative
+        res -= ( 0b1 << (len(src) * 4) )
+    return res
+
 def i2h(src):
     return re.split(r'[xL]', hex(src))[1].upper()
+
+def i2h_sign(src, precision):
+    '''precision is measured in number of hex digits'''
+    if src < 0:
+        cmp2 = ( 0b1 << (precision * 4) ) + src # 2's complement
+        res = i2h(cmp2)
+    else:
+        res = i2h(src)
+    return '{0:0>{1}}'.format(res[-precision:], precision)
 
 
 ## dictionary manipulation

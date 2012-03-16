@@ -102,12 +102,47 @@ class Register(Union):
         return SPR['PSW'].CC
 
 
-    def __nonzero__(self):
-        if self.long == 0:
-            SPR['PSW'].CC = 0
+    def __lshift__(self, other):
+        '''
+        SLL   R1,addr    =>      R1 << addr
+        '''
+        self.long <<= (other & 0b111111)
+        return self
+
+    def __rshift__(self, other):
+        '''
+        SRL   R1,addr    =>      R1 >> addr
+        '''
+        self.long >>= (other & 0b111111)
+        return self
+
+    def lshft(self, other):
+        '''
+        SLA   R1,addr    =>      R1.lshft(addr)
+        '''
+        res  = self.long << (other & 0b111111)
+        self.long &= 0x80000000 # only preserve sign bit
+        self.long += (res & 0x7FFFFFFF) # add the rest 31 bits
+
+        res_test  = res >> 32                       # bits shifted out
+        test_mask = (0b1 << (other & 0b111111)) - 1 # num-of-bit-shifted 1s
+        if 0 < res_test < test_mask: # overflow occured
+            SPR['PSW'].CC = 3
         else:
-            SPR['PSW'].CC = 1
-        return SPR['PSW'].CC
+            self.test()
+        return self
+
+    def rshft(self, other):
+        '''
+        SRA   R1,addr    =>      R1.rshft(addr)
+        '''
+        self.int >>= (other & 0b111111)
+        return self.test()      # overflow will never occur
+
+
+    def __nonzero__(self):
+        '''used by bool(self), should not set CC here'''
+        return bool(self.long)
 
     def __and__(self, other):
         '''
@@ -190,15 +225,15 @@ class Register(Union):
         if pos_mask == None:
             self[4] = value
         else:
-            if not pos_mask or int(value, 16) == 0:
+            if not pos_mask or zPE.h2i(value) == 0:
                 SPR['PSW'].CC = 0
-            elif int(value[:1], 16) >= 0x8:
+            elif zPE.h2i(value[:1]) >= 0x8:
                 SPR['PSW'].CC = 1
             else:
                 SPR['PSW'].CC = 2
             # insert the bytes
             for pos in pos_mask:
-                self[pos + 1] = int(value[:2], 16)
+                self[pos + 1] = zPE.h2i(value[:2])
                 value = value[2:]
         return self
 
@@ -316,35 +351,88 @@ class RegisterPair(object):
 
     def __mul__(self, other):
         '''
-        MR   R2,R3      =>      R2 * R3
-        M    R2,addr    =>      R2 * value@addr
+        MR   R2,R3      =>      RegisterPair(R2,R2+1) * R3
+        M    R2,addr    =>      RegisterPair(R2,R2+1) * value@addr
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
-        res = '{0:0>16}'.format(zPE.i2h(self.odd.long * other.long))
-        self.even.long = int(res[ :8], 16)
-        self.odd.long  = int(res[8: ], 16)
+        res = zPE.i2h_sign(self.odd.int * other.int, 16)
+        self.even.long = zPE.h2i(res[ :8])
+        self.odd.long  = zPE.h2i(res[8: ])
         return self
 
     def __div__(self, other):
         return self.__truediv__(other)
     def __truediv__(self, other):
         '''
-        DR   R2,R3      =>      R2 / R3
-        D    R2,addr    =>      R2 / value@addr
+        DR   R2,R3      =>      RegisterPair(R2,R2+1) / R3
+        D    R2,addr    =>      RegisterPair(R2,R2+1) / value@addr
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
         if other.sign() == 0:       # zero-division
             raise zPE.newFixedPointDivideException()
 
-        dividend = (self.even.long << 32) + self.odd.long
-        self.even.long = abs(dividend % other.long)
-        res = (dividend - self.even.long) / other.long
+        dividend = zPE.h2i_sign(str(self.even)+str(self.odd))
+        # res[0] : quotient, res[1] : reminder
+        res = list(divmod(abs(dividend), abs(other.int)))
+        if self.even.sign() == 1:
+            # dividend is negative
+            res[1] = (- res[1])
+        if (self.even.int < 0) != (other.int < 0):
+            # sign of operands differ
+            res[0] = (- res[0])
 
-        if not -0x80000000 <= res < 0x80000000: # quotient too large
+        if not -0x80000000 <= res[0] < 0x80000000: # quotient too large
             raise zPE.newFixedPointDivideException()
-        self.odd.long = res
+        self.even.int = res[1]
+        self.odd.int  = res[0]
+        return self
+
+
+    def __lshift__(self, other):
+        '''
+        SLDL  R2,addr    =>      RegisterPair(R2,R2+1) << addr
+        '''
+        res = ((self.even.long << 32) + self.odd.long) << (other & 0b111111)
+        self.even.long = res >> 32
+        self.odd.long  = res
+        return self
+
+    def __rshift__(self, other):
+        '''
+        SRDL  R2,addr    =>      RegisterPair(R2,R2+1) >> addr
+        '''
+        res = ((self.even.long << 32) + self.odd.long) >> (other & 0b111111)
+        self.even.long = res >> 32
+        self.odd.long  = res
+        return self
+
+    def lshft(self, other):
+        '''
+        SLDA  R2,addr    =>      RegisterPair(R2,R2+1).lshft(addr)
+        '''
+        res = ((self.even.long << 32) + self.odd.long) << (other & 0b111111)
+        self.even.long &= 0x80000000 # only preserve sign bit
+        self.even.long += ((res >> 32) & 0x7FFFFFFF) # add the rest 31 bits
+        self.odd.long  =  res
+
+        res_test  = res >> 64                       # bits shifted out
+        test_mask = (0b1 << (other & 0b111111)) - 1 # num-of-bit-shifted 1s
+        if 0 < res_test < test_mask: # overflow occured
+            SPR['PSW'].CC = 3
+        else:
+            self.even.test()    # sign bit is in even register
+        return self
+
+    def rshft(self, other):
+        '''
+        SRDA  R2,addr    =>      RegisterPair(R2,R2+1).rshft(addr)
+        '''
+        res = zPE.h2i_sign(str(self.even)+str(self.odd)) >> (other & 0b111111)
+        self.even.long = res >> 32
+        self.odd.long  = res
+        self.even.test()        # sign bit is in even register
         return self
 # end of GPR class definition
 
@@ -451,8 +539,12 @@ class PSW(object):
                 ])
                 )
 
-    def dump_hex(self):
-        return [ zPE.b2x(bin_str) for bin_str in self.dump_bin() ]
+    def dump_hex(self, word = 0):
+        bin_dump = self.dump_bin()
+        if word:
+            return zPE.b2x(bin_dump[word - 1])
+        else:
+            return [ zPE.b2x(bin_str) for bin_str in bin_dump ]
 
     def __str__(self):
         (w1, w2) = self.dump_hex()
