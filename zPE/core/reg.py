@@ -589,28 +589,6 @@ GPR = [                         # general purpose registers
     Register(0xC), Register(0xD), Register(0xE), Register(0xF)  # R12 ~ R15
     ]
 
-def parse_GPR(reg_str):
-    equ = None
-    if isinstance(reg_str, int):
-        reg_num = reg_str
-    elif reg_str.isdigit():
-        reg_num = int(reg_str)
-    else:
-        # check reg equates
-        lbl_8 = '{0:<8}'.format(reg_str)
-        sym_map = zPE.pgm.ASMA90.SYMBOL
-        if lbl_8 in sym_map  and  sym_map[lbl_8].type == 'U':
-            equ = sym_map[lbl_8]
-            reg_num = equ.value
-        else:
-            reg_num = -1        # invalidate reg_str
-
-    if 0 <= reg_num < zPE.core.reg.GPR_NUM:
-        return ( reg_num, equ, )
-    else:
-        return (   -1,    equ, )
-
-
 SPR = {                         # special purpose registers
     'PSW' : PSW(PSW_MODE['BC']),
     }

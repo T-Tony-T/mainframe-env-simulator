@@ -298,10 +298,16 @@ def pass_1():
             from_addr = addr
             if len(field) > 2:  # has argument
                 parsed_arg = __PARSE_ARG(field[2])
-                if ( len(parsed_arg[0][-1]) > 0      or  # has index/base
-                     'eq_constant' in parsed_arg[1]  or  # has =constant
-                     'symbol_candidate' in parsed_arg[1] # has undefined symbol
-                     ):
+                if isinstance(parsed_arg, int):
+                    ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
+                    indx_e = line.index(field[2]) + err_indx
+                    __INFO(None, line_num, # let system determine err level
+                           ( err_num, indx_e - 1, indx_e, )
+                           )
+                elif ( len(parsed_arg[0][-1]) > 0      or  # has index/base
+                       'eq_constant' in parsed_arg[1]  or  # or =constant
+                       'symbol_candidate' in parsed_arg[1] # or undefined symbol
+                       ):
                     indx_s = line.index(field[2])
                     __INFO('E', line_num,
                            ( 32, indx_s, indx_s + len(field[2]), )
@@ -318,7 +324,7 @@ def pass_1():
                             parsed_arg[0][indx] = str(from_addr)
                             parsed_arg[1][indx] = 'regular_num'
                     addr = __REDUCE_EXP(parsed_arg, scope.id(), from_addr)
-                    if addr < 0: # fail to reduce expression
+                    if addr < 0: # failed to reduce expression
                         addr = from_addr # restore old location counter
                         indx_s = line.index(field[2])
                         __INFO('E', line_num,
@@ -518,7 +524,6 @@ def pass_1():
             elif len(op_args) > len(argv):  # too few args
                 indx_s = line.index(argv[-1]) + len(argv[-1])
                 __INFO('S', line_num, ( 175, indx_s, indx_s, ))
-                arg_list = field[2]
             elif len(op_args) < len(argv):  # too many args
                 indx_e = line.index(field[2]) + len(field[2])
                 __INFO('S', line_num, (
@@ -526,7 +531,6 @@ def pass_1():
                         indx_e - len(argv[len(op_args)]) - 1, # -1 for ','
                         indx_e,
                         ))
-                arg_list = field[2]
             else:                           # correct number of args
                 # check arguments
                 for arg in argv:
@@ -865,35 +869,59 @@ def pass_2():
                     # regular using
                     range_limit = 4096      # have to be 4096
 
-                    bad_lbl = zPE.bad_label(args[0])
-                    if args[0] == '*':
-                        # location counter
-                        using_value = addr
-                        using_scope = scope_id
-                    elif bad_lbl == None:
+                    parsed_arg = __PARSE_ARG(args[0])
+                    if not args[0]:
                         # nothing before ','
                         indx_s = line.index(field[2])
                         __INFO('E', line_num,
                                ( 74, indx_s, indx_s + 1 + len(args[1]), )
                                )
-                    elif bad_lbl:
-                        # not a valid label
+                    elif ( isinstance(parsed_arg, int)     or
+                           len(parsed_arg[0][-1]) > 0      or
+                           'eq_constant' in parsed_arg[1]  or
+                           'symbol_candidate' in parsed_arg[1]
+                           ):
                         indx_s = line.index(field[2])
                         __INFO('E', line_num, ( 305, indx_s, None, ))
                     else:
-                        # a valid label
-                        lbl_8 = '{0:<8}'.format(args[0])
-                        if lbl_8 in SYMBOL:
+                        parsed_arg[0].pop() # []
+                        parsed_arg[1].pop() # index_reg
+
+                        num_sym = parsed_arg[1].count('valid_symbol')
+                        num_loc = parsed_arg[1].count('location_ptr')
+                        if num_sym + num_loc == 0:
+                            zPE.abort(92, 'Error: ', args[0],
+                                      ': Label or Location Counter Required.\n')
+                        elif num_sym + num_loc > 1:
+                            indx_s = line.index(args[0])
+                            __INFO('E', line_num,
+                                   ( 32, indx_s, indx_s + len(args[0]), )
+                                   )
+                        elif num_loc:
+                            # location counter
+                            indx = parsed_arg[1].index('location_ptr')
+                            parsed_arg[0][indx] = str(addr)
+                            parsed_arg[1][indx] = 'regular_num'
+                            using_value = __REDUCE_EXP(parsed_arg,scope_id,addr)
+                            using_scope = scope_id
+                        else:
+                            # a valid label
+                            indx = parsed_arg[1].index('valid_symbol')
+                            lbl_8 = '{0:<8}'.format(parsed_arg[0][indx])
+                            parsed_arg[0][indx] = str(SYMBOL[lbl_8].value)
+                            parsed_arg[1][indx] = 'regular_num'
+
                             SYMBOL[lbl_8].references.append(
                                 '{0:>4}{1}'.format(line_num, 'U')
                                 )
-                            using_value = SYMBOL[lbl_8].value
+                            using_value = __REDUCE_EXP(parsed_arg,scope_id,addr)
                             using_scope = SYMBOL[lbl_8].id
-                        else:
-                            indx_s = line.index(field[2])
+                        if not INFO_GE(line_num, 'E') and using_value < 0:
+                            # failed to reduce expression
+                            indx_s = line.index(args[0])
                             __INFO('E', line_num,
-                                   ( 44, indx_s, indx_s + 1 + len(args[1]), )
-                                   )
+                                   ( 32, indx_s, indx_s + len(args[0]), )
+                                   )                            
                 else:
                     if len(sub_args) != 2:
                         __INFO('S', line_num, (
@@ -910,16 +938,34 @@ def pass_2():
                     __INFO('S', line_num, ( 174, indx_s, indx_s, ))
 
                 # check following arguments
-                parsed_args = [ None ] * len(args)
+                arg_list = [ None ] * len(args)
                 for indx in range(1, len(args)):
-                    reg_info = zPE.core.reg.parse_GPR(args[indx])
-                    if reg_info[0] < 0:
+                    parsed_arg = __PARSE_ARG(args[indx])
+                    if isinstance(parsed_arg, int):
+                        ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
+                        indx_e = line.index(field[2]) + err_indx
+                        __INFO(None, line_num, # let system determine err level
+                               ( err_num, indx_e - 1, indx_e, )
+                               )
+                        break
+                    if len(parsed_arg[0][-1]) > 0: # has index/base
+                        indx_s = line.index(field[2])
+                        __INFO('E', line_num,
+                               ( 32, indx_s, indx_s + len(field[2]), )
+                               )
+                        break
+
+                    parsed_arg[0].pop() # []
+                    parsed_arg[1].pop() # index_reg
+                    abs_value = __REDUCE_EXP(parsed_arg, scope_id, addr)
+
+                    if not 0 <= abs_value < zPE.core.reg.GPR_NUM:
                         indx_s = line.index(args[indx])
                         __INFO('E', line_num,
                                ( 29, indx_s, indx_s + len(args[indx]), )
                                )
                         break
-                    if reg_info[0] in parsed_args:
+                    if abs_value in arg_list:
                         indx_s = ( line.index(args[indx-1]) +
                                    len(args[indx-1]) + 1 # +1 for ','
                                    )
@@ -927,33 +973,38 @@ def pass_2():
                                ( 308, indx_s, indx_s + len(args[indx]), )
                                )
                         break
+
                     # register OK, record it
-                    parsed_args[indx] = reg_info[0]
-                    if reg_info[1]:
-                        # a reference to a symbol
-                        reg_info[1].references.append(
+                    arg_list[indx] = abs_value
+
+                    # check reference
+                    lbl_8 = '{0:<8}'.format(args[indx])
+                    if lbl_8 in SYMBOL  and  SYMBOL[lbl_8].type == 'U':
+                        SYMBOL[lbl_8].references.append(
                             '{0:>4}{1}'.format(line_num, 'U')
                             )
+                    else:
+                        __REF_SYMBOL_IN(parsed_arg, scope_id, line_num)
 
             if not INFO_GE(line_num, 'E'):
                 # update using map
-                USING_MAP[line_num, parsed_args[1]] = Using(
+                USING_MAP[line_num, arg_list[1]] = Using(
                     addr, scope_id,
                     'USING',
                     'ORDINARY', using_value, range_limit, using_scope,
                     0, '{0:>5}'.format(''), field[2]
                     )
-                ACTIVE_USING[parsed_args[1]] = line_num # start domain of USING
+                ACTIVE_USING[arg_list[1]] = line_num # start domain of USING
 
                 for indx in range(2, len(args)):
-                    USING_MAP[line_num, parsed_args[indx]] = Using(
+                    USING_MAP[line_num, arg_list[indx]] = Using(
                         addr, scope_id,
                         'USING',
                         'ORDINARY', using.value + 4096 * (indx - 1),
                         range_limit, using.id,
                         0, '{0:>5}'.format(''), ''
                         )
-                    ACTIVE_USING[parsed_args[indx]] = line_num
+                    ACTIVE_USING[arg_list[indx]] = line_num
             # "upgrade" USING
             MNEMONIC_LOC[line_num] = using_value  # record USING location
 
@@ -962,20 +1013,41 @@ def pass_2():
             # update using map
             args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
             for indx in range(len(args)):
-                reg_info = zPE.core.reg.parse_GPR(args[indx])
-                if reg_info[0] < 0:
+                parsed_arg = __PARSE_ARG(args[indx])
+                if isinstance(parsed_arg, int):
+                    ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
+                    indx_e = line.index(field[2]) + err_indx
+                    __INFO(None, line_num, # let system determine err level
+                           ( err_num, indx_e - 1, indx_e, )
+                           )
+                    break
+                if len(parsed_arg[0][-1]) > 0: # has index/base
+                    indx_s = line.index(field[2])
+                    __INFO('E', line_num,
+                           ( 32, indx_s, indx_s + len(field[2]), )
+                           )
+                    break
+
+                parsed_arg[0].pop() # []
+                parsed_arg[1].pop() # index_reg
+                abs_value = __REDUCE_EXP(parsed_arg, scope_id, addr)
+
+                if not 0 <= abs_value < zPE.core.reg.GPR_NUM:
                     indx_s = line.index(args[indx])
                     __INFO('E', line_num,
                            ( 29, indx_s, indx_s + len(args[indx]), )
                            )
                     continue
-                if reg_info[0] in ACTIVE_USING:
-                    del ACTIVE_USING[reg_info[0]] # end domain of USING
-                    if reg_info[1]:
-                        # a reference to a symbol
-                        reg_info[1].references.append(
+                if abs_value in ACTIVE_USING:
+                    del ACTIVE_USING[abs_value] # end domain of USING
+                    # check reference
+                    lbl_8 = '{0:<8}'.format(args[indx])
+                    if lbl_8 in SYMBOL  and  SYMBOL[lbl_8].type == 'U':
+                        SYMBOL[lbl_8].references.append(
                             '{0:>4}{1}'.format(line_num, 'D')
                             )
+                    else:
+                        __REF_SYMBOL_IN(parsed_arg, scope_id, line_num)
                 else:
                     indx_s = line.index(args[indx])
                     __INFO('W', line_num,
