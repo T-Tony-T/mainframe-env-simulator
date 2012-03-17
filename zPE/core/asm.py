@@ -579,6 +579,9 @@ op_code = {
 
     'TM'   : lambda: ('91', S(1).ro(), I(2,2).ro()),
 
+    'TR'   : lambda: ('DC', L(1,2).rw(), S(2).ro()), # LL + bddd format
+    'TRT'  : lambda: ('DD', L(1,2).rw(), S(2).ro()), # LL + bddd format
+
     'UNPK' : lambda: ('F3', L(1,1).rw(), L(2,1).ro()),
 
     'X'    : lambda: ('57', R(1).rw(),   X(2).ro().al('fw')),

@@ -74,19 +74,19 @@ def fetch(EX_addr = None, EX_reg = None):
         indx = zPE.h2i(EX_reg)
         if indx:                # not R0
             if zPE.debug_mode():
-                print '  ORing with R{0} = {1:0>2}******'.format(
-                    indx, zPE.i2h(GPR[indx][1])
+                print '  ORing with R{0} = ******{1:0>2}'.format(
+                    indx, zPE.i2h(GPR[indx][4])
                     )
             if op_len == 1:
                 # 1-byte op-code
                 arg = '{0:0>2}{1}'.format(
-                    zPE.i2h( GPR[indx][1] | int(arg[0:2],16) ), arg[2:]
+                    zPE.i2h( GPR[indx][4] | int(arg[0:2],16) ), arg[2:]
                     ) # perform OR on 2nd byte of instruction (1st arg byte)
             else:
                 # 2-byte op-code
                 op_code = '{0}{1:0>2}{2}'.format(
                     op_code[:2],
-                    zPE.i2h( GPR[indx][1] | int(op_code[2:],16) )
+                    zPE.i2h( GPR[indx][4] | int(op_code[2:],16) )
                     ) # perform OR on 2nd byte of instruction (2nd op-code byte)
                 # validate op-code
                 if op_code not in ins_op:
@@ -97,7 +97,6 @@ def fetch(EX_addr = None, EX_reg = None):
         else:
             if zPE.debug_mode():
                 print '  Register is R0, no instruction unchanged'
-
     else:
         # update ILC and Address pointer
         SPR['PSW'].ILC += len(arg) / 4  # num of additional halfword(s)
@@ -337,6 +336,29 @@ ins_op = {
                       )         # skip zero-check if CC is already 1
             for offset in range(__dclen(s[0:2]))
             ] ),
+    'DC'   : ( 'TR',   5, lambda s : (
+            lambda tr_val_gen_func = ( # encapsulate a tr mapping generator
+                lambda tr_index : __deref(s[7:10], '0', s[6], 1, tr_index)
+                ) :
+                [ __refmod( s[3:6], '0', s[2], 'R', # d, i, b, TR
+                            tr_val_gen_func,        # value generator (function)
+                            offset                  # offset
+                            )
+                  for offset in range(__dclen(s[0:2]))
+                  ]
+            )() ),
+    'DD'   : ( 'TRT',  5, lambda s : (
+            lambda tr_val_gen_func = ( # encapsulate a tr mapping generator
+                lambda tr_index : __deref(s[7:10], '0', s[6], 1, tr_index)
+                ) :
+                [ __refmod( s[3:6], '0', s[2], 'T', # d, i, b, TRT
+                            tr_val_gen_func,        # value generator (function)
+                            offset,                 # offset
+                            offset and SPR['PSW'].CC
+                            )   # skip translation if CC is non-zero
+                  for offset in range(__dclen(s[0:2]))
+                  ]
+            )() ),
     'DE'   : ( 'ED',   5,
                lambda s : __ed(s[3:6], s[2], __dclen(s[0:2]), s[7:10], s[6])
                ),
@@ -456,11 +478,30 @@ def __refmod(d, x, b, action, byte, offset = 0, skip_CC = False):
     ( page, addr ) = __page(d, x, b, 1, offset) # have to be byteword boundary
 
     if action == 'N':
-        byte &= page[addr]
+        byte &= page.retrieve(addr, 'bw')
     elif action == 'O':
-        byte |= page[addr]
+        byte |= page.retrieve(addr, 'bw')
     elif action == 'X':
-        byte ^= page[addr]
+        byte ^= page.retrieve(addr, 'bw')
+    elif action == 'R':
+        byte = byte(page.retrieve(addr, 'bw')) # get the actual byte
+        skip_CC = True          # always skip CC
+    elif action == 'T':
+        if skip_CC:             # in TRT, skip_CC is used to skip translation
+            SPR['PSW'].CC = 1   # stop early, change CC to 1
+            return None
+        byte = byte(page.retrieve(addr, 'bw')) # get the actual byte
+        if byte:                # non-zero, scan succeed
+            addr = __addr(d, x, b) + offset
+            for i in [ 4, 3, 2 ]: # load offset into right-most 3 bytes of R1
+                GPR[1][i] = addr & 0xFF
+                addr  >>= 8
+            GPR[2][4] = byte    # insert tr value into right-most byte of R2
+            SPR['PSW'].CC = 2   # assume the end of the scan field
+        else:
+            SPR['PSW'].CC = 0
+        return None
+
     page[addr] = byte
 
     if not skip_CC:

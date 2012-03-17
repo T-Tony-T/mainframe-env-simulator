@@ -101,7 +101,7 @@ def pass_1():
 #
 
     addr = 0                    # program counter
-    org_addr = None             # back-up program counter for ORG
+    org_addr = 0                # back-up program counter for ORG
     line_num = 0
 
     scope = ScopeCounter()
@@ -192,7 +192,7 @@ def pass_1():
         elif field[1] in [ 'CSECT', 'DSECT', ]:
             # update the current CSECT/DSECT info, if any
             if scope.id(test = True):
-                ESD[scope.label()][0].length = addr
+                ESD[scope.label()][0].length = max(addr, org_addr)
 
             # allocate scope id for new CSECT/DSECT
             if ins_lbl != 0:    # no label detected, or an invalid label
@@ -200,6 +200,7 @@ def pass_1():
                 addr = scope.new(field[1], line_num, None)
             else:               # valid label
                 addr = scope.new(field[1], line_num, field[0])
+            org_addr = min(addr, org_addr) # update backup
 
             MNEMONIC[line_num] = [ scope.id(), addr, ]          # type 2
             spt.push( ( line, deck_id, ) )
@@ -1914,6 +1915,8 @@ def __IS_IN_RANGE(lbl, ex_disp, using, csect):
         disp = MNEMONIC[eq_const.defn][1]
     elif SYMBOL[lbl].type != 'U':
         # is symbol, retrieve definition location
+        if using.u_id != MNEMONIC[SYMBOL[lbl].defn][0]:
+            return False
         disp = MNEMONIC[SYMBOL[lbl].defn][1]
     else:
         return False
