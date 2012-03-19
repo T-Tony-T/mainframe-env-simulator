@@ -470,6 +470,9 @@ def is_file(dsn):
 def is_dir(dsn):
     return os.path.isdir(os.path.join(* dsn))
 
+def is_pds(dsn):                # PDS is currently mapped to flat directory
+    return is_dir(dsn)
+
 def open_file(dsn, mode, f_type):
     '''Open the target file in regardless of the existance'''
     return eval(''.join(['core.', JES[f_type], '.open_file']))(dsn, mode)

@@ -394,7 +394,7 @@ def init_step(step):
 
     if 'STEPLIB' in step.dd.dict():
         for ddcard in step.dd['STEPLIB']:
-            if not zPE.is_dir(ddcard['DSN']):
+            if not zPE.is_pds(ddcard['DSN']):
                 # STEPLIB cannot be instream, thus DSN= should always exist
                 sp3.pop()       # no file allocated
                 sp3.append(ctrl, 'IEF212I {0:<8} '.format(zPE.JCL['jobname']),
