@@ -513,7 +513,10 @@ def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
     return page.retrieve(addr, zPE.align_fmt_map[al])
 
 def __dump(d, b, size):
-    addr_start = zPE.h2i(d) + __addr_reg(b)
+    base = __addr_reg(b)
+    if not base:
+        base = 0
+    addr_start = zPE.h2i(d) + base
     addr_end   = addr_start + size
     try:
         val = Memory.deref_storage(addr_start, addr_end)

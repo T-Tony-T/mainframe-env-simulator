@@ -100,8 +100,8 @@ def init(step):
     if 'FT05F001' in FILE_MISSING:
         spi = zPE.core.SPOOL.retrieve('SYSIN')
         while not spi.empty():
-            spo.append('{0:<72}{1:0>4}{2:0>4}\n'.format(
-                    spi[0][:-1], spi.deck_id(0), '----' # need info
+            spo.append('{0:<72}{1:8}\n'.format(
+                    spi[0][:-1], '' # keep the deck_id blank
                     ))
             spi.pop(0)
     else:
