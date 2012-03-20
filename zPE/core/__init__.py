@@ -1,2 +1,2 @@
 # modules that will be auto imported
-import asm, cpu, jcl, JES2, mem, reg, SMS, SPOOL
+import asm, cpu, IO_JES2, IO_SMS, JES2, mem, reg, SPOOL

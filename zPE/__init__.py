@@ -475,7 +475,7 @@ def is_pds(dsn):                # PDS is currently mapped to flat directory
 
 def open_file(dsn, mode, f_type):
     '''Open the target file in regardless of the existance'''
-    return eval(''.join(['core.', JES[f_type], '.open_file']))(dsn, mode)
+    return eval(''.join(['core.IO_', JES[f_type], '.open_file']))(dsn, mode)
 
 def fill(sp, path):
     '''Load the indicated SPOOL from the indicated file, treated as FB 80'''

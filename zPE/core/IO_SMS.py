@@ -1,4 +1,4 @@
-# this is a simplification of the "Storage Management Subsystem"
+# this is a simplification of the "Storage Management Subsystem - IO Component"
 # it is used to manage the actual (non-SPOOL) files on the storage
 
 import zPE

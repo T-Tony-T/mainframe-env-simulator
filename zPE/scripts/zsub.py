@@ -33,18 +33,18 @@ def main(argv = sys.argv):
 
 
 def submit(job):
-    rv = zPE.core.jcl.parse(job)
+    rv = zPE.core.JES2.parse(job)
     flush_all = False
     overall_rc = 0
 
     if rv == 'ok':
-        zPE.core.jcl.init_job()
+        zPE.core.JES2.init_job()
         for step in zPE.JCL['step']:
             if flush_all:
                 continue        # flush all the rest step
 
             if step.pgm in zPE.PGM_SUPPORTED:
-                rv = zPE.core.jcl.init_step(step)
+                rv = zPE.core.JES2.init_step(step)
                 if rv == 'ok':
                     step.rc = eval(zPE.PGM_SUPPORTED[step.pgm])(step)
                     overall_rc = max(overall_rc, step.rc)
@@ -53,10 +53,10 @@ def submit(job):
                 else:
                     step.rc = 'FLUSH'
                     flush_all = True
-                zPE.core.jcl.finish_step(step)
+                zPE.core.JES2.finish_step(step)
             else:               # not in system path, search in STEPLIB
                 if 'STEPLIB' in step.dd:
-                    rv = zPE.core.jcl.init_step(step)
+                    rv = zPE.core.JES2.init_step(step)
                     if rv == 'ok':
                         step.rc = zPE.pgm.HEWLDRGO.run(step)
                         overall_rc = max(overall_rc, step.rc)
@@ -65,7 +65,7 @@ def submit(job):
                     else:
                         step.rc = 'FLUSH'
                         flush_all = True
-                    zPE.core.jcl.finish_step(step)
+                    zPE.core.JES2.finish_step(step)
                 else:           # not found at all
                     zPE.abort(-1, 'Error: ', step.pgm,
                                ': Program not supported.\n',
@@ -76,7 +76,7 @@ def submit(job):
     else:
         overall_rc = 9       # JCL error; see zPE.__init__.py for help
 
-    zPE.core.jcl.finish_job(rv)
+    zPE.core.JES2.finish_job(rv)
     return overall_rc
 
 
