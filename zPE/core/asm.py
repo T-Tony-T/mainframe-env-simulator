@@ -1268,79 +1268,102 @@ def update_sd(sd_list, sd_info):
 #   init_val:   str(num) | [ symbol ] | None
 # exception:
 #   SyntaxError: any syntax error in parsing the arguments
+#        format: ( err_type, err_index [, err_end ] )
 def parse_sd(sd_arg):
-    # split into ( [mul]ch[Llen], val )
-    L = zPE.resplit_sq('\(', sd_arg)  # split according to '\('
-    sz = len(L)
-    if sz == 2 and L[1][-1] == ')':
-        # A(label) ==> [ 'A', 'label)' ]
-        sd_ch = L[0]
-        sd_val = zPE.resplit(',', L[1][:-1], ['(',"'"], [')',"'"])
-        if not sd_val:
-            sd_val = None
-        val_tp = 'a'            # address type constant
-    elif sz == 1:
-        # AL3 ==> [ 'AL3' ]  or  8F'1' ==> [ "8F'1'" ]
-        L = re.split("'", sd_arg) # re-split according to '\''
-        sz = len(L)
-        if sz == 3 and L[2] == '':
-            # 8F'1' ==> [ '8F', '1', '' ]
-            sd_ch = L[0]
-            sd_val = L[1]
-            val_tp = 's'        # simple constant
-        elif sz == 1:           # DS
-            # 8F ==> [ '8F' ]
-            sd_ch = L[0]
-            sd_val = None
-            val_tp = 's'
-        else:
-            raise SyntaxError
-    else:
-        raise SyntaxError
-
-    # split l[0] into [ multiplier, type, length ]
-    L = re.split('([A-Z])L?', sd_ch) # split according to '?L'
-    match = len(re.findall('([A-Z])L', sd_ch)) # match the postfix 'L'
-
-    # parse multiplier
-    if len(L) != 3:
-        raise SyntaxError
-    if L[0] == '':
+    # parse multiplier, if offered
+    for indx in range(len(sd_arg)):
+        if not sd_arg[indx].isdigit(): # locate 1st non-digit char
+            break
+    sd_mul = sd_arg[:indx]
+    if not sd_mul:
         sd_mul = 1
     else:
-        sd_mul = int(L[0])
-    if val_tp == 'a' and sd_val and len(sd_val) > 0:
-        sd_mul = max(sd_mul, len(sd_val))
+        sd_mul = int(sd_mul)
 
-    # check type
-    const_tp = valid_sd(L[1])
+    # locate separation point of [mul]ch[Llen] and val
+    if '(' in sd_arg:
+        val_start = sd_arg.index('(')
+    else:
+        val_start = len(sd_arg)
+    if "'" in sd_arg:
+        val_start = min(val_start, sd_arg.index("'"))
+    # locate separation point of [mul]ch and [Llen]
+    try:
+        len_start = sd_arg.index('L', 0, val_start)
+    except:
+        len_start = val_start
+
+    # parse type
+    if indx >= len_start  or  re.match(r'[^A-Z]', sd_arg[indx]):
+        raise SyntaxError(( 'DLM', indx, ))
+    sd_ch    = sd_arg[indx : len_start]
+    const_tp = valid_sd(sd_ch)
     if not const_tp:
-        raise SyntaxError
-    sd_ch = L[1]
-    if sd_val != None and const_tp != val_tp:
-        raise SyntaxError
+        raise SyntaxError(( 'TYPE', indx, len_start - indx, ))
+    if len(sd_ch) != 1:
+        raise SyntaxError(( 'DLM', indx + 1, ))
 
-    # parse length
-    if match == 0:              # no '?L' found
-        has_L = False
-        if L[2] == '':
-            if const_tp == 's' and sd_val != None:
-                sd_len = len(const_s[sd_ch](sd_val))
-            else:
-                if const_tp == 's':
-                    sd_len = len(const_s[sd_ch]())
-                else:
-                    sd_len = len(const_a[sd_ch]())
-        else:
-            raise SyntaxError
-    elif match == 1:            # one '?L' found
+    # parse length, if offered
+    if len_start < val_start and sd_arg[len_start] == 'L':
         has_L = True
-        if L[2] == '':
-            raise SyntaxError
+
+        if len_start + 1 >= val_start:
+            raise SyntaxError(( 'EXP', len_start + 1, indx + 1, ))
+
+        for indx in range(len_start + 1, val_start + 1):
+            if indx == val_start:          # at end of string
+                break
+            if not sd_arg[indx].isdigit(): # locate 1st non-digit char
+                break
+        sd_len = sd_arg[len_start + 1 : indx]
+
+        if not sd_len  or  indx != val_start:
+            raise SyntaxError(( 'EXP', indx, val_start, ))
+        sd_len = int(sd_len)
+    else:
+        has_L = False
+
+    # parse value, if any
+    if val_start < len(sd_arg):
+        if const_tp == 's':
+            if sd_arg[val_start] != "'":
+                raise SyntaxError(( 'DLM', val_start, ))
+            if len(sd_arg) - val_start < 2:
+                raise SyntaxError(( 'APOS', len(sd_arg) + 1, len(sd_arg) + 1, ))
+
+            sd_val = sd_arg[val_start + 1 : -1]
+
+            if "'" not in sd_val  and  sd_arg[-1] != "'":
+                raise SyntaxError(( 'APOS', val_start + 1, len(sd_arg), ))
+            if not sd_val  or  "'" in sd_val:
+                raise SyntaxError(( 'EXP', val_start + 1, len(sd_arg), ))
         else:
-            sd_len = int(L[2])
-    else:                       # more than one '?L' found
-        raise SyntaxError
+            if sd_arg[val_start] != '(':
+                raise SyntaxError(( 'DLM', val_start, ))
+            if len(sd_arg) - val_start < 2:
+                raise SyntaxError(( 'NON', val_start + 1, ))
+
+            sd_val = zPE.resplit(',', sd_arg[val_start + 1 : -1], ['(',"'"], [')',"'"])
+
+            if sd_arg[-1] != ')':
+                raise SyntaxError(( 'DLM', len(sd_arg, )))
+            if not sd_val:
+                raise SyntaxError(( 'NON', val_start + 1, ))
+    else:
+        sd_val = None
+
+    # check default length, if Llen is omitted
+    if not has_L:
+        if const_tp == 's' and sd_val != None:
+            sd_len = len(const_s[sd_ch](sd_val))
+        elif const_tp == 's':
+            sd_len = len(const_s[sd_ch]())
+        else:
+            sd_len = len(const_a[sd_ch]())
+
+    # check value length, if initial value is offered
+    if const_tp == 'a'  and  sd_val  and  len(sd_val) > 0:
+        sd_mul = max(sd_mul, len(sd_val))
 
     return (const_tp, sd_mul, sd_ch, sd_len, sd_val, has_L)
 

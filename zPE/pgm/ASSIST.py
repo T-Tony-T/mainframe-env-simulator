@@ -227,6 +227,7 @@ def __PARSE_OUT_ASM(limit):
     init_line_num = 1           # start at line No. 1
     title = ''                  # default title
     title_indx = 1              # start at first title, if any
+
     # print first header
     if len(TITLE) > title_indx and TITLE[title_indx][0] == init_line_num:
         # line No. 1 is TITLE
@@ -236,6 +237,15 @@ def __PARSE_OUT_ASM(limit):
             init_line_num = 2   # all green with the TITLE line, skip it
     CNT['pln'] = __PRINT_HEADER(spo, title, CNT['pln'], CNT['page'], ctrl)
 
+    # define mapping function for error printing
+    def print_err_msg(line_num, err_level):
+        for tmp in INFO[err_level][line_num]:
+            ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
+                spo, title,
+                [ ctrl, gen_msg(err_level, tmp, line) ],
+                CNT['pln'], CNT['page']
+                )
+
     for line_num in range(init_line_num, len(spi) + 1):
         # loop through line_num (indx + 1)
         line = spi[line_num - 1]
@@ -243,6 +253,20 @@ def __PARSE_OUT_ASM(limit):
         ctrl = ' '
 
         if line_num not in MNEMONIC:
+            if INFO_GE(line_num, 'I'):
+                # process error msg
+                ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
+                    spo, title,
+                    [ ctrl, '{0:>6} {1:<26} '.format(' ', ' '),
+                      '{0:>5} {1:<72}'.format(line_num, line[:-1]),
+                      '{0:0>4}{1:0>4}'.format(line_did, '----'), # need info
+                      '\n',
+                      ],
+                    CNT['pln'], CNT['page']
+                    )
+                MAP_INFO_GE(line_num, 'I', print_err_msg)
+                continue
+
             # comment, EJECT, SPACE, MACRO definition, etc.
             field = zPE.resplit_sq(r'\s+', line[:-1], 3)
 
@@ -303,16 +327,16 @@ def __PARSE_OUT_ASM(limit):
 
         # instructions
         if len(MNEMONIC[line_num]) == 0: # type 0, TITLE
-            if not INFO_GE(line_num, 'E'):
+            if not INFO_GE(line_num, 'I'):   # TITLE require RC = 0
                 title = TITLE[title_indx][2] # update current TITLE
                 title_indx += 1 # advance the index to the next potential TITLE
 
                 CNT['page'] += 1 # new page
                 CNT['pln']   = __PRINT_HEADER(spo, title, 0, CNT['page'])
 
-                if not INFO_GE(line_num, 'I'):
-                    # skip the current iteration if no info need to be printed
-                    continue
+                # skip the current iteration if no info need to be printed,
+                # since the TITLE will show anyway
+                continue
             loc = ' ' * 6       # do not print location for this type
         elif len(MNEMONIC[line_num]) == 1: # type 1
             if MNEMONIC[line_num][0]  and  MNEMONIC_LOC[line_num] != None:
@@ -403,13 +427,6 @@ def __PARSE_OUT_ASM(limit):
             )
 
         # process error msg, if any
-        def print_err_msg(line_num, err_level):
-            for tmp in INFO[err_level][line_num]:
-                ( CNT['pln'], CNT['page'] ) = __PRINT_LINE(
-                    spo, title,
-                    [ ctrl, gen_msg(err_level, tmp, line) ],
-                    CNT['pln'], CNT['page']
-                    )
         MAP_INFO_GE(line_num, 'I', print_err_msg)
     ### end of main read loop
 

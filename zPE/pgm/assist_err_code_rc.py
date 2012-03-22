@@ -18,6 +18,7 @@ __N_MSG = {                     # ASMAxxxN
 __W_MSG = {                     # ASMAxxxW
     45  : lambda info, line: __format('W-REGISTER NOT USED', info[1]),
     140 : lambda info, line: __format('W-END CARD MISSING-SUPPLIED', info[1]),
+    163 : lambda info, line: __format('INVALID DELIMITER', info[1]),
     165 : lambda info, line: __format('W-LABEL NOT ALLOWED', info[1]),
     300 : lambda info, line: __format('W-USING OVERRIDDEN', info[1]),
     301 : lambda info, line: __format('W-USING OVERRIDDEN', info[1]),
@@ -35,6 +36,7 @@ __E_MSG = {                     # ASMAxxxE
     41  : lambda info, line: __format('INVALID DELIMITER', info[1]),
     44  : lambda info, line: __format('UNDEFINED SYMBOL', info[1]),
     57  : lambda info, line: __format('INVALID OP-CODE', info[1]),
+    63  : lambda info, line: __format('MISSING DELIMITER', info[2]),
     65  : lambda info, line: __format('ILLEGAL CONSTANT TYPE', info[1]),
     74  : lambda info, line: __format('UNEXPECTED END OF EXPRESSION', info[1]),
     78  : lambda info, line: __format('COMPLEX RELOCATABILITY ILLEGAL', info[1]),
@@ -57,6 +59,7 @@ __S_MSG = {                     # ASMAxxxS
     175 : lambda info, line: __format('INVALID DELIMITER', info[1]),
     178 : lambda info, line: __format('UNEXPECTED END OF EXPRESSION', info[1]),
     179 : lambda info, line: __format('INVALID DELIMITER', info[1]),
+    180 : lambda info, line: __format('INVALID SELF-DEFINING TERM', info[1]),
     }
 
 

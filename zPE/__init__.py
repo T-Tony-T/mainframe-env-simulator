@@ -151,18 +151,6 @@ def listify_mask(mask_hex):
 def fixed_width_split(width, src_str, flags = 0):
     return re.findall(''.join([ r'.{', str(width), r'}|.+' ]), src_str, flags)
 
-def resplit_sq(pattern, string, maxsplit = 0):
-    '''See resplit() for detials'''
-    return resplit(pattern, string, "'", "'", maxsplit)
-
-def resplit_dq(pattern, string, maxsplit = 0):
-    '''See resplit() for detials'''
-    return resplit(pattern, string, '"', '"', maxsplit)
-
-def resplit_pp(pattern, string, maxsplit = 0):
-    '''See resplit() for detials'''
-    return resplit(pattern, string, '(', ')', maxsplit)
-
 def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
     '''
     Split the string using the given pattern like re.split(),
@@ -182,6 +170,26 @@ def resplit(pattern, string, skip_l, skip_r, maxsplit = 0):
     if len(skip_l) != len(skip_r):
         raise ValueError
     return __SKIP_SPLIT(pattern, string, skip_l, skip_r, maxsplit)
+
+def resplit_index(split_src, split_fields, field_index):
+    indx_s = 0
+    for i in range(field_index):
+        indx_s = ( split_src.index(split_fields[i], indx_s) + # start pos
+                   len(split_fields[i])                       # length
+                   )
+    return split_src.index(split_fields[field_index], indx_s)
+
+def resplit_sq(pattern, string, maxsplit = 0):
+    '''See resplit() for detials'''
+    return resplit(pattern, string, "'", "'", maxsplit)
+
+def resplit_dq(pattern, string, maxsplit = 0):
+    '''See resplit() for detials'''
+    return resplit(pattern, string, '"', '"', maxsplit)
+
+def resplit_pp(pattern, string, maxsplit = 0):
+    '''See resplit() for detials'''
+    return resplit(pattern, string, '(', ')', maxsplit)
 
 
 SPOOL_ENCODE_MAP = {

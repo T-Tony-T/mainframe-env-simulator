@@ -8,6 +8,7 @@ __N_MSG = {                     # ASMAxxxN
 __W_MSG = {                     # ASMAxxxW
     45  : lambda info, line: 'Register or label not previously used - {0}'.format(line[info[1]:info[2]]),
     140 : lambda info, line: 'END record missing',
+    163 : lambda info, line: 'Operand not properly enclosed in quotes',
     165 : lambda info, line: 'Unexpected name field',
     300 : lambda info, line: 'USING overridden by a prior active USING on statement number {0}'.format(info[1]),
     301 : lambda info, line: 'Prior active USING on statement number {0} overridden by this USING'.format(info[1]),
@@ -25,6 +26,7 @@ __E_MSG = {                     # ASMAxxxE
     43  : lambda info, line: 'Previously defined symbol - {0}'.format(line[info[1]:info[2]]),
     44  : lambda info, line: 'Undefined symbol - {0}'.format(line[info[1]:info[2]]),
     57  : lambda info, line: 'Undefined operation code - {0}'.format(line[info[1]:info[2]]),
+    63  : lambda info, line: 'No ending apostrophe - {0}'.format(line[info[1]:info[2]]),
     65  : lambda info, line: 'Unknown type - {0}'.format(line[info[1]:info[2]]),
     74  : lambda info, line: 'Illegal syntax in expansion - {0}'.format(line[info[1]:info[2]]),
     78  : lambda info, line: 'Operand 2 expansion complexly relocatable - {0}'.format(line[info[1]:info[2]]),
@@ -47,6 +49,7 @@ __S_MSG = {                     # ASMAxxxS
     175 : lambda info, line: 'Delimiter error, expected comma - {0}'.format(line[info[1]:info[2]]),
     178 : lambda info, line: 'Delimiter error, expected comma or right parenthesis - {0}'.format(line[info[1]:info[2]]),
     179 : lambda info, line: 'Delimiter error, expected right parenthesis - {0}'.format(line[info[1]:info[2]]),
+    180 : lambda info, line: 'Operand must be absolute',
     }
 
 

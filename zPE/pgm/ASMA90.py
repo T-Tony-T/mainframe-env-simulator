@@ -150,8 +150,10 @@ def pass_1():
         # check SPACE
         elif len(field) > 1 and field[1] == 'SPACE':
             if len(field) > 2  and  not field[2].isdigit():
-                zPE.abort(91, 'Error: ', field[2],
-                          ': Argument is not a valid number')
+                indx_s = zPE.resplit_index(line, field, 2)
+                __INFO('S', line_num,
+                       (180, indx_s, None,)
+                       )
             spt.push( ( line, deck_id, ) )
             continue
 
@@ -172,18 +174,33 @@ def pass_1():
 
         # parse TITLE
         if field[1] == 'TITLE':
-            # check label
-            if ins_lbl == 0:    # valid label
-                if not TITLE[0]:
-                    TITLE[0] = field[0] # record the first named TITLE
-
-            if ( len(field[2]) < 2    or # at least "''"
-                 field[2][0]  != "'"  or # start with "'"
-                 field[2][-1] != "'"  or # end with "'"
-                 "'" in field[2][1:-1]   # no "'" in the content
+            # check title
+            if ( len(field[2]) < 3  or # at least 1 char + 2 "'"
+                 field[2][0] != "'"    # not start with "'"
                  ):
-                zPE.abort(91, 'Error: ', field[2], ': Invalid TITLE content.\n')
-            TITLE.append([ line_num, field[0], field[2][1:-1] ])
+                indx_s = zPE.resplit_index(line, field, 2)
+                __INFO('W', line_num,
+                       (163, indx_s, None,)
+                       )
+            elif "'" in field[2][1:-1]: # "'" in the content
+                indx_s = ( zPE.resplit_index(line, field, 2) +
+                           field[2][1:-1].index("'") + 1
+                           )
+                __INFO('W', line_num,
+                       (163, indx_s, None,)
+                       )
+            elif field[2][-1] != "'":
+                indx_s = zPE.resplit_index(line, field, 2) + len(field[2])
+                __INFO('W', line_num,
+                       (163, indx_s, None,)
+                       )
+            else:
+                # check label
+                if ins_lbl == 0:    # valid label
+                    if not TITLE[0]:
+                        TITLE[0] = field[0] # record the first named TITLE
+
+                TITLE.append([ line_num, field[0], field[2][1:-1] ])
 
             MNEMONIC[line_num] = [  ]                           # type 0
             spt.push( ( line, deck_id, ) )
@@ -301,7 +318,7 @@ def pass_1():
                 parsed_arg = __PARSE_ARG(field[2])
                 if isinstance(parsed_arg, int):
                     ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
-                    indx_e = line.index(field[2]) + err_indx
+                    indx_e = zPE.resplit_index(line, field, 2) + err_indx
                     __INFO(None, line_num, # let system determine err level
                            ( err_num, indx_e - 1, indx_e, )
                            )
@@ -309,7 +326,7 @@ def pass_1():
                        'eq_constant' in parsed_arg[1]  or  # or =constant
                        'symbol_candidate' in parsed_arg[1] # or undefined symbol
                        ):
-                    indx_s = line.index(field[2])
+                    indx_s = zPE.resplit_index(line, field, 2)
                     __INFO('E', line_num,
                            ( 32, indx_s, indx_s + len(field[2]), )
                            )
@@ -327,7 +344,7 @@ def pass_1():
                     addr = __REDUCE_EXP(parsed_arg, scope.id(), from_addr)
                     if addr < 0: # failed to reduce expression
                         addr = from_addr # restore old location counter
-                        indx_s = line.index(field[2])
+                        indx_s = zPE.resplit_index(line, field, 2)
                         __INFO('E', line_num,
                                ( 32, indx_s, indx_s + len(field[2]), )
                                )
@@ -377,13 +394,61 @@ def pass_1():
             if field[1][0] == '=':
                 tmp = field[1][1:]
             else:
+                if len(field) < 3  or  not field[2]:
+                    indx_s = ( zPE.resplit_index(line, field, 1) +
+                               len(field[1]) + 1
+                               )
+                    __INFO('S', line_num,
+                           (40, indx_s, None,)
+                           )
+                    MNEMONIC[line_num] = [                      # type 3
+                        scope.id(), addr, None,
+                        ]
+                    spt.push( ( line, deck_id, ) )
+                    continue
                 tmp = field[2]
             try:
                 sd_info = zPE.core.asm.parse_sd(tmp)
-            except:
-                zPE.abort( 91, 'Error: ', tmp,
-                           ': Invalid constant at line {0}.\n'.format(line_num)
-                           )
+            except Exception as e:
+                indx_s = line.index(tmp)
+                if e.args[0][0] == 'DLM':
+                    __INFO('S', line_num, (
+                            35,
+                            indx_s + e.args[0][1],
+                            indx_s + e.args[0][1] + 1,
+                            ))
+                elif e.args[0][0] == 'TYPE':
+                    __INFO('E', line_num, (
+                            65,
+                            indx_s + e.args[0][1],
+                            indx_s + e.args[0][1] + 1,
+                            ))
+                elif e.args[0][0] == 'EXP':
+                    __INFO('E', line_num, (
+                            74,
+                            indx_s + e.args[0][1],
+                            indx_s + e.args[0][2],
+                            ))
+                elif e.args[0][0] == 'APOS':
+                    __INFO('E', line_num, (
+                            63,
+                            indx_s + e.args[0][1],
+                            indx_s + e.args[0][2],
+                            ))
+                elif e.args[0][0] == 'NON':
+                    __INFO('E', line_num, (
+                            41,
+                            indx_s + e.args[0][1],
+                            indx_s + e.args[0][1],
+                            ))
+                else:
+                    raise e
+
+                MNEMONIC[line_num] = [                          # type 3
+                    scope.id(), addr, None,
+                    ]
+                spt.push( ( line, deck_id, ) )
+                continue
 
             # align boundary if needed
             if not sd_info[5]:
@@ -394,7 +459,7 @@ def pass_1():
             # check =constant
             if field[1][0] == '=':
                 if not const_left:
-                    indx_s = line.index(field[1])
+                    indx_s = zPE.resplit_index(line, field, 1)
                     __INFO('E', line_num,
                            ( 141, indx_s, indx_s + len(field[1]), )
                            )
@@ -509,10 +574,13 @@ def pass_1():
                 # no argument offered
                 argv = []
                 argc = 0
+                argv_indx = zPE.resplit_index(line, field, 1) + len(field[1]) + 1
             else:
                 # has argument(s), get the count
                 argv = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
                 argc = len(argv)
+                argv_indx = zPE.resplit_index(line, field, 2)
+
             if zPE.core.asm.valid_pseudo(field[1]):
                 op_code = zPE.core.asm.get_op_from(field[1], argc)
             else:
@@ -523,10 +591,13 @@ def pass_1():
             if not op_args:                 # no args required
                 pass
             elif len(op_args) > len(argv):  # too few args
-                indx_s = line.index(argv[-1]) + len(argv[-1])
+                if argv:
+                    indx_s = argv_indx + len(field[2])
+                else:
+                    indx_s = argv_indx
                 __INFO('S', line_num, ( 175, indx_s, indx_s, ))
             elif len(op_args) < len(argv):  # too many args
-                indx_e = line.index(field[2]) + len(field[2])
+                indx_e = argv_indx + len(field[2])
                 __INFO('S', line_num, (
                         173,
                         indx_e - len(argv[len(op_args)]) - 1, # -1 for ','
@@ -538,7 +609,7 @@ def pass_1():
                     res = __PARSE_ARG(arg, bypass_sym = True)
                     if isinstance(res, int):
                         ( err_num, err_indx ) = __DECODE_ERRCODE(res)
-                        indx_e = line.index(arg) + err_indx
+                        indx_e = argv_indx + field[2].index(arg) + err_indx
                         __INFO(None, line_num, # let system determine err level
                                ( err_num, indx_e - 1, indx_e, )
                                )
@@ -546,6 +617,7 @@ def pass_1():
 
                     for indx in range(len(res[0]) - 1):
                         lbl = res[0][indx]
+
                         if res[1][indx] == 'eq_constant':
                             # parse =constant, this is the only thing checked
                             # during the 1st pass
@@ -580,7 +652,10 @@ def pass_1():
                                                        '{0}.\n'.format(sd_info)
                                                        )
                                         elif bad_lbl:
-                                            indx_s = line.index(tmp)+bad_lbl-1
+                                            indx_s = ( argv_indx +
+                                                       field[2].index(tmp) +
+                                                       bad_lbl - 1
+                                                       )
                                             __INFO('E', line_num, (
                                                     143,
                                                     indx_s,
@@ -598,7 +673,7 @@ def pass_1():
                                         )
                                     const_pool_lbl.append(lbl)
                             else:
-                                indx_s = line.index(lbl) + 1
+                                indx_s = argv_indx + field[2].index(lbl) + 1
                                 __INFO('E', line_num,
                                        ( 65, indx_s, indx_s - 1 + len(lbl), )
                                        )
@@ -642,7 +717,7 @@ def pass_1():
 
         # unrecognized op-code
         else:
-            indx_s = line.index(field[1])
+            indx_s = zPE.resplit_index(line, field, 1)
             __INFO('E', line_num, ( 57, indx_s, indx_s + len(field[1]), ))
             MNEMONIC[line_num] = [ scope.id(), ]                # type 1
             spt.push( ( line, deck_id, ) )
@@ -858,11 +933,12 @@ def pass_2():
             if len(field[0]) != 0:
                 zPE.mark4future('Labeled USING')
             if len(field) < 3:
-                indx_s = line.index(field[1]) + len(field[1]) + 1
+                indx_s = zPE.resplit_index(line, field, 1) + len(field[1]) + 1
                                                                 # +1 for ' '
                 __INFO('S', line_num, ( 40, indx_s, None, ))
             else:
                 args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
+                args_indx = zPE.resplit_index(line, field, 2)
 
                 # check 1st argument
                 sub_args = re.split(',', args[0])
@@ -873,17 +949,15 @@ def pass_2():
                     parsed_arg = __PARSE_ARG(args[0])
                     if not args[0]:
                         # nothing before ','
-                        indx_s = line.index(field[2])
                         __INFO('E', line_num,
-                               ( 74, indx_s, indx_s + 1 + len(args[1]), )
+                               ( 74, args_indx, args_indx + 1 + len(args[1]), )
                                )
                     elif ( isinstance(parsed_arg, int)     or
                            len(parsed_arg[0][-1]) > 0      or
                            'eq_constant' in parsed_arg[1]  or
                            'symbol_candidate' in parsed_arg[1]
                            ):
-                        indx_s = line.index(field[2])
-                        __INFO('E', line_num, ( 305, indx_s, None, ))
+                        __INFO('E', line_num, ( 305, args_indx, None, ))
                     else:
                         parsed_arg[0].pop() # []
                         parsed_arg[1].pop() # index_reg
@@ -894,7 +968,7 @@ def pass_2():
                             zPE.abort(92, 'Error: ', args[0],
                                       ': Label or Location Counter Required.\n')
                         elif num_sym + num_loc > 1:
-                            indx_s = line.index(args[0])
+                            indx_s = args_indx + zPE.resplit_index(field[2], args, 0)
                             __INFO('E', line_num,
                                    ( 32, indx_s, indx_s + len(args[0]), )
                                    )
@@ -919,24 +993,25 @@ def pass_2():
                             using_scope = SYMBOL[lbl_8].id
                         if not INFO_GE(line_num, 'E') and using_value < 0:
                             # failed to reduce expression
-                            indx_s = line.index(args[0])
+                            indx_s = args_indx + zPE.resplit_index(field[2], args, 0)
                             __INFO('E', line_num,
                                    ( 32, indx_s, indx_s + len(args[0]), )
                                    )                            
                 else:
                     if len(sub_args) != 2:
+                        indx_s = args_indx + zPE.resplit_index(field[2], args, 0)
                         __INFO('S', line_num, (
                                 178,
-                                line.index(sub_args[2]),
-                                line.index(args[0]) + len(args[0]) - 1,
+                                indx_s + args[0].index(sub_args[2]),
+                                indx_s + len(args[0]) - 1,
                                 ))
                     # range-limit using
                     zPE.mark4future('Range-Limited USING')
 
                 # check existance of 2nd argument
                 if len(args) < 2:
-                    indx_s = line.index(field[2]) + len(field[2])
-                    __INFO('S', line_num, ( 174, indx_s, indx_s, ))
+                    indx_e = args_indx + len(field[2])
+                    __INFO('S', line_num, ( 174, indx_e, indx_e, ))
 
                 # check following arguments
                 arg_list = [ None ] * len(args)
@@ -944,15 +1019,14 @@ def pass_2():
                     parsed_arg = __PARSE_ARG(args[indx])
                     if isinstance(parsed_arg, int):
                         ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
-                        indx_e = line.index(field[2]) + err_indx
+                        indx_e = args_indx + err_indx
                         __INFO(None, line_num, # let system determine err level
                                ( err_num, indx_e - 1, indx_e, )
                                )
                         break
                     if len(parsed_arg[0][-1]) > 0: # has index/base
-                        indx_s = line.index(field[2])
                         __INFO('E', line_num,
-                               ( 32, indx_s, indx_s + len(field[2]), )
+                               ( 32, args_indx, args_indx + len(field[2]), )
                                )
                         break
 
@@ -961,14 +1035,16 @@ def pass_2():
                     abs_value = __REDUCE_EXP(parsed_arg, scope_id, addr)
 
                     if not 0 <= abs_value < zPE.core.reg.GPR_NUM:
-                        indx_s = line.index(args[indx])
+                        indx_s = args_indx + zPE.resplit_index(field[2], args, indx)
                         __INFO('E', line_num,
                                ( 29, indx_s, indx_s + len(args[indx]), )
                                )
                         break
                     if abs_value in arg_list:
-                        indx_s = ( line.index(args[indx-1]) +
-                                   len(args[indx-1]) + 1 # +1 for ','
+                        indx_s = ( args_indx +
+                                   zPE.resplit_index(field[2], args, indx-1) +
+                                   len(args[indx-1]) +
+                                   1 # +1 for ','
                                    )
                         __INFO('E', line_num,
                                ( 308, indx_s, indx_s + len(args[indx]), )
@@ -1013,19 +1089,20 @@ def pass_2():
         elif field[1] == 'DROP':
             # update using map
             args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
+            args_indx = zPE.resplit_index(line, field, 2)
+
             for indx in range(len(args)):
                 parsed_arg = __PARSE_ARG(args[indx])
                 if isinstance(parsed_arg, int):
                     ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
-                    indx_e = line.index(field[2]) + err_indx
+                    indx_e = args_indx + err_indx
                     __INFO(None, line_num, # let system determine err level
                            ( err_num, indx_e - 1, indx_e, )
                            )
                     break
                 if len(parsed_arg[0][-1]) > 0: # has index/base
-                    indx_s = line.index(field[2])
                     __INFO('E', line_num,
-                           ( 32, indx_s, indx_s + len(field[2]), )
+                           ( 32, args_indx, args_indx + len(field[2]), )
                            )
                     break
 
@@ -1034,7 +1111,7 @@ def pass_2():
                 abs_value = __REDUCE_EXP(parsed_arg, scope_id, addr)
 
                 if not 0 <= abs_value < zPE.core.reg.GPR_NUM:
-                    indx_s = line.index(args[indx])
+                    indx_s = args_indx + zPE.resplit_index(field[2], args, indx)
                     __INFO('E', line_num,
                            ( 29, indx_s, indx_s + len(args[indx]), )
                            )
@@ -1050,7 +1127,7 @@ def pass_2():
                     else:
                         __REF_SYMBOL_IN(parsed_arg, scope_id, line_num)
                 else:
-                    indx_s = line.index(args[indx])
+                    indx_s = args_indx + zPE.resplit_index(field[2], args, indx)
                     __INFO('W', line_num,
                            ( 45, indx_s, indx_s + len(args[indx]), )
                            )
@@ -1064,7 +1141,7 @@ def pass_2():
                         '{0:>4}{1}'.format(line_num, '')
                         )
                 else:
-                    indx_s = line.index(field[2])
+                    indx_s = zPE.resplit_index(line, field, 2)
                     __INFO('E', line_num,
                            ( 44, indx_s, indx_s + len(field[2]), )
                            )
@@ -1086,14 +1163,14 @@ def pass_2():
 
         # parse DC/DS/=constant
         elif field[1] in [ 'DC', 'DS' ] or field[1][0] == '=':
+            if INFO_GE(line_num, 'E'):
+                continue
+
             if field[1][0] == '=':
                 tmp = field[1][1:]
             else:
                 tmp = field[2]
-            try:
-                sd_info = zPE.core.asm.parse_sd(tmp)
-            except:
-                zPE.abort(91, 'Error: ', tmp, ': Invalid constant.\n')
+            sd_info = zPE.core.asm.parse_sd(tmp) # already done once in pass 1
 
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
@@ -1129,7 +1206,9 @@ def pass_2():
                         parsed_arg = __PARSE_ARG(lbl)
 
                         if isinstance(parsed_arg, int):
-                            indx_s = line.index(lbl)
+                            indx_s = ( zPE.resplit_index(line, field, 2) +
+                                       field[2].index(lbl)
+                                       )
                             __INFO('S', line_num, (
                                     35,
                                     indx_s + parsed_arg,
@@ -1139,7 +1218,9 @@ def pass_2():
 
                         # check index / base register
                         if len(parsed_arg[0][-1]) > 0:
-                            indx_s = line.index(lbl)
+                            indx_s = ( zPE.resplit_index(line, field, 2) +
+                                       field[2].index(lbl)
+                                       )
                             __INFO('E', line_num,
                                    ( 32, indx_s, indx_s + len(lbl), )
                                    )
@@ -1206,7 +1287,10 @@ def pass_2():
                                 if parsed_arg[0][indx] in '*/':
                                     # symbol not allowed prior '*' or '/'
                                     if chk_item[curr_lvl] == 'symbol':
-                                        indx_s = line.index(lbl)
+                                        indx_s = (
+                                            zPE.resplit_index(line, field, 2) +
+                                            field[2].index(lbl)
+                                            )
                                         __INFO('E', line_num, (
                                                 32, indx_s, indx_s + len(lbl),
                                                 ))
@@ -1223,7 +1307,9 @@ def pass_2():
                                     chk_item[curr_lvl] = None
 
                             elif parsed_arg[1][indx] == 'eq_constant':
-                                indx_s = line.index(parsed_arg[0][indx])
+                                indx_s = ( zPE.resplit_index(line, field, 2) +
+                                           field[2].index(parsed_arg[0][indx])
+                                           )
                                 __INFO('E', line_num, (
                                         30,
                                         indx_s,
@@ -1237,7 +1323,10 @@ def pass_2():
                                 # check complex addressing
                                 for lvl in range(curr_lvl + 1):
                                     if chk_item[lvl]:
-                                        indx_s = line.index(lbl)
+                                        indx_s = (
+                                            zPE.resplit_index(line, field, 2) +
+                                            field[2].index(lbl)
+                                            )
                                         __INFO('E', line_num, (
                                                 32, indx_s, indx_s + len(lbl),
                                                 ))
@@ -1264,7 +1353,10 @@ def pass_2():
                                     )
                                 if parsed_arg[0][indx][0] != sd_info[2]:
                                     # e.g. 2B'10'
-                                    indx_s = line.index(parsed_arg[0][indx])
+                                    indx_s = (
+                                        zPE.resplit_index(line, field, 2) +
+                                        field[2].index(parsed_arg[0][indx])
+                                        )
                                     __INFO('E', line_num, (
                                             145,
                                             indx_s,
@@ -1273,7 +1365,10 @@ def pass_2():
                                     break
                                 elif parsed_arg[0][indx][1] != "'":
                                     # e.g. BL2'1'
-                                    indx_s = line.index(parsed_arg[0][indx])
+                                    indx_s = (
+                                        zPE.resplit_index(line, field, 2) +
+                                        field[2].index(parsed_arg[0][indx])
+                                        )
                                     __INFO('E', line_num, (
                                             150,
                                             indx_s,
@@ -1294,8 +1389,9 @@ def pass_2():
                                         indx += 1
                                         continue
                                     else:
-                                        indx_s = line.index(
-                                            parsed_addr[0][indx]
+                                        indx_s = (
+                                            zPE.resplit_index(line, field, 2) +
+                                            field[2].index(parsed_arg[0][indx])
                                             )
                                         indx_e = (
                                             indx_s + len(parsed_addr[0][indx])
@@ -1309,7 +1405,10 @@ def pass_2():
                                         ': Fail to parse the expression.\n'
                                               )
                             if reloc_cnt > 1: # more than one relocatable symbol
-                                indx_s = line.index(lbl)
+                                indx_s = (
+                                    zPE.resplit_index(line, field, 2) +
+                                    field[2].index(lbl)
+                                    )
                                 __INFO('E', line_num,
                                        ( 78, indx_s, indx_s + len(lbl), )
                                        )
@@ -1392,8 +1491,10 @@ def pass_2():
 
             if op_args:
                 args = zPE.resplit(',', field[2], ['(',"'"], [')',"'"])
+                args_indx = zPE.resplit_index(line, field, 2)
             else:
                 args = ()       # skip argument parsing
+                args_indx = zPE.resplit_index(line, field, 1) + len(field[1]) + 1
             if len(op_args) != len(args):
                 continue        # should be processed in pass 1
 
@@ -1406,7 +1507,9 @@ def pass_2():
                 parsed_arg = __PARSE_ARG(lbl)
 
                 if isinstance(parsed_arg, int):
-                    indx_s = line.index(args[lbl_i])
+                    indx_s = ( args_indx +
+                               zPE.resplit_index(field[2], args, lbl_i)
+                               )
                     ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
 
                     if err_num == 174: # expect comma or blank
@@ -1427,7 +1530,9 @@ def pass_2():
                 if op_code[op_args[lbl_i]].type in 'LSX' and abs_values:
                     # absolute address found, check length
                     if not 0x0 <= abs_values[0] <= 0xFFF:
-                        indx_s = line.index(lbl)
+                        indx_s = ( args_indx +
+                                   zPE.resplit_index(field[2], args, lbl_i)
+                                   )
                         indx_e = indx_s + len(''.join(parsed_arg[0][:-1]))
                         __INFO('E', line_num, ( 28, indx_s, indx_e, ))
                         break   # stop processing current argument
@@ -1452,7 +1557,11 @@ def pass_2():
                         indx_range = [ 1 ]      # only validate indx (real base)
 
                         if len(parsed_arg[0][-1]) > 1:
-                            indx_e = line.index(lbl) + len(lbl)
+                            indx_e = (
+                                args_indx +
+                                zPE.resplit_index(field[2], args, lbl_i) +
+                                len(lbl)
+                                )
                             indx_s = indx_e - len(
                                 ''.join(parsed_arg[0][-1][0][1])
                                 ) - 1 # -1 to skip ','
@@ -1482,7 +1591,11 @@ def pass_2():
                     for i in indx_range:
                         # validate each register
                         if not 0 <= abs_values[i] < zPE.core.reg.GPR_NUM:
-                            indx_s = line.index(lbl) + 1
+                            indx_s = (
+                                args_indx +
+                                zPE.resplit_index(field[2], args, lbl_i) +
+                                1 # +1 for '('
+                                )
                             __INFO('E', line_num,
                                    ( 29,
                                      indx_s + indx_os[i][0],
@@ -1518,7 +1631,11 @@ def pass_2():
                         else:
                             __REF_SYMBOL_IN(parsed_arg, scope_id, line_num)
                     else:
-                        indx_s = line.index(lbl) + 1
+                        indx_s = (
+                            args_indx +
+                            zPE.resplit_index(field[2], args, lbl_i) +
+                            1 # +1 for '('
+                            )
                         __INFO('E', line_num,
                                ( 29, indx_s, indx_s + len(lbl), )
                                )
@@ -1566,7 +1683,10 @@ def pass_2():
                             if parsed_arg[0][indx] in '*/':
                                 # symbol not allowed prior '*' or '/'
                                 if chk_item[curr_lvl] == 'symbol':
-                                    indx_s = line.index(lbl)
+                                    indx_s = (
+                                        args_indx +
+                                        zPE.resplit_index(field[2], args, lbl_i)
+                                        )
                                     __INFO('E', line_num,
                                            ( 32, indx_s, indx_s + len(lbl), )
                                            )
@@ -1586,7 +1706,10 @@ def pass_2():
                                ):
                             if parsed_arg[1][indx] == 'eq_constant':
                                 if op_code[op_args[lbl_i]].for_write:
-                                    indx_s = line.index(parsed_arg[0][indx])
+                                    indx_s = (
+                                        args_indx +
+                                        field[2].index(parsed_arg[0][indx])
+                                        )
                                     __INFO('E', line_num, (
                                             30,
                                             indx_s,
@@ -1601,7 +1724,11 @@ def pass_2():
                                 if ( op_code[op_args[lbl_i]].type == 'S'  and
                                      len(parsed_arg[0][-1]) > 0
                                      ): # S-type arg does not support index reg
-                                    indx_e = line.index(lbl) + len(lbl)
+                                    indx_e = (
+                                        args_indx +
+                                        field[2].index(parsed_arg[0][indx]) +
+                                        len(lbl)
+                                        )
                                     indx_s = indx_e - len(
                                         ''.join(parsed_arg[0][-1][0][0])
                                         ) - 1 # -1 to skip '('
@@ -1613,7 +1740,10 @@ def pass_2():
                             # check complex addressing
                             for lvl in range(curr_lvl + 1):
                                 if chk_item[lvl]:
-                                    indx_s = line.index(lbl)
+                                    indx_s = (
+                                        args_indx +
+                                        field[2].index(parsed_arg[0][indx])
+                                        )
                                     __INFO('E', line_num,
                                            ( 32, indx_s, indx_s + len(lbl), )
                                            )
@@ -1638,7 +1768,9 @@ def pass_2():
                             sd_info = zPE.core.asm.parse_sd(parsed_arg[0][indx])
                             if parsed_arg[0][indx][0] != sd_info[2]:
                                 # e.g. 2B'10'
-                                indx_s = line.index(parsed_arg[0][indx])
+                                indx_s = ( args_indx +
+                                           field[2].index(parsed_arg[0][indx])
+                                           )
                                 __INFO('E', line_num, (
                                         145,
                                         indx_s,
@@ -1647,7 +1779,9 @@ def pass_2():
                                 break   # stop processing current argument
                             elif parsed_arg[0][indx][1] != "'":
                                 # e.g. BL2'1'
-                                indx_s = line.index(parsed_arg[0][indx])
+                                indx_s = ( args_indx +
+                                           field[2].index(parsed_arg[0][indx])
+                                           )
                                 __INFO('E', line_num, (
                                         150,
                                         indx_s,
@@ -1656,7 +1790,9 @@ def pass_2():
                                 break   # stop processing current argument
 
                         if reloc_cnt > 1: # more than one relocatable symbol
-                            indx_s = line.index(lbl)
+                            indx_s = ( args_indx +
+                                       zPE.resplit_index(field[2], args, lbl_i)
+                                       )
                             __INFO('E', line_num,
                                    ( 78, indx_s, indx_s + len(lbl), )
                                    )
@@ -1759,7 +1895,9 @@ def pass_2():
                                 addr_res[0], reg_indx, addr_res[2]
                                 )
                     else:
-                        indx_s = line.index(lbl)
+                        indx_s = ( args_indx +
+                                   zPE.resplit_index(field[2], args, lbl_i)
+                                   )
                         __INFO('E', line_num,
                                ( 34, indx_s, indx_s + len(lbl), )
                                )
@@ -1770,13 +1908,14 @@ def pass_2():
                      ): # no other error, and op code arg require an alignment
                     disp = __GUESS_DISP(op_code[op_args[lbl_i]])
                     if not op_code[op_args[lbl_i]].is_aligned(disp):
+                        indx_s = ( args_indx +
+                                   zPE.resplit_index(field[2], args, lbl_i)
+                                   )
                         if op_code[op_args[lbl_i]].type == 'R':
-                            indx_s = line.index(lbl)
                             __INFO('E', line_num,
                                    ( 29, indx_s, indx_s + len(lbl), )
                                    )
                         else:
-                            indx_s = line.index(lbl)
                             __INFO('I', line_num,
                                    ( 33, indx_s, indx_s + len(lbl), )
                                    )
