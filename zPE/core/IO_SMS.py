@@ -18,11 +18,14 @@ def open_file(dsn, mode):
 def rm_file(dsn):
     path = os.path.join(* dsn)
     if os.path.isfile(path):
-        return os.remove(path)
-    elif os.path.isdir(path):
-        return os.removedirs(path)
-    else:
-        return None
+        os.remove(path)
+        path = os.path.dirname(path)
+    if os.path.isdir(path):
+        try:
+            os.removedirs(path)
+        except:
+            pass
+    return None
 
 
 ### Supporting Functions
