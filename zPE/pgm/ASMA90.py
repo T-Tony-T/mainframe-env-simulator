@@ -1167,10 +1167,13 @@ def pass_2():
                 continue
 
             if field[1][0] == '=':
-                tmp = field[1][1:]
+                arg_str  = field[1][1:]
+                arg_indx = zPE.resplit_index(line, field, 1) + 1
             else:
-                tmp = field[2]
-            sd_info = zPE.core.asm.parse_sd(tmp) # already done once in pass 1
+                arg_str  = field[2]
+                arg_indx = zPE.resplit_index(line, field, 2)
+            sd_info = zPE.core.asm.parse_sd(arg_str)
+            # already done once in pass 1, no need for try-catching
 
             # check address const
             if sd_info[0] == 'a' and sd_info[4] != None:
@@ -1206,21 +1209,30 @@ def pass_2():
                         parsed_arg = __PARSE_ARG(lbl)
 
                         if isinstance(parsed_arg, int):
-                            indx_s = ( zPE.resplit_index(line, field, 2) +
-                                       field[2].index(lbl)
-                                       )
+                            indx_s = arg_indx + arg_str.index(lbl)
+                            ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
                             __INFO('S', line_num, (
-                                    35,
-                                    indx_s + parsed_arg,
+                                    err_num,
+                                    indx_s + err_indx,
                                     indx_s + len(lbl),
+                                    ))
+                            break
+                        elif 'symbol_candidate' in parsed_arg[1]:
+                            err_indx = parsed_arg[1].index('symbol_candidate')
+                            indx_s = ( arg_indx +
+                                       arg_str.index(lbl) +
+                                       lbl.index(parsed_arg[0][err_indx])
+                                       )
+                            __INFO('E', line_num, (
+                                    44,
+                                    indx_s,
+                                    indx_s + len(parsed_arg[0][err_indx]),
                                     ))
                             break
 
                         # check index / base register
                         if len(parsed_arg[0][-1]) > 0:
-                            indx_s = ( zPE.resplit_index(line, field, 2) +
-                                       field[2].index(lbl)
-                                       )
+                            indx_s = arg_indx + arg_str.index(lbl)
                             __INFO('E', line_num,
                                    ( 32, indx_s, indx_s + len(lbl), )
                                    )
@@ -1288,8 +1300,8 @@ def pass_2():
                                     # symbol not allowed prior '*' or '/'
                                     if chk_item[curr_lvl] == 'symbol':
                                         indx_s = (
-                                            zPE.resplit_index(line, field, 2) +
-                                            field[2].index(lbl)
+                                            arg_indx +
+                                            arg_str.index(lbl)
                                             )
                                         __INFO('E', line_num, (
                                                 32, indx_s, indx_s + len(lbl),
@@ -1307,8 +1319,8 @@ def pass_2():
                                     chk_item[curr_lvl] = None
 
                             elif parsed_arg[1][indx] == 'eq_constant':
-                                indx_s = ( zPE.resplit_index(line, field, 2) +
-                                           field[2].index(parsed_arg[0][indx])
+                                indx_s = ( arg_indx +
+                                           arg_str.index(parsed_arg[0][indx])
                                            )
                                 __INFO('E', line_num, (
                                         30,
@@ -1324,8 +1336,8 @@ def pass_2():
                                 for lvl in range(curr_lvl + 1):
                                     if chk_item[lvl]:
                                         indx_s = (
-                                            zPE.resplit_index(line, field, 2) +
-                                            field[2].index(lbl)
+                                            arg_indx +
+                                            arg_str.index(lbl)
                                             )
                                         __INFO('E', line_num, (
                                                 32, indx_s, indx_s + len(lbl),
@@ -1354,8 +1366,8 @@ def pass_2():
                                 if parsed_arg[0][indx][0] != sd_info[2]:
                                     # e.g. 2B'10'
                                     indx_s = (
-                                        zPE.resplit_index(line, field, 2) +
-                                        field[2].index(parsed_arg[0][indx])
+                                        arg_indx +
+                                        arg_str.index(parsed_arg[0][indx])
                                         )
                                     __INFO('E', line_num, (
                                             145,
@@ -1366,8 +1378,8 @@ def pass_2():
                                 elif parsed_arg[0][indx][1] != "'":
                                     # e.g. BL2'1'
                                     indx_s = (
-                                        zPE.resplit_index(line, field, 2) +
-                                        field[2].index(parsed_arg[0][indx])
+                                        arg_indx +
+                                        arg_str.index(parsed_arg[0][indx])
                                         )
                                     __INFO('E', line_num, (
                                             150,
@@ -1390,8 +1402,8 @@ def pass_2():
                                         continue
                                     else:
                                         indx_s = (
-                                            zPE.resplit_index(line, field, 2) +
-                                            field[2].index(parsed_arg[0][indx])
+                                            arg_indx +
+                                            arg_str.index(parsed_arg[0][indx])
                                             )
                                         indx_e = (
                                             indx_s + len(parsed_addr[0][indx])
@@ -1405,10 +1417,7 @@ def pass_2():
                                         ': Fail to parse the expression.\n'
                                               )
                             if reloc_cnt > 1: # more than one relocatable symbol
-                                indx_s = (
-                                    zPE.resplit_index(line, field, 2) +
-                                    field[2].index(lbl)
-                                    )
+                                indx_s = arg_indx + arg_str.index(lbl)
                                 __INFO('E', line_num,
                                        ( 78, indx_s, indx_s + len(lbl), )
                                        )
@@ -1521,6 +1530,16 @@ def pass_2():
                             err_num,
                             indx_s + err_indx,
                             indx_s + len(args[lbl_i]),
+                            ))
+                    break   # stop processing current argument
+                elif 'symbol_candidate' in parsed_arg[1]:
+                    err_indx = parsed_arg[1].index('symbol_candidate')
+                    indx_s = ( args_indx +
+                               zPE.resplit_index(field[2], args, lbl_i) +
+                               lbl.index(parsed_arg[0][err_indx])
+                               )
+                    __INFO('E', line_num, (
+                            44, indx_s, indx_s + len(parsed_arg[0][err_indx]),
                             ))
                     break   # stop processing current argument
 

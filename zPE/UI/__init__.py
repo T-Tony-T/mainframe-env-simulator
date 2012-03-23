@@ -1,5 +1,5 @@
 # modules that will be auto imported
-import zComp, conf
+import zComp, conf, majormode
 import zPE.conf
 
 import os, sys, copy, re, subprocess
