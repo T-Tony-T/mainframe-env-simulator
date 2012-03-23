@@ -481,9 +481,15 @@ def is_dir(dsn):
 def is_pds(dsn):                # PDS is currently mapped to flat directory
     return is_dir(dsn)
 
+
 def open_file(dsn, mode, f_type):
     '''Open the target file in regardless of the existance'''
     return eval(''.join(['core.IO_', JES[f_type], '.open_file']))(dsn, mode)
+
+def rm_file(dsn, f_type):
+    '''Remove the target file in regardless of the existance'''
+    return eval(''.join(['core.IO_', JES[f_type], '.rm_file']))(dsn)
+
 
 def fill(sp, path):
     '''Load the indicated SPOOL from the indicated file, treated as FB 80'''

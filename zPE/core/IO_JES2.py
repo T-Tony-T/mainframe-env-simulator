@@ -99,3 +99,6 @@ def open_file(dsn, mode):
         zPE.JCL['owner'],
         os.path.join(* dsn)
         )
+
+def rm_file(dsn):
+    return None

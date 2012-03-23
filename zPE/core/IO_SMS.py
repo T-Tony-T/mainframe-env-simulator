@@ -15,6 +15,15 @@ def open_file(dsn, mode):
     return open(path, mode)
 
 
+def rm_file(dsn):
+    path = os.path.join(* dsn)
+    if os.path.isfile(path):
+        return os.remove(path)
+    elif os.path.isdir(path):
+        return os.removedirs(path)
+    else:
+        return None
+
 
 ### Supporting Functions
 

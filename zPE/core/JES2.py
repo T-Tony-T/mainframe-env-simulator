@@ -562,6 +562,8 @@ def finish_step(step):
                 else:                    # sync file if needed
                     if step.dd.get_act(ddname) in [ 'KEEP', 'PASS', 'CATLG' ]:
                         __WRITE_OUT([ddname])
+                    elif step.dd.get_act(ddname) == 'DELETE':
+                        __RM_FILE([ddname])
 
                 if step.dd.get_act(ddname) != 'PASS':
                     zPE.core.SPOOL.remove(ddname) # remove SPOOLs of the step
@@ -713,3 +715,7 @@ def __WRITE_OUT(dd_list):
 
         zPE.flush(sp)
 
+def __RM_FILE(dd_list):
+    for fn in dd_list:
+        sp = zPE.core.SPOOL.retrieve(fn)
+        zPE.rm_file(sp.real_path, sp.f_type)
