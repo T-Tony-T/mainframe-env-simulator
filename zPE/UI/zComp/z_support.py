@@ -73,6 +73,33 @@ XPM = {                         # inline xpm definition
         "X ........ X",
         "X          X"
         ],
+
+    'pds' : [
+        "17 16 7 1",
+        "  c #000000",
+        ". c #808000",
+        "X c yellow",
+        "* c #0000ff",
+        "O c #c0c0c0",
+        "+ c white",
+        "@ c None",
+        "@@@@@@@@@@@@@@@@@",
+        "@@@@@@@@@@@@@@@@@",
+        "@@+XXXX.@@@@@@@@@",
+        "@+OOOOOO.@@@@@@@@",
+        "@+XOXOXOXOXOXOX. ",
+        "@+OXOXOXOXOXOXO. ",
+        "@***XO***OXO**X. ",
+        "@*OX*X*XO*O*OX*. ",
+        "@*XO*O*OX*XO*OX. ",
+        "@***OX*XO*OXO*O. ",
+        "@*XOXO*OX*X*XO*. ",
+        "@*OXOX***XOX**O. ",
+        "@+OOOOOOOOOOOOO. ",
+        "@                ",
+        "@@@@@@@@@@@@@@@@@",
+        "@@@@@@@@@@@@@@@@@"
+        ],
     }
 
 PIXBUF = {}                     # pixbuf definition
