@@ -694,13 +694,14 @@ def __READ_UNTIL(fp, fn, dlm, nextline = None):
         if line[:2] == dlm:
             return ( None, spt )
 
-        if (line[:2] == '//'):
+        if (line[:2] == '//'  or  not line):
             # next JCL card, put it back to the buffer
             zPE.JCL['read_cnt'] -= 1
             return ( line, spt, )
 
         spt.append(line, deck_id = zPE.JCL['read_cnt'])
         line = fp.readline()    # updating read
+
 
 def __WRITE_OUT(dd_list):
     for fn in dd_list:
