@@ -20,6 +20,8 @@ from zStrokeParser import zStrokeListener
 from zText import zLastLine, zTextView, zUndoStack
 from zWidget import zToolButton, zComboBox, zTabbar
 
+import majormode
+
 import os, copy, re
 import pygtk
 pygtk.require('2.0')
@@ -196,7 +198,8 @@ class zEdit(z_ABC, gtk.VBox):
         self.bottom.pack_start(self.buffer_md, False, False, 0)
 
         self.buffer_md.set_row_separator_func(self.__separator)
-        self.buffer_md.append(['Text Mode   ', False]) # mark for future implementation
+        for key in sorted(majormode.MODE_MAP.iterkeys()):
+            self.buffer_md.append(['{0:<12}'.format(key), False])
 
         # create caps-on flag button
         self.buffer_c = zToolButton('C')

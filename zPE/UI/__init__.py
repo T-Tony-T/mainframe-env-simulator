@@ -1,8 +1,15 @@
 # modules that will be auto imported
-import zComp, conf, majormode
+import io_encap
+
+import os, sys, inspect
+SELF_PATH = os.path.split(io_encap.norm_path(inspect.getfile(inspect.currentframe())))
+if SELF_PATH[0] not in sys.path:
+    sys.path.append(SELF_PATH[0])
+
+import conf, zComp
 import zPE.conf
 
-import os, sys, copy, re, subprocess
+import copy, re, subprocess
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -24,6 +31,7 @@ JCL = {
 '''[1:],                        # tailer; index 3
                    ],
     }
+
 
 class BaseFrame(object):
     def delete_event(self, widget, event, data = None):
@@ -83,7 +91,7 @@ class BaseFrame(object):
 
         self.root.set_title('zPE - Mainframe Programming Environment Simulator')
         self.root.set_icon( gtk.gdk.pixbuf_new_from_file(
-                os.path.join(os.path.dirname(__file__), 'image', 'icon_zPE.svg')
+                os.path.join(SELF_PATH[0], 'image', 'icon_zPE.svg')
                 ))
         self.root.set_size_request(800, 560)
 
@@ -118,33 +126,33 @@ class BaseFrame(object):
         self.tool_buff_redo.set_tooltip_text('Redo Last "Undo" in Current Buffer')
         # ------------------------
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'window_split_horz.png')
+            os.path.join(SELF_PATH[0], 'image', 'window_split_horz.png')
             )
         self.tool_win_split_horz = gtk.ToolButton(bttn_icon)
         self.tool_win_split_horz.set_tooltip_text('Split Current Focused Window Horizontally')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'window_split_vert.png')
+            os.path.join(SELF_PATH[0], 'image', 'window_split_vert.png')
             )
         self.tool_win_split_vert = gtk.ToolButton(bttn_icon)
         self.tool_win_split_vert.set_tooltip_text('Split Current Focused Window Vertically')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'window_delete.png')
+            os.path.join(SELF_PATH[0], 'image', 'window_delete.png')
             )
         self.tool_win_delete = gtk.ToolButton(bttn_icon)
         self.tool_win_delete.set_tooltip_text('Close Current Focused Frame')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'window_delete_other.png')
+            os.path.join(SELF_PATH[0], 'image', 'window_delete_other.png')
             )
         self.tool_win_delete_other = gtk.ToolButton(bttn_icon)
         self.tool_win_delete_other.set_tooltip_text('Close All Frames but the Current One')
         # ------------------------
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'submit.png')
+            os.path.join(SELF_PATH[0], 'image', 'submit.png')
             )
         self.tool_submit = gtk.ToolButton(bttn_icon)
         self.tool_submit.set_tooltip_text('Submit the Job File')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(os.path.dirname(__file__), 'image', 'submit_test.png')
+            os.path.join(SELF_PATH[0], 'image', 'submit_test.png')
             )
         self.tool_submit_wrap = gtk.ToolButton(bttn_icon)
         self.tool_submit_wrap.set_tooltip_text('Test Run the Source File With Default JCL')
@@ -460,7 +468,7 @@ class BaseFrame(object):
 
         if buff.type == 'file':
             if buff.path:
-                pathname = zComp.io_encap.norm_path_list(buff.path[:-1])
+                pathname = io_encap.norm_path_list(buff.path[:-1])
                 basename = buff.path[-1]
             else:
                 pathname = None
@@ -471,7 +479,7 @@ class BaseFrame(object):
             except:
                 raise AssertionError('Cannot fetch the submission information.')
 
-            if not zComp.io_encap.is_file( (pathname, basename) ):
+            if not io_encap.is_file( (pathname, basename) ):
                 return          # dir selection is not a file, early return
         else:
             return              # not a file nor an dir, early return
@@ -490,7 +498,7 @@ class BaseFrame(object):
                     )
                 pathname = conf.Config['ENV']['starting_path']
             else:
-                JCL['ASM-MODE'][1] = zComp.io_encap.open_file( (pathname, basename), 'r' ).read()
+                JCL['ASM-MODE'][1] = io_encap.open_file( (pathname, basename), 'r' ).read()
             if JCL['ASM-MODE'][1][-1] != '\n':
                 JCL['ASM-MODE'][2] = '\n'
             else:
@@ -534,7 +542,7 @@ class BaseFrame(object):
         if buff.type == 'dir':
             not_tmp = True
             fullpath = widget.get_active_item()
-            if fullpath and zComp.io_encap.is_file(fullpath):
+            if fullpath and io_encap.is_file(fullpath):
                 is_file = True
             else:
                 is_file = False
@@ -1028,7 +1036,7 @@ class ConfigWindow(gtk.Window):
         ct_about_icon = gtk.Image()
         ct_about_icon.set_from_pixbuf(
             gtk.gdk.pixbuf_new_from_file_at_size(
-                os.path.join(os.path.dirname(__file__), 'image', 'icon_zPE.svg'),
+                os.path.join(SELF_PATH[0], 'image', 'icon_zPE.svg'),
                 192, 192
                 ))
         ct_about.pack_start(ct_about_icon, False, False, 25)

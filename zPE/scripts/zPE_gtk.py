@@ -1,9 +1,8 @@
-import zPE
-import UI
+import zPE.UI
 
 
 def main():
-    base = UI.BaseFrame()
+    base = zPE.UI.BaseFrame()
     base.main()
 
 

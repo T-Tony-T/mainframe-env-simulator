@@ -1,7 +1,7 @@
 from zComp.zStrokeParser import KEY_BINDING_RULE_MKUP
 from zComp.zStrokeParser import parse_key_binding as zSP_PARSE_KEY_BINDING
 
-import zComp.io_encap
+import io_encap
 
 import os, sys
 import pygtk
@@ -415,7 +415,7 @@ def init_rc():
         }
 
     Config['ENV']       = {
-        'starting_path' : zComp.io_encap.norm_path( DEFAULT['ENV']['STARTING_PATH'] ),
+        'starting_path' : io_encap.norm_path( DEFAULT['ENV']['STARTING_PATH'] ),
         }
 
 def init_key_binding():
@@ -527,11 +527,11 @@ def read_rc():
 
         elif label == 'ENV':
             if k == 'starting_path':
-                tmp_v = zComp.io_encap.norm_path(v)
+                tmp_v = io_encap.norm_path(v)
                 if os.path.isdir(tmp_v):
                     Config[label][k] = tmp_v
                 else:
-                    Config[label][k] = zComp.io_encap.norm_path( DEFAULT['ENV']['STARTING_PATH'] )
+                    Config[label][k] = io_encap.norm_path( DEFAULT['ENV']['STARTING_PATH'] )
                     sys.stderr.write('CONFIG WARNING: {0}: Invalid starting path.\n'.format(v))
     write_rc()
 

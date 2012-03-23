@@ -46,11 +46,11 @@ setup(
 
     entry_points = {
         'console_scripts': [
-            'zsub = zPE.scripts.zsub:main',
+            'zsub   = zPE.scripts.zsub:main',
             'zfetch = zPE.scripts.zfetch:main',
             ],
         'gui_scripts': [
-            'zPE = zPE.zPE_gtk:main',
+            'zPE    = zPE.scripts.zPE_gtk:main',
             ],
         },
     )
