@@ -199,7 +199,7 @@ class zEdit(z_ABC, gtk.VBox):
 
         self.buffer_md.set_row_separator_func(self.__separator)
         for key in sorted(majormode.MODE_MAP.iterkeys()):
-            self.buffer_md.append(['{0:<12}'.format(key), False])
+            self.buffer_md.append(['{0:<12}'.format(key), False, key])
 
         # create caps-on flag button
         self.buffer_c = zToolButton('C')
@@ -220,6 +220,7 @@ class zEdit(z_ABC, gtk.VBox):
         zEditBuffer.register('buffer_modified_set', self._sig_buffer_modified_set, None)
         zEditBuffer.register('buffer_removed',      self._sig_buffer_removed,      None)
 
+        zEditBuffer.register('buffer_mode_set',     self._sig_buffer_mode_set,     None)
         zEditBuffer.register('buffer_caps_set',     self._sig_buffer_caps_set,     None)
 
         zEditBuffer.register('buffer_list_modified', zEdit._sig_buffer_list_modified, self)
@@ -231,6 +232,7 @@ class zEdit(z_ABC, gtk.VBox):
         zTheme.register('update_color_map', self._sig_update_color_map, self)
 
         zComboBox.register('changed', self._sig_combo_changed, self.buffer_sw)
+        zComboBox.register('changed', self._sig_mode_changed,  self.buffer_md)
 
 
         self.__on_init = False
@@ -504,6 +506,7 @@ class zEdit(z_ABC, gtk.VBox):
             zEdit.reg_emit('buffer_focus_in')
         self.update_theme_focus_in()
         self._sig_buffer_modified_set()
+        self._sig_buffer_mode_set()
         self._sig_buffer_caps_set()
 
     def _sig_focus_out(self, widget, event):
@@ -649,6 +652,36 @@ class zEdit(z_ABC, gtk.VBox):
             zEdit.focused_widget.grab_focus()
         else:
             self.grab_focus()
+
+
+    def _sig_mode_changed(self, combobox):
+        # check for switcher items
+        active_item = combobox.get_active()
+        if not active_item:
+            return              # early return
+
+        # get buffer info
+        buff = self.active_buffer
+
+        if active_item[2] != buff.major_mode:
+            buff.switch_mode(active_item[2])
+
+        # set focus
+        if zEdit.focused_widget and self.__list_modified:
+            zEdit.focused_widget.grab_focus()
+        else:
+            self.grab_focus()
+
+    def _sig_buffer_mode_set(self, widget = None):
+        # get current active item
+        active_item = self.buffer_md.get_active()
+
+        # get buffer info
+        buff = self.active_buffer
+
+        if not active_item  or  active_item[2] != buff.major_mode:
+            self.buffer_md.set_active(['{0:<12}'.format(buff.major_mode), False, buff.major_mode])
+
 
     def _sig_buffer_caps_toggled(self, bttn):
         self.active_buffer.toggle_caps_on()
@@ -942,6 +975,10 @@ class zEdit(z_ABC, gtk.VBox):
         return False
 
 
+    def major_mode(self):
+        return self.buffer_md.get_active()[0]
+
+
     def caps_on(self):
         return self.active_buffer.caps_on
 
@@ -1064,6 +1101,7 @@ class zEditBuffer(z_ABC):
         # 'signal_like_string'  : [ (widget, callback, data_list), ... ]
         'buffer_list_modified'    : [  ],
         'buffer_modified_set'     : [  ],
+        'buffer_mode_set'         : [  ],
         'buffer_caps_set'         : [  ],
         'buffer_removed'          : [  ],
         }
@@ -1165,8 +1203,9 @@ class zEditBuffer(z_ABC):
         zEditBuffer.reg_emit('buffer_list_modified', self)
 
         # fetch content
-        self.modified = None    # will be set after determining the content
-        self.caps_on  = None    # will be set after determining the content
+        self.modified   = None # will be set after determining the content
+        self.major_mode = None # will be set after determining the content
+        self.caps_on    = None # will be set after determining the content
 
         if self.type == 'file':
             self.buffer = gtk.TextBuffer()
@@ -1182,6 +1221,7 @@ class zEditBuffer(z_ABC):
             self.writable = False # whether can be saved
             self.editable = None  # whether can be modified
             self.set_modified(False)
+            self.switch_mode(majormode.DEFAULT['dir'])
             self.set_caps_on(False)
 
         elif buffer_type == 'disp':
@@ -1190,6 +1230,7 @@ class zEditBuffer(z_ABC):
             self.writable = False # whether can be saved
             self.editable = None  # whether can be modified
             self.set_modified(False)
+            self.switch_mode(majormode.DEFAULT['disp'])
             self.set_caps_on(False)
         else:
             raise TypeError
@@ -1206,6 +1247,13 @@ class zEditBuffer(z_ABC):
         if setting != self.modified:
             self.modified = setting
             zEditBuffer.reg_emit('buffer_modified_set')
+
+
+    def switch_mode(self, mode):
+        if mode != self.major_mode:
+            self.major_mode = mode
+            zEditBuffer.reg_emit('buffer_mode_set')
+
 
     def set_caps_on(self, setting):
         if setting != self.caps_on:
@@ -1375,15 +1423,9 @@ class zEditBuffer(z_ABC):
         self.buffer.reloading = True # notify zTextView to wait for update
         if self.name == '*scratch*':
             # tmp buffer
-            self.buffer.set_text(
-'''*
-* This buffer is for notes you don't want to save.
-* If you want to create a file, do that with
-*   {0}
-* or save this buffer explicitly.
-*
-'''.format('"Open a New Buffer" -> Right Click -> "New File"')
-)
+            if not self.major_mode:
+                self.switch_mode(majormode.DEFAULT['scratch'])
+            self.buffer.set_text(majormode.MODE_MAP[self.major_mode].default['scratch'])
             self.writable = False # whether can be saved
             self.editable = True  # whether can be modified
 
@@ -1401,12 +1443,23 @@ class zEditBuffer(z_ABC):
                 raise BufferError('Failed to fetch the content.')
             self.buffer.place_cursor(self.buffer.get_start_iter())
 
+            if not self.major_mode:
+                self.switch_mode(
+                    majormode.guess(
+                        self.buffer.get_text(
+                            self.buffer.get_start_iter(),
+                            self.buffer.get_end_iter(),
+                            False
+                            )))
+
             self.writable = os.access(fullpath, os.W_OK) # whether can be saved
             self.editable = os.access(fullpath, os.W_OK) # whether can be modified
             self.mtime = os.stat(fullpath).st_mtime      # time modified
         else:
             # new file
             # passive alloc (copy on write)
+            if not self.major_mode:
+                self.switch_mode(majormode.DEFAULT['file'])
             self.writable = True
             self.editable = True
             self.mtime = None

@@ -6,7 +6,22 @@ SELF_PATH = os.path.split(io_encap.norm_path(inspect.getfile(inspect.currentfram
 if SELF_PATH[0] not in sys.path:
     sys.path.append(SELF_PATH[0])
 
-import conf, zComp
+def min_import(module, attr_list, import_level = -1, path = None):
+    '''minimal-import of the given attr from the module'''
+    if path and path not in sys.path:
+        sys.path.insert(0, path)
+        path = True
+    else:
+        path = False
+    _temp = __import__(module, globals(), locals(), attr_list, import_level)
+    if path:
+        sys.path.pop(0)
+    if len(attr_list) == 1:
+        return eval('_temp.{0}'.format(attr_list[0]))
+    return [ eval('_temp.{0}'.format(attr)) for attr in attr_list ]
+
+
+import conf, majormode, zComp
 import zPE.conf
 
 import copy, re, subprocess
@@ -14,23 +29,6 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 import gobject, pango
-
-
-JCL = {
-    'ASM-MODE' : [ '''
-//KC00NIUA JOB ,'DEFAULT ASSIST JCL',MSGCLASS=H
-//STEP1    EXEC PGM=ASSIST
-//SYSPRINT DD SYSOUT=*
-//SYSIN    DD *
-'''[1:],                        # header; index 0
-                   '  BR 14',   # replace this with the actual content
-                   '\n',        # either '' or '\n', determined by the content[-1]
-                   '''
-/*
-//
-'''[1:],                        # tailer; index 3
-                   ],
-    }
 
 
 class BaseFrame(object):
@@ -491,19 +489,20 @@ class BaseFrame(object):
             filename = '-'      # read from stdin
             # generate stdin input from the content of the buffer
             if pathname == None:
-                JCL['ASM-MODE'][1] = buff.buffer.get_text(
+                content = buff.buffer.get_text(
                     buff.buffer.get_start_iter(),
                     buff.buffer.get_end_iter(),
                     False
                     )
                 pathname = conf.Config['ENV']['starting_path']
             else:
-                JCL['ASM-MODE'][1] = io_encap.open_file( (pathname, basename), 'r' ).read()
-            if JCL['ASM-MODE'][1][-1] != '\n':
-                JCL['ASM-MODE'][2] = '\n'
+                content = io_encap.open_file( (pathname, basename), 'r' ).read()
+            if content[-1] != '\n':
+                content_end = '\n'
             else:
-                JCL['ASM-MODE'][2] = ''
-            stdindata = ''.join(JCL['ASM-MODE'])
+                content_end = ''
+            mode = majormode.MODE_MAP[buff.major_mode]
+            stdindata = ''.join([ mode.default['JCL-header'], content, content_end, mode.default['JCL-tailer'] ])
 
         cmd = [ 'zsub', ]
         if conf.Config['MISC']['debug_mode']:

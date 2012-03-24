@@ -1,6 +1,7 @@
 # this is the "Major Editing Mode" selector
 # each Major Mode is defined as an resource module in "zMajorMode" resource folder
 
+from zPE.UI import min_import
 from io_encap import norm_path
 from conf import CONFIG_PATH
 
@@ -14,28 +15,39 @@ SEARCH_PATH = {
 
 if SEARCH_PATH['user'] not in sys.path:
     sys.path.append(SEARCH_PATH['user'])
-if SEARCH_PATH['global'] not in sys.path:
-    sys.path.append(SEARCH_PATH['global'])
 
 
 MODE_MAP = {
     # mode_string : mode_object
     }
 
-_temp = __import__('zPE.UI.basemode', globals(), locals(), [ 'BaseMode' ], -1)
-_base = _temp.BaseMode
-for fn in os.listdir(SEARCH_PATH['user']) + os.listdir(SEARCH_PATH['global']):
-    mn, ext = os.path.splitext(fn) # Handles no-extension files, etc.
-    if ext == '.py':
-        cn = mn.title() + 'Mode'
-        _temp = __import__(mn, globals(), locals(), [ cn ], -1)
-        try:
-            _obj  = eval('_temp.{0}'.format(cn))()
-        except:
-            continue            # ignore silently
-        if isinstance(_obj, _base)  and  str(_obj) not in MODE_MAP:
-            MODE_MAP[str(_obj)] = _obj # load the mode
-        else:
-            sys.stderr.write('warn: {0}: Invalid Major Mode Module.\n'.format(cn))
+_base_ = min_import('zPE.UI.basemode', [ 'BaseMode' ], 0)
 
+def load_mode(path):
+    for fn in os.listdir(path):
+        [ mn, ext ] = os.path.splitext(fn) # Handles no-extension files, etc.
+        if ext == '.py':
+            cn = mn.title() + 'Mode'
+            try:
+                _cls_ = min_import(mn, [ cn ], -1, path)
+                _obj_  = _cls_()
+            except:
+                continue            # ignore silently
+            if isinstance(_obj_, _base_)  and  str(_obj_) not in MODE_MAP:
+                MODE_MAP[str(_obj_)] = _obj_ # load the mode
+            else:
+                sys.stderr.write('warn: {0}: Invalid Major Mode Module.\n'.format(cn))
 
+load_mode(SEARCH_PATH['user'])
+load_mode(SEARCH_PATH['global'])
+
+DEFAULT = {
+    'scratch' : 'ASM Mode',     # scratch file
+    'file'    : 'ASM Mode',     # regular file
+    'dir'     : 'Text Mode',    # directory
+    'disp'    : 'Text Mode',    # display panel
+    }
+
+def guess(text):
+    '''guess the major mode from the text in the buffer'''
+    return 'ASM Mode' # currently only support ASSIST (next develop version: HL-ASM), thus hard-coded

@@ -1,5 +1,8 @@
-from zComp.zStrokeParser import KEY_BINDING_RULE_MKUP
-from zComp.zStrokeParser import parse_key_binding as zSP_PARSE_KEY_BINDING
+from zPE.UI import min_import
+
+[ KEY_BINDING_RULE_MKUP, zSP_PARSE_KEY_BINDING ] = min_import(
+    'zPE.UI.zComp.zStrokeParser', [ 'KEY_BINDING_RULE_MKUP', 'parse_key_binding' ], 0
+    )
 
 import io_encap
 
