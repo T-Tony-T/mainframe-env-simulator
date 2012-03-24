@@ -976,7 +976,7 @@ class zEdit(z_ABC, gtk.VBox):
 
 
     def major_mode(self):
-        return self.buffer_md.get_active()[0]
+        return self.buffer_md.get_active()[2]
 
 
     def caps_on(self):

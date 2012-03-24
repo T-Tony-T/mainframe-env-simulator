@@ -5,6 +5,7 @@ import io_encap
 #
 #   norm_path(full_path):       return the normalized absolute path
 #
+import majormode
 
 from zWidget import zPopupMenu
 
@@ -1139,7 +1140,7 @@ class zComplete(gobject.GObject):
     '''
     A completion module that can be applied to any editable widget
     that (at least) implements the following methods:
-      - widget.is_word_end()    : test if cursor is at word end
+      - widget.is_word_end()          : test if cursor is at word end
 
       - widget.get_current_word()     : get the word in front of the cursor
       - widget.set_current_word(word) : set the word in front of the cursor
@@ -1188,7 +1189,7 @@ class zComplete(gobject.GObject):
 
         if self.__task == 'text':
             # text completion
-            return              # not implemented yet
+            normalized_text = majormode.MODE_MAP[self.widget.major_mode()].complete(self.widget.get_current_line())
 
         elif self.__task == 'func':
             # function completion

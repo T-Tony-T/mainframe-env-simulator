@@ -7,8 +7,11 @@ import io_encap
 #   norm_path(full_path):       same as above; take a string as argument
 #
 
+import majormode
+
 from zBase import z_ABC, zTheme
 from zStrokeParser import zStrokeListener, zComplete
+from zSyntaxParser import zSplitWords
 from zWidget import zKillRing, zPopupMenu
 
 import os, sys, re
@@ -16,81 +19,6 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 import gobject, pango
-
-
-######## ######## ######## ######## ########
-########        zSplitWords         ########
-######## ######## ######## ######## ########
-
-class zSplitWords(object):
-    '''a text splitter'''
-    def __init__(self, src = ''):
-        self.src = src
-
-
-    def index_split(self):
-        self.len = len(self.src)
-
-        self.res = []           # result holder
-        self.indx = 0           # current char index
-        self.__parse_begin()
-
-        return self.res
-
-
-    def split(self):
-        return [ self.src[indx_s : indx_e]
-                 for (indx_s, indx_e) in self.index_split()
-                 ]
-
-
-    ### supporting function
-    def __parse_begin(self):
-        while self.indx < self.len:
-            # backup the current index
-            self.indx_bkup = self.indx
-
-            # process current char
-            ch = self.src[self.indx]
-            self.indx += 1
-
-            if ch.isspace():    # whitespace out of a word, skip it
-                continue
-
-            # parse the word
-            if ch == '"':       # start escaping matching
-                self.__parse_in_quote()
-            else:               # start normal matching
-                self.__parse_in_word()
-
-            # add the word to the result
-            self.res.append( (self.indx_bkup, self.indx, ) )
-
-
-    def __parse_in_quote(self):
-        while self.indx < self.len:
-            # process current char
-            ch = self.src[self.indx]
-            self.indx += 1
-
-            if ch == '"':       # switch to normal matching
-                self.__parse_in_word()
-                return
-
-
-    def __parse_in_word(self):
-        while self.indx < self.len:
-            # process current char
-            ch = self.src[self.indx]
-            self.indx += 1
-
-            if ch == '"':       # switch to escaping matching
-                self.__parse_in_quote()
-
-            elif ch.isspace():  # whitespace in a word, end matching
-                self.indx -= 1  # back up and leave space unhandled
-                return
-    ### end of supporting function
 
 
 ######## ######## ######## ######## ########
@@ -1590,6 +1518,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         else:
             self.completer.set_completion_task(task)
 
+    def major_mode(self):
+        return self.get_editor().major_mode()
+
 
     def is_alternative_listenning(self):
         return self.__listener != self.listener
@@ -1897,6 +1828,15 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         # move start back to the word start
         start_iter.backward_word_start()
+
+        return self.buff['disp'].get_text(start_iter, end_iter, False)
+
+    def get_current_line(self):
+        start_iter = self.get_cursor_iter()
+        end_iter   = self.get_cursor_iter()
+
+        # move start back to the line start
+        start_iter.set_line_offset(0)
 
         return self.buff['disp'].get_text(start_iter, end_iter, False)
 

@@ -13,15 +13,13 @@ SEARCH_PATH = {
     'user'   : norm_path(CONFIG_PATH['dir']),
     }
 
-if SEARCH_PATH['user'] not in sys.path:
-    sys.path.append(SEARCH_PATH['user'])
-
 
 MODE_MAP = {
     # mode_string : mode_object
     }
 
 _base_ = min_import('zPE.UI.basemode', [ 'BaseMode' ], 0)
+_AST_  = min_import('zPE.UI.zComp.zSyntaxParser', [ 'AST' ], 0)
 
 def load_mode(path):
     for fn in os.listdir(path):
@@ -30,7 +28,7 @@ def load_mode(path):
             cn = mn.title() + 'Mode'
             try:
                 _cls_ = min_import(mn, [ cn ], -1, path)
-                _obj_  = _cls_()
+                _obj_  = _cls_(_AST_)
             except:
                 continue            # ignore silently
             if isinstance(_obj_, _base_)  and  str(_obj_) not in MODE_MAP:
@@ -51,3 +49,4 @@ DEFAULT = {
 def guess(text):
     '''guess the major mode from the text in the buffer'''
     return 'ASM Mode' # currently only support ASSIST (next develop version: HL-ASM), thus hard-coded
+

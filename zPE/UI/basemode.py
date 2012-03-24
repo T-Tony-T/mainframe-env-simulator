@@ -30,8 +30,9 @@ class BaseMode(object):
     Any major mode need to be derived from this class
     '''
 
-    def __init__(self, mode = '__base_mode__', default = LC['default']):
-        self.mode = mode
+    def __init__(self, ast, mode = '__base_mode__', default = LC['default']):
+        self.__ast__ = ast
+        self.mode    = mode
         self.default = default
 
     def __str__(self):
@@ -46,7 +47,10 @@ class BaseMode(object):
         '''return the line with comment added / ajusted'''
         raise AssertionError('require overridden')
 
-    def complete(self, line, pos):
+    def complete(self, line):
         '''return the completion-list'''
         raise AssertionError('require overridden')
 
+    def hilite(self):
+        '''return highlight tag info list'''
+        raise AssertionError('require overridden')

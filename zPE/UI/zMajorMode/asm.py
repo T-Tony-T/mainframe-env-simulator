@@ -28,6 +28,6 @@ LC = {                          # local config
 
 
 class AsmMode(BaseMode):
-    def __init__(self):
-        super(AsmMode, self).__init__('ASM Mode', LC['default'])
+    def __init__(self, ast):
+        super(AsmMode, self).__init__(ast, 'ASM Mode', LC['default'])
 
