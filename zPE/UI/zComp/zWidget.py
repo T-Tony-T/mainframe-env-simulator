@@ -412,26 +412,31 @@ class zKillRing(object):
 
         cls.__kill_ring = [ None ] * cls.__capacity
 
+        # record the current clipboards' content
+        cls.__cb_text['primary']   = cls.__cb['primary'].wait_for_text()
+        cls.__cb_text['clipboard'] = cls.__cb['clipboard'].wait_for_text()
 
-    __capacity  = 16
 
-    # the following should be exactly the same as cls.__init_kill_ring()
-    __curr_corpse = None        # for pop (resurrect)
-    __curr_grave  = 0           # for push (kill)
-
-    __kill_ring = [ None ] * __capacity
-    # the above should be exactly the same as cls.__init_kill_ring()
+    __capacity = 16
+    __primary_hold = None
 
     __cb = {
         'primary'   : gtk.clipboard_get('PRIMARY'),
         'clipboard' : gtk.clipboard_get('CLIPBOARD'),
         }
 
+    # the following should be exactly the same as cls.__init_kill_ring()
+    __curr_corpse = None        # for pop (resurrect)
+    __curr_grave  = 0           # for push (kill)
+
+    __kill_ring = [ None ] * __capacity
+
     # record the current clipboards' content
     __cb_text = {
         'primary'   : __cb['primary'].wait_for_text(),
         'clipboard' : __cb['clipboard'].wait_for_text(),
         }
+    # the above should be exactly the same as cls.__init_kill_ring()
 
 
     @classmethod
@@ -446,6 +451,7 @@ class zKillRing(object):
     @classmethod
     def set_kill_ring_size(cls, size):
         cls.__capacity  = size
+        cls.__primary_hold = None
         cls.__init_kill_ring()
 
 
@@ -465,8 +471,10 @@ class zKillRing(object):
             cls.kill(text + cls.__kill_ring[cls.__curr_corpse]) # kill the prepended version
 
     @classmethod
-    def kill(cls, text):
+    def kill(cls, text, clear = False):
         cls.__kill_cb()                      # push whatever in the clipboard if the content has been changed
+        if clear:
+            cls.__cb_text['clipboard'] = ''  # clear the backup clipboard
         cls.__cb['clipboard'].set_text(text) # push the text into system clipboard
         while cls.__cb['clipboard'].wait_for_text() != text:
             continue            # wait for system clipboard to sync
@@ -477,14 +485,14 @@ class zKillRing(object):
         cls.__kill_cb()                      # push whatever in the clipboard if the content has been changed
 
         if cls.is_empty():
-            # kill-ring is empty, or clipboards' content changed
-            if cls.__cb_text['primary']:
+            # kill-ring is empty
+            if cls.__cb_text['primary']  and  cls.__primary_hold != cls.__cb_text['primary']:
                 # put primary clipboard text into kill-ring
-                cls.kill(cls.__cb_text['primary'])
+                cls.kill(cls.__cb_text['primary'], clear = True)
 
             elif cls.__cb_text['clipboard']:
                 # put clipboard text into kill-ring
-                cls.kill(cls.__cb_text['clipboard'])
+                cls.kill(cls.__cb_text['clipboard'], clear = True)
 
         if cls.is_empty():
             return None
@@ -536,6 +544,7 @@ class zKillRing(object):
             # if no kill for clipboard, check primary
             killed = cls.__really_kill(p_text)  # try killing the new content
             cls.__cb_text['primary'] = p_text   # synchronize the backup
+            cls.__primary_hold = p_text         # hold the kill
 
         return killed
     ### end of supporting functions
