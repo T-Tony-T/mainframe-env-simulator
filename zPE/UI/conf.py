@@ -183,11 +183,28 @@ DEFAULT_FUNC_KEY_BIND = {
         'other' : 'C-Right',
         },
 
-    # editor related functions; required by zTextView and zEntry
-    'complete'              : {
-        'emacs' : 'Tab',
+    # editor related functions; required by zTextView and/or zEntry
+    'align_line'            : {
+        'emacs' : '',
         'vi'    : '',
-        'other' : 'Tab',
+        'other' : '',
+        },
+    'align_region'          : {
+        'emacs' : 'C-M-\\',
+        'vi'    : '',
+        'other' : '',
+        },
+
+    'align_or_complete'     : {
+        'emacs' : 'TAB',
+        'vi'    : '',
+        'other' : 'TAB',
+        },
+
+    'complete'              : {
+        'emacs' : '',
+        'vi'    : '',
+        'other' : '',
         },
     'complete_list'         : {
         'emacs' : 'M-/',

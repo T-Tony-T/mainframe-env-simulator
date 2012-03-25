@@ -39,18 +39,46 @@ class BaseMode(object):
         '''return mode string'''
         return self.mode
 
-    def align(self, line, pos):
-        '''return aligned line'''
-        raise AssertionError('require overridden')
+
+    def align(self, line):
+        '''
+        line
+            the tuple of the format (line_number, line_content, cursor_offset)
+
+        return
+            aligned line tuple, or None if nothing need to be changed
+        '''
+        return None
+
 
     def comment(self, line):
-        '''return the line with comment added / ajusted'''
-        raise AssertionError('require overridden')
+        '''
+        line
+            the tuple of the format (line_number, line_content, cursor_offset)
+
+        return
+            the line tuple with comment added / ajusted, or None if nothing need to be changed
+        '''
+        return None
+
 
     def complete(self, line):
-        '''return the completion-list'''
-        raise AssertionError('require overridden')
+        '''
+        line
+            the tuple of the format (line_number, line_content, cursor_offset)
+
+        return
+            the completion-list
+        '''
+        return [ ]
+
 
     def hilite(self):
-        '''return highlight tag info list'''
-        raise AssertionError('require overridden')
+        '''
+        line
+            the tuple of the format (line_number, line_content, cursor_offset)
+
+        return
+            the highlight tag info list
+        '''
+        return [ ]

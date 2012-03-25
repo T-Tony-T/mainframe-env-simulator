@@ -178,6 +178,7 @@ class zUndoStack(object):
 class zEntry(gtk.Entry):
     '''A gtk.Entry that has additional methods'''
     global_func_list = [
+        'align_or_complete',
         'complete',
         'complete_list',
 
@@ -233,6 +234,7 @@ class zEntry(gtk.Entry):
 
         # register callbacks for function bindings
         self.default_func_callback = {
+            'align_or_complete'     : lambda msg: self.complete(), # no align available anyway
             'complete'              : lambda msg: self.complete(),
             'complete_list'         : lambda msg: self.complete_list(),
 
@@ -1233,6 +1235,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         }
 
     global_func_list = [
+        'align_line',
+        'align_region',
+        'align_or_complete',
         'complete',
         'complete_list',
 
@@ -1318,6 +1323,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         # register callbacks for function bindings
         self.default_func_callback = {
+            'align_line'            : lambda msg: self.align_line(),
+            'align_region'          : lambda msg: self.align_region(),
+            'align_or_complete'     : lambda msg: self.align_or_complete(),
             'complete'              : lambda msg: self.complete(),
             'complete_list'         : lambda msg: self.complete_list(),
 
@@ -1681,6 +1689,28 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### editor related API
+    def align_line(self):
+        line = majormode.MODE_MAP[self.major_mode()].align(self.get_current_line())
+        if line:
+            self.set_current_line(line)
+
+    def align_region(self):
+        sel = self.get_selection_bounds()
+        if not sel:             # no selection region
+            return              # early return
+        mode = majormode.MODE_MAP[self.major_mode()]
+        for line_num in range(sel[0].get_line(), sel[1].get_line() + 1):
+            line = mode.align(self.get_line_at(line_num))
+            if line:
+                self.set_line_at(line_num, line)
+
+    def align_or_complete(self):
+        if self.is_word_end():
+            self.complete()
+        else:
+            self.align_line()
+
+
     def buffer_undo(self):
         state = self.buff['true'].undo_stack.undo()
 
@@ -1822,21 +1852,47 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         return self.buff['disp'].get_iter_at_mark(self.buff['disp'].get_insert())
 
 
+    def get_line_at(self, line_iter):
+        if isinstance(line_iter, int):
+            line_iter = self.buff['disp'].get_iter_at_line(line_iter)
+        start_iter = line_iter.copy()
+        end_iter   = line_iter.copy()
+
+        start_iter.set_line_offset(0)
+        self.forward_to_line_end(end_iter)
+
+        return ( line_iter.get_line(),
+                 self.buff['disp'].get_text(start_iter, end_iter, False),
+                 line_iter.get_line_offset(),
+                 )
+
+    def set_line_at(self, line_iter, line_tuple):
+        if isinstance(line_iter, int):
+            line_iter = self.buff['disp'].get_iter_at_line(line_iter)
+        start_iter = line_iter.copy()
+        end_iter   = line_iter.copy()
+
+        start_iter.set_line_offset(0)
+        self.forward_to_line_end(end_iter)
+
+        # replace the current word with the new word
+        self.buff['disp'].delete(start_iter, end_iter)
+        self.buff['disp'].insert(start_iter, line_tuple[1])
+        self.place_cursor(self.buff['disp'].get_iter_at_line_offset(line_tuple[0], line_tuple[2]))
+
+    def get_current_line(self):
+        return self.get_line_at(self.get_cursor_iter())
+
+    def set_current_line(self, line_tuple):
+        self.set_line_at(self.get_cursor_iter(), line_tuple)
+
+
     def get_current_word(self):
         start_iter = self.get_cursor_iter()
         end_iter   = self.get_cursor_iter()
 
         # move start back to the word start
         start_iter.backward_word_start()
-
-        return self.buff['disp'].get_text(start_iter, end_iter, False)
-
-    def get_current_line(self):
-        start_iter = self.get_cursor_iter()
-        end_iter   = self.get_cursor_iter()
-
-        # move start back to the line start
-        start_iter.set_line_offset(0)
 
         return self.buff['disp'].get_text(start_iter, end_iter, False)
 
@@ -1849,7 +1905,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         # replace the current word with the new word
         self.buff['disp'].delete(start_iter, end_iter)
-        self.buff['disp'].insert_text(start_iter, word)
+        self.buff['disp'].insert(start_iter, word)
 
 
     def is_word_start(self):
