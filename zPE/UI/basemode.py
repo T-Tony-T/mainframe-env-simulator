@@ -22,6 +22,14 @@ LC = {                          # local config
 
 '''.format('"Open a New Buffer" -> Right Click -> "New File"'),
         },
+
+
+    'ast-map' : {
+        'pos_rlvnt' : { },
+        'non_split' : { },
+        'key_words' : { },
+        'level_dlm' : { },
+        },
     }
 
 class BaseMode(object):
@@ -30,20 +38,44 @@ class BaseMode(object):
     Any major mode need to be derived from this class
     '''
 
-    def __init__(self, ast, mode = '__base_mode__', default = LC['default']):
-        self.__ast__ = ast
+    def __init__(self, mode = '__base_mode__', default = LC['default'], ast_map = LC['ast-map']):
+        '''
+        mode
+            the mode string of the major editing mode
+        default
+            a dictionary containing the following mappings:
+                'JCL-header' : the header part of default JCL
+                'JCL-tailer' : the tailer part of default JCL
+                'scratch'    : the default text to display when the
+                               scratch buffer is (re)loaded
+        ast_map
+            a dictionary containing the following mappings:
+            (precedence high -> low)
+                'pos_rlvnt'  : position-relevant regular expression mapping
+                               (empty dict for context-free languages)
+                'non_split'  : AST minimal unit delimiter mapping
+                               (empty dict unless absolutely needed)
+                'key_words'  : AST reserved word mapping
+                'level_dlm'  : AST level delimiter mapping
+
+            see zPE.UI.zComp.zSyntaxParser.zSyntaxParser() for detailed info
+        '''
         self.mode    = mode
         self.default = default
+        self.ast_map = ast_map
+
 
     def __str__(self):
         '''return mode string'''
         return self.mode
 
 
-    def align(self, line):
+    def align(self, line, ast):
         '''
         line
             the tuple of the format (line_number, line_content, cursor_offset)
+        ast
+            the abstract syntax tree associated with the buffer
 
         return
             aligned line tuple, or None if nothing need to be changed
@@ -51,10 +83,12 @@ class BaseMode(object):
         return None
 
 
-    def comment(self, line):
+    def comment(self, line, ast):
         '''
         line
             the tuple of the format (line_number, line_content, cursor_offset)
+        ast
+            the abstract syntax tree associated with the buffer
 
         return
             the line tuple with comment added / ajusted, or None if nothing need to be changed
@@ -62,10 +96,12 @@ class BaseMode(object):
         return None
 
 
-    def complete(self, line):
+    def complete(self, line, ast):
         '''
         line
             the tuple of the format (line_number, line_content, cursor_offset)
+        ast
+            the abstract syntax tree associated with the buffer
 
         return
             the completion-list
@@ -73,10 +109,10 @@ class BaseMode(object):
         return [ ]
 
 
-    def hilite(self):
+    def hilite(self, ast):
         '''
-        line
-            the tuple of the format (line_number, line_content, cursor_offset)
+        ast
+            the abstract syntax tree associated with the buffer
 
         return
             the highlight tag info list

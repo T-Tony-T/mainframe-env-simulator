@@ -17,6 +17,7 @@ import io_encap
 from zBase import z_ABC, zTheme
 from zFileManager import zDisplayPanel, zFileManager
 from zStrokeParser import zStrokeListener
+from zSyntaxParser import zSyntaxParser
 from zText import zLastLine, zTextView, zUndoStack
 from zWidget import zToolButton, zComboBox, zTabbar
 
@@ -791,6 +792,10 @@ class zEdit(z_ABC, gtk.VBox):
         self.ui_uninit_func = ui_init_func[1]
 
 
+    def get_ast(self):
+        return { 'syntax_tree' : self.active_buffer.ast, 'major_mode' : self.active_buffer.major_mode, }
+
+
     def get_buffer(self):
         return self.active_buffer.path, self.active_buffer.type
 
@@ -973,10 +978,6 @@ class zEdit(z_ABC, gtk.VBox):
         if self.active_buffer.editable:
             return self.center.buffer_redo()
         return False
-
-
-    def major_mode(self):
-        return self.buffer_md.get_active()[2]
 
 
     def caps_on(self):
@@ -1206,6 +1207,7 @@ class zEditBuffer(z_ABC):
         self.modified   = None # will be set after determining the content
         self.major_mode = None # will be set after determining the content
         self.caps_on    = None # will be set after determining the content
+        self.ast        = None # will be set after content is 1st loaded
 
         if self.type == 'file':
             self.buffer = gtk.TextBuffer()
@@ -1216,21 +1218,21 @@ class zEditBuffer(z_ABC):
             # connect internal signals
             self.buffer.connect('changed', self._sig_buffer_content_changed)
 
-        elif buffer_type == 'dir':
+        elif self.type == 'dir':
             self.buffer   = None
             self.writable = False # whether can be saved
             self.editable = None  # whether can be modified
             self.set_modified(False)
-            self.switch_mode(majormode.DEFAULT['dir'])
+            self.switch_mode(majormode.DEFAULT['dir'], skip_ast = True)
             self.set_caps_on(False)
 
-        elif buffer_type == 'disp':
+        elif self.type == 'disp':
             self.buffer   = gtk.TextBuffer()
             self.buffer.reloading = False
             self.writable = False # whether can be saved
             self.editable = None  # whether can be modified
             self.set_modified(False)
-            self.switch_mode(majormode.DEFAULT['disp'])
+            self.switch_mode(majormode.DEFAULT['disp'], skip_ast = True)
             self.set_caps_on(False)
         else:
             raise TypeError
@@ -1249,9 +1251,11 @@ class zEditBuffer(z_ABC):
             zEditBuffer.reg_emit('buffer_modified_set')
 
 
-    def switch_mode(self, mode):
+    def switch_mode(self, mode, skip_ast = False):
         if mode != self.major_mode:
             self.major_mode = mode
+            if self.type == 'file'  and  not skip_ast:
+                self.ast = self.ast.reparse(** majormode.MODE_MAP[self.major_mode].ast_map)
             zEditBuffer.reg_emit('buffer_mode_set')
 
 
@@ -1424,8 +1428,12 @@ class zEditBuffer(z_ABC):
         if self.name == '*scratch*':
             # tmp buffer
             if not self.major_mode:
-                self.switch_mode(majormode.DEFAULT['scratch'])
-            self.buffer.set_text(majormode.MODE_MAP[self.major_mode].default['scratch'])
+                self.switch_mode(majormode.DEFAULT['scratch'], skip_ast = True)
+            mode = majormode.MODE_MAP[self.major_mode]
+
+            self.buffer.set_text(mode.default['scratch'])
+            self.ast = zSyntaxParser(mode.default['scratch'], ** mode.ast_map)
+
             self.writable = False # whether can be saved
             self.editable = True  # whether can be modified
 
@@ -1443,14 +1451,15 @@ class zEditBuffer(z_ABC):
                 raise BufferError('Failed to fetch the content.')
             self.buffer.place_cursor(self.buffer.get_start_iter())
 
+            buffer_text = self.buffer.get_text( self.buffer.get_start_iter(),
+                                                self.buffer.get_end_iter(),
+                                                False
+                                                )
             if not self.major_mode:
-                self.switch_mode(
-                    majormode.guess(
-                        self.buffer.get_text(
-                            self.buffer.get_start_iter(),
-                            self.buffer.get_end_iter(),
-                            False
-                            )))
+                self.switch_mode(majormode.guess(buffer_text), skip_ast = True)
+            mode = majormode.MODE_MAP[self.major_mode]
+
+            self.ast = zSyntaxParser(buffer_text, ** mode.ast_map)
 
             self.writable = os.access(fullpath, os.W_OK) # whether can be saved
             self.editable = os.access(fullpath, os.W_OK) # whether can be modified

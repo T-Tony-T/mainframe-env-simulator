@@ -11,7 +11,7 @@ import majormode
 
 from zBase import z_ABC, zTheme
 from zStrokeParser import zStrokeListener, zComplete
-from zSyntaxParser import zSplitWords
+from zSyntaxParser import zSyntaxParser
 from zWidget import zKillRing, zPopupMenu
 
 import os, sys, re
@@ -606,7 +606,9 @@ class zEntry(gtk.Entry):
             start = self.__get_word_start(curr, letter)
         else:
             # pattern not offered, use unquoted-space as separater
-            start = zSplitWords(self.get_chars(0, curr)).index_split()[-1][0]
+            start = zSyntaxParser( self.get_chars(0, curr),
+                                   non_split = { 'DQUOTE' : ( '"', '"' ), 'SQUOTE' : ( "'", "'" ), }
+                                   ).get_word_bounds(curr, conn_back = True)[0]
 
         return self.get_chars(start, curr)
 
@@ -621,7 +623,9 @@ class zEntry(gtk.Entry):
             start = self.__get_word_start(curr, letter)
         else:
             # pattern not offered, use unquoted-space as separater
-            start = zSplitWords(self.get_chars(0, curr)).index_split()[-1][0]
+            start = zSyntaxParser( self.get_chars(0, curr),
+                                   non_split = { 'DQUOTE' : ( '"', '"' ), 'SQUOTE' : ( "'", "'" ), }
+                                   ).get_word_bounds(curr, conn_back = True)[0]
 
         self.select_region(start, curr)
         self.delete_selection()
@@ -1526,9 +1530,6 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         else:
             self.completer.set_completion_task(task)
 
-    def major_mode(self):
-        return self.get_editor().major_mode()
-
 
     def is_alternative_listenning(self):
         return self.__listener != self.listener
@@ -1690,7 +1691,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
     ### editor related API
     def align_line(self):
-        line = majormode.MODE_MAP[self.major_mode()].align(self.get_current_line())
+        ast = self.get_ast()
+        line = majormode.MODE_MAP[ast['major_mode']].align(self.get_current_line(), ast['syntax_tree'])
         if line:
             self.set_current_line(line)
 
@@ -1698,11 +1700,16 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         sel = self.get_selection_bounds()
         if not sel:             # no selection region
             return              # early return
-        mode = majormode.MODE_MAP[self.major_mode()]
+        ast = self.get_ast()
+        mode = majormode.MODE_MAP[ast['major_mode']]
+        changed = False
         for line_num in range(sel[0].get_line(), sel[1].get_line() + 1):
-            line = mode.align(self.get_line_at(line_num))
+            line = mode.align(self.get_line_at(line_num), ast['syntax_tree'])
             if line:
                 self.set_line_at(line_num, line)
+                changed = True
+        if changed:
+            self.unset_mark()       # cancel selection
 
     def align_or_complete(self):
         if self.is_word_end():
@@ -2148,6 +2155,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
     def get_editor(self):
         return self.__editor_frame
+
+    def get_ast(self):
+        return self.get_editor().get_ast()
 
     def set_editor(self, editor):
         self.__editor_frame = editor

@@ -1190,7 +1190,7 @@ class zComplete(gobject.GObject):
         current_word = self.widget.get_current_word()
         if self.__task == 'text':
             # text completion
-            self.__generate_text_list(self.widget.get_current_line(), self.widget.major_mode())
+            self.__generate_text_list(self.widget.get_current_line(), self.widget.get_ast())
 
         elif self.__task == 'func':
             # function completion
@@ -1214,7 +1214,7 @@ class zComplete(gobject.GObject):
 
         if self.__task == 'text':
             # text completion
-            self.__generate_text_list(self.widget.get_current_line(), self.widget.major_mode())
+            self.__generate_text_list(self.widget.get_current_line(), self.widget.get_ast())
 
         elif self.__task == 'func':
             # function completion
@@ -1294,8 +1294,8 @@ class zComplete(gobject.GObject):
         self.widget.set_current_word(normalized_text)
 
 
-    def __generate_text_list(self, curr_line, major_mode):
-        self.__comp_list = majormode.MODE_MAP[major_mode].complete(curr_line)
+    def __generate_text_list(self, curr_line, ast):
+        self.__comp_list = majormode.MODE_MAP[ast['major_mode']].complete(curr_line, ast['syntax_tree'])
 
     def __generate_func_list(self, curr_func):
         # get the completion list

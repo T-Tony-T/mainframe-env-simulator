@@ -19,7 +19,6 @@ MODE_MAP = {
     }
 
 _base_ = min_import('zPE.UI.basemode', [ 'BaseMode' ], 0)
-_AST_  = min_import('zPE.UI.zComp.zSyntaxParser', [ 'AST' ], 0)
 
 def load_mode(path):
     for fn in os.listdir(path):
@@ -28,7 +27,7 @@ def load_mode(path):
             cn = mn.title() + 'Mode'
             try:
                 _cls_ = min_import(mn, [ cn ], -1, path)
-                _obj_  = _cls_(_AST_)
+                _obj_  = _cls_()
             except:
                 continue            # ignore silently
             if isinstance(_obj_, _base_)  and  str(_obj_) not in MODE_MAP:

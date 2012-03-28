@@ -16,7 +16,7 @@ LC = {                          # local config
 //
 '''[1:],
 
-        'scratch'    : '''*
+        'scratch'    : '''* (test this)
 * This buffer is for notes you don't want to save.
 * If you want to create a file, do that with
 *   {0}
@@ -24,54 +24,82 @@ LC = {                          # local config
 *
 '''.format('"Open a New Buffer" -> Right Click -> "New File"')
         },
+
+
+    'ast-map' : {
+        'pos_rlvnt'     : {
+            'LN-CMMNT'  : r'(\*.+)',
+            'LN-LABEL'  : r'([a-zA-Z][a-zA-Z0-9]*)',
+            'INSTRUCT'  : r'(?:[a-zA-Z][a-zA-Z0-9]*)? +([a-zA-Z]+).*',
+            'END-CMMNT' : r'(?:[a-zA-Z][a-zA-Z0-9]*)? +(?:[a-zA-Z]+ +){2}(.+)',
+            },
+        'non_split'     : {
+            'QUOTE'     : ( "'", "'" ),
+            },
+        'key_words' : {
+            'OPERATOR'  : ( r'([*/+-]).*', 0 ),
+            'LABEL'     : ( r'([a-zA-Z][a-zA-Z0-9]*).*', 0 ),
+            'NUMBER'    : ( r'([0-9]+(?:\.[0-9]+)?).*', 0 ),
+            'CONSTANT'  : ( r"(=?[0-9]*[CGXBFHEDLPZAYSVQ](?:L[0-9]+)?(:?'[^']*')?)", 0 ),
+            },
+        'level_dlm' : {
+            'PAREN'     : ( '(', ')' ),
+            },
+        },
     }
 
 
 class AsmMode(BaseMode):
-    def __init__(self, ast):
-        super(AsmMode, self).__init__(ast, 'ASM Mode', LC['default'])
+    def __init__(self):
+        super(AsmMode, self).__init__('ASM Mode', LC['default'], LC['ast-map'])
 
 
-    def align(self, line):
+    def align(self, line, ast):
         '''
         line
             the tuple of the format (line_number, line_content, cursor_offset)
+        ast
+            the abstract syntax tree associated with the buffer
 
         return
             aligned line tuple, or None if nothing need to be changed
         '''
-        print 'ASM Mode :: align ~', line
+        print 'ASM Mode :: align ~', line, ast
         return None
 
 
-    def comment(self, line):
+    def comment(self, line, ast):
         '''
         line
             the tuple of the format (line_number, line_content, cursor_offset)
+        ast
+            the abstract syntax tree associated with the buffer
 
         return
             the line tuple with comment added / ajusted, or None if nothing need to be changed
         '''
-        print 'ASM Mode :: comment ~', line
+        print 'ASM Mode :: comment ~', line, ast
         return None
 
 
-    def complete(self, line):
+    def complete(self, line, ast):
         '''
         line
             the tuple of the format (line_number, line_content, cursor_offset)
+        ast
+            the abstract syntax tree associated with the buffer
 
         return
             the completion-list
         '''
-        print 'ASM Mode :: complete ~', line
+        print 'ASM Mode :: complete ~', line, ast
         return [ ]
 
 
-    def hilite(self):
+    def hilite(self, ast):
         '''
-        line
-            the tuple of the format (line_number, line_content, cursor_offset)
+        ast
+            the abstract syntax tree associated with the buffer
 
         return
             the highlight tag info list
