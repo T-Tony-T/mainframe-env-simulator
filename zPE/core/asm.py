@@ -1288,13 +1288,12 @@ def parse_sd(sd_arg):
     if "'" in sd_arg:
         val_start = min(val_start, sd_arg.index("'"))
     # locate separation point of [mul]ch and [Llen]
-    try:
-        len_start = sd_arg.index('L', 0, val_start)
-    except:
+    len_start = sd_arg.find('L', indx + 1, val_start)
+    if len_start < 0:
         len_start = val_start
 
     # parse type
-    if indx >= len_start  or  re.match(r'[^A-Z]', sd_arg[indx]):
+    if re.match(r'[^A-Z]', sd_arg[indx]):
         raise SyntaxError(( 'DLM', indx, ))
     sd_ch    = sd_arg[indx : len_start]
     const_tp = valid_sd(sd_ch)
