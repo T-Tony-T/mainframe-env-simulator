@@ -678,7 +678,7 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
     src_field_swap = {
         'buff'   : '',          # buffer for src field
         'offset' : 0,           # offset for src field
-        'digit'  : False,       # whether encountered any digit
+        'digit'  : False,       # whether encountered any digit (digit-check)
         }
     def get_next_src_digit(look_ahead = False):
         if not src_field_swap['buff']:
@@ -703,7 +703,9 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
             src_digit = get_next_src_digit()
             if not src_digit.isdigit()  and  src_field_swap['digit']:
                 # end of current field
-                src_field_swap['digit'] = False
+                src_field_swap['digit'] = False # reset digit-check
+                significance_indicator  = False
+                num_sign = 0    # reset sign field
                 src_digit = get_next_src_digit()
             if not src_digit.isdigit(): # still not digit -> invalid format
                 raise zPE.newDataException()
@@ -724,11 +726,12 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
 
             # check sign
             if src_field_swap['buff'] and src_field_swap['buff'][0] in 'FACE':
-                significance_indicator = False
+                significance_indicator = False # no sign printing for positive
 
         elif pttn == 0x22:
             # field separator
             __ref(pttn_disp, '0', pttn_base, fill, indx)
+            # do not reset digit-check
             significance_indicator = False
             num_sign = 0        # reset sign field
 
