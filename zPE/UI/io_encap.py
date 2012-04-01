@@ -15,6 +15,7 @@ import os, sys
 #   new_dir(fn_list):           create the dir unless the fn_list corresponding to a directory
 #
 #   open_file(fn_list, mode):   open the file with the indicated mode
+#   list_dir(dir_name):         list the file(s) in the indicated directory, create an empty one if not exsits
 #
 #   fetch(buff):                read content from the corresponding file to the zEditBuffer
 #   flush(buff):                write content from the zEditBuffer to the corresponding file
@@ -69,10 +70,18 @@ def new_dir(fn_list):
 
 def open_file(fn_list, mode):
     '''Open the target file in regardless of the existance'''
-    path = os.path.join(* fn_list)
-    __CREATE_DIR(os.path.dirname(path))
+    if isinstance(fn_list, str):
+        path = fn_list
+    else:
+        path = os.path.join(* fn_list)
 
+    __CREATE_DIR(os.path.dirname(path))
     return open(path, mode)
+
+
+def list_dir(dir_path):
+    __CREATE_DIR(dir_path)
+    return os.listdir(dir_path)
 
 
 def fetch(buff):

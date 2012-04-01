@@ -696,7 +696,7 @@ def __CK_KEY():
 
 
 def __TOUCH_RC():
-    fp = open(CONFIG_PATH['gui_rc'], 'w')
+    fp = io_encap.open_file(CONFIG_PATH['gui_rc'], 'w')
 
     for label in [ 'MISC', 'ENV', 'FONT' ]:
         fp.write('[{0}]\n'.format(label))
@@ -722,7 +722,7 @@ def __TOUCH_KEY(style = None, func_binding = None):
         func_binding = copy.copy(Config['FUNC_BINDING'])
     style_path = 'key_{0}'.format(style)
 
-    fp = open(CONFIG_PATH[style_path], 'w')
+    fp = io_encap.open_file(CONFIG_PATH[style_path], 'w')
     for func in sorted(func_binding.iterkeys()):
         fp.write('{0} = {1}\n'.format(func, func_binding[func]))
     fp.close()

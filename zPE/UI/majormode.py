@@ -2,7 +2,7 @@
 # each Major Mode is defined as an resource module in "zMajorMode" resource folder
 
 from zPE.UI import min_import
-from io_encap import norm_path
+from io_encap import norm_path, list_dir
 from conf import CONFIG_PATH
 
 import os, sys, inspect
@@ -21,7 +21,7 @@ MODE_MAP = {
 _base_ = min_import('zPE.UI.basemode', [ 'BaseMode' ], 0)
 
 def load_mode(path):
-    for fn in os.listdir(path):
+    for fn in list_dir(path):
         [ mn, ext ] = os.path.splitext(fn) # Handles no-extension files, etc.
         if ext == '.py':
             cn = mn.title() + 'Mode'
