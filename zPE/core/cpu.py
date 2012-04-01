@@ -678,6 +678,7 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
     src_field_swap = {
         'buff'   : '',          # buffer for src field
         'offset' : 0,           # offset for src field
+        'digit'  : False,       # whether encountered any digit
         }
     def get_next_src_digit(look_ahead = False):
         if not src_field_swap['buff']:
@@ -689,6 +690,7 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
         rv = src_field_swap['buff'][0]
         if not look_ahead:
             src_field_swap['buff'] = src_field_swap['buff'][1:] # pop the digit
+            src_field_swap['digit'] = bool(src_field_swap['digit']  or  rv.isdigit())
         return rv
 
     for indx in range(indx_s, ed_len):
@@ -699,7 +701,11 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
 
             # get the next src digit
             src_digit = get_next_src_digit()
-            if not src_digit.isdigit():
+            if not src_digit.isdigit()  and  src_field_swap['digit']:
+                # end of current field
+                src_field_swap['digit'] = False
+                src_digit = get_next_src_digit()
+            if not src_digit.isdigit(): # still not digit -> invalid format
                 raise zPE.newDataException()
             src_digit = int(src_digit)
             if src_digit:
