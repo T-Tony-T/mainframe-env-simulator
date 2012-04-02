@@ -636,6 +636,7 @@ class ConfigWindow(gtk.Window):
 
         # used to stop closing the window
         self.__on_err = False
+        self.__focus_ignore = False
 
 
         # layout of the frame:
@@ -1323,6 +1324,7 @@ All rights reserved
                         binding_is_valid = None
                 except ValueError as (err_type, err_msg, err_func, err_stroke):
                     if err_type == 'override':
+                        self.__focus_ignore = True
                         md = gtk.MessageDialog(
                             self,
                             gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_QUESTION,
@@ -1349,6 +1351,7 @@ All rights reserved
                         else:
                             binding_is_valid = False
                         md.destroy()
+                        self.__focus_ignore = False
 
             # process stroke
             if binding_is_valid:
@@ -1367,7 +1370,8 @@ All rights reserved
 
     def _sig_key_entry_fo(self, entry = None, event = None):
         self.__on_err = self.kb_stroke_entry.get_property('sensitive')
-        self.kb_stroke_entry.grab_focus()
+        if not self.__focus_ignore:
+            self.kb_stroke_entry.grab_focus()
 
 
     def _sig_key_stroke_help(self, bttn):
