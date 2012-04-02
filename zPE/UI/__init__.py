@@ -1294,7 +1294,7 @@ All rights reserved
 
         # clean up
         self.kb_stroke_entry.set_property('sensitive', active)
-        self.kb_stroke_entry.grab_focus()
+        self._sig_key_entry_fo()
 
     def _sig_key_stroke_entered(self, entry):
         stroke = entry.get_text()
@@ -1365,7 +1365,7 @@ All rights reserved
         entry.editing_done = True
         self.kb_function[entry.func_editing].set_active(False)
 
-    def _sig_key_entry_fo(self, entry, event):
+    def _sig_key_entry_fo(self, entry = None, event = None):
         self.__on_err = self.kb_stroke_entry.get_property('sensitive')
         self.kb_stroke_entry.grab_focus()
 

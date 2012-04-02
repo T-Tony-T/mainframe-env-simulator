@@ -69,8 +69,8 @@ DEFAULT = {
 
         'KILL_RING_SZ'  : 16,
 
-        'TAB_ON'        : 0,
-        'TAB_GROUPED'   : 1,
+        'TAB_ON'        : 1,
+        'TAB_GROUPED'   : 0,
 
         'DEBUG_MODE'    : 0,
         },
