@@ -314,7 +314,7 @@ def pass_1():
         # parse ORG
         elif field[1] == 'ORG':
             from_addr = addr
-            if len(field) > 2:  # has argument
+            if len(field) > 2  and  field[2]: # has argument
                 parsed_arg = __PARSE_ARG(field[2])
                 if isinstance(parsed_arg, int):
                     ( err_num, err_indx ) = __DECODE_ERRCODE(parsed_arg)
