@@ -1152,6 +1152,7 @@ class zEditBuffer(z_ABC):
         # update buffer list
         if self.type == 'file':
             # only record type::file for user-opened buffer
+
             no_rec = True           # assume first encounter of the name
             rec_name = self.name    # this is used as the key of zEditBuffer.buff_rec
             if self.name in zEditBuffer.buff_rec:
@@ -1189,6 +1190,7 @@ class zEditBuffer(z_ABC):
 
         elif buff_group == 'system':
             # system-opened non-type::file buffer
+
             if self.name in zEditBuffer.buff_rec:
                 # name is recorded, update it
                 zEditBuffer.buff_list[self.name].path = self.path
@@ -1468,7 +1470,11 @@ class zEditBuffer(z_ABC):
             # new file
             # passive alloc (copy on write)
             if not self.major_mode:
-                self.switch_mode(majormode.DEFAULT['file'])
+                self.switch_mode(majormode.DEFAULT['file'], skip_ast = True)
+            mode = majormode.MODE_MAP[self.major_mode]
+
+            self.ast = zSyntaxParser('', ** mode.ast_map)
+
             self.writable = True
             self.editable = True
             self.mtime = None
