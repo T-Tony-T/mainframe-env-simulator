@@ -621,15 +621,18 @@ def __ref_dec(d, l, b, value, cc = True, ex = None):
 
 def __shft_dec(d, b, l, shft_code, rounding):
     val_str = __dump(d, b, l)
+    val_digit = val_str[:-1]
+    if not val_digit.isdigit():
+        raise zPE.newDataException()
     if val_str[-1] in 'FACE':
         val_sign = 1
     else:
         val_sign = -1
-    val_len = len(val_str) - 1  # length of the digit string
+    val_len = len(val_digit)    # length of the digit string
 
     # (0 < l < 16)  =>  (0 < byte_cnt < 32)  =>  (0 < digit_cnt < 31)
-    buff = '{0:0>32}{1:0>32}'.format(val_str[:-1], '') # val_32|zero_32
-    buff = buff[shft_code:] + buff[:shft_code]         # spin the circular array
+    buff = '{0:0>32}{1:0>32}'.format(val_digit, '') # val_32|zero_32
+    buff = buff[shft_code:] + buff[:shft_code]      # spin the circular array
 
     overflow = False
     if shft_code > 32:
