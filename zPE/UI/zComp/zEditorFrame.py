@@ -402,6 +402,10 @@ class zEdit(z_ABC, gtk.VBox):
         self.center.modify_base(gtk.STATE_ACTIVE,   gtk.gdk.color_parse(zTheme.color_map['base_selected']))
         self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
 
+        if self.active_buffer.type == 'file':
+            for key in zTheme.color_map_hilite_key:
+                self.center.modify_hilite(key)
+
         # bottom
         self.buffer_w.modify_fg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))
         self.buffer_w.modify_fg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(zTheme.color_map['text']))
@@ -896,9 +900,6 @@ class zEdit(z_ABC, gtk.VBox):
             self.sig_id['focus_out'] = self.center.connect('focus-out-event', self._sig_focus_out)
             self.sig_id['button_press'] = widget_button_press_id
 
-            zTheme._sig_update_font_modify(self.center)
-            self._sig_update_color_map()
-
 
         # switch buffer
         self.active_buffer = new_buff
@@ -922,6 +923,10 @@ class zEdit(z_ABC, gtk.VBox):
         # focus self out and in since the context has changed
         self.center.emit('focus-out-event', gtk.gdk.Event(gtk.gdk.FOCUS_CHANGE))
         self.center.emit('focus-in-event', gtk.gdk.Event(gtk.gdk.FOCUS_CHANGE))
+
+        # (re)set font and color theme
+        zTheme._sig_update_font_modify(self.center)
+        self._sig_update_color_map()
 
         self.show_all()
 
@@ -1257,7 +1262,7 @@ class zEditBuffer(z_ABC):
         if mode != self.major_mode:
             self.major_mode = mode
             if self.type == 'file'  and  not skip_ast:
-                self.ast = self.ast.reparse(** majormode.MODE_MAP[self.major_mode].ast_map)
+                self.ast.reparse(** majormode.MODE_MAP[self.major_mode].ast_map)
             zEditBuffer.reg_emit('buffer_mode_set')
 
 

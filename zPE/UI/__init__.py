@@ -668,7 +668,7 @@ class ConfigWindow(gtk.Window):
         self.__label['TAB'].append(gtk.Label('GUI'))
         center.append_page(ct_gui, self.__label['TAB'][-1])
 
-        # Tabbar
+        # GUI->Tabbar
         self.__label['FRAME'].append(gtk.Label('Tabbar'))
         ct_gui_tab = gtk.Frame()
         ct_gui_tab.set_label_widget(self.__label['FRAME'][-1])
@@ -691,7 +691,7 @@ class ConfigWindow(gtk.Window):
         zComp.zEdit.register('tabbar_mode_toggled', self._sig_tabbar_mode_toggled_sync, self)
 
 
-        # Font
+        # GUI->Font
         self.__label['FRAME'].append(gtk.Label('Font'))
         ct_gui_font = gtk.Frame()
         ct_gui_font.set_label_widget(self.__label['FRAME'][-1])
@@ -714,7 +714,7 @@ class ConfigWindow(gtk.Window):
         for size in range(6, 73):
             self.font_sw['size'].append_text(str(size))
 
-        # Theme
+        # GUI->Theme
         self.__label['FRAME'].append(gtk.Label('Theme'))
         ct_gui_theme = gtk.Frame()
         ct_gui_theme.set_label_widget(self.__label['FRAME'][-1])
@@ -767,7 +767,7 @@ class ConfigWindow(gtk.Window):
             self.color_entry[key].connect('activate',  self._sig_color_entry_activate, None, key)
             self.color_entry[key].connect('focus-out-event', self._sig_color_entry_activate, key)
 
-        # Environment
+        # GUI->Environment
         self.__label['FRAME'].append(gtk.Label('Environment'))
         ct_gui_env = gtk.Frame()
         ct_gui_env.set_label_widget(self.__label['FRAME'][-1])
@@ -813,7 +813,7 @@ class ConfigWindow(gtk.Window):
         self.__label['TAB'].append(gtk.Label('Key Binding'))
         center.append_page(ct_key, self.__label['TAB'][-1])
 
-        # Style
+        # KeyBinding->Style
         self.__label['FRAME'].append(gtk.Label('Key Binding Sytle'))
         ct_key_style = gtk.Frame()
         ct_key_style.set_label_widget(self.__label['FRAME'][-1])
@@ -834,7 +834,7 @@ class ConfigWindow(gtk.Window):
 
             self.key_style[key].connect('toggled', self._sig_key_style_toggled, key)
 
-        # Binding
+        # KeyBinding->Binding
         self.__label['FRAME'].append(gtk.Label('Key Bindings'))
         ct_key_binding = gtk.Frame()
         ct_key_binding.set_label_widget(self.__label['FRAME'][-1])
@@ -930,7 +930,7 @@ class ConfigWindow(gtk.Window):
         self.__label['TAB'].append(gtk.Label('Editor'))
         center.append_page(ct_editor, self.__label['TAB'][-1])
 
-        # KillRing
+        # Editor->KillRing
         self.__label['FRAME'].append(gtk.Label('Kill Ring'))
         ct_editor_kr = gtk.Frame()
         ct_editor_kr.set_label_widget(self.__label['FRAME'][-1])
@@ -956,12 +956,58 @@ class ConfigWindow(gtk.Window):
         self.kill_ring_sz_entry.connect('focus-out-event', self._sig_kill_ring_sz_entered)
 
 
+        # Editor->Highlighter
+        self.__label['FRAME'].append(gtk.Label('Highlighter'))
+        ct_editor_hilite = gtk.Frame()
+        ct_editor_hilite.set_label_widget(self.__label['FRAME'][-1])
+        ct_editor.pack_start(ct_editor_hilite, False, False, 10)
+
+        ct_editor_hilite.add(gtk.Table(2, 6, False))
+        ct_editor_hilite.child.set_col_spacings(5)
+
+        color_pos = {
+            # +--------+--------+
+            # |   -1   |   +1   |
+            # +--------+--------+
+            # |   -2   |   +2   |
+            # +--------+--------+
+            'reserve'       : -1, # len = 7
+            'literal'       : +1, # len = 7
+
+            'symbol'        : -2, # len = 6
+            'comment'       : +2, # len = 7
+            }
+        label_len = [ 7, 7 ]   # [ max_len[col_0], max_len[col_1] ]
+
+        for key in color_pos:
+            row = abs(color_pos[key])
+            col = (row + color_pos[key]) / (row + row)
+
+            self.__label['LABEL'].append(gtk.Label(' {0:<{1}}'.format(key.replace('_', ' ').title(), label_len[col])))
+
+            self.color_entry[key] = gtk.Entry(7)
+            self.color_picker[key] = zComp.zColorPickerButton(self.__ebox, self._sig_color_selected)
+
+            self.color_entry[key].set_property('width-chars', 7)
+            self.color_picker[key].set_size_button(35, -1)
+
+            self.__entry.append(self.color_entry[key])
+
+            col *= 3            # each column has 3 sub-column: label, entry, and picker
+            ct_editor_hilite.child.attach(self.__label['LABEL'][-1], 0 + col, 1 + col, row, 1 + row, xoptions = gtk.SHRINK)
+            ct_editor_hilite.child.attach(self.color_entry[key],     1 + col, 2 + col, row, 1 + row, xoptions = gtk.SHRINK)
+            ct_editor_hilite.child.attach(self.color_picker[key],    2 + col, 3 + col, row, 1 + row, xoptions = gtk.SHRINK)
+
+            self.color_entry[key].connect('activate',  self._sig_color_entry_activate, None, key)
+            self.color_entry[key].connect('focus-out-event', self._sig_color_entry_activate, key)
+
+
         ## System
         ct_system = gtk.VBox()
         self.__label['TAB'].append(gtk.Label('System'))
         center.append_page(ct_system, self.__label['TAB'][-1])
 
-        # Architecture
+        # System->Architecture
         self.__label['FRAME'].append(gtk.Label('Architecture'))
         ct_system_arch = gtk.Frame()
         ct_system_arch.set_label_widget(self.__label['FRAME'][-1])
@@ -1010,7 +1056,7 @@ class ConfigWindow(gtk.Window):
         self.time_ss_entry.connect('activate',        self._sig_time_limit_changed)
         self.time_ss_entry.connect('focus-out-event', self._sig_time_limit_changed)
 
-        # Debugging
+        # System->Debugging
         self.__label['FRAME'].append(gtk.Label('Debugging'))
         ct_system_debug = gtk.Frame()
         ct_system_debug.set_label_widget(self.__label['FRAME'][-1])
@@ -1032,7 +1078,7 @@ class ConfigWindow(gtk.Window):
         self.__label['TAB'].append(gtk.Label('About'))
         center.append_page(ct_about, self.__label['TAB'][-1])
 
-        # Icon
+        # About->Icon
         ct_about_icon = gtk.Image()
         ct_about_icon.set_from_pixbuf(
             gtk.gdk.pixbuf_new_from_file_at_size(
@@ -1041,7 +1087,7 @@ class ConfigWindow(gtk.Window):
                 ))
         ct_about.pack_start(ct_about_icon, False, False, 25)
 
-        # Content
+        # About->Content
         ct_about_content = gtk.VBox()
         ct_about.pack_start(ct_about_content, False, False, 5)
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os, sys
 from setuptools import setup, find_packages
 from shutil import copytree     # for including data files under Windows
@@ -21,7 +23,7 @@ setup(
     #   R - SVN Revision Number (int) [ developing version ]
     #   P - Pre-Release Number (int)  [ release candidate  ]
     #   B - Bug-Fix Number (int)      [ normal release     ]
-    version = "0.618",
+    version = "0.815",
     # note:
     #   Major version is considered as:
     #     0 - None   Fully Functional - current
@@ -38,7 +40,7 @@ setup(
 
     description = ("This software is a Mainframe Programming Environment Simulator running on PC (Linux, Max OS, Windows, etc.) that will compile / assemble source code written to be compiled / assembled on a Mainframe machine. The final goal is to let the developer work on their own PC when developing / testing their programs without worrying about internet connection or connection to a Mainframe machine. It is also aimed at reduce the teaching cost of IBM Assembler, COBOL, etc."),
     long_description=read('README'),
-    license = "New BSD",
+    license = "BSD 3-Clause",
 
     packages = find_packages(),
     include_package_data = True, # include every data file under SVN control
@@ -64,4 +66,9 @@ if sys.argv[1] == 'build':
                 copytree(
                     os.path.join('zPE', 'UI', 'image'), # from src dir
                     os.path.join(base_path, 'image')    # to build dir
+                    )
+            if 'zMajorMode' not in dirs:
+                copytree(
+                    os.path.join('zPE', 'UI', 'zMajorMode'), # from src dir
+                    os.path.join(base_path, 'zMajorMode')    # to build dir
                     )

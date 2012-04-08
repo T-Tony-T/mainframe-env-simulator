@@ -128,6 +128,7 @@ class zTheme(z_ABC):
         'fn_len' : 16,
         }
 
+    # the following dictionaries will be updated by config
     env = {
         'starting_path' : '~',
         }
@@ -147,8 +148,9 @@ class zTheme(z_ABC):
         'reserve'       : '#0000FF', # blue
         'comment'       : '#008000', # green
         'literal'       : '#FF0000', # red
-        'label'         : '#808000', # olive
+        'symbol'        : '#800080', # purple
         }
+    color_map_hilite_key = [ 'reserve', 'comment', 'literal', 'symbol', ]
 
 
     _auto_update = {

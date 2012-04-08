@@ -10,9 +10,9 @@ developing / testing their programs without worrying about internet
 connection or connection to a Mainframe machine. It is also aimed
 at reduce the teaching cost of IBM Assembler, COBOL, etc. 
 
-This software is released under the New BSD license. 
+This software is released under the BSD 3-Clause License.
 
-Copyright (c) 2011, Northern Illinois University
+Copyright (c) 2011, 2012, Northern Illinois University
 All rights reserved.
 
 

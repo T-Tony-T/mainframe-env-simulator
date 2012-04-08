@@ -93,7 +93,7 @@ DEFAULT = {
         'RESERVE'       : '#0000FF', # blue
         'COMMENT'       : '#008000', # green
         'LITERAL'       : '#FF0000', # red
-        'LABEL'         : '#808000', # olive
+        'SYMBOL'        : '#800080', # purple
         },
 
     'ENV'       : {
@@ -431,7 +431,7 @@ def init_rc():
         'reserve'       : DEFAULT['COLOR_MAP']['RESERVE'],
         'comment'       : DEFAULT['COLOR_MAP']['COMMENT'],
         'literal'       : DEFAULT['COLOR_MAP']['LITERAL'],
-        'label'         : DEFAULT['COLOR_MAP']['LABEL'],
+        'symbol'        : DEFAULT['COLOR_MAP']['SYMBOL'],
         }
 
     Config['ENV']       = {

@@ -230,16 +230,21 @@ class zSyntaxParser(object):
                 ...
                 }
         '''
-        self.__ast__ = zAstSubTree('_ROOT_')
-        self.__lns__ = [ ]      # line-content fast-lookup table
+        self.__src   = src      # original string
 
         self.__pos__ = pos_rlvnt
         self.__one__ = non_split
         self.__key__ = key_words
         self.__lvl__ = level_dlm
 
-        self.__src   = src      # original string
-        self.__size  = len(src) # length of original string
+        self.__parse()
+
+
+    def __parse(self):
+        self.__ast__ = zAstSubTree('_ROOT_')
+        self.__lns__ = [ ]      # line-content fast-lookup table
+
+        self.__size  = len(self.__src) # length of original string
         self.__last  = 0        # end of the last element
         self.__indx  = 0        # current char index
 
@@ -249,6 +254,7 @@ class zSyntaxParser(object):
         self.__lnum  = -1       # current line number
 
         self.__parse_begin(self.__ast__)
+        return self
 
 
     def __str__(self):
@@ -260,6 +266,10 @@ class zSyntaxParser(object):
 
     def get_ast(self):
         return self.__ast__
+
+
+    def get_node_at(self, line_num):
+        return self.__lns__[line_num]
 
 
     def get_word(self, abs_pos, conn_back = False):
@@ -282,15 +292,30 @@ class zSyntaxParser(object):
         return ( indx_s, indx_s + wlen )
 
 
+    def update(self, buffer_state):
+        if not buffer_state:
+            return self
+        if buffer_state.action == 'i':
+            self.__src = ''.join([
+                    self.__src[ : buffer_state.offset],
+                    buffer_state.content,
+                    self.__src[buffer_state.offset : ]
+                    ])
+        else:
+            self.__src = ''.join([
+                    self.__src[ : buffer_state.offset],
+                    self.__src[buffer_state.offset + len(buffer_state.content) : ]
+                    ])
+        return self.__parse()
+
+
     def reparse(self, pos_rlvnt = {}, non_split = {}, key_words = {}, level_dlm = {}):
-        '''generate a new AST object for the new configuration'''
-        return zSyntaxParser(
-            self.__src,
-            pos_rlvnt = pos_rlvnt,
-            non_split = non_split,
-            key_words = key_words,
-            level_dlm = level_dlm
-            )
+        self.__pos__ = pos_rlvnt
+        self.__one__ = non_split
+        self.__key__ = key_words
+        self.__lvl__ = level_dlm
+
+        return self.parse()
 
 
     ### supporting function
@@ -471,10 +496,18 @@ class zSyntaxParser(object):
 
     def __get_word_at(self, indx, dlm = None):
         indx_e = indx
-        while ( indx_e < self.__size       and
-                self.__src[indx_e] != dlm  and
-                not self.__src[indx_e].isspace()
-                ):
+        in_quote = None
+        while indx_e < self.__size:
+            if ( not in_quote  and
+                 ( self.__src[indx_e] == dlm  or
+                   self.__src[indx_e].isspace()
+                   )
+                 ):
+                break
+            if self.__src[indx_e] == in_quote:
+                in_quote = None
+            elif not in_quote and self.__src[indx_e] in [ '"', "'" ]:
+                in_quote = self.__src[indx_e]
             indx_e += 1
         return self.__src[indx : indx_e]
     ### end of supporting function

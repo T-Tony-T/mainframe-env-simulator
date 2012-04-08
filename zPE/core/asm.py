@@ -1086,28 +1086,6 @@ class SDNumericalType(object):
         '''translate the universal dump to the repr string of this class'''
         raise AssertionError('require overridden')
 
-class D_(SDNumericalType):
-    def __init__(self, int_str, length = 0):
-        super(D_, self).__init__(int_str, length, 8) # 8-byte natual length
-
-    def fill__(self, dump):      # no error checking
-        self.load_value(int(self.tr(dump)), dump[1])
-
-    @staticmethod
-    def tr(dump):
-        vals = dump[0]
-        int_val = vals[0]
-        for indx in range(1, len(vals)):
-            int_val *= 256
-            int_val += vals[indx]
-        int_val  %=  0xFFFFFFFFFFFFFFFF
-        if int_val > 0x7FFFFFFFFFFFFFFF:
-            int_str = '-{0}'.format(0x10000000000000000 - int_val)
-                                    # 2's complement
-        else:
-            int_str = str(int_val)
-        return int_str
-
 class F_(SDNumericalType):
     def __init__(self, int_str, length = 0):
         super(F_, self).__init__(int_str, length, 4) # 4-byte natual length
@@ -1197,6 +1175,50 @@ class A_(SDNumericalType):
                 zPE.i2h(int_val % 0xFFFFFFFF)
                 )[ 8 - dump[1] / 4 : ] # only show the real length
             )
+
+
+class SDFloatingType(object):
+    '''this is an abstract base class'''
+
+    def __init__(self, int_str, length, n_byte):
+        self.natual_len = n_byte * 8
+        self._byte_len_ = n_byte
+        self.set(int_str, length)
+
+    def __len__(self):
+        return self._byte_len_
+
+    def get(self):
+        return self.tr(self.dump())
+
+    def value(self):
+        return self.__val
+
+    def set(self, int_str, length = 0):
+        self.__val  = 0      # reset value
+        self.__indx = 1      # reset insert index
+        self.append(int_str, length)
+
+    def dump(self):
+        raise AssertionError('require overridden')
+
+    def fill__(self, dump):
+        '''load the universal dump into the internal structure'''
+        raise AssertionError('require overridden')
+
+    def load_value(self, val, length): # no error checking
+        self.__val      = val
+        self.natual_len = length
+
+    @staticmethod
+    def tr(dump):
+        '''translate the universal dump to the repr string of this class'''
+        raise AssertionError('require overridden')
+
+class D_(SDFloatingType):
+    def __init__(self, int_str, length = 0):
+        super(D_, self).__init__(int_str, length, 8) # 8-byte natual length
+
 
 
 ## simple type

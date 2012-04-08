@@ -29,6 +29,7 @@ def load_mode(path):
                 _cls_ = min_import(mn, [ cn ], -1, path)
                 _obj_  = _cls_()
             except:
+                sys.stderr.write('warn: {0}: Fail to load Major Mode Module.\n'.format(cn))
                 continue            # ignore silently
             if isinstance(_obj_, _base_)  and  str(_obj_) not in MODE_MAP:
                 MODE_MAP[str(_obj_)] = _obj_ # load the mode

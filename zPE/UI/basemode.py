@@ -115,6 +115,7 @@ class BaseMode(object):
             the abstract syntax tree associated with the buffer
 
         return
-            the highlight tag info list
+            the highlight tag info list, where each tag entry is
+            (abs_pos_s, hilite_key, abs_pos_e)
         '''
         return [ ]

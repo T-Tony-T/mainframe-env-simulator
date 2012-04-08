@@ -1308,12 +1308,18 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             background = zTheme.color_map['base_selected']
             )
 
-        gobject.timeout_add(20, self.__watch_selection)
+        for key in zTheme.color_map_hilite_key:
+            self.buff['disp'].create_tag(
+                key, foreground = zTheme.color_map[key]
+                )
 
+        state_swap = { 'state' : None, }
         self.__buff_watcher = {
             'disp' : [
-                self.buff['disp'].connect('insert_text',  self._sig_buffer_text_inserted, 'disp'),
-                self.buff['disp'].connect('delete_range', self._sig_buffer_range_deleted, 'disp'),
+                self.buff['disp'].connect('insert_text',  self._sig_buffer_text_inserting, 'disp', state_swap),
+                self.buff['disp'].connect('delete_range', self._sig_buffer_range_deleting, 'disp', state_swap),
+                self.buff['disp'].connect_after('insert_text',  self._sig_buffer_text_inserted, state_swap),
+                self.buff['disp'].connect_after('delete_range', self._sig_buffer_range_deleted, state_swap),
                 ],
             }
 
@@ -1379,15 +1385,28 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         self.mouse_motion_id = self.connect('motion_notify_event', self._sig_mouse_motion)
         self.handler_block(self.mouse_motion_id)
 
+        # start watching selection
+        gobject.timeout_add(20, self.__watch_selection)
+
 
     ### overridden signal definition
-    def _sig_buffer_text_inserted(self, textbuffer, ins_iter, text, length, src):
+    def _sig_buffer_text_inserting(self, textbuffer, ins_iter, text, length, src, state_swap = None):
         new_state = zBufferState(text, ins_iter.get_offset(), 'i')
+        if state_swap:
+            state_swap['state'] = new_state
         self.__sync_buff(zTextView.target_buffer[src], new_state)
 
-    def _sig_buffer_range_deleted(self, textbuffer, start_iter, end_iter, src):
+    def _sig_buffer_range_deleting(self, textbuffer, start_iter, end_iter, src, state_swap = None):
         new_state = zBufferState(self.buff[src].get_text(start_iter, end_iter, False), start_iter.get_offset(), 'd')
+        if state_swap:
+            state_swap['state'] = new_state
         self.__sync_buff(zTextView.target_buffer[src], new_state)
+
+    def _sig_buffer_text_inserted(self, textbuffer, ins_iter, text, length, state_swap):
+        self.hilite(update = state_swap['state'])
+
+    def _sig_buffer_range_deleted(self, textbuffer, start_iter, end_iter, state_swap):
+        self.hilite(update = state_swap['state'])
 
 
     def _sig_button_press(self, widget, event):
@@ -1639,6 +1658,14 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 background = zTheme.color_map['base_selected']
                 )
 
+    def modify_hilite(self, hilite_type):
+        tag_table = self.buff['disp'].get_tag_table()
+        tag_table.remove(tag_table.lookup(hilite_type))
+        self.buff['disp'].create_tag(
+            hilite_type, foreground = zTheme.color_map[hilite_type]
+            )
+        self.hilite()
+
 
     def get_buffer(self):
         if self.buff['true']:
@@ -1655,8 +1682,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
             self.buff['true'] = buff
             self.__buff_watcher['true'] = [
-                self.buff['true'].connect('insert_text',  self._sig_buffer_text_inserted, 'true'),
-                self.buff['true'].connect('delete_range', self._sig_buffer_range_deleted, 'true'),
+                self.buff['true'].connect('insert_text',  self._sig_buffer_text_inserting, 'true'),
+                self.buff['true'].connect('delete_range', self._sig_buffer_range_deleting, 'true'),
                 ]
 
         # replace the content of the current display buffer
@@ -1716,6 +1743,27 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             self.complete()
         else:
             self.align_line()
+
+
+    def hilite(self, update = None):
+        buff = self.buff['disp']
+
+        # clear previous highlighting tags
+        iter_s = buff.get_start_iter()
+        iter_e = buff.get_end_iter()
+        for key in zTheme.color_map_hilite_key:
+            buff.remove_tag_by_name(key, iter_s, iter_e)
+
+        # apply new highlighting tags
+        ast  = self.get_ast()
+        for (pos_s, key, pos_e) in majormode.MODE_MAP[ast['major_mode']].hilite(
+            ast['syntax_tree'].update(update) # update the AST, if needed
+            ):
+            buff.apply_tag_by_name(
+                key,
+                buff.get_iter_at_offset(pos_s),
+                buff.get_iter_at_offset(pos_e)
+                )
 
 
     def buffer_undo(self):
@@ -2250,16 +2298,15 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         for handler in self.__buff_watcher[target]:
             if self.buff[target].handler_is_connected(handler):
                 self.buff[target].handler_unblock(handler)
+        if target == 'disp':
+            # (re)set highlighting
+            self.hilite()
 
     def __sync_buff(self, target, new_state = None):
         if not self.get_editable():
             return              # no need for synchronizing, early return
 
         self.__sync_buff_start(target) # start synchronizing
-
-        if new_state and target == 'true':
-            # new state applied on true buffer, record it
-            self.buff['true'].undo_stack.new_state(new_state) # only true buffer has undo stack
 
         if new_state.action == 'i':
             self.buff[target].insert(
@@ -2271,6 +2318,10 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 self.buff[target].get_iter_at_offset(new_state.offset),
                 self.buff[target].get_iter_at_offset(new_state.offset + len(new_state.content))
                 )
+
+        if new_state and target == 'true':
+            # new state applied on true buffer, record it
+            self.buff['true'].undo_stack.new_state(new_state) # only true buffer has undo stack
 
         self.__sync_buff_end(target) # synchronizing ended
 
