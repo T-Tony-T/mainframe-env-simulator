@@ -1746,7 +1746,11 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     def hilite(self, update = None):
+        ast  = self.get_ast()
         buff = self.buff['disp']
+
+        if not ast  or  not ast['syntax_tree']: # cannot highlight
+            return
 
         # clear previous highlighting tags
         iter_s = buff.get_start_iter()
@@ -1755,7 +1759,6 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             buff.remove_tag_by_name(key, iter_s, iter_e)
 
         # apply new highlighting tags
-        ast  = self.get_ast()
         for (pos_s, key, pos_e) in majormode.MODE_MAP[ast['major_mode']].hilite(
             ast['syntax_tree'].update(update) # update the AST, if needed
             ):
