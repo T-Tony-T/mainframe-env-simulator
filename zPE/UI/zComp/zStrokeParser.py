@@ -5,7 +5,6 @@ import io_encap
 #
 #   norm_path(full_path):       return the normalized absolute path
 #
-import majormode
 
 from zWidget import zPopupMenu
 
@@ -1153,6 +1152,9 @@ class zComplete(gobject.GObject):
     it will emit 'z_mid_of_word' signal if completion happened when
     the cursor is not at a word-end boundary
     '''
+
+    import majormode as __mode__
+
     __gsignals__ = {
         'z_mid_of_word' : (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, ()),
         }
@@ -1295,7 +1297,7 @@ class zComplete(gobject.GObject):
 
 
     def __generate_text_list(self, curr_line, ast):
-        self.__comp_list = majormode.MODE_MAP[ast['major_mode']].complete(curr_line, ast['syntax_tree'])
+        self.__comp_list = self.__mode__.MODE_MAP[ast['major_mode']].complete(curr_line, ast['syntax_tree'])
 
     def __generate_func_list(self, curr_func):
         # get the completion list

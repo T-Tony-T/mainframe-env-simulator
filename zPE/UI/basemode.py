@@ -38,6 +38,8 @@ class BaseMode(object):
     Any major mode need to be derived from this class
     '''
 
+    from zComp.zText import zBufferState
+
     def __init__(self, mode = '__base_mode__', default = LC['default'], ast_map = LC['ast-map']):
         '''
         mode
@@ -78,7 +80,8 @@ class BaseMode(object):
             the abstract syntax tree associated with the buffer
 
         return
-            aligned line tuple, or None if nothing need to be changed
+            an zBufferState object indicating what need to be changed, or
+            None if nothing need to be changed
         '''
         return None
 

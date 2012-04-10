@@ -5,6 +5,10 @@ from zPE.UI.basemode import BaseMode
 from zPE.core.asm import valid_ins as VALID_ASM_INS, valid_op  as VALID_ASM_OP, const_s, const_a
 from zPE.pgm.assist_pseudo_ins import PSEUDO_INS
 
+import sys                      # for sys.maxsize
+import re
+
+
 def valid_ins(ins):
     if ( VALID_ASM_INS(ins)  or
          VALID_ASM_OP(ins)   or
@@ -91,9 +95,75 @@ class AsmMode(BaseMode):
             the abstract syntax tree associated with the buffer
 
         return
-            aligned line tuple, or None if nothing need to be changed
+            an zBufferState object indicating what need to be changed, or
+            None if nothing need to be changed
         '''
-        print 'ASM Mode :: align ~', line, ast.get_node_at(line[0])
+        curr_ln = ast.get_nodes_at(line[0])
+
+        if curr_ln and curr_ln[0].token == 'LN-CMMNT':
+            # current line is line-comment
+            curr_nonsp_pos = self.__locate_nonsp(curr_ln[0].text, 1)
+
+            for prev_ln_ndx in range(line[0] - 1, -1, -1): # count down to line No.0
+                prev_ln = ast.get_nodes_at(prev_ln_ndx)
+                if not prev_ln:
+                    # effective previous line is empty
+                    continue    # skip it
+                elif prev_ln[0].token == 'LN-CMMNT':
+                    # effective previous line is line-comment
+                    nonsp_pos = self.__locate_nonsp(prev_ln[0].text, 1)
+                    if nonsp_pos == len(prev_ln[0].text): # previous line empty
+                        continue                          #   check lines prior it
+                    elif nonsp_pos == curr_nonsp_pos:     # previous line at same alignment
+                        return None                       #   no need to align current line
+                    elif nonsp_pos > curr_nonsp_pos:      # previous line at larger alignment
+                        return self.zBufferState(
+                            '{0:{1}}'.format('', nonsp_pos - curr_nonsp_pos),
+                            1, 'i' # insertion / deletion always occured at offset 1
+                            )
+                    else:                                 # previous line at smaller alignment
+                        return self.zBufferState(
+                            '{0:{1}}'.format('', curr_nonsp_pos - nonsp_pos),
+                            1, 'd' # insertion / deletion always occured at offset 1
+                            )
+                else:
+                    # effective previous line is not line-comment
+                    return None # do not align current line
+            # no search succeed
+            return None
+        else:
+            # current line is regular line
+            pos_ins_start = 10
+            pos_arg_start = 6   # col 16 = col 10 + len 6
+            pos_cmt_start = 16  # col 32 = col 16 + len 16
+
+            for prev_ln_ndx in range(line[0] - 1, -1, -1): # count down to line No.0
+                prev_ln = ast.get_nodes_at(prev_ln_ndx)
+                if not prev_ln:
+                    # effective previous line is empty
+                    continue    # skip it
+                elif prev_ln[0].token != 'LN-CMMNT':
+                    # effective previous line is regular line
+                    rel_pos = 0
+                    for i in range(len(prev_ln)):
+                        rel_pos += prev_ln[i].offset
+                        if prev_ln[i].token == 'INSTRUCT':
+                            pos_ins_start = rel_pos
+                            pos_arg_start = rel_pos + len(prev_ln[i].text)
+                            if i < len(prev_ln):
+                                pos_arg_start += prev_ln[i+1].offset
+                            rel_pos       = 0 # reset relative position
+                        elif prev_ln[i].token == 'END-CMMNT':
+                            pos_cmt_start = rel_pos
+                            break
+                        rel_pos += len(prev_ln[i].text)
+                    break
+                else:
+                    # effective previous line is not regular line
+                    continue    # skip it
+
+            # perform the alignment
+            pass
         return None
 
 
@@ -107,7 +177,7 @@ class AsmMode(BaseMode):
         return
             the line tuple with comment added / ajusted, or None if nothing need to be changed
         '''
-        print 'ASM Mode :: comment ~', line, ast.get_node_at(line[0])
+        print 'ASM Mode :: comment ~', line, ast.get_nodes_at(line[0])
         return None
 
 
@@ -121,7 +191,7 @@ class AsmMode(BaseMode):
         return
             the completion-list
         '''
-        print 'ASM Mode :: complete ~', line, ast.get_node_at(line[0])
+        print 'ASM Mode :: complete ~', line, ast.get_nodes_at(line[0])
         return [ ]
 
 
@@ -151,3 +221,12 @@ class AsmMode(BaseMode):
                 pass            # no special rules applied
             curr_pos = pos_end  # advance to end of the token
         return rv
+
+
+    ### supporting methods ###
+    def __locate_nonsp(self, src, start = 0, end = sys.maxsize):
+        while start < min(len(src), end):
+            if not src[start].isspace():
+                return start
+            start += 1          # advance to next character
+        return start            # cannot locate non-space character

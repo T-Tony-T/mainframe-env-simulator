@@ -268,8 +268,11 @@ class zSyntaxParser(object):
         return self.__ast__
 
 
-    def get_node_at(self, line_num):
-        return self.__lns__[line_num]
+    def get_nodes_at(self, line_num):
+        if line_num < len(self.__lns__):
+            return self.__lns__[line_num]
+        else:
+            return None
 
 
     def get_word(self, abs_pos, conn_back = False):
@@ -307,7 +310,6 @@ class zSyntaxParser(object):
                     self.__src[buffer_state.offset + len(buffer_state.content) : ]
                     ])
         return self.__parse()
-
 
     def reparse(self, pos_rlvnt = {}, non_split = {}, key_words = {}, level_dlm = {}):
         self.__pos__ = pos_rlvnt
