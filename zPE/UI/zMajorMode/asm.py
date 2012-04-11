@@ -95,7 +95,7 @@ class AsmMode(BaseMode):
             the abstract syntax tree associated with the buffer
 
         return
-            an zBufferState object indicating what need to be changed, or
+            an zAtomicChange object indicating what need to be changed, or
             None if nothing need to be changed
         '''
         curr_ln = ast.get_nodes_at(line[0])
@@ -117,15 +117,16 @@ class AsmMode(BaseMode):
                     elif nonsp_pos == curr_nonsp_pos:     # previous line at same alignment
                         return None                       #   no need to align current line
                     elif nonsp_pos > curr_nonsp_pos:      # previous line at larger alignment
-                        return self.zBufferState(
+                        change = self.zBufferChange(
                             '{0:{1}}'.format('', nonsp_pos - curr_nonsp_pos),
                             1, 'i' # insertion / deletion always occured at offset 1
                             )
                     else:                                 # previous line at smaller alignment
-                        return self.zBufferState(
+                        change = self.zBufferChange(
                             '{0:{1}}'.format('', curr_nonsp_pos - nonsp_pos),
                             1, 'd' # insertion / deletion always occured at offset 1
                             )
+                    return self.zAtomicChange([ change ])
                 else:
                     # effective previous line is not line-comment
                     return None # do not align current line

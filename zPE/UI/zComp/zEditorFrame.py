@@ -879,6 +879,7 @@ class zEdit(z_ABC, gtk.VBox):
                 self.center_shell.remove(self.center)
                 self.remove(self.center_shell)
                 self.center.hide_all()
+                self.center.destroy()
             self.center_shell = widget_shell
             self.center = widget
             self.center_shell.add(self.center)

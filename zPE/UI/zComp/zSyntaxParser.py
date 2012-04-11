@@ -295,19 +295,19 @@ class zSyntaxParser(object):
         return ( indx_s, indx_s + wlen )
 
 
-    def update(self, buffer_state):
-        if not buffer_state:
+    def update(self, change):
+        if not change:
             return self
-        if buffer_state.action == 'i':
+        if change.action == 'i':
             self.__src = ''.join([
-                    self.__src[ : buffer_state.offset],
-                    buffer_state.content,
-                    self.__src[buffer_state.offset : ]
+                    self.__src[ : change.offset],
+                    change.content,
+                    self.__src[change.offset : ]
                     ])
         else:
             self.__src = ''.join([
-                    self.__src[ : buffer_state.offset],
-                    self.__src[buffer_state.offset + len(buffer_state.content) : ]
+                    self.__src[ : change.offset],
+                    self.__src[change.offset + len(change.content) : ]
                     ])
         return self.__parse()
 

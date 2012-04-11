@@ -18,7 +18,7 @@ import gobject, pango
 ########         zUndoStack         ########
 ######## ######## ######## ######## ########
 
-class zBufferState(object):
+class zBufferChange(object):
     '''a node keeps track of the change in a text buffer. this is used to implement undo / redo system'''
     revert_action = {
         'i' : 'd',
@@ -63,7 +63,34 @@ class zBufferState(object):
 
 
     def revert(self):
-        return zBufferState(self.content, self.offset, zBufferState.revert_action[self.action])
+        return zBufferChange(self.content, self.offset, zBufferChange.revert_action[self.action])
+
+
+class zAtomicChange(object):
+    '''an atomic change (state) consists of a (list of) zBufferChange(s)'''
+    def __init__(self, buff_changes):
+        self.__state__ = []
+        for change in buff_changes:
+            self.__state__.append(change)
+
+    def __str__(self):
+        return ' => '.join([ str(change) for change in self.__state__ ])
+
+    def __len__(self):
+        return len(self.__state__)
+
+    def __getitem__(self, key):
+        return self.__state__[key]
+
+    def append(self, new_change):
+        self.__state__.append(new_change)
+
+    def pop(self, index = -1):
+        return self.__state__.pop(index)
+
+    def revert(self):
+        return zAtomicChange([ change.revert() for change in self.__state__ ][::-1])
+
 
 
 class zUndoStack(object):
@@ -87,7 +114,7 @@ class zUndoStack(object):
 
     def clear(self, init_content = ''):
         '''reset the entire undo-stack'''
-        init_state = zBufferState(init_content, 0, 'i')
+        init_state = zAtomicChange([ zBufferChange(init_content, 0, 'i') ])
 
         self.__stack = [ init_state ]
         self.__top   = 0        # top index (of the undo-stack)
@@ -96,7 +123,7 @@ class zUndoStack(object):
         self.__group = [        # any states within the same group are "equvilent"
             [ init_state ],
             ]
-        self.__group_saved = 0  # the index of the group that state(s) is equvilent to the saved state
+        self.__group_saved = 0  # the index of the group that state(s) is equvilent to the saved one
 
 
     def is_init(self):
@@ -1322,15 +1349,18 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 key, foreground = zTheme.color_map[key]
                 )
 
-        state_swap = { 'state' : None, }
-        self.__buff_watcher = {
+        self.__state_swap = {
+            'state' : zAtomicChange([]), # the state to hold (multiple) buffer change(s)
+            'more'  : False,             # flag indicate whether the above state is ended
+            }
+        self.__buff_watcher = { # need to be disconnected in destroy()
             'disp' : [
-                self.buff['disp'].connect('insert_text',  self._sig_buffer_text_inserting, 'disp', state_swap),
-                self.buff['disp'].connect('delete_range', self._sig_buffer_range_deleting, 'disp', state_swap),
+                self.buff['disp'].connect('insert_text',  self._sig_buffer_text_inserting, 'disp'),
+                self.buff['disp'].connect('delete_range', self._sig_buffer_range_deleting, 'disp'),
                 ],
-            'hilite' : [
-                self.buff['disp'].connect_after('insert_text',  self._sig_disp_text_inserted, state_swap),
-                self.buff['disp'].connect_after('delete_range', self._sig_disp_range_deleted, state_swap),
+            'hilite' : [        # this will use self.__state_swap to obtain buffer state information
+                self.buff['disp'].connect_after('insert_text',  self._sig_disp_text_inserted),
+                self.buff['disp'].connect_after('delete_range', self._sig_disp_range_deleted),
                 ],
             }
 
@@ -1401,25 +1431,21 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### overridden signal definition
-    def _sig_buffer_text_inserting(self, textbuffer, ins_iter, text, length, src, state_swap = None):
-        new_state = zBufferState(text, ins_iter.get_offset(), 'i')
-        if state_swap:
-            state_swap['state'] = new_state
-        self.__sync_buff(zTextView.target_buffer[src], new_state)
+    def _sig_buffer_text_inserting(self, textbuffer, ins_iter, text, length, src):
+        change = zBufferChange(text, ins_iter.get_offset(), 'i')
+        self.__sync_buff(zTextView.target_buffer[src], change)
 
-    def _sig_buffer_range_deleting(self, textbuffer, start_iter, end_iter, src, state_swap = None):
-        new_state = zBufferState(self.buff[src].get_text(start_iter, end_iter, False), start_iter.get_offset(), 'd')
-        if state_swap:
-            state_swap['state'] = new_state
-        self.__sync_buff(zTextView.target_buffer[src], new_state)
+    def _sig_buffer_range_deleting(self, textbuffer, start_iter, end_iter, src):
+        change = zBufferChange(self.buff[src].get_text(start_iter, end_iter, False), start_iter.get_offset(), 'd')
+        self.__sync_buff(zTextView.target_buffer[src], change)
 
-    def _sig_disp_text_inserted(self, textbuffer, ins_iter, text, length, state_swap):
-        self.hilite(update = state_swap['state'])
-        state_swap['state'] = None
+    def _sig_disp_text_inserted(self, textbuffer, ins_iter, text, length):
+        if not self.__state_swap['more']:
+            self.hilite()
 
-    def _sig_disp_range_deleted(self, textbuffer, start_iter, end_iter, state_swap):
-        self.hilite(update = state_swap['state'])
-        state_swap['state'] = None
+    def _sig_disp_range_deleted(self, textbuffer, start_iter, end_iter):
+        if not self.__state_swap['more']:
+            self.hilite()
 
 
     def _sig_button_press(self, widget, event):
@@ -1550,6 +1576,16 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### overridden function definition
+    def destroy(self):
+        for key in self.__buff_watcher:
+            for handler in self.__buff_watcher[key]:
+                if self.buff['disp'].handler_is_connected(handler):
+                    self.buff['disp'].disconnect(handler)
+                if self.buff['true'].handler_is_connected(handler):
+                    self.buff['true'].disconnect(handler)
+        super(zTextView, self).destroy()
+
+
     def complete(self):
         self.completer.complete()
 
@@ -1598,10 +1634,12 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             end_iter   = self.get_cursor_iter()
             end_iter.forward_chars(len(text))
 
+            self.__state_swap['more'] = True
             if line_end.compare(end_iter) < 0:
                 self.buff['disp'].delete(start_iter, line_end)
             else:
                 self.buff['disp'].delete(start_iter, end_iter)
+            self.__state_swap['more'] = False
             self.buff['disp'].insert_at_cursor(text)
         else:                           # insert mode
             # clear selection region, if any
@@ -1732,6 +1770,18 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### editor related API
+    def apply_change(self, buff, change, get_iter_func):
+        if change.action == 'i':
+            buff.insert(
+                get_iter_func(change.offset),
+                change.content
+                )
+        else:
+            buff.delete(
+                get_iter_func(change.offset),
+                get_iter_func(change.offset + len(change.content)),
+                )
+
     def align_line(self):
         ast  = self.get_ast()
         buff = self.buff['disp']
@@ -1739,16 +1789,12 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         line_tuple = self.get_current_line()
         state = self.__mode__.MODE_MAP[ast['major_mode']].align(line_tuple, ast['syntax_tree'])
         if state:
-            if state.action == 'i':
-                buff.insert(
-                    buff.get_iter_at_line_offset(line_tuple[0], state.offset),
-                    state.content
-                    )
-            else:
-                buff.delete(
-                    buff.get_iter_at_line_offset(line_tuple[0], state.offset),
-                    buff.get_iter_at_line_offset(line_tuple[0], state.offset + len(state.content)),
-                    )
+            self.__state_swap['more'] = True
+            for change in state[:-1]:
+                self.apply_change(buff, change, lambda offset: buff.get_iter_at_line_offset(line_tuple[0], offset))
+            self.__state_swap['more'] = False
+            self.apply_change(buff, state[-1], lambda offset: buff.get_iter_at_line_offset(line_tuple[0], offset))
+
 
     def align_region(self):
         sel = self.get_selection_bounds()
@@ -1759,22 +1805,22 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         mode = self.__mode__.MODE_MAP[ast['major_mode']]
         changed = False
+        self.__state_swap['more'] = True
         for line_num in range(sel[0].get_line(), sel[1].get_line() + 1):
             line_tuple = self.get_line_at(line_num)
             state = mode.align(line_tuple, ast['syntax_tree'])
             if state:
-                if state.action == 'i':
-                    buff.insert(
-                        buff.get_iter_at_line_offset(line_tuple[0], state.offset),
-                        state.content
-                        )
-                else:
-                    buff.delete(
-                        buff.get_iter_at_line_offset(line_tuple[0], state.offset),
-                        buff.get_iter_at_line_offset(line_tuple[0], state.offset + len(state.content)),
-                        )
+                for change in state:
+                    self.apply_change(buff, change, lambda offset: buff.get_iter_at_line_offset(line_tuple[0], offset))
                 changed = True
         if changed:
+            last_change = self.__state_swap['state'].pop() # pop out last change
+            # revert last change
+            self.apply_change(buff, last_change.revert(), buff.get_iter_at_offset)
+            self.__state_swap['state'].pop() # pop out the revertion of last change
+            self.__state_swap['more'] = False
+            # re-apply last change
+            self.apply_change(buff, last_change, buff.get_iter_at_offset)
             self.unset_mark()       # cancel selection
 
     def align_or_complete(self):
@@ -1784,7 +1830,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             self.align_line()
 
 
-    def hilite(self, update = None):
+    def hilite(self):
         ast  = self.get_ast()
         buff = self.buff['disp']
 
@@ -1798,9 +1844,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             buff.remove_tag_by_name(key, iter_s, iter_e)
 
         # apply new highlighting tags
-        for (pos_s, key, pos_e) in self.__mode__.MODE_MAP[ast['major_mode']].hilite(
-            ast['syntax_tree'].update(update) # update the AST, if needed
-            ):
+        for (pos_s, key, pos_e) in self.__mode__.MODE_MAP[ast['major_mode']].hilite(ast['syntax_tree']):
             buff.apply_tag_by_name(
                 key,
                 buff.get_iter_at_offset(pos_s),
@@ -1809,52 +1853,10 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     def buffer_undo(self):
-        state = self.buff['true'].undo_stack.undo()
-
-        if state:
-            start_iter = self.buff['true'].get_iter_at_offset(state.offset)
-            end_offset = state.offset + len(state.content)
-
-            if state.action == 'i':
-                self.buff['true'].insert(start_iter, state.content)
-            else:
-                self.buff['true'].delete(
-                    start_iter, self.buff['true'].get_iter_at_offset(end_offset)
-                    )
-                end_offset = state.offset
-
-            self.place_cursor_at_offset(end_offset)
-
-            # test saved state
-            if self.buff['true'].undo_stack.is_saved():
-                self.get_editor().active_buffer.set_modified(False)
-
-            return True
-        return False
+        return self.__buffer_undo('undo')
 
     def buffer_redo(self):
-        state = self.buff['true'].undo_stack.redo()
-
-        if state:
-            start_iter = self.buff['true'].get_iter_at_offset(state.offset)
-            end_offset = state.offset + len(state.content)
-
-            if state.action == 'i':
-                self.buff['true'].insert(start_iter, state.content)
-            else:
-                self.buff['true'].delete(
-                    start_iter, self.buff['true'].get_iter_at_offset(end_offset)
-                    )
-                end_offset = state.offset
-
-            self.place_cursor_at_offset(end_offset)
-
-            # test saved state
-            if self.buff['true'].undo_stack.is_saved():
-                self.get_editor().active_buffer.set_modified(False)
-
-            return True
-        return False
+        return self.__buffer_undo('redo')
 
 
     def backward(self, task):
@@ -1972,8 +1974,10 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         start_iter.set_line_offset(0)
         self.forward_to_line_end(end_iter)
 
-        # replace the current word with the new word
+        # replace the current line with the new line
+        self.__state_swap['more'] = True
         self.buff['disp'].delete(start_iter, end_iter)
+        self.__state_swap['more'] = False
         self.buff['disp'].insert(start_iter, line_tuple[1])
         self.place_cursor(self.buff['disp'].get_iter_at_line_offset(line_tuple[0], line_tuple[2]))
 
@@ -2001,7 +2005,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         start_iter.backward_word_start()
 
         # replace the current word with the new word
+        self.__state_swap['more'] = True
         self.buff['disp'].delete(start_iter, end_iter)
+        self.__state_swap['more'] = False
         self.buff['disp'].insert(start_iter, word)
 
 
@@ -2254,6 +2260,30 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### supporting function
+    def __buffer_undo(self, action):
+        buff  = self.buff['true']
+        if action == 'undo':
+            state = buff.undo_stack.undo()
+        else:
+            state = buff.undo_stack.redo()
+
+        if state:
+            self.__state_swap['more'] = True
+            for change in state[:-1]:
+                self.apply_change(buff, change, buff.get_iter_at_offset)
+            self.__state_swap['more'] = False
+            self.apply_change(buff, state[-1], buff.get_iter_at_offset)
+
+            self.place_cursor_at_offset(state[0].offset) # place cursor at end of first change
+
+            # test saved state
+            if self.buff['true'].undo_stack.is_saved():
+                self.get_editor().active_buffer.set_modified(False)
+
+            return True
+        return False
+
+
     def __backward(self, task, extend_selection = False):
         sel = self.get_selection_bounds()
 
@@ -2341,32 +2371,28 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             if self.buff[target].handler_is_connected(handler):
                 self.buff[target].handler_unblock(handler)
 
-    def __sync_buff(self, target, new_state = None):
+    def __sync_buff(self, target, change = None):
         if not self.get_editable():
             return              # no need for synchronizing, early return
 
         self.__sync_buff_start(target) # start synchronizing
 
-        if new_state and target == 'true':
-            # new state applied on true buffer, record it
-            self.buff['true'].undo_stack.new_state(new_state) # only true buffer has undo stack
-        elif new_state:
-            # new state applied on disp buffer, update it to AST as well
+        if change:
+            self.__state_swap['state'].append(change)
+
+            # new change applied on disp/true buffer, update it to AST as well
             ast = self.get_ast()
             if ast and ast['syntax_tree']:
-                ast['syntax_tree'].update(new_state)
+                ast['syntax_tree'].update(change)
 
-        if new_state.action == 'i':
-            self.buff[target].insert(
-                self.buff[target].get_iter_at_offset(new_state.offset),
-                new_state.content
-                )
-        else:
-            self.buff[target].delete(
-                self.buff[target].get_iter_at_offset(new_state.offset),
-                self.buff[target].get_iter_at_offset(new_state.offset + len(new_state.content))
-                )
+            if not self.__state_swap['more']:
+                # no more to append, process the state
+                if target == 'true':
+                    # new state applied on true buffer, record it
+                    self.buff['true'].undo_stack.new_state(self.__state_swap['state'])
+                self.__state_swap['state'] = zAtomicChange([]) # reset swap area
 
+        self.apply_change(self.buff[target], change, self.buff[target].get_iter_at_offset)
         self.__sync_buff_end(target) # synchronizing ended
 
 
