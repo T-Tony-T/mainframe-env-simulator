@@ -18,7 +18,7 @@ from zBase import z_ABC, zTheme
 from zFileManager import zDisplayPanel, zFileManager
 from zStrokeParser import zStrokeListener
 from zSyntaxParser import zSyntaxParser
-from zText import zLastLine, zTextView, zUndoStack
+from zText import zLastLine, zTextView, zUndoStack, zBufferChange
 from zWidget import zToolButton, zComboBox, zTabbar
 
 import majormode
@@ -1489,6 +1489,19 @@ class zEditBuffer(z_ABC):
             self.buffer.undo_stack = zUndoStack(
                 self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
                 )
+            self.buffer.connect('insert_text',  self.__sig_buffer_text_inserting)
+            self.buffer.connect('delete_range', self.__sig_buffer_range_deleting)
         self.set_modified(False)
         self.buffer.reloading = False # notify zTextView to update
+
+
+    def __sig_buffer_text_inserting(self, textbuffer, ins_iter, text, length):
+        self.ast.update(
+            zBufferChange(text, ins_iter.get_offset(), 'i')
+            )
+
+    def __sig_buffer_range_deleting(self, textbuffer, start_iter, end_iter):
+        self.ast.update(
+            zBufferChange(textbuffer.get_text(start_iter, end_iter, False), start_iter.get_offset(), 'd')
+            )
     ### end of supporting function

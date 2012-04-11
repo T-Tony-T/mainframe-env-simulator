@@ -1436,7 +1436,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         self.__sync_buff(zTextView.target_buffer[src], change)
 
     def _sig_buffer_range_deleting(self, textbuffer, start_iter, end_iter, src):
-        change = zBufferChange(self.buff[src].get_text(start_iter, end_iter, False), start_iter.get_offset(), 'd')
+        change = zBufferChange(textbuffer.get_text(start_iter, end_iter, False), start_iter.get_offset(), 'd')
         self.__sync_buff(zTextView.target_buffer[src], change)
 
     def _sig_disp_text_inserted(self, textbuffer, ins_iter, text, length):
@@ -1734,7 +1734,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                         self.buff['true'].disconnect(handler)
 
             self.buff['true'] = buff
-            self.__buff_watcher['true'] = [
+            self.__buff_watcher['true'] = [ # need to be disconnect in destroy()
                 self.buff['true'].connect('insert_text',  self._sig_buffer_text_inserting, 'true'),
                 self.buff['true'].connect('delete_range', self._sig_buffer_range_deleting, 'true'),
                 ]
@@ -2379,12 +2379,6 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         if change:
             self.__state_swap['state'].append(change)
-
-            # new change applied on disp/true buffer, update it to AST as well
-            ast = self.get_ast()
-            if ast and ast['syntax_tree']:
-                ast['syntax_tree'].update(change)
-
             if not self.__state_swap['more']:
                 # no more to append, process the state
                 if target == 'true':
