@@ -12,23 +12,38 @@ class zAstLeafNode(object):
     '''
     a leaf node of a (sub) abstract syntax tree;
     has the following members:
-        token:  the token type of the element
-        text:   the content of the element
-        offset: the relative offset to the end of the previous element
+        token:    the token type of the element
+        text:     the content of the element
+        offset:   the relative offset to the end of the previous element
+        complete: whether the leaf node is complete or not
     '''
-    def __init__(self, token, text, offset = 0):
+    def __init__(self, token, text, offset = 0, complete = True):
         self.token  = token
         self.text   = text
         self.offset = offset
+        self.__complete__ = complete
 
     def __str__(self):
         return '{0:>{1}}{2}'.format('', self.offset, self.text)
 
+    def spec(self):
+        return '{0}({1})'.format(self.token, self.__complete__ and 'C' or 'I')
+
     def __repr__(self):
-        return '{0}({1})'.format(self.token, self.text)
+        return '{0}<{1}>'.format(self.spec(), self.text)
 
     def __len__(self):
         return self.offset + len(self.text)
+
+
+    def complete(self, setting = True):
+        self.__complete__ = setting
+
+    def iscomplete(self):
+        return self.__complete__
+
+    def allcomplete(self):
+        return self.iscomplete()
 
 
     ### the following functions are required by zAstSubTree()
@@ -54,16 +69,20 @@ class zAstSubTree(object):
     '''
     an sub-tree (non-leaf node) of a (sub) abstract syntax tree
     '''
-    def __init__(self, token):
+    def __init__(self, token, complete = None):
         self.token    = token
         self.__list__ = [ ]
+        self.__complete__ = complete
 
 
     def __str__(self):
         return ''.join([ ele.__str__() for ele in self.__list__ ])
 
+    def spec(self):
+        return '{0}({1})'.format(self.token, self.__complete__ and 'C' or 'I')
+
     def __repr__(self):
-        return '{0}{1}{2}{3}'.format(self.token, '{ ',
+        return '{0}{1}{2}{3}'.format(self.spec(), '{ ',
             ', '.join([ ele.__repr__() for ele in self.__list__ ]),
             ' }'
             )
@@ -90,6 +109,21 @@ class zAstSubTree(object):
 
     def count(self, content):
         return self.flat(show_text = True).count(content)
+
+
+    def complete(self, setting = True):
+        self.__complete__ = setting
+
+    def iscomplete(self):
+        return self.__complete__
+
+    def allcomplete(self, children_only = False):
+        if not children_only and not self.__complete__:
+            return False
+        for ele in self.__list__:
+            if not ele.allcomplete():
+                return False
+        return True
 
 
     def index_from_offset(self, abs_pos):
@@ -256,6 +290,8 @@ class zSyntaxParser(object):
         self.__lnum  = -1       # current line number
 
         self.__parse_begin(self.__ast__)
+        self.__ast__.complete(self.__ast__.allcomplete(children_only = True))
+        #self.print_tree()       # for debugging usage
         return self
 
 
@@ -304,9 +340,23 @@ class zSyntaxParser(object):
         return ( indx_s, indx_s + wlen )
 
 
+    def reparse(self, pos_rlvnt = {}, non_split = {}, key_words = {}, level_dlm = {}):
+        self.__pos__ = pos_rlvnt
+        self.__one__ = non_split
+        self.__key__ = key_words
+        self.__lvl__ = level_dlm
+
+        return self.__parse()
+
+
     def update(self, change):
         if not change:
             return self
+#        index = self.__ast__.index_from_offset(change.offset)
+#        node  = self.__ast__[index] # must be a leaf node
+
+#        print index, type(node), node
+
         if change.action == 'i':
             self.__src = ''.join([
                     self.__src[ : change.offset],
@@ -320,13 +370,9 @@ class zSyntaxParser(object):
                     ])
         return self.__parse()
 
-    def reparse(self, pos_rlvnt = {}, non_split = {}, key_words = {}, level_dlm = {}):
-        self.__pos__ = pos_rlvnt
-        self.__one__ = non_split
-        self.__key__ = key_words
-        self.__lvl__ = level_dlm
 
-        return self.__parse()
+    def print_tree(self):
+        self.__print_subtree('', self.__ast__)
 
 
     ### supporting function
@@ -364,6 +410,7 @@ class zSyntaxParser(object):
             self.__append_curr_lns(ast_node[-1])
             self.__last = indx_e # mark the end of the item just parsed
             self.__advance_indx(len(dlm_s), ast_node)
+            ast_node.complete(False) # mark the sub-tree as incomplete
 
         # check position-relevant token
         self.__parse_pos_relevant(ast_node)
@@ -393,13 +440,14 @@ class zSyntaxParser(object):
                         ast_node.append(zAstLeafNode(ast_node.token, self.__src[indx_s : indx_e], indx_s - self.__last))
                         self.__append_curr_lns(ast_node[-1])
                         self.__last = indx_e # mark the end of the item just parsed
-                        return len(dlm_s)    # report to upper level the offset index should be advanced
+                        ast_node.complete()  # complete the sub-tree
+                        return len(dlm_e)    # report to upper level the offset index should be advanced
                 else:
                     dlm_e = ' ' # default dlm for word end
 
                 # try parsing level indicator
                 word = self.__get_word_at(self.__indx, dlm_e)
-                ( token, indx ) = self.__search_level_dlm(word)
+                ( token, indx, action ) = self.__search_level_dlm(word)
                 if indx:
                     # e.g. 'word(...' (indx > 0)  or  'word' (indx == -1)
                     if indx < 0:
@@ -411,11 +459,34 @@ class zSyntaxParser(object):
                     self.__last = indx_e # mark the end of the item just parsed
                     self.__advance_indx(indx, ast_node)
                 else:
-                    # e.g. '(...' (indx == 0)
-                    new_sub_tree = zAstSubTree(token)
-                    ast_node.append(new_sub_tree)
-                    offset = self.__parse_begin(new_sub_tree) # go to next level
-                    self.__advance_indx(offset, ast_node)
+                    # e.g. '(...' (indx == 0)  or  ') ...' (indx == 0, action == 'reform tree')
+                    if action == 'normal':
+                        new_sub_tree = zAstSubTree(token)
+                        ast_node.append(new_sub_tree)
+                        offset = self.__parse_begin(new_sub_tree) # go to next level
+                        if isinstance(offset, zAstSubTree):
+                            # offset is really a new sub-tree to be appended
+                            ast_node.append(offset)
+                            self.__append_curr_lns(ast_node[-1])
+                            self.__last += len(offset)
+                            offset = self.__last - self.__indx
+                        self.__advance_indx(offset, ast_node)
+                    elif action == 'reform tree':
+                        dlm_e  = self.__lvl__[token][1]
+                        indx_s = self.__indx
+                        indx_e = indx_s + len(dlm_e)
+                        new_subtree = zAstSubTree(token, False)
+                        new_subtree.append(zAstLeafNode(token, self.__src[indx_s : indx_e], indx_s - self.__last))
+                        if ast_node.token in self.__lvl__: # sub-tree
+                            ast_node.complete(False) # mark the current sub-tree as incomplete
+                            return new_subtree # report to upper level the sub-tree need to be appended
+                        else:
+                            ast_node.append(new_subtree)
+                            self.__append_curr_lns(ast_node[-1])
+                            self.__last = indx_e
+                            self.__advance_indx(len(dlm_e), ast_node)
+                    else:
+                        raise KeyError('{0}: action not supported!'.format(action))
         return 0 # index should not be advanced since no content any more
 
 
@@ -445,9 +516,11 @@ class zSyntaxParser(object):
                 indx_e = self.__src.find(v[1], self.__indx + len(v[0]))
                 if indx_e >= 0:
                     indx_e += len(v[1]) # to include ending dlm
+                    complete = True
                 else:
                     indx_e = self.__size
-                ast_node.append(zAstLeafNode(k, self.__src[indx_s : indx_e], indx_s - self.__last))
+                    complete = False
+                ast_node.append(zAstLeafNode(k, self.__src[indx_s : indx_e], indx_s - self.__last, complete))
                 self.__append_curr_lns(ast_node[-1])
                 self.__last = indx_e # mark the end of the item just parsed
                 self.__advance_indx(indx_e - indx_s, ast_node)
@@ -481,10 +554,21 @@ class zSyntaxParser(object):
 
 
     def __search_level_dlm(self, word):
+        edlm = {                # holding (invalid) ending dlm
+            'indx' : len(word),
+            'key'  : None,
+            }
         for (k, v) in self.__lvl__.iteritems():
             if v[0] in word:
-                return ( k, word.index(v[0]), )
-        return ( None, -1 )
+                return ( k, word.index(v[0]), 'normal' )
+            if v[1] in word:    # potential invalid ending dlm
+                indx = word.index(v[1])
+                if indx < edlm['indx']:
+                    edlm['indx'] = indx
+                    edlm['key']  = k
+        if edlm['key']:
+            return ( edlm['key'], edlm['indx'], 'reform tree' )
+        return ( None, -1, 'pass' )
 
 
     def __get_line_at(self, indx):
@@ -526,4 +610,20 @@ class zSyntaxParser(object):
                 in_quote = self.__src[indx_e]
             indx_e += 1
         return self.__src[indx : indx_e]
+
+
+    def __print_subtree(self, leading_msg, treenode):
+        if isinstance(treenode, zAstSubTree):
+            # sub-tree
+            line1 = '{0}{1} -> '.format(leading_msg, treenode.spec())
+            if len(treenode):
+                self.__print_subtree(line1, treenode[0])
+                linen = '{0:{1}}'.format('', len(line1))
+                for node in treenode[1:]:
+                    self.__print_subtree(linen, node)
+            else:
+                sys.stderr.write('{0}{1}\n'.format(line1, '[ empty ]'))
+        else:
+            # leaf node
+            sys.stderr.write('{0}{1}\n'.format(leading_msg, repr(treenode)))
     ### end of supporting function

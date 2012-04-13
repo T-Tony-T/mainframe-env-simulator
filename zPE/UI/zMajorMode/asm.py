@@ -59,7 +59,7 @@ LC = {                          # local config
     'ast-map' : {
         'pos_rlvnt'     : {
             'LN-CMMNT'  : r'(\*.*)',
-            'JCL-STMT'  : r'(//.*|/\*[\s]*)',
+            'JCL-STMT'  : r'(//.*|/\* *)',
             'LN-LABEL'  : ''.join([ r'(', RE['lbl'], r')' ]),
             'INSTRUCT'  : ''.join([ r'(?:', RE['lbl'], r')? +(', RE['ins'], r')', RE['spc'] ]),
             'LOC-CNT'   : ''.join([ r'(?:', RE['lbl'], r')? +(?:', RE['ins'], r' +)(?:[^\s*/+-]+[*/+-])*\(*(\*).*' ]),
