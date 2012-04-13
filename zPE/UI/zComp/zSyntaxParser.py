@@ -242,7 +242,9 @@ class zSyntaxParser(object):
 
     def __parse(self):
         self.__ast__ = zAstSubTree('_ROOT_')
-        self.__lns__ = [ ]      # line-content fast-lookup table
+        self.__lns__ = [        # line-content fast-lookup table
+            # line_offset_from_last_node, node_1, node_2, ...
+            ]
 
         self.__size  = len(self.__src) # length of original string
         self.__last  = 0        # end of the last element
@@ -269,8 +271,15 @@ class zSyntaxParser(object):
 
 
     def get_nodes_at(self, line_num):
+        '''the offset of first node in the list need to be corrected using get_line_offset()'''
         if line_num < len(self.__lns__):
-            return self.__lns__[line_num]
+            return self.__lns__[line_num][1:]
+        else:
+            return None
+
+    def get_line_offset(self, line_num):
+        if line_num < len(self.__lns__):
+            return self.__lns__[line_num][0]
         else:
             return None
 
@@ -330,7 +339,12 @@ class zSyntaxParser(object):
 
     def __append_lns(self, line_num, node):
         while len(self.__lns__) <= line_num: # line_num start at 0
-            self.__lns__.append([])
+            self.__lns__.append([ 0 ])
+        if len(self.__lns__[line_num]) == 1: # first node in the line
+            # update correction offset, if needed
+            space = self.__src[self.__last : self.__indx]
+            if '\n' in space:
+                self.__lns__[line_num][0] = space.rindex('\n') + 1
         self.__lns__[line_num].append(node)
 
     def __append_curr_lns(self, node):

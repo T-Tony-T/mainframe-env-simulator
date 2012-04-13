@@ -59,11 +59,11 @@ LC = {                          # local config
     'ast-map' : {
         'pos_rlvnt'     : {
             'LN-CMMNT'  : r'(\*.*)',
-            'JCL-STMT'  : r'(//.*)',
+            'JCL-STMT'  : r'(//.*|/\*[\s]*)',
             'LN-LABEL'  : ''.join([ r'(', RE['lbl'], r')' ]),
             'INSTRUCT'  : ''.join([ r'(?:', RE['lbl'], r')? +(', RE['ins'], r')', RE['spc'] ]),
             'LOC-CNT'   : ''.join([ r'(?:', RE['lbl'], r')? +(?:', RE['ins'], r' +)(?:[^\s*/+-]+[*/+-])*\(*(\*).*' ]),
-            'END-CMMNT' : ''.join([ r'(?:', RE['lbl'], r')? +(?:', RE['ins'], r' +)(?:', RE['wrd'], r' +)(.+)' ]),
+            'END-CMMNT' : ''.join([ r'(?:', RE['lbl'], r')? +(?:', RE['ins'], r' +)(?:', RE['wrd'], r' +)([^\s].*)' ]),
             },
         'non_split'     : {
             'QUOTE'     : ( "'", "'" ),
@@ -100,7 +100,10 @@ class AsmMode(BaseMode):
         '''
         curr_ln = ast.get_nodes_at(line[0])
 
-        if curr_ln and curr_ln[0].token == 'LN-CMMNT':
+        if curr_ln and curr_ln[0].token == 'JCL-STMT':
+            # current line is JCL card
+            return None         # ignore it
+        elif curr_ln and curr_ln[0].token == 'LN-CMMNT':
             # current line is line-comment
             curr_nonsp_pos = self.__locate_nonsp(curr_ln[0].text, 1)
 
@@ -134,38 +137,73 @@ class AsmMode(BaseMode):
             return None
         else:
             # current line is regular line
-            pos_ins_start = 10
-            pos_arg_start = 6   # col 16 = col 10 + len 6
-            pos_cmt_start = 16  # col 32 = col 16 + len 16
+            pos_ins_start = 9
+            pos_arg_start = 15  # ins_start + 6
+            pos_cmt_start = 31  # arg_start + 16
 
             for prev_ln_ndx in range(line[0] - 1, -1, -1): # count down to line No.0
                 prev_ln = ast.get_nodes_at(prev_ln_ndx)
                 if not prev_ln:
                     # effective previous line is empty
                     continue    # skip it
+                elif prev_ln[0].token == 'JCL-STMT':
+                    # effective previous line is JCL card
+                    continue    # ignore it
                 elif prev_ln[0].token != 'LN-CMMNT':
                     # effective previous line is regular line
-                    rel_pos = 0
-                    for i in range(len(prev_ln)):
-                        rel_pos += prev_ln[i].offset
-                        if prev_ln[i].token == 'INSTRUCT':
-                            pos_ins_start = rel_pos
-                            pos_arg_start = rel_pos + len(prev_ln[i].text)
-                            if i < len(prev_ln):
-                                pos_arg_start += prev_ln[i+1].offset
-                            rel_pos       = 0 # reset relative position
-                        elif prev_ln[i].token == 'END-CMMNT':
-                            pos_cmt_start = rel_pos
-                            break
-                        rel_pos += len(prev_ln[i].text)
+                    prev_ln = ''.join([ str(node) for node in prev_ln ])[ast.get_line_offset(prev_ln_ndx) : ]
+                    field = re.split(r'(\s+)', prev_ln, 3)
+
+                    pos_ins_start = sum([ len(f) for f in field[0:2] ])
+                    if len(field) > 4: # i.e. has everything upto argument(s) field
+                        pos_arg_start = pos_ins_start + sum([ len(f) for f in field[2:4] ])
+                    else:
+                        pos_arg_start = pos_ins_start + 6
+                    if len(field) > 6: # i.e. has everything upto comment field
+                        pos_cmt_start = pos_arg_start + sum([ len(f) for f in field[4:6] ])
+                    else:
+                        pos_cmt_start = pos_arg_start + 16
                     break
                 else:
                     # effective previous line is not regular line
                     continue    # skip it
 
             # perform the alignment
-            pass
-        return None
+            field = re.split(r'(\s+)', line[1], 3)
+            change_list = [ ]
+            # check instruction alignment
+            label_end  = len(field[0]) # this always exists, since an re.split() on '' results [ '' ]
+            offset_ins = sum([ len(f) for f in field[0:2] ])
+            change = self.__align_part(label_end, offset_ins, pos_ins_start)
+            if change:
+                change_list.append(change)
+                if change.action == 'i':
+                    offset_ins += len(change.content)
+                else:
+                    offset_ins -= len(change.content)
+            # check argument(s) alignment, if any
+            if len(field) > 2 and field[2]:  # i.e. has instruction field
+                ins_end    = offset_ins + len(field[2])
+                offset_arg = offset_ins + sum([ len(f) for f in field[2:4] ])
+                change = self.__align_part(ins_end, offset_arg, pos_arg_start)
+                if change:
+                    change_list.append(change)
+                    if change.action == 'i':
+                        offset_arg += len(change.content)
+                    else:
+                        offset_arg -= len(change.content)
+            # check comment alignment, if any
+            if len(field) > 4 and field[4]:  # i.e. has argument(s) field
+                cmmnt_end  = offset_arg + len(field[4])
+                offset_cmt = offset_arg + sum([ len(f) for f in field[4:6] ])
+                change = self.__align_part(cmmnt_end, offset_cmt, pos_cmt_start)
+                if change:
+                    change_list.append(change)
+            # return the change(s), if any
+            if change_list:
+                return self.zAtomicChange(change_list)
+            else:
+                return None
 
 
     def comment(self, line, ast):
@@ -231,3 +269,22 @@ class AsmMode(BaseMode):
                 return start
             start += 1          # advance to next character
         return start            # cannot locate non-space character
+
+    def __align_part(self, eolast, currpart, alignpos):
+        if eolast < alignpos < currpart:
+            return self.zBufferChange(
+                '{0:{1}}'.format('', currpart - alignpos),
+                eolast, 'd'
+                )
+        elif alignpos < eolast + 1 < currpart:
+            return self.zBufferChange(
+                '{0:{1}}'.format('', currpart - eolast - 1),
+                eolast, 'd'
+                )
+        elif currpart < alignpos:
+            return self.zBufferChange(
+                '{0:{1}}'.format('', alignpos - currpart),
+                eolast, 'i'
+                )
+        else:
+            return None         # no need to align instruction

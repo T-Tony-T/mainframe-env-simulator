@@ -1808,6 +1808,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         self.__state_swap['more'] = True
         for line_num in range(sel[0].get_line(), sel[1].get_line() + 1):
             line_tuple = self.get_line_at(line_num)
+            if not line_tuple[1]: # empty line
+                continue          # skip it
             state = mode.align(line_tuple, ast['syntax_tree'])
             if state:
                 for change in state:
