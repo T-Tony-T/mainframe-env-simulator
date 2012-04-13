@@ -326,7 +326,7 @@ class zSyntaxParser(object):
         self.__key__ = key_words
         self.__lvl__ = level_dlm
 
-        return self.parse()
+        return self.__parse()
 
 
     ### supporting function

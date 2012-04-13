@@ -687,6 +687,9 @@ class zEdit(z_ABC, gtk.VBox):
         if not active_item  or  active_item[2] != buff.major_mode:
             self.buffer_md.set_active(['{0:<12}'.format(buff.major_mode), False, buff.major_mode])
 
+        if buff.type == 'file':
+            self.center.hilite()
+
 
     def _sig_buffer_caps_toggled(self, bttn):
         self.active_buffer.toggle_caps_on()
