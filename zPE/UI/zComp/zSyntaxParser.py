@@ -147,6 +147,23 @@ class zAstSubTree(object):
         return curr_pos + self.__list__[norm_indx].index_to_offset(index[1:])
 
 
+    def index(self, node):
+        # this is SLOW!!! need to be improved later
+        # avoid using it if possible
+        for search in range(len(self.__list__)):
+            search_node = self.__list__[search]
+            if isinstance(search_node, zAstLeafNode):
+                if search_node == node:
+                    return [ search ]
+                else:
+                    continue
+            else:
+                try:
+                    return [ search ] + search_node.index()
+                except:
+                    continue
+        raise KeyError('node not in the AST Sub Tree')
+
     def __getitem__(self, index):
         if isinstance(index, list):
             if not -1 <= index[0] <= self.__len__(): # check indexing range
@@ -181,17 +198,6 @@ class zAstSubTree(object):
     def pop(self, indx = -1):
         return self.__list__.pop(indx)
     ### generic list (sub tree) manipulation
-
-
-    def index(self, content, index_start = 0, index_end = sys.maxsize):
-        try:
-            return [ str(ele).strip() for ele in self.__list__ ].index(content, index_start, index_end)
-        except:
-            raise ValueError('content is not in the current level of AST.\n'
-                             '\ttry `search_content()` if you need a deep search.')
-
-    def search_content(self, content):
-        raise AssertionError('not supported yet.')
 
 
 
@@ -286,6 +292,7 @@ class zSyntaxParser(object):
 
         self.__parse_begin(self.__ast__)
         self.__ast__.append(zAstLeafNode('_EOF_', '', self.__indx - self.__last))
+        self.__append_curr_lns(self.__ast__[-1])
         self.__ast__.complete(self.__ast__.allcomplete(children_only = True))
         #self.print_tree()       # for debugging usage
         return self
@@ -315,6 +322,32 @@ class zSyntaxParser(object):
         else:
             return None
 
+    def get_line_index(self, node, start = 0, end = sys.maxsize):
+        for ln in range(start, min(len(self.__lns__), end)):
+            if node in self.__lns__[ln]:
+                return ln
+        return None
+
+    def get_prev_node(self, node_indx, line_num):
+        if node_indx > 1:
+            return self.__lns__[line_num][node_indx - 1]
+        while line_num > 0  and  len(self.__lns__[line_num - 1]) == 1:
+            line_num -= 1
+        if line_num > 0:
+            return self.__lns__[line_num - 1][-1]
+        return None
+
+    def get_next_node(self, node_indx, line_num):
+        if node_indx < len(self.__lns__[line_num]) - 1:
+            return self.__lns__[line_num][node_indx + 1]
+        max_line_indx = len(self.__lns__) - 1
+        while line_num < max_line_indx  and  len(self.__lns__[line_num + 1]) == 1:
+            line_num += 1
+        if line_num < max_line_indx:
+            return self.__lns__[line_num + 1][1]
+        return None
+
+        
 
     def get_word(self, abs_pos, conn_back = False):
         ( indx_s, indx_e ) = self.get_word_bounds(abs_pos, conn_back)
@@ -336,6 +369,7 @@ class zSyntaxParser(object):
         return ( indx_s, indx_s + wlen )
 
 
+
     def reparse(self, pos_rlvnt = {}, non_split = {}, key_words = {}, level_dlm = {}):
         self.__pos__ = pos_rlvnt
         self.__one__ = non_split
@@ -348,21 +382,23 @@ class zSyntaxParser(object):
     def update(self, change):
         if not change:
             return self
+
+        # calculate effected line range of the change
         index = self.__ast__.index_from_offset(change.offset)
         node  = self.__ast__[index] # must be a leaf node
+        ln_s  = self.get_line_index(node)
+        if index[-1] < 0:       # insertion/deletion before current node
+            node = self.get_prev_node(self.__lns__[ln_s].index(node), ln_s)  or  node
+            ln_s = self.get_line_index(node)
+        ln_e = ln_s + 1
+        while ln_e < len(self.__lns__)  and  len(self.__lns__[ln_e]) == 1:
+            ln_e += 1
 
+        # apply changes
         if change.action == 'i':
-            self.__src = ''.join([
-                    self.__src[ : change.offset],
-                    change.content,
-                    self.__src[change.offset : ]
-                    ])
+            return self.__update_insert(ln_s, change, ln_e)
         else:
-            self.__src = ''.join([
-                    self.__src[ : change.offset],
-                    self.__src[change.offset + len(change.content) : ]
-                    ])
-        return self.__parse()
+            return self.__update_delete(ln_s, change, ln_e)
 
 
     def print_tree(self):
@@ -604,6 +640,26 @@ class zSyntaxParser(object):
                 in_quote = self.__src[indx_e]
             indx_e += 1
         return self.__src[indx : indx_e]
+
+
+
+    def __update_insert(self, ln_s, change, ln_e):
+        #print ln_s, ln_e
+        self.__src = ''.join([
+                self.__src[ : change.offset],
+                change.content,
+                self.__src[change.offset : ]
+                ])
+        return self.__parse()
+
+    def __update_delete(self, ln_s, change, ln_e):
+        #print ln_s, ln_e
+        self.__src = ''.join([
+                self.__src[ : change.offset],
+                self.__src[change.offset + len(change.content) : ]
+                ])
+        return self.__parse()
+
 
 
     def __print_subtree(self, leading_msg, treenode):
