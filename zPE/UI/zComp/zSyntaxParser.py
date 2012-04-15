@@ -30,7 +30,7 @@ class zAstLeafNode(object):
         return '{0}({1})'.format(self.token, self.__complete__ and 'C' or 'I')
 
     def __repr__(self):
-        return '{0}<{1}>'.format(self.spec(), self.text)
+        return '{0}<{1}|{2}>'.format(self.spec(), self.offset, self.text)
 
     def __len__(self):
         return self.offset + len(self.text)
@@ -129,20 +129,15 @@ class zAstSubTree(object):
     def index_from_offset(self, abs_pos):
         if abs_pos > self.__len__():
             raise ValueError('absolute offset excess the AST Sub-Tree Node length')
-        curr_pos = 0
-        search   = 0
-        while search < len(self.__list__):
-            ele_size = len(self.__list__[search])
-            if abs_pos < curr_pos + ele_size:
+        next_pos = 0
+        for search in range(len(self.__list__)):
+            curr_pos = next_pos # backup current position
+            next_pos += len(self.__list__[search])
+            if abs_pos < next_pos:
                 # abs_pos corresponding to current sub-tree
                 break
-            # abs_pos is past current sub-element
-            curr_pos += ele_size
-            search += 1         # move to next element
-        if search < len(self.__list__):
-            return [ search ] + self.__list__[search].index_from_offset(abs_pos - curr_pos)
-        else:
-            return [ search - 1, ele_size ]
+        # search succeed, or reached the end of current (sub-)tree
+        return [ search ] + self.__list__[search].index_from_offset(abs_pos - curr_pos)
 
     def index_to_offset(self, index):
         curr_pos  = 0
@@ -290,6 +285,7 @@ class zSyntaxParser(object):
         self.__lnum  = -1       # current line number
 
         self.__parse_begin(self.__ast__)
+        self.__ast__.append(zAstLeafNode('_EOF_', '', self.__indx - self.__last))
         self.__ast__.complete(self.__ast__.allcomplete(children_only = True))
         #self.print_tree()       # for debugging usage
         return self
@@ -352,10 +348,8 @@ class zSyntaxParser(object):
     def update(self, change):
         if not change:
             return self
-#        index = self.__ast__.index_from_offset(change.offset)
-#        node  = self.__ast__[index] # must be a leaf node
-
-#        print index, type(node), node
+        index = self.__ast__.index_from_offset(change.offset)
+        node  = self.__ast__[index] # must be a leaf node
 
         if change.action == 'i':
             self.__src = ''.join([
