@@ -35,6 +35,9 @@ class zAstLeafNode(object):
     def __len__(self):
         return self.offset + len(self.text)
 
+    def __nonzero__(self):
+        return True
+
 
     def complete(self, setting = True):
         self.__complete__ = setting
@@ -89,6 +92,9 @@ class zAstSubTree(object):
 
     def __len__(self):
         return len(self.__str__())
+
+    def __nonzero__(self):
+        return True
 
 
     def flat(self, show_text = False):
@@ -145,6 +151,12 @@ class zAstSubTree(object):
         for search in range(norm_indx):
             curr_pos += len(self.__list__[search])
         return curr_pos + self.__list__[norm_indx].index_to_offset(index[1:])
+
+    def list_top_index(self, indx_s, indx_e):
+        indx = 0
+        while indx_s[indx] == indx_e[indx]:
+            indx += 1
+        return indx_s[:indx]
 
 
     def index(self, node):
@@ -278,7 +290,7 @@ class zSyntaxParser(object):
     def __parse(self):
         self.__ast__ = zAstSubTree('_ROOT_')
         self.__lns__ = [        # line-content fast-lookup table
-            # line_offset_from_last_node, node_1, node_2, ...
+            # (line_offset, content_since_last_node), node_1, node_2, ...
             ]
 
         self.__size  = len(self.__src) # length of original string
@@ -290,11 +302,18 @@ class zSyntaxParser(object):
         self.__eol   = 0        # absolute ending   position of current line
         self.__lnum  = -1       # current line number
 
+        # mark the start of the root tree
+        self.__ast__.append(zAstLeafNode('_TOP_', '', 0))
+        self.__append_curr_lns(self.__ast__[-1])
+
+        # fill the root tree
         self.__parse_begin(self.__ast__)
+
+        # mark the end of the root tree
         self.__ast__.append(zAstLeafNode('_EOF_', '', self.__indx - self.__last))
         self.__append_curr_lns(self.__ast__[-1])
+
         self.__ast__.complete(self.__ast__.allcomplete(children_only = True))
-        #self.print_tree()       # for debugging usage
         return self
 
 
@@ -308,24 +327,42 @@ class zSyntaxParser(object):
     def get_ast(self):
         return self.__ast__
 
+    def is_complete(self):
+        return self.__ast__.iscomplete()
 
-    def get_nodes_at(self, line_num):
-        '''the offset of first node in the list need to be corrected using get_line_offset()'''
+
+    def get_nodes_at(self, line_num, ignore_anchor = False):
+        '''the offset of first node in the list need to be corrected using get_line_prefix()'''
         if line_num < len(self.__lns__):
-            return self.__lns__[line_num][1:]
+            nodes = self.__lns__[line_num][1:]
+            if ignore_anchor:
+                if nodes and nodes[0].token  == '_TOP_':
+                    nodes.pop(0)
+                if nodes and nodes[-1].token == '_EOF_':
+                    nodes.pop(-1)
+            return nodes
         else:
             return None
 
     def get_line_offset(self, line_num):
         if line_num < len(self.__lns__):
-            return self.__lns__[line_num][0]
+            return self.__lns__[line_num][0][0]
+        else:
+            return len(self.__src)
+
+    def get_line_prefix(self, line_num):
+        if line_num < len(self.__lns__):
+            return self.__lns__[line_num][0][1]
         else:
             return None
 
     def get_line_index(self, node, start = 0, end = sys.maxsize):
-        for ln in range(start, min(len(self.__lns__), end)):
+        ln = start
+        end = min(len(self.__lns__), end)
+        while ln < end:
             if node in self.__lns__[ln]:
                 return ln
+            ln += 1
         return None
 
     def get_prev_node(self, node_indx, line_num):
@@ -348,6 +385,32 @@ class zSyntaxParser(object):
         return None
 
         
+    def get_nodes_at_lines(self, ln_s, ln_e):
+        return sum([ self.get_nodes_at(ln) for ln in range(ln_s, ln_e) ], [])
+
+    def get_contents_at_lines(self, ln_s, ln_e, prefix = True, surfix = True):
+        indx_s = self.get_line_offset(ln_s)
+        if prefix:
+            prefix = self.get_line_prefix(ln_s)  or  ''
+            indx_s -= len(prefix)
+        indx_e = self.get_line_offset(ln_e)
+        if surfix:
+            while ln_e < len(self.__lns__) - 1:
+                ln_e += 1
+                line = self.__lns__[ln_e]
+                if line[0][0] != None:
+                    indx_e += len(line[0][1]) - 1
+                    break
+        return self.__src[indx_s : indx_e]
+
+
+    def all_complete_at_lines(self, ln_s, ln_e):
+        for ln in range(ln_s, ln_e):
+            for ele in self.get_nodes_at(ln):
+                if not ele.allcomplete():
+                    return False
+        return True
+
 
     def get_word(self, abs_pos, conn_back = False):
         ( indx_s, indx_e ) = self.get_word_bounds(abs_pos, conn_back)
@@ -369,7 +432,6 @@ class zSyntaxParser(object):
         return ( indx_s, indx_s + wlen )
 
 
-
     def reparse(self, pos_rlvnt = {}, non_split = {}, key_words = {}, level_dlm = {}):
         self.__pos__ = pos_rlvnt
         self.__one__ = non_split
@@ -387,10 +449,10 @@ class zSyntaxParser(object):
         index = self.__ast__.index_from_offset(change.offset)
         node  = self.__ast__[index] # must be a leaf node
         ln_s  = self.get_line_index(node)
-        if index[-1] < 0:       # insertion/deletion before current node
+        ln_e = ln_s + 1
+        if index[-1] <= 0:    # insertion/deletion before current node
             node = self.get_prev_node(self.__lns__[ln_s].index(node), ln_s)  or  node
             ln_s = self.get_line_index(node)
-        ln_e = ln_s + 1
         while ln_e < len(self.__lns__)  and  len(self.__lns__[ln_e]) == 1:
             ln_e += 1
 
@@ -415,12 +477,14 @@ class zSyntaxParser(object):
 
     def __append_lns(self, line_num, node):
         while len(self.__lns__) <= line_num: # line_num start at 0
-            self.__lns__.append([ 0 ])
+            self.__lns__.append([ (None, None) ])
         if len(self.__lns__[line_num]) == 1: # first node in the line
             # update correction offset, if needed
-            space = self.__src[self.__last : self.__indx]
-            if '\n' in space:
-                self.__lns__[line_num][0] = space.rindex('\n') + 1
+            gross_prefix = self.__src[self.__last : self.__indx]
+            net_prefix   = gross_prefix[ : gross_prefix.rfind('\n')+1]
+                           # if found, [:rfind()+1] contains net_prefix;
+                           # otherwise, rfind()+1 == 0 gives '' as net_prefix
+            self.__lns__[line_num][0] = (self.__last + len(net_prefix), net_prefix)
         self.__lns__[line_num].append(node)
 
     def __append_curr_lns(self, node):
@@ -644,22 +708,156 @@ class zSyntaxParser(object):
 
 
     def __update_insert(self, ln_s, change, ln_e):
-        #print ln_s, ln_e
+        old_complete = self.all_complete_at_lines(ln_s, ln_e)
+        if old_complete:
+            content = self.get_contents_at_lines(ln_s, ln_e, prefix = True, surfix = True)
+
+            # test change on line content
+            offset = change.offset - self.get_line_offset(ln_s) + len(self.get_line_prefix(ln_s))
+            update = zSyntaxParser(
+                ''.join([ content[ : offset],
+                          change.content,
+                          content[offset : ]
+                          ]),
+                pos_rlvnt = self.__pos__,
+                non_split = self.__one__,
+                key_words = self.__key__,
+                level_dlm = self.__lvl__
+                )
+
+            if update.is_complete():
+                # all  complete   -> all  complete:   safe to modify AST directly
+                self.__apply_update(ln_s, update, ln_e) # apply modification
+
+        # apply the change
         self.__src = ''.join([
                 self.__src[ : change.offset],
                 change.content,
                 self.__src[change.offset : ]
                 ])
-        return self.__parse()
+        if old_complete  and  update.is_complete():
+            # all  complete   -> all  complete:   safe to modify AST directly
+            return self
+        else:
+            # all  complete   -> some incomplete: may be safe (furture feature)
+            # some incomplete -> all  complete:   almost safe (furture feature)
+            # some incomplete -> some incomplete: unsafe to modify AST directly
+            return self.__parse()
 
     def __update_delete(self, ln_s, change, ln_e):
-        #print ln_s, ln_e
+        old_complete = self.all_complete_at_lines(ln_s, ln_e)
+        if old_complete:
+            content = self.get_contents_at_lines(ln_s, ln_e, prefix = True, surfix = True)
+
+            # test change on line content
+            offset = change.offset - self.get_line_offset(ln_s) + len(self.get_line_prefix(ln_s))
+            update = zSyntaxParser(
+                ''.join([ content[ : offset],
+                          content[offset + len(change.content) : ]
+                          ]),
+                pos_rlvnt = self.__pos__,
+                non_split = self.__one__,
+                key_words = self.__key__,
+                level_dlm = self.__lvl__
+                )
+
+            if update.is_complete():
+                # all  complete   -> all  complete:   safe to modify AST directly
+                self.__apply_update(ln_s, update, ln_e) # apply modification
+
+        # apply the change
         self.__src = ''.join([
                 self.__src[ : change.offset],
                 self.__src[change.offset + len(change.content) : ]
                 ])
-        return self.__parse()
+        if old_complete  and  update.is_complete():
+            # all  complete   -> all  complete:   safe to modify AST directly
+            return self
+        else:
+            # all  complete   -> some incomplete: may be safe (furture feature)
+            # some incomplete -> all  complete:   almost safe (furture feature)
+            # some incomplete -> some incomplete: unsafe to modify AST directly
+            return self.__parse()
 
+
+    def __apply_update(self, ln_s, update, ln_e):
+        # normalize AST and fast-lookup table
+        old_nodes = self.get_nodes_at_lines(ln_s, ln_e)
+        if old_nodes[0]  == self.__ast__[0]:
+            # 1st node to be removed is TOP, keep it
+            keep_top = old_nodes.pop(0)
+        else:
+            keep_top = None
+        update.__lns__[0].pop(1) # remove TOP from 1st line
+        if len(update.__lns__[0]) == 1:
+            # nothing after TOP in the 1st line
+            top_insert = update.__lns__[0][0]
+            update.__lns__.pop(0) # remove it
+        else:
+            top_insert = None
+
+        if old_nodes[-1] == self.__ast__[-1]:
+            # last node to be removed is EoF, keep it
+            keep_eof = old_nodes.pop()
+        else:
+            # more nodes follows, record next one
+            keep_eof = None
+        update.__lns__[-1].pop() # remove EoF from last line
+        if len(update.__lns__[-1]) == 1:
+            # nothing before EoF in the last line
+            eof_insert = update.__lns__[-1][0]
+            update.__lns__.pop() # remove it
+        else:
+            eof_insert = None
+
+        # generate offset modifier
+        ln_s_offset = self.get_line_offset(ln_s) - len(self.get_line_prefix(ln_s))
+        ln_e_offset = ln_s_offset + len(update.__src) - self.get_line_offset(ln_e)
+
+        # locate outdated nodes
+        text = ''.join([ str(node) for node in old_nodes ])
+        indx_s = self.__ast__.index_from_offset(ln_s_offset)
+        indx_e = self.__ast__.index_from_offset(ln_s_offset + len(text))
+        top_indx = self.__ast__.list_top_index(indx_s, indx_e)
+        parent = self.__ast__
+        for indx in top_indx:
+            parent = parent[indx]
+        indx_s = indx_s[len(top_indx)]
+        indx_e = indx_e[len(top_indx)]
+
+        # update the AST
+        for indx in range(indx_s, indx_e):
+            parent.pop(indx_s)
+        for node in update.__ast__[-2:0:-1]: # reverse order, exclude 1st and last nodes
+            parent.insert(indx_s, node)
+
+        # update fast-lookup table
+        for i in range(ln_s, ln_e):
+            self.__lns__.pop(ln_s)
+        next_line = ln_s
+        for line in update.__lns__[-1::-1]: # reverse order
+            if line[0][0] == None:
+                self.__lns__.insert(ln_s, line)
+            else:
+                self.__lns__.insert(ln_s, [ (ln_s_offset + line[0][0], line[0][1]) ] + line[1:])
+            next_line += 1
+        if keep_top:
+            if top_insert:
+                self.__lns__.insert(ln_s, [ top_insert ])
+            self.__lns__[ln_s].insert(1, keep_top)
+        if keep_eof:
+            if eof_insert:
+                self.__lns__.insert(next_line, [ (ln_s_offset + eof_insert[0], eof_insert[1]) ])
+                next_line += 1
+            self.__lns__[next_line - 1].append(keep_eof)
+
+        # correct all-pass-last line offset
+        for ln in range(next_line, len(self.__lns__)):
+            line = self.__lns__[ln]
+            if line[0][0] != None:
+                line[0] = (ln_e_offset + line[0][0], line[0][1])
+
+        return self
 
 
     def __print_subtree(self, leading_msg, treenode):

@@ -98,7 +98,7 @@ class AsmMode(BaseMode):
             an zAtomicChange object indicating what need to be changed, or
             None if nothing need to be changed
         '''
-        curr_ln = ast.get_nodes_at(line[0])
+        curr_ln = ast.get_nodes_at(line[0], ignore_anchor = True)
 
         if curr_ln and curr_ln[0].token == 'JCL-STMT':
             # current line is JCL card
@@ -108,7 +108,7 @@ class AsmMode(BaseMode):
             curr_nonsp_pos = self.__locate_nonsp(curr_ln[0].text, 1)
 
             for prev_ln_ndx in range(line[0] - 1, -1, -1): # count down to line No.0
-                prev_ln = ast.get_nodes_at(prev_ln_ndx)
+                prev_ln = ast.get_nodes_at(prev_ln_ndx, ignore_anchor = True)
                 if not prev_ln:
                     # effective previous line is empty
                     continue    # skip it
@@ -142,7 +142,7 @@ class AsmMode(BaseMode):
             pos_cmt_start = 31  # arg_start + 16
 
             for prev_ln_ndx in range(line[0] - 1, -1, -1): # count down to line No.0
-                prev_ln = ast.get_nodes_at(prev_ln_ndx)
+                prev_ln = ast.get_nodes_at(prev_ln_ndx, ignore_anchor = True)
                 if not prev_ln:
                     # effective previous line is empty
                     continue    # skip it
@@ -151,7 +151,7 @@ class AsmMode(BaseMode):
                     continue    # ignore it
                 elif prev_ln[0].token != 'LN-CMMNT':
                     # effective previous line is regular line
-                    prev_ln = ''.join([ str(node) for node in prev_ln ])[ast.get_line_offset(prev_ln_ndx) : ]
+                    prev_ln = ''.join([ str(node) for node in prev_ln ])[len(ast.get_line_prefix(prev_ln_ndx)) : ]
                     field = re.split(r'(\s+)', prev_ln, 3)
 
                     pos_ins_start = sum([ len(f) for f in field[0:2] ])
