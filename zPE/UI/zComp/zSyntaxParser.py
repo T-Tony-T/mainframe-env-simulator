@@ -784,8 +784,8 @@ class zSyntaxParser(object):
 
 
     def __apply_update(self, ln_s, update, ln_e):
-        self.print_tree()
-        update.print_tree()
+        #self.print_tree()
+        #update.print_tree()
         # normalize AST and fast-lookup table
         old_nodes = self.get_nodes_at_lines(ln_s, ln_e)
         if old_nodes[0]  == self.__ast__[0]:
@@ -870,7 +870,7 @@ class zSyntaxParser(object):
             if line[0][0] != None:
                 line[0] = (ln_e_offset + line[0][0], line[0][1])
 
-        self.print_tree()
+        #self.print_tree()
         return self
 
 
