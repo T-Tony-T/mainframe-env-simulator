@@ -831,6 +831,9 @@ class zSyntaxParser(object):
             parent.pop(indx_s)
         for node in update.__ast__[-2:0:-1]: # reverse order, exclude 1st and last nodes
             parent.insert(indx_s, node)
+        if keep_eof:
+            # correct EoF offset
+            self.__ast__[-1].offset += ln_e_offset
 
         # update fast-lookup table
         for i in range(ln_s, ln_e):
