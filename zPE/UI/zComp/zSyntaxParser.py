@@ -154,6 +154,12 @@ class zAstSubTree(object):
         return curr_pos + self.__list__[norm_indx].index_to_offset(index[1:])
 
     def list_top_index(self, indx_s, indx_e):
+        if indx_s == indx_e:    # same index
+            indx = -1
+            while not isinstance(self.__getitem__(indx_s[:indx]), zAstSubTree):
+                indx -= 1       # get first sub-tree
+            return indx_s[:indx]
+        # different indices
         indx = 0
         while indx_s[indx] == indx_e[indx]:
             indx += 1
@@ -179,7 +185,9 @@ class zAstSubTree(object):
 
     def __getitem__(self, index):
         if isinstance(index, list):
-            if not -1 <= index[0] <= self.__len__(): # check indexing range
+            if not index:       # empty list
+                return self
+            if not -1 <= index[0] <= len(self.__list__): # check indexing range
                 raise IndexError('AST element index out of range.')
             if len(index) == 1: # last node to be fetched
                 return self.__list__[index[0]]
@@ -784,8 +792,6 @@ class zSyntaxParser(object):
 
 
     def __apply_update(self, ln_s, update, ln_e):
-        #self.print_tree()
-        #update.print_tree()
         # normalize AST and fast-lookup table
         old_nodes = self.get_nodes_at_lines(ln_s, ln_e)
         if old_nodes[0]  == self.__ast__[0]:
@@ -870,7 +876,6 @@ class zSyntaxParser(object):
             if line[0][0] != None:
                 line[0] = (ln_e_offset + line[0][0], line[0][1])
 
-        #self.print_tree()
         return self
 
 
@@ -878,7 +883,7 @@ class zSyntaxParser(object):
         if isinstance(treenode, zAstSubTree):
             # sub-tree
             line1 = '{0}{1} -> '.format(leading_msg, treenode.spec())
-            if len(treenode):
+            if len(treenode.__list__):
                 self.__print_subtree(line1, treenode[0])
                 linen = '{0:{1}}'.format('', len(line1))
                 for node in treenode[1:]:
