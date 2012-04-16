@@ -397,19 +397,19 @@ class zSyntaxParser(object):
     def get_nodes_at_lines(self, ln_s, ln_e):
         return sum([ self.get_nodes_at(ln) for ln in range(ln_s, ln_e) ], [])
 
-    def get_contents_at_lines(self, ln_s, ln_e, prefix = True, surfix = True):
+    def get_contents_at_lines(self, ln_s, ln_e, prefix = False, surfix = True):
         indx_s = self.get_line_offset(ln_s)
         if prefix:
             prefix = self.get_line_prefix(ln_s)  or  ''
             indx_s -= len(prefix)
         indx_e = self.get_line_offset(ln_e)
-        if surfix:
-            while ln_e < len(self.__lns__) - 1:
-                ln_e += 1
+        if not surfix:
+            while ln_e < len(self.__lns__):
                 line = self.__lns__[ln_e]
                 if line[0][0] != None:
-                    indx_e += len(line[0][1]) - 1
+                    indx_e -= len(line[0][1])
                     break
+                ln_e += 1
         return self.__src[indx_s : indx_e]
 
 
