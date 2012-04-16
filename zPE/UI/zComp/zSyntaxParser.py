@@ -422,8 +422,8 @@ class zSyntaxParser(object):
         if index[-1] < 0:       # not within a word
             return ( None, None )
         wlen = len(self.__ast__[index].text)
-        while ( conn_back        and           # need to try connecting back
-                sum(index[:-1])  and           # not at 1st element
+        while ( conn_back                 and  # need to try connecting back
+                abs_pos >= index[-1] + 1  and  # not 1st element (_TOP_)
                 not self.__ast__[index].offset # not apart from previous element
                 ):
             abs_pos -= index[-1] + 1 # move back to previous element
