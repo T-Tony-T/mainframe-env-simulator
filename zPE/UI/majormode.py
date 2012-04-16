@@ -48,5 +48,7 @@ DEFAULT = {
 
 def guess(text):
     '''guess the major mode from the text in the buffer'''
+    if text and text[0].isdigit():
+        return 'Text Mode'      # programming language usually does not start with an digit
     return 'ASM Mode' # currently only support ASSIST (next develop version: HL-ASM), thus hard-coded
 
