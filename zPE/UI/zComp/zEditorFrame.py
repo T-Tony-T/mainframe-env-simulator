@@ -403,8 +403,11 @@ class zEdit(z_ABC, gtk.VBox):
         self.center.modify_base(gtk.STATE_SELECTED, gtk.gdk.color_parse(zTheme.color_map['base_selected']))
 
         if self.active_buffer.type == 'file':
-            for key in zTheme.color_map_hilite_key:
-                self.center.modify_hilite(key)
+            for key in zTheme.color_map_fg_hilite_key:
+                self.center.modify_fg_hilite(key, hilite = False)
+            for key in zTheme.color_map_bg_hilite_key:
+                self.center.modify_bg_hilite(key, hilite = False)
+            self.center.hilite()
 
         # bottom
         self.buffer_w.modify_fg(gtk.STATE_NORMAL,   gtk.gdk.color_parse(zTheme.color_map['text']))

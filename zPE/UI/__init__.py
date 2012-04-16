@@ -1002,6 +1002,46 @@ class ConfigWindow(gtk.Window):
             self.color_entry[key].connect('focus-out-event', self._sig_color_entry_activate, key)
 
 
+        # Editor->ErrHighlighter
+        self.__label['FRAME'].append(gtk.Label('Error Highlighter'))
+        ct_editor_ehilite = gtk.Frame()
+        ct_editor_ehilite.set_label_widget(self.__label['FRAME'][-1])
+        ct_editor.pack_start(ct_editor_ehilite, False, False, 10)
+
+        ct_editor_ehilite.add(gtk.Table(1, 6, False))
+        ct_editor_ehilite.child.set_col_spacings(5)
+
+        color_pos = {
+            # +--------+--------+
+            # |   -1   |   +1   |
+            # +--------+--------+
+            'invalid'       : -1, # len = 7
+            }
+        label_len = [ 7, 0 ]   # [ max_len[col_0], max_len[col_1] ]
+
+        for key in color_pos:
+            row = abs(color_pos[key])
+            col = (row + color_pos[key]) / (row + row)
+
+            self.__label['LABEL'].append(gtk.Label(' {0:<{1}}'.format(key.replace('_', ' ').title(), label_len[col])))
+
+            self.color_entry[key] = gtk.Entry(7)
+            self.color_picker[key] = zComp.zColorPickerButton(self.__ebox, self._sig_color_selected)
+
+            self.color_entry[key].set_property('width-chars', 7)
+            self.color_picker[key].set_size_button(35, -1)
+
+            self.__entry.append(self.color_entry[key])
+
+            col *= 3            # each column has 3 sub-column: label, entry, and picker
+            ct_editor_ehilite.child.attach(self.__label['LABEL'][-1], 0 + col, 1 + col, row, 1 + row, xoptions = gtk.SHRINK)
+            ct_editor_ehilite.child.attach(self.color_entry[key],     1 + col, 2 + col, row, 1 + row, xoptions = gtk.SHRINK)
+            ct_editor_ehilite.child.attach(self.color_picker[key],    2 + col, 3 + col, row, 1 + row, xoptions = gtk.SHRINK)
+
+            self.color_entry[key].connect('activate',  self._sig_color_entry_activate, None, key)
+            self.color_entry[key].connect('focus-out-event', self._sig_color_entry_activate, key)
+
+
         ## System
         ct_system = gtk.VBox()
         self.__label['TAB'].append(gtk.Label('System'))

@@ -144,13 +144,16 @@ class zTheme(z_ABC):
         'base_selected' : '#FFA500', # orenge
         'status'        : '#808080', # gray
         'status_active' : '#C0C0C0', # silver
-        # highlight
+        # highlight - foreground
         'reserve'       : '#0000FF', # blue
         'comment'       : '#008000', # green
         'literal'       : '#FF0000', # red
         'symbol'        : '#800080', # purple
+        # highlight - background
+        'invalid'       : '#FF0000', # red
         }
-    color_map_hilite_key = [ 'reserve', 'comment', 'literal', 'symbol', ]
+    color_map_fg_hilite_key = [ 'reserve', 'comment', 'literal', 'symbol', ]
+    color_map_bg_hilite_key = [ 'invalid', ]
 
 
     _auto_update = {

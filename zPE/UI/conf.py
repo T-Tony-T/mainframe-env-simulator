@@ -90,10 +90,14 @@ DEFAULT = {
         'STATUS'        : '#808080', # gray
         'STATUS_ACTIVE' : '#C0C0C0', # silver
 
+        # foreground only
         'RESERVE'       : '#0000FF', # blue
         'COMMENT'       : '#008000', # green
         'LITERAL'       : '#FF0000', # red
         'SYMBOL'        : '#800080', # purple
+
+        # background only
+        'INVALID'       : '#FF0000', # red
         },
 
     'ENV'       : {
@@ -432,6 +436,8 @@ def init_rc():
         'comment'       : DEFAULT['COLOR_MAP']['COMMENT'],
         'literal'       : DEFAULT['COLOR_MAP']['LITERAL'],
         'symbol'        : DEFAULT['COLOR_MAP']['SYMBOL'],
+
+        'invalid'       : DEFAULT['COLOR_MAP']['INVALID'],
         }
 
     Config['ENV']       = {

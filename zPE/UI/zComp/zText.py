@@ -1344,9 +1344,13 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             background = zTheme.color_map['base_selected']
             )
 
-        for key in zTheme.color_map_hilite_key:
+        for key in zTheme.color_map_fg_hilite_key:
             self.buff['disp'].create_tag(
                 key, foreground = zTheme.color_map[key]
+                )
+        for key in zTheme.color_map_bg_hilite_key:
+            self.buff['disp'].create_tag(
+                key, background = zTheme.color_map[key]
                 )
 
         self.__state_swap = {
@@ -1711,13 +1715,23 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 background = zTheme.color_map['base_selected']
                 )
 
-    def modify_hilite(self, hilite_type):
+    def modify_fg_hilite(self, hilite_type, hilite = True):
         tag_table = self.buff['disp'].get_tag_table()
         tag_table.remove(tag_table.lookup(hilite_type))
         self.buff['disp'].create_tag(
             hilite_type, foreground = zTheme.color_map[hilite_type]
             )
-        self.hilite()
+        if hilite:
+            self.hilite()
+
+    def modify_bg_hilite(self, hilite_type, hilite = True):
+        tag_table = self.buff['disp'].get_tag_table()
+        tag_table.remove(tag_table.lookup(hilite_type))
+        self.buff['disp'].create_tag(
+            hilite_type, background = zTheme.color_map[hilite_type]
+            )
+        if hilite:
+            self.hilite()
 
 
     def get_buffer(self):
@@ -1842,7 +1856,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         # clear previous highlighting tags
         iter_s = buff.get_start_iter()
         iter_e = buff.get_end_iter()
-        for key in zTheme.color_map_hilite_key:
+        for key in zTheme.color_map_fg_hilite_key:
+            buff.remove_tag_by_name(key, iter_s, iter_e)
+        for key in zTheme.color_map_bg_hilite_key:
             buff.remove_tag_by_name(key, iter_s, iter_e)
 
         # apply new highlighting tags

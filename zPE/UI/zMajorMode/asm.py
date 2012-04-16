@@ -28,7 +28,7 @@ RE = {
         ),
     'wrd' : r"[^\s']+(?:'[^']*'[^\s']*)*",
     'eow' : r'(?:[^a-zA-Z0-9].*)?$',
-    'spc' : r'(?: +.*)?$',
+    'spc' : r'(?:[ \t]+.*)?$',
     }
 
 
@@ -60,10 +60,15 @@ LC = {                          # local config
         'pos_rlvnt'     : {
             'LN-CMMNT'  : r'(\*.*)',
             'JCL-STMT'  : r'(//.*|/\* *)',
-            'LN-LABEL'  : ''.join([ r'(', RE['lbl'], r')' ]),
-            'INSTRUCT'  : ''.join([ r'(?:', RE['lbl'], r')? +(', RE['ins'], r')', RE['spc'] ]),
-            'LOC-CNT'   : ''.join([ r'(?:', RE['lbl'], r')? +(?:', RE['ins'], r' +)(?:[^\s*/+-]+[*/+-])*\(*(\*).*' ]),
-            'END-CMMNT' : ''.join([ r'(?:', RE['lbl'], r')? +(?:', RE['ins'], r' +)(?:', RE['wrd'], r' +)([^\s].*)' ]),
+            'LN-LABEL'  : ''.join([ r'(',   RE['lbl'], r')' ]),
+            'INSTRUCT'  : ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(',   RE['ins'], r')', RE['spc'] ]),
+            'LOC-CNT'   : ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(?:', RE['ins'], r'[ \t]+)',
+                                    r'(?:[^\s*/+-]+[*/+-])*\(*(\*).*'
+                                    ]),
+            'END-CMMNT' : ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(?:', RE['ins'], r'[ \t]+)',
+                                    r'(?:', RE['wrd'], r'[ \t]+)([^\s].*)'
+                                    ]),
+            'TAB-CHAR'  : r'.*(\t+).*',
             },
         'non_split'     : {
             'QUOTE'     : ( "'", "'" ),
@@ -256,6 +261,8 @@ class AsmMode(BaseMode):
                 rv.append((curr_pos, 'reserve', pos_end))
             elif leaf.token in [ 'QUOTE', 'NUMBER', 'CONSTANT' ]:
                 rv.append((curr_pos, 'literal', pos_end))
+            elif leaf.token in [ 'TAB-CHAR' ]:
+                rv.append((curr_pos, 'invalid', pos_end))
             else:
                 pass            # no special rules applied
             curr_pos = pos_end  # advance to end of the token
