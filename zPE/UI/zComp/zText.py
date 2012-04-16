@@ -1808,6 +1808,12 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 self.apply_change(buff, change, lambda offset: buff.get_iter_at_line_offset(line_tuple[0], offset))
             self.__state_swap['more'] = False
             self.apply_change(buff, state[-1], lambda offset: buff.get_iter_at_line_offset(line_tuple[0], offset))
+        # move cursor to line end, if no outstanding data in between
+        cursor = self.get_cursor_iter()
+        eoline = cursor.copy()
+        eoline.forward_to_line_end()
+        if self.buff['disp'].get_text(cursor, eoline).isspace():
+            self.place_cursor(eoline)
 
 
     def align_region(self):
