@@ -784,6 +784,8 @@ class zSyntaxParser(object):
 
 
     def __apply_update(self, ln_s, update, ln_e):
+        self.print_tree()
+        update.print_tree()
         # normalize AST and fast-lookup table
         old_nodes = self.get_nodes_at_lines(ln_s, ln_e)
         if old_nodes[0]  == self.__ast__[0]:
@@ -831,11 +833,16 @@ class zSyntaxParser(object):
         # update the AST
         for indx in range(indx_s, indx_e):
             parent.pop(indx_s)
+        next_node = parent[indx_s]
         for node in update.__ast__[-2:0:-1]: # reverse order, exclude 1st and last nodes
             parent.insert(indx_s, node)
-        if keep_eof:
-            # correct EoF offset
-            self.__ast__[-1].offset += ln_e_offset
+
+        # correct 1-pass-last node offset
+        if not keep_eof:        # more node follows
+            node_offset = update.__ast__[-1].offset - len(self.get_line_prefix(ln_e))
+        else:                   # EoF  node
+            node_offset = update.__ast__[-1].offset - next_node.offset
+        next_node.offset += node_offset
 
         # update fast-lookup table
         for i in range(ln_s, ln_e):
@@ -863,6 +870,7 @@ class zSyntaxParser(object):
             if line[0][0] != None:
                 line[0] = (ln_e_offset + line[0][0], line[0][1])
 
+        self.print_tree()
         return self
 
 
