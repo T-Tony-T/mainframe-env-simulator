@@ -24,7 +24,8 @@ class zAstLeafNode(object):
         self.__complete__ = complete
 
     def __str__(self):
-        return '{0:>{1}}{2}'.format('', self.offset, self.text)
+        # do not use 'format()' since it is slow
+        return '%*s%s' % (self.offset, '', self.text)
 
     def spec(self):
         return '{0}({1})'.format(self.token, self.__complete__ and 'C' or 'I')
