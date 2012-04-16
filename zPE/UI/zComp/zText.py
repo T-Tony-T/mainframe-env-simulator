@@ -2396,16 +2396,13 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 self.buff[target].handler_unblock(handler)
 
     def __sync_buff(self, target, change = None):
-        if not self.get_editable():
-            return              # no need for synchronizing, early return
-
         self.__sync_buff_start(target) # start synchronizing
 
         if change:
             self.__state_swap['state'].append(change)
             if not self.__state_swap['more']:
                 # no more to append, process the state
-                if target == 'true':
+                if target == 'true'  and  self.buff['true'].undo_stack:
                     # new state applied on true buffer, record it
                     self.buff['true'].undo_stack.new_state(self.__state_swap['state'])
                 self.__state_swap['state'] = zAtomicChange([]) # reset swap area

@@ -1217,12 +1217,13 @@ class zEditBuffer(z_ABC):
             raise SystemError   # this should never happen
         zEditBuffer.reg_emit('buffer_list_modified', self)
 
-        # fetch content
+        # initiated flags
         self.modified   = None # will be set after determining the content
         self.major_mode = None # will be set after determining the content
         self.caps_on    = None # will be set after determining the content
         self.ast        = None # will be set after content is 1st loaded
 
+        # fetch content
         if self.type == 'file':
             self.buffer = gtk.TextBuffer()
             self.buffer.reloading = False
@@ -1248,6 +1249,8 @@ class zEditBuffer(z_ABC):
             self.set_modified(False)
             self.switch_mode(majormode.DEFAULT['disp'], skip_ast = True)
             self.set_caps_on(False)
+
+            self.buffer.undo_stack = None # mark disp as non-undoable
         else:
             raise TypeError
         return self
@@ -1365,6 +1368,8 @@ class zEditBuffer(z_ABC):
         # create a new buffer
         opened_buffs = zEditBuffer.buff_list.values()
         new_buff = zEditBuffer(path, 'file')
+        if self.type != 'file': # src is not a file
+            new_buff.switch_mode(majormode.DEFAULT['disp'])
 
         if new_buff in opened_buffs:
             # buffer already opened, refuse renaming
@@ -1376,13 +1381,17 @@ class zEditBuffer(z_ABC):
             )
 
         # transfer undo-stack to the new buffer
-        dummy_undo_stack           = new_buff.buffer.undo_stack
-        new_buff.buffer.undo_stack = self.buffer.undo_stack
-        self.buffer.undo_stack     = dummy_undo_stack # this is for rm_buffer() to work correctly
+        if self.type == 'file': # src is also a file
+            # transfer undo stack over
+            dummy_undo_stack           = new_buff.buffer.undo_stack
+            new_buff.buffer.undo_stack = self.buffer.undo_stack
+            self.buffer.undo_stack     = dummy_undo_stack # this is for rm_buffer() to work correctly
 
         # write the new buffer
         new_buff.flush()
         new_buff.__reload_buffer(dry_run = True) # reload the new buffer to set all flags
+        if self.type != 'file': # src is not a file
+            new_buff.editable = False # set it to be modified-protected
 
         # clean up
         if self.path:
