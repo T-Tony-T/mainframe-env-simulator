@@ -451,6 +451,8 @@ class zSyntaxParser(object):
         node  = self.__ast__[index] # must be a leaf node
         ln_s  = self.get_line_index(node)
         ln_e = ln_s + 1
+        if change.action == 'd':
+            ln_e += change.content.count('\n') # extend effected range to include deleted content
         if index[-1] <= 0:    # insertion/deletion before current node
             node = self.get_prev_node(self.__lns__[ln_s].index(node), ln_s)  or  node
             ln_s = self.get_line_index(node)
