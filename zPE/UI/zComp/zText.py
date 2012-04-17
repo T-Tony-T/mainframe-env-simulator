@@ -718,7 +718,7 @@ class zEntry(gtk.Entry):
         else:
             # pattern not offered, use unquoted-space as separater
             start = zSyntaxParser( self.get_chars(0, curr),
-                                   non_split = { 'DQUOTE' : ( '"', '"' ), 'SQUOTE' : ( "'", "'" ), }
+                                   non_split = { 'DQUOTE' : ( 0, '"', '"' ), 'SQUOTE' : ( 0, "'", "'" ), }
                                    ).get_word_bounds(curr, conn_back = True)[0]
 
         return self.get_chars(start, curr)
@@ -735,7 +735,7 @@ class zEntry(gtk.Entry):
         else:
             # pattern not offered, use unquoted-space as separater
             start = zSyntaxParser( self.get_chars(0, curr),
-                                   non_split = { 'DQUOTE' : ( '"', '"' ), 'SQUOTE' : ( "'", "'" ), }
+                                   non_split = { 'DQUOTE' : ( 0, '"', '"' ), 'SQUOTE' : ( 0, "'", "'" ), }
                                    ).get_word_bounds(curr, conn_back = True)[0]
 
         self.select_region(start, curr)

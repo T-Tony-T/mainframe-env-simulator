@@ -267,9 +267,9 @@ class zSyntaxParser(object):
             format = {
                 # re should containing exactly 1 catch-group to indicate
                 # the intended match
-                pos_token   : re_match_exp,
+                pos_token   : ( priority, re_match_exp ),
                 ...
-                }
+                } # priority is the priority of the re_match_exp within the dictionary
 
             Note: this should always be empty for context-free languages
 
@@ -278,7 +278,7 @@ class zSyntaxParser(object):
             anything within such an item will not be parsed further
 
             format = {
-                nonsp_token : ( starting_dlm, ending_dlm ),
+                nonsp_token : ( priority, starting_dlm, ending_dlm ),
                 ...
                 }
 
@@ -293,8 +293,8 @@ class zSyntaxParser(object):
             format = {
                 # re should containing exactly 1 catch-group to indicate
                 # the intended match
-                key_token   : ( re_match_exp, 0 ), # regular expression match
-                key_token   : ( key_word_str, 1 ), # exact string match
+                key_token   : ( priority, re_match_exp, 0 ), # regular expression match
+                key_token   : ( priority, key_word_str, 1 ), # exact string match
                 ...
                 }
 
@@ -304,7 +304,7 @@ class zSyntaxParser(object):
             if present, take the lowest precedence
 
             format = {
-                level_token : ( starting_dlm, ending_dlm ),
+                level_token : ( priority, starting_dlm, ending_dlm ),
                 ...
                 }
         '''
@@ -544,7 +544,7 @@ class zSyntaxParser(object):
     def __parse_begin(self, ast_node):
         if ast_node.token in self.__lvl__: # sub-tree
             # append starting dlm
-            dlm_s = self.__lvl__[ast_node.token][0]
+            dlm_s = self.__lvl__[ast_node.token][1]
             indx_s = self.__indx
             indx_e = indx_s + len(dlm_s)
             if not self.__src.startswith(dlm_s, self.__indx):
@@ -576,7 +576,7 @@ class zSyntaxParser(object):
             else:
                 if ast_node.token in self.__lvl__: # sub-tree
                     # check ending dlm first
-                    dlm_e = self.__lvl__[ast_node.token][1]
+                    dlm_e = self.__lvl__[ast_node.token][2]
                     if self.__src.startswith(dlm_e, self.__indx):
                         indx_s = self.__indx
                         indx_e = indx_s + len(dlm_e)
@@ -615,7 +615,7 @@ class zSyntaxParser(object):
                             offset = self.__last - self.__indx
                         self.__advance_indx(offset, ast_node)
                     elif action == 'reform tree':
-                        dlm_e  = self.__lvl__[token][1]
+                        dlm_e  = self.__lvl__[token][2]
                         indx_s = self.__indx
                         indx_e = indx_s + len(dlm_e)
                         new_subtree = zAstSubTree(token, False)
@@ -636,8 +636,8 @@ class zSyntaxParser(object):
     def __parse_pos_relevant(self, ast_node):
         if self.__indx >= self.__size:
             return None
-        for (k, v) in self.__pos__.iteritems():
-            match = re.match(v, self.__get_line_at(self.__indx))
+        for (k, v) in sorted(self.__pos__.items(), key = lambda t: -t[1][0]):
+            match = re.match(v[1], self.__get_line_at(self.__indx))
             if match:
                 indx_s = self.__lpos + match.start(1)
                 indx_e = self.__lpos + match.end(1)
@@ -653,12 +653,12 @@ class zSyntaxParser(object):
     def __parse_non_splitable(self, ast_node):
         if self.__indx >= self.__size:
             return None
-        for (k, v) in self.__one__.iteritems():
-            if self.__src.startswith(v[0], self.__indx):
+        for (k, v) in sorted(self.__one__.items(), key = lambda t: -t[1][0]):
+            if self.__src.startswith(v[1], self.__indx):
                 indx_s = self.__indx
-                indx_e = self.__src.find(v[1], self.__indx + len(v[0]))
+                indx_e = self.__src.find(v[2], self.__indx + len(v[1]))
                 if indx_e >= 0:
-                    indx_e += len(v[1]) # to include ending dlm
+                    indx_e += len(v[2]) # to include ending dlm
                     complete = True
                 else:
                     indx_e = self.__size
@@ -674,16 +674,16 @@ class zSyntaxParser(object):
     def __parse_reserve_word(self, ast_node):
         if self.__indx >= self.__size:
             return None
-        for (k, v) in self.__key__.iteritems():
+        for (k, v) in sorted(self.__key__.items(), key = lambda t: -t[1][0]):
             if v[-1]:           # exact string match
-                if self.__src.startswith(v[0], self.__indx):
+                if self.__src.startswith(v[1], self.__indx):
                     indx_s = self.__indx
-                    indx_e = indx_s + len(v[0])
+                    indx_e = indx_s + len(v[1])
                     match = True
                 else:
                     match = False
             else:               # regular expression match
-                match = re.match(v[0], self.__get_word_at(self.__indx))
+                match = re.match(v[1], self.__get_word_at(self.__indx))
                 if match:
                     indx_s = self.__indx + match.start(1)
                     indx_e = self.__indx + match.end(1)
@@ -701,11 +701,11 @@ class zSyntaxParser(object):
             'indx' : len(word),
             'key'  : None,
             }
-        for (k, v) in self.__lvl__.iteritems():
-            if v[0] in word:
-                return ( k, word.index(v[0]), 'normal' )
-            if v[1] in word:    # potential invalid ending dlm
-                indx = word.index(v[1])
+        for (k, v) in sorted(self.__lvl__.items(), key = lambda t: -t[1][0]):
+            if v[1] in word:
+                return ( k, word.index(v[1]), 'normal' )
+            if v[2] in word:    # potential invalid ending dlm
+                indx = word.index(v[2])
                 if indx < edlm['indx']:
                     edlm['indx'] = indx
                     edlm['key']  = k

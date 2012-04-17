@@ -19,8 +19,11 @@ RE = {
     'con' : ''.join(
         [ r'=?[0-9]*[' ] +
         const_s.keys() + const_a.keys() +
-        [ r'](?:L[0-9]+)?', r"(?:'[^']*'?)?" ]
+        [ r'](?:L[0-9]+)?' ]
         ),
+    'con-' : r"'[^']*",         # incompleted constant
+    'con+' : r"'[^']*'",        #   completed constant
+
     'wrd' : r"[^\s']+(?:'[^']*'[^\s']*)*",
     'eow' : r'(?:[^a-zA-Z0-9].*)?$',
     'spc' : r'(?:[ \t]+.*)?$',
@@ -53,30 +56,34 @@ LC = {                          # local config
 
     'ast-map' : {
         'pos_rlvnt'     : {
-            'LN-CMMNT'  : r'(\*.*)',
-            'JCL-STMT'  : r'(//.*|/\* *)',
-            'LN-LABEL'  : ''.join([ r'(',   RE['lbl'], r')' ]),
-            'INSTRUCT'  : ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(',   RE['ins'], r')', RE['spc'] ]),
-            'LOC-CNT'   : ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(?:', RE['ins'], r'[ \t]+)',
+            'LN-CMMNT'  : ( 0, r'(\*.*)' ),
+            'JCL-STMT'  : ( 0, r'(//.*|/\*[ \t]*)' ),
+            'LN-LABEL'  : ( 0, ''.join([ r'(',   RE['lbl'], r')' ]) ),
+            'INSTRUCT'  : ( 0, ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(',   RE['ins'], r')', RE['spc'] ]) ),
+            'LOC-CNT'   : ( 0, ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(?:', RE['ins'], r'[ \t]+)',
                                     r'(?:[^\s*/+-]+[*/+-])*\(*(\*).*'
-                                    ]),
-            'END-CMMNT' : ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(?:', RE['ins'], r'[ \t]+)',
+                                    ])
+                            ),
+            'END-CMMNT' : ( 0, ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(?:', RE['ins'], r'[ \t]+)',
                                     r'(?:', RE['wrd'], r'[ \t]+)([^\s].*)'
-                                    ]),
-            'TAB-CHAR'  : r'.*(\t+).*',
+                                    ])
+                            ),
+            'TAB-CHAR'  : ( 0, r'.*(\t+).*' ),
             },
         'non_split'     : {
-            'QUOTE'     : ( "'", "'" ),
+            'QUOTE'     : ( 0, "'", "'" ),
             },
         'key_words' : {
-            'SEPARATER' : ( ',', 1 ),
-            'OPERATOR'  : ( r'([*/+-])', 0 ),
-            'LABEL'     : ( ''.join([ r'(', RE['lbl'], r')' ]), 0 ),
-            'NUMBER'    : ( ''.join([ r'([0-9]+(?:\.[0-9]+)?)', RE['eow'] ]), 0 ),
-            'CONSTANT'  : ( ''.join([ r'(', RE['con'], r')', RE['eow'] ]), 0 ),
+            'SEPARATER' : ( 0, ',', 1 ),
+            'OPERATOR'  : ( 0, r'([*/+-])', 0 ),
+            'LABEL'     : ( 0, ''.join([ r'(', RE['lbl'], r')' ]), 0 ),
+            'NUMBER'    : ( 0, ''.join([ r'([0-9]+(?:\.[0-9]+)?)', RE['eow'] ]), 0 ),
+            'CONST'     : ( 0, ''.join([ r'(', RE['con'],             r')', RE['eow'] ]), 0 ),
+            'CONSTAN-'  : ( 5, ''.join([ r'(', RE['con'], RE['con-'], r')', RE['eow'] ]), 0 ),
+            'CONSTANT'  : ( 9, ''.join([ r'(', RE['con'], RE['con+'], r')', RE['eow'] ]), 0 ),
             },
         'level_dlm' : {
-            'PAREN'     : ( '(', ')' ),
+            'PAREN'     : ( 0, '(', ')' ),
             },
         },
     }
@@ -244,9 +251,9 @@ class AsmMode(BaseMode):
                 show_text = True
                 )
             curr_dict = self.zCompletionDict(word_set - set([node.text]))
-        elif node.token in [ 'LABEL', 'CONSTANT' ]:
+        elif node.token in [ 'LABEL', 'CONST', 'CONSTAN-', 'CONSTANT' ]:
             word_set = ast.get_nodes_with(
-                fetch_list = [ 'LABEL', 'LN-LABEL', 'CONSTANT' ],
+                fetch_list = [ 'LABEL', 'LN-LABEL', 'CONST', 'CONSTANT' ],
                 show_text = True
                 )
             curr_dict = self.zCompletionDict(word_set - set([node.text]))
@@ -275,9 +282,9 @@ class AsmMode(BaseMode):
                 rv.append((curr_pos, 'symbol', pos_end))
             elif leaf.token == 'INSTRUCT'  and  valid_ins(leaf.text):
                 rv.append((curr_pos, 'reserve', pos_end))
-            elif leaf.token in [ 'QUOTE', 'NUMBER', 'CONSTANT' ]:
+            elif leaf.token in [ 'QUOTE', 'NUMBER', 'CONST', 'CONSTANT' ]:
                 rv.append((curr_pos, 'literal', pos_end))
-            elif leaf.token in [ 'TAB-CHAR' ]:
+            elif leaf.token in [ 'TAB-CHAR', 'CONSTAN-' ]:
                 rv.append((curr_pos, 'invalid', pos_end))
             else:
                 pass            # no special rules applied
@@ -311,3 +318,4 @@ class AsmMode(BaseMode):
                 )
         else:
             return None         # no need to align instruction
+
