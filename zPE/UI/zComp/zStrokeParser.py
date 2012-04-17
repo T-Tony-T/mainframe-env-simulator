@@ -1193,17 +1193,16 @@ class zComplete(gobject.GObject):
         # increment the completion counter
         self.__try_completing += 1
 
-        current_word = self.widget.get_current_word()
         if self.__task == 'text':
             # text completion
-            self.__generate_text_list(self.widget.get_current_line(), self.widget.get_ast())
+            current_word = self.__generate_text_list(self.widget.get_current_line(), self.widget.get_ast())
 
         elif self.__task == 'func':
             # function completion
-            self.__generate_func_list(current_word)
+            current_word = self.__generate_func_list(self.widget.get_current_word())
         else:
             # path completion
-            current_word = self.__generate_path_list(current_word, self.__task)
+            current_word = self.__generate_path_list(self.widget.get_current_word(), self.__task)
 
         self.__complete(current_word, self.__task)
 
@@ -1220,11 +1219,11 @@ class zComplete(gobject.GObject):
 
         if self.__task == 'text':
             # text completion
-            self.__generate_text_list(self.widget.get_current_line(), self.widget.get_ast())
+            normalized_text = self.__generate_text_list(self.widget.get_current_line(), self.widget.get_ast())
 
         elif self.__task == 'func':
             # function completion
-            self.__generate_func_list(self.widget.get_current_word())
+            normalized_text = self.__generate_func_list(self.widget.get_current_word())
         else:
             # path completion
             normalized_text = self.__generate_path_list(self.widget.get_current_word(), self.__task)
@@ -1302,6 +1301,7 @@ class zComplete(gobject.GObject):
 
     def __generate_text_list(self, curr_line, ast):
         self.__comp_list = self.__mode__.MODE_MAP[ast['major_mode']].complete(curr_line, ast['syntax_tree'])
+        return self.widget.get_current_word()
 
     def __generate_func_list(self, curr_func):
         # get the completion list
@@ -1309,6 +1309,7 @@ class zComplete(gobject.GObject):
                              if func.startswith(curr_func)
                              ]
         self.__comp_list.sort(key = str.lower) # sort alphabetically
+        return curr_func
 
     def __generate_path_list(self, curr_path, task):
         # normalize the path
@@ -1486,7 +1487,8 @@ class zComplete(gobject.GObject):
         self.menu.popup_given(self.widget, w_alloc)
 
     def __popdown_complete_list(self):
-        self.menu.popdown()
+        if self.menu:
+            self.menu.popdown()
 
     def __on_popdown_callback(self):
         self.menu.listener.clear_all()

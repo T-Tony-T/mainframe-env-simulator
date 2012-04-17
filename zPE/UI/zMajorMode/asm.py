@@ -19,7 +19,7 @@ RE = {
     'con' : ''.join(
         [ r'=?[0-9]*[' ] +
         const_s.keys() + const_a.keys() +
-        [ r'](?:L[0-9]+)?', r"(?:'[^']*')?" ]
+        [ r'](?:L[0-9]+)?', r"(?:'[^']*'?)?" ]
         ),
     'wrd' : r"[^\s']+(?:'[^']*'[^\s']*)*",
     'eow' : r'(?:[^a-zA-Z0-9].*)?$',
@@ -238,9 +238,18 @@ class AsmMode(BaseMode):
         if node.token == 'INSTRUCT':
             curr_dict = self._cp_dict_['ins']
         elif node.token == 'LN-LABEL':
-            curr_dict = self.zCompletionDict(ast.get_nodes_of_types([ 'LABEL' ], show_text = True))
-        elif node.token == 'LABEL':
-            curr_dict = self.zCompletionDict(ast.get_nodes_of_types([ 'LN-LABEL' ], show_text = True))
+            word_set = ast.get_nodes_with(
+                fetch_list = [ 'LABEL' ],
+                skip_list = [ 'LN-LABEL' ], # to avoid duplicate label
+                show_text = True
+                )
+            curr_dict = self.zCompletionDict(word_set - set([node.text]))
+        elif node.token in [ 'LABEL', 'CONSTANT' ]:
+            word_set = ast.get_nodes_with(
+                fetch_list = [ 'LABEL', 'LN-LABEL', 'CONSTANT' ],
+                show_text = True
+                )
+            curr_dict = self.zCompletionDict(word_set - set([node.text]))
         else:
             return [ ]          # nothing to complete
         return curr_dict.complete(node.text)

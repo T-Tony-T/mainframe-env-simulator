@@ -218,6 +218,13 @@ class zAstSubTree(object):
             raise ValueError('Assignment of AST Non-Leaf Node is forbidden')
 
 
+    def get_leaf_at(self, index):
+        node = self.__list__[index]
+        while isinstance(node, zAstSubTree):
+            node = node[0]
+        return node
+
+
     ### generic list (sub tree) manipulation
     def extend(self, valist):
         self.__list__.extend(valist)
@@ -355,11 +362,11 @@ class zSyntaxParser(object):
         return self.__ast__.iscomplete()
 
 
-    def get_nodes_of_types(self, token_list, show_text = False):
-        return self.__ast__.flat(fetch = token_list, show_text = show_text)
-
-    def get_nodes_other_then(self, token_list, show_text = False):
-        return self.__ast__.flat(skip = token_list, show_text = show_text)
+    def get_nodes_with(self, fetch_list = None, skip_list = None, show_text = False):
+        fetch_set = set(self.__ast__.flat(fetch = fetch_list, show_text = show_text))
+        if skip_list:
+            fetch_set -= set(self.__ast__.flat(fetch = skip_list, show_text = show_text))
+        return fetch_set
 
 
     def get_nodes_at(self, line_num, ignore_anchor = False):
@@ -734,6 +741,8 @@ class zSyntaxParser(object):
         indx_e = indx
         in_quote = None
         while indx_e < self.__size:
+            if self.__src[indx_e] == '\n': # new line encountered
+                break                      # stop even if in quote
             if ( not in_quote  and
                  ( self.__src[indx_e] == dlm  or
                    self.__src[indx_e].isspace()
@@ -870,7 +879,7 @@ class zSyntaxParser(object):
         # update the AST
         for indx in range(indx_s, indx_e):
             parent.pop(indx_s)
-        next_node = parent[indx_s]
+        next_node = parent.get_leaf_at(indx_s)
         for node in update.__ast__[-2:0:-1]: # reverse order, exclude 1st and last nodes
             parent.insert(indx_s, node)
 

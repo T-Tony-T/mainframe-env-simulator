@@ -1881,6 +1881,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         ast  = self.get_ast()
         buff = self.buff['disp']
 
+        if not ast  or  not ast['syntax_tree']: # cannot align
+            return
+
         line_tuple = self.get_current_line()
         state = self.__mode__.MODE_MAP[ast['major_mode']].align(line_tuple, ast['syntax_tree'])
         if state:
@@ -1903,6 +1906,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             return              # early return
         ast = self.get_ast()
         buff = self.buff['disp']
+
+        if not ast  or  not ast['syntax_tree']: # cannot align
+            return
 
         mode = self.__mode__.MODE_MAP[ast['major_mode']]
         changed = False
@@ -2094,20 +2100,36 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     def get_current_word(self):
-        start_iter = self.get_cursor_iter()
-        end_iter   = self.get_cursor_iter()
+        ast = self.get_ast()
+        end_iter = self.get_cursor_iter()
 
-        # move start back to the word start
-        start_iter.backward_word_start()
+        if ast  and  ast['syntax_tree']:
+            ( indx, node ) = ast['syntax_tree'].get_word_node(end_iter.get_offset())
 
-        return self.buff['disp'].get_text(start_iter, end_iter, False)
+        if indx == None: # cannot use AST, fall back to regular fetch mode
+            start_iter = self.get_cursor_iter()
+
+            # move start back to the word start
+            start_iter.backward_word_start()
+
+            return self.buff['disp'].get_text(start_iter, end_iter, False)
+        else:
+            return node.text
 
     def set_current_word(self, word):
-        start_iter = self.get_cursor_iter()
-        end_iter   = self.get_cursor_iter()
+        ast = self.get_ast()
+        end_iter = self.get_cursor_iter()
 
-        # move start back to the word start
-        start_iter.backward_word_start()
+        if ast  and  ast['syntax_tree']:
+            ( indx, node ) = ast['syntax_tree'].get_word_node(end_iter.get_offset())
+
+        if indx == None: # cannot use AST, fall back to regular fetch mode
+            start_iter = self.get_cursor_iter()
+
+            # move start back to the word start
+            start_iter.backward_word_start()
+        else:
+            start_iter = self.buff['disp'].get_iter_at_offset(end_iter.get_offset() - len(node.text))
 
         # replace the current word with the new word, if differs
         old_word = self.buff['disp'].get_text(start_iter, end_iter, False)
