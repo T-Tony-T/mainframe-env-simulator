@@ -564,6 +564,10 @@ class zPopupMenu(gtk.Menu):
         self.set_property('reserve-toggle-size', False)
 
         self.__reset_w_arg()
+        self.connect('deactivate', self._sig_deactivated)
+
+    def _sig_deactivated(self, menushell):
+        self.popdown()
 
 
     def register_popdown_cb(self, callback, *data):
