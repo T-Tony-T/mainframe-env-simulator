@@ -2,21 +2,16 @@
 
 from zPE.UI.basemode import BaseMode
 
-from zPE.core.asm import valid_ins as VALID_ASM_INS, valid_op  as VALID_ASM_OP, const_s, const_a
+from zPE.core.asm import ASM_INSTRUCTION as ASM_INS_SET, op_code as ASM_OP_MAP, ext_mnem as EXT_MNEM_MAP, const_s, const_a
 from zPE.pgm.assist_pseudo_ins import PSEUDO_INS
 
 import sys                      # for sys.maxsize
 import re
 
+INS_LIST = ASM_INS_SET | set(ASM_OP_MAP.keys()) | set(EXT_MNEM_MAP.keys()) | set(PSEUDO_INS.keys()) # set union
 
 def valid_ins(ins):
-    if ( VALID_ASM_INS(ins)  or
-         VALID_ASM_OP(ins)   or
-         ins in PSEUDO_INS
-         ):
-        return True
-    else:
-        return False
+    return ins in INS_LIST
 
 RE = {
     'lbl' : r'\.?[a-zA-Z@#$][a-zA-Z@#$0-9]*',
@@ -88,6 +83,11 @@ LC = {                          # local config
 
 
 class AsmMode(BaseMode):
+
+    _cp_dict_ = {
+        'ins' : BaseMode.zCompletionDict(INS_LIST),
+        }
+
     def __init__(self):
         super(AsmMode, self).__init__('ASM Mode', LC['default'], LC['ast-map'])
 
@@ -221,7 +221,6 @@ class AsmMode(BaseMode):
         return
             the line tuple with comment added / ajusted, or None if nothing need to be changed
         '''
-        print 'ASM Mode :: comment ~', line, ast.get_nodes_at(line[0])
         return None
 
 
@@ -235,8 +234,12 @@ class AsmMode(BaseMode):
         return
             the completion-list
         '''
-        print 'ASM Mode :: complete ~', line, ast.get_nodes_at(line[0])
-        return [ ]
+        ( indx, node ) = ast.get_word_node(ast.get_line_offset(line[0]) + line[-1])
+        if node.token == 'INSTRUCT':
+            curr_dict = self._cp_dict_['ins']
+        else:
+            return [ ]          # nothing to complete
+        return curr_dict.complete(node.text)
 
 
     def hilite(self, ast):

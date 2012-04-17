@@ -479,6 +479,9 @@ class zStrokeListener(gobject.GObject):
         self.listener_id = { # see is_listenning_on(), listen_on(), and listen_off() for more info
             # widget : handler_id for 'key-press-event'
             }
+        self.listen_task = { # see is_listenning_on(), listen_on(), and listen_off() for more info
+            # widget : task
+            }
 
         self.is_enabled_func = {
             # func_name : defined_flag
@@ -560,7 +563,7 @@ class zStrokeListener(gobject.GObject):
 
 
     def is_listenning_on(self, widget):
-        return widget in self.listener_id
+        return widget in self.listener_id and self.listen_task[widget] or None
 
     def block_listenning(self, widget):
         if self.is_listenning_on(widget) and widget.handler_is_connected(self.listener_id[widget]):
@@ -592,12 +595,13 @@ class zStrokeListener(gobject.GObject):
             raise AssertionError('Listener already binded. use listen_off(widget) to remove it.')
 
         self.listener_id[widget] = widget.connect('key-press-event', self._sig_key_pressed, task, init_widget)
-
+        self.listen_task[widget] = task # also record the task being listenning
 
     def listen_off(self, widget):
         if self.is_listenning_on(widget) and widget.handler_is_connected(self.listener_id[widget]):
             widget.disconnect(self.listener_id[widget])
             del self.listener_id[widget]
+            del self.listen_task[widget]
 
     def clear_all(self):
         self.clear_kp_focus_out()
@@ -1230,7 +1234,7 @@ class zComplete(gobject.GObject):
                 normalized_text = ''.join(['"', normalized_text])
 
             self.widget.set_current_word(normalized_text)
-        self.__popup_complete_list()
+        self.__popup_complete_list(normalized_text)
 
 
     def set_completion_task(self, task):
@@ -1285,7 +1289,7 @@ class zComplete(gobject.GObject):
 
             if self.__try_completing > 1:
                 # more than one try, switch to complete_list()
-                self.__popup_complete_list()
+                self.__popup_complete_list(normalized_text)
 
         if self.__task == 'path':
             if '"' in normalized_text:
@@ -1369,7 +1373,7 @@ class zComplete(gobject.GObject):
         self.__complete(self.widget.get_text(), self.__task)
 
     def __menu_listener_active(self, listener, msg):
-        curr_text = self.widget.get_text()
+        curr_text = self.menu.curr_text
 
         # check for function key for entry
         key_binding = zStrokeListener.get_key_binding()
@@ -1386,7 +1390,7 @@ class zComplete(gobject.GObject):
                 self.__complete(curr_text, self.__task)
                 if self.__comp_list and self.widget.get_text() not in self.__comp_list:
                     # there are more partial-matches
-                    self.__popup_complete_list()
+                    self.__popup_complete_list(curr_text)
                 else:
                     # no matches, or there exists an exact match
                     self.__try_completing = 1 # menu just popdown, set it to stand-by mode
@@ -1402,16 +1406,21 @@ class zComplete(gobject.GObject):
         new_comp_list = []
         new_char = ''
 
-        if re.match(KEY_RE_PATTERN['printable'], msg['stroke'], re.X):
+        if re.match(KEY_RE_PATTERN['printable'], msg['stroke'], re.X) or msg['stroke'] == ' ':
+            # printable or space
             new_char = msg['stroke']
             indx = len(curr_text) # the index of the newly typed char
 
+        self.widget.set_current_word(curr_text + new_char)
+
+        if new_char:            # list changed
+            curr_text = self.widget.get_current_word() # re-fetch the current word
+            # this need to be done since the behaviour of `set_current_word()` is non-trival
+
             # generate new list
             for item in self.__comp_list:
-                if len(item) > indx and new_char == item[indx]:
+                if item.startswith(curr_text):
                     new_comp_list.append(item)
-
-        self.widget.set_text(curr_text + new_char)
 
         # test if there is any match
         if new_comp_list:
@@ -1422,7 +1431,7 @@ class zComplete(gobject.GObject):
             self.__try_completing = 0
             if self.__comp_list and self.widget.get_text() not in self.__comp_list:
                 # there are more partial-matches
-                self.__popup_complete_list()
+                self.__popup_complete_list(curr_text)
             else:
                 # no matches, or there exists an exact match
                 self.__try_completing = 1
@@ -1432,18 +1441,21 @@ class zComplete(gobject.GObject):
             self.__reset_complete_list()
 
 
-    def __popup_complete_list(self):
+    def __popup_complete_list(self, curr_text):
         if not self.__comp_list: # list is empty
             return               # early return
 
         # create the menu
         self.menu = zPopupMenu()
 
+        # record the current text
+        self.menu.curr_text = curr_text
+
         # setup key listener
         self.widget.block_listenning() # temporarily disable the old listener
         self.menu.listener = zStrokeListener()
-        self.menu.listener.listen_on(self.menu)
-        self.menu.listener.listen_on(self.widget)
+        self.menu.listener.listen_on(self.menu)   # use default (text) task
+        self.menu.listener.listen_on(self.widget) # use default (text) task
         self.menu.listener_sig = self.menu.listener.connect('z_activate', self.__menu_listener_active)
 
         self.menu.register_popdown_cb(self.__on_popdown_callback)

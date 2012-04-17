@@ -426,8 +426,8 @@ class zSyntaxParser(object):
         return self.__src[indx_s : indx_e]
 
     def get_word_bounds(self, abs_pos, conn_back = False):
-        index = self.__ast__.index_from_offset(abs_pos)
-        if index[-1] < 0:       # not within a word
+        ( index, node ) = self.get_word_node(abs_pos)
+        if not node:
             return ( None, None )
         wlen = len(self.__ast__[index].text)
         while ( conn_back                 and  # need to try connecting back
@@ -439,6 +439,15 @@ class zSyntaxParser(object):
             wlen += len(self.__ast__[index].text)
         indx_s = abs_pos - index[-1]
         return ( indx_s, indx_s + wlen )
+
+    def get_word_node(self, abs_pos):
+        index = self.__ast__.index_from_offset(abs_pos)
+        if index[-1] < 0  or  not self.__ast__[index].text: # not within a word
+            index = self.__ast__.index_from_offset(abs_pos - 1) # try move into a word
+            index[-1] += 1      # move back the offset
+            if index[-1] < 0:
+                return ( None, None )
+        return ( index, self.__ast__[index] )
 
 
     def reparse(self, pos_rlvnt = {}, non_split = {}, key_words = {}, level_dlm = {}):

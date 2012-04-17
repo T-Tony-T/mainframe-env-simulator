@@ -38,7 +38,11 @@ class BaseMode(object):
     Any major mode need to be derived from this class
     '''
 
-    from zComp.zText import zBufferChange, zAtomicChange
+    from zComp.zText import zBufferChange, zAtomicChange, zCompletionDict
+
+    # define all completion dictionary here
+    _cp_dict_ = {
+        }
 
     def __init__(self, mode = '__base_mode__', default = LC['default'], ast_map = LC['ast-map']):
         '''

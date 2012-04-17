@@ -193,6 +193,81 @@ class zUndoStack(object):
 
 
 ######## ######## ######## ######## ########
+########       zCompletionDict      ########
+######## ######## ######## ######## ########
+
+class zCompletionDict(object):
+    '''completion dictionary used for generating completion list'''
+    def __init__(self, word_set):
+        self.__root__ = { '' : False } # root cannot be end-of-word
+        self.__cnt__  = 0
+        self.update(word_set)
+
+
+    def __contains__(self, word):
+        sub = self.subdict(word)
+        return sub and sub['']
+
+    def __len__(self):
+        return self.__cnt__
+
+
+    def add(self, word):
+        '''add a word into the dict'''
+        if word in self:
+            return              # no need to add, early return
+        ptr = self.__root__
+        for ch in word:
+            ptr[ch] = ptr.has_key(ch) and ptr[ch] or { '' : False }
+            ptr = ptr[ch]
+        ptr[''] = True          # turn on end-of-word mark
+        self.__cnt__ += 1
+
+
+    def complete(self, word):
+        '''return the list of all possible completions of the word'''
+        sub = self.subdict(word)
+        return sub and self.listify(word, sub) or [ ]
+
+
+    def dump(self):
+        return self.__root__
+
+
+    def listify(self, prefix = '', subdict = None):
+        if not subdict:
+            subdict = self.dump()
+        return [ ''.join(chlist) for chlist in self.__listify__([ prefix ], subdict) ]
+
+    def __listify__(self, prefix, subdict):
+        rv = [ ]
+        if subdict['']:
+            rv.append(prefix)
+        for key in subdict.iterkeys():
+            if not key:         # '' is end-of-word mark, ignore it
+                continue
+            rv.extend(self.__listify__(prefix + [ key ], subdict[key]))
+        return rv
+
+
+    def subdict(self, word):
+        '''return the subdict with prefix equal to the given word, or None if not found'''
+        ptr = self.__root__
+        for ch in word:
+            if not ch in ptr:
+                return None
+            ptr = ptr[ch]
+        return ptr
+
+
+    def update(self, word_set):
+        '''update the dict with a set of words'''
+        for word in word_set:
+            self.add(word)
+
+
+
+######## ######## ######## ######## ########
 ######## Text Field / Area Classes  ########
 ######## ######## ######## ######## ########
 
@@ -466,6 +541,9 @@ class zEntry(gtk.Entry):
         return self.__listener != self.listener
 
     def is_listenning(self):
+        return self.task_listenning() != None
+
+    def task_listenning(self):
         return self.__listener.is_listenning_on(self)
 
     def block_listenning(self):
@@ -1607,6 +1685,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         return self.__listener != self.listener
 
     def is_listenning(self):
+        return self.task_listenning() != None
+
+    def task_listenning(self):
         return self.__listener.is_listenning_on(self)
 
     def block_listenning(self):
@@ -2028,7 +2109,14 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         # move start back to the word start
         start_iter.backward_word_start()
 
-        # replace the current word with the new word
+        # replace the current word with the new word, if differs
+        old_word = self.buff['disp'].get_text(start_iter, end_iter, False)
+        if old_word == word:
+            return              # no need to set, early return
+        if word.startswith(old_word):
+            # appending to old word
+            self.insert_text(word[len(old_word):])
+            return              # this is a speed-up for completion
         self.__state_swap['more'] = True
         self.buff['disp'].delete(start_iter, end_iter)
         self.__state_swap['more'] = False
