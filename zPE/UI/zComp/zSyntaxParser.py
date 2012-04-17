@@ -98,12 +98,27 @@ class zAstSubTree(object):
         return True
 
 
-    def flat(self, show_text = False):
+    def flat(self, fetch = None, skip = [], show_text = False):
+        '''
+        flat the subtree into a list
+
+        if fetch is not None, put into the list only leaves whose token is in "fetch"
+
+        if skip is offered, put into the list only leaves whose token is not in "skip"
+        this take precedence over "fetch"
+
+        if show_text is True, put into the list the content of the node, instead of
+        the leaf node itself
+        '''
         rv = [ ]
         def __flat__(node):
             if isinstance(node, zAstSubTree): # non-leaf node
-                [ __flat__(ele) for ele in node ]
+                [ __flat__(ele) for ele in node
+                  if isinstance(ele, zAstSubTree) or ele.token not in skip
+                  ]
             else:                             # leaf node
+                if fetch and node.token not in fetch:
+                    return
                 if show_text:
                     rv.append(node.text)
                 else:
@@ -338,6 +353,13 @@ class zSyntaxParser(object):
 
     def is_complete(self):
         return self.__ast__.iscomplete()
+
+
+    def get_nodes_of_types(self, token_list, show_text = False):
+        return self.__ast__.flat(fetch = token_list, show_text = show_text)
+
+    def get_nodes_other_then(self, token_list, show_text = False):
+        return self.__ast__.flat(skip = token_list, show_text = show_text)
 
 
     def get_nodes_at(self, line_num, ignore_anchor = False):

@@ -237,6 +237,10 @@ class AsmMode(BaseMode):
         ( indx, node ) = ast.get_word_node(ast.get_line_offset(line[0]) + line[-1])
         if node.token == 'INSTRUCT':
             curr_dict = self._cp_dict_['ins']
+        elif node.token == 'LN-LABEL':
+            curr_dict = self.zCompletionDict(ast.get_nodes_of_types([ 'LABEL' ], show_text = True))
+        elif node.token == 'LABEL':
+            curr_dict = self.zCompletionDict(ast.get_nodes_of_types([ 'LN-LABEL' ], show_text = True))
         else:
             return [ ]          # nothing to complete
         return curr_dict.complete(node.text)

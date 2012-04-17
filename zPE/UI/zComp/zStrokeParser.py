@@ -1466,6 +1466,9 @@ class zComplete(gobject.GObject):
         else:
             w_alloc = self.widget.get_iter_location(self.widget.get_cursor_iter())
             w_alloc[2] = -1     # release the width requirement
+            ( w_alloc[0], w_alloc[1] ) = self.widget.buffer_to_window_coords(
+                gtk.TEXT_WINDOW_TEXT, w_alloc[0], w_alloc[1]
+                )
 
         # fill the menu
         list_sz = len(self.__comp_list)
