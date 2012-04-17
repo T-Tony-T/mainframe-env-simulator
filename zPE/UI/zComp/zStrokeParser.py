@@ -1460,18 +1460,24 @@ class zComplete(gobject.GObject):
 
         self.menu.register_popdown_cb(self.__on_popdown_callback)
 
-        # fill the menu
-        for indx in range(len(self.__comp_list)):
-            mi = gtk.MenuItem(self.__comp_list[indx], False)
-            self.menu.append(mi)
-            mi.connect('activate', self.__menu_completion_selected, indx)
-
         # calculate the popup position
         if isinstance(self.widget, gtk.Entry):
             w_alloc = None
         else:
             w_alloc = self.widget.get_iter_location(self.widget.get_cursor_iter())
             w_alloc[2] = -1     # release the width requirement
+
+        # fill the menu
+        list_sz = len(self.__comp_list)
+        nrows   = int(list_sz ** 0.5) + 1
+        for indx in range(list_sz):
+            mi = gtk.MenuItem(self.__comp_list[indx], False)
+            if w_alloc:
+                ( col, row ) = divmod(indx, nrows)
+                self.menu.attach(mi, col, col + 1, row, row + 1)
+            else:
+                self.menu.append(mi)
+            mi.connect('activate', self.__menu_completion_selected, indx)
 
         self.menu.show_all()
         self.menu.popup_given(self.widget, w_alloc)
