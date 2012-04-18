@@ -21,8 +21,8 @@ RE = {
         const_s.keys() + const_a.keys() +
         [ r'](?:L[0-9]+)?' ]
         ),
-    'con-' : r"'[^']*",         # incompleted constant
-    'con+' : r"'[^']*'",        #   completed constant
+    'con-' : r"'[^']*",         # incomplete constant
+    'con+' : r"'[^']*'",        #   complete constant
 
     'wrd' : r"[^\s']+(?:'[^']*'[^\s']*)*",
     'eow' : r'(?:[^a-zA-Z0-9].*)?$',

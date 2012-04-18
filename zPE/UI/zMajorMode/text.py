@@ -5,7 +5,10 @@ from zPE.UI.basemode import BaseMode
 LC = {                          # local config
     'ast-map' : {
         'pos_rlvnt' : { },
-        'non_split' : { 'DQUOTE' : ( '"', '"', ), 'SQUOTE' : ( "'", "'", ), },
+        'non_split' : {
+            'DQUOTE' : ( 0, '"', '"', ),
+            'SQUOTE' : ( 0, "'", "'", ),
+            },
         'key_words' : { },
         'level_dlm' : { },
         },
