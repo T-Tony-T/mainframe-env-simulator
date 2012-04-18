@@ -1195,9 +1195,7 @@ class SDFloatingType(object):
         return self.__val
 
     def set(self, int_str, length = 0):
-        self.__val  = 0      # reset value
-        self.__indx = 1      # reset insert index
-        self.append(int_str, length)
+        raise AssertionError('require overridden')
 
     def dump(self):
         raise AssertionError('require overridden')
@@ -1219,6 +1217,11 @@ class D_(SDFloatingType):
     def __init__(self, int_str, length = 0):
         super(D_, self).__init__(int_str, length, 8) # 8-byte natual length
 
+    def set(self, int_str, length = 0):
+        pass                    # not implemented yet
+
+    def dump(self):
+        return ([0], self.natual_len)
 
 
 ## simple type
