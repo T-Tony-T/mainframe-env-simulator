@@ -15,8 +15,13 @@ class Register(Union):
         ('bytes', c_ubyte * 4),
         ]
 
-    def addr(self):
-        return ( self.long & 0x00FFFFFF )
+    def addr(self, amode = 24):
+        if amode == 24:
+            return ( self.long & 0x00FFFFFF )
+        elif amode == 31:
+            return ( self.long & 0x7FFFFFFF )
+        else:
+            raise KeyError('Invalid Address Mode!')
 
     def __getitem__(self, key):
         if key == 0:

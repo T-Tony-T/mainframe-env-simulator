@@ -449,13 +449,9 @@ def __pair(r):                  # even-odd pair registers retriever
     return RegisterPair(GPR[indx], GPR[indx + 1])
 
 def __addr(d, x, b):            # address retriever
-    indx = __addr_reg(x)
-    if not indx:
-        indx = 0
-    base = __addr_reg(b)
-    if not base:
-        base = 0
-    return indx + base + zPE.h2i(d)
+    indx = __addr_reg(x) or 0
+    base = __addr_reg(b) or 0
+    return Register(indx + base + zPE.h2i(d)).addr()
 
 def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
     addr = __addr(d, x, b) + offset * al
@@ -513,9 +509,7 @@ def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
     return page.retrieve(addr, zPE.align_fmt_map[al])
 
 def __dump(d, b, size):
-    base = __addr_reg(b)
-    if not base:
-        base = 0
+    base = __addr_reg(b) or 0
     addr_start = zPE.h2i(d) + base
     addr_end   = addr_start + size
     try:

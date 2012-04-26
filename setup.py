@@ -23,7 +23,7 @@ setup(
     #   R - SVN Revision Number (int) [ developing version ]
     #   P - Pre-Release Number (int)  [ release candidate  ]
     #   B - Bug-Fix Number (int)      [ normal release     ]
-    version = "0.815",
+    version = "1.000",
     # note:
     #   Major version is considered as:
     #     0 - None   Fully Functional - current
