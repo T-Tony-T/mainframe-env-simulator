@@ -762,7 +762,13 @@ class zSyntaxParser(object):
 
 
     def __update_insert(self, ln_s, change, ln_e):
-        old_complete = self.all_complete_at_lines(ln_s, ln_e)
+        old_complete = self.all_complete_at_lines(ln_s, ln_e) and zSyntaxParser(
+            change.content,
+            pos_rlvnt = self.__pos__,
+            non_split = self.__one__,
+            key_words = self.__key__,
+            level_dlm = self.__lvl__
+            ).__ast__.iscomplete()
         if old_complete:
             content = self.get_contents_at_lines(ln_s, ln_e, prefix = True, surfix = True)
 
@@ -799,7 +805,13 @@ class zSyntaxParser(object):
             return self.__parse()
 
     def __update_delete(self, ln_s, change, ln_e):
-        old_complete = self.all_complete_at_lines(ln_s, ln_e)
+        old_complete = self.all_complete_at_lines(ln_s, ln_e) and zSyntaxParser(
+            change.content,
+            pos_rlvnt = self.__pos__,
+            non_split = self.__one__,
+            key_words = self.__key__,
+            level_dlm = self.__lvl__
+            ).__ast__.iscomplete()
         if old_complete:
             content = self.get_contents_at_lines(ln_s, ln_e, prefix = True, surfix = True)
 
