@@ -228,7 +228,8 @@ class ScopeCounter(object):
     def __init__(self):
         self.__id  = 0          # current scope ID; init to zero
         self.__lbl = None       # current csect label
-        self.__new = 1          # next available scope ID; starting at 1
+        self.__cid =  1 # next available CSECT ID; starting at 0x00000001
+        self.__did = -1 # next available DSECT ID; starting at 0xFFFFFFFF
 
     def id(self, test = False):
         if ( self.__lbl == None  and # no CSECT encountered so far
@@ -240,10 +241,16 @@ class ScopeCounter(object):
     def label(self):
         return self.__lbl
 
-    def next(self):
-        rv = self.__new         # get the next available scope
-        self.__new += 1         # increment the counter
+    def next(self, what = 'CSECT'):
+        if what == 'DSECT':
+            rv = self.__did     # get the next available DSECT
+            self.__did -= 1     # decrement the DSECT counter
+        else:
+            rv = self.__cid     # get the next available CSECT
+            self.__cid += 1     # increment the CSECT counter
+
         return rv               # report the retrieved one
+
 
     def type(self):
         return [ 'SD', 'PC' ][self.__lbl.isspace()]
@@ -265,11 +272,7 @@ class ScopeCounter(object):
             DSECT_CR.append([ self.__lbl, line_num, None ])
 
         # generate the section id
-        if sectype == 'CSECT':
-            self.__id = self.__new
-            self.__new += 1     # update the next scope_id ptr
-        elif sectype == 'DSECT':
-            self.__id = -1      # 0xFFFFFFFF
+        self.__id = self.next(sectype)
 
         # insert the symbol into ESD table
         if self.__lbl not in ESD: # global ESD defined above
@@ -292,7 +295,7 @@ class ScopeCounter(object):
                           str(line_num), '.\n')
             # continued CSECT, switch to it
             self.__id = ESD[self.__lbl][0].id
-            self.__new -= 1                 # roll back the next scope id
+            self.__cid -= 1                 # roll back the next scope id
             addr = ESD[csect_lbl][0].length # retrieve program counter
         else:
             # new CSECT/DSECT, update info

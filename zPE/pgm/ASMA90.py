@@ -724,8 +724,9 @@ def pass_1():
     # end of main read loop
 
     # remove left-over DSECT from the ESD-index table
-    if -1 in ESD_ID:
-        del ESD_ID[-1]
+    for k in ESD_ID.keys():
+        if k < 0:
+            del ESD_ID[k]
     # prepare the offset look-up table of the addresses
     offset = RELOCATE_OFFSET
     for key in sorted(ESD_ID.iterkeys()):
@@ -2699,6 +2700,7 @@ def __PRINT_ASM_DCR():
             )
 
 def __PRINT_ASM_MSG():
+    print
     __PRINT_ASM_MSG_FOR('Infomation')
     __PRINT_ASM_MSG_FOR('Notification')
     __PRINT_ASM_MSG_FOR('Warning')
@@ -2706,7 +2708,7 @@ def __PRINT_ASM_MSG():
     __PRINT_ASM_MSG_FOR('Severe Error')
 
 def __PRINT_ASM_MSG_FOR(level):
-    print '\n{0}:'.format(level),
+    print '{0}:'.format(level),
     level = level[0]            # first char is index into INFO dict
     if len(INFO[level]):
         print
@@ -2714,3 +2716,4 @@ def __PRINT_ASM_MSG_FOR(level):
             print 'line {0} => {1}'.format(line_num, INFO[level][line_num])
     else:
         print 'N/A'
+    print
