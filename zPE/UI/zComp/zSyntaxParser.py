@@ -424,7 +424,9 @@ class zSyntaxParser(object):
 
         
     def get_nodes_at_lines(self, ln_s, ln_e):
-        return sum([ self.get_nodes_at(ln) for ln in range(ln_s, ln_e) ], [])
+        return sum([ self.get_nodes_at(ln) or []
+                     for ln in range(ln_s, ln_e)
+                     ], [])
 
     def get_contents_at_lines(self, ln_s, ln_e, prefix = False, surfix = True):
         indx_s = self.get_line_offset(ln_s)
