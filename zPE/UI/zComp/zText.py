@@ -1990,7 +1990,10 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         self.place_cursor(self.__forward(task, extend_selection = True))
 
     def forward_delete(self, task, msg):
+        curr_iter   = self.get_cursor_iter()
         target_iter = self.__forward(task)
+        if curr_iter.equal(target_iter):
+            return
         if task != 'char':
             text_to_kill = self.buff['disp'].get_text(self.get_cursor_iter(), target_iter)
 
@@ -1999,7 +2002,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             else:
                 zKillRing.kill(text_to_kill)
 
-        self.buff['disp'].delete(self.get_cursor_iter(), target_iter)
+        self.buff['disp'].delete(curr_iter, target_iter)
         self.unset_mark()
 
 

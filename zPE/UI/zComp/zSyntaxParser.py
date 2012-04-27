@@ -446,7 +446,7 @@ class zSyntaxParser(object):
 
     def all_complete_at_lines(self, ln_s, ln_e):
         for ln in range(ln_s, ln_e):
-            for ele in self.get_nodes_at(ln):
+            for ele in self.get_nodes_at(ln) or []:
                 if not ele.allcomplete():
                     return False
         return True
@@ -501,6 +501,7 @@ class zSyntaxParser(object):
         ln_e = ln_s + 1
         if change.action == 'd':
             ln_e += change.content.count('\n') # extend effected range to include deleted content
+        ln_e = min(ln_e, len(self.__lns__))    # make sure not pass EoF
         if index[-1] <= 0:    # insertion/deletion before current node
             node = self.get_prev_node(self.__lns__[ln_s].index(node), ln_s)  or  node
             ln_s = self.get_line_index(node)
@@ -858,13 +859,17 @@ class zSyntaxParser(object):
         update.__lns__[-1].pop() # remove EoF from last line
         if len(update.__lns__[-1]) == 1:
             # nothing before EoF in the last line
-            eof_insert = update.__lns__[-1][0]
+            if update.__lns__[-1][0][1]:
+                eof_insert = update.__lns__[-1][0]
+            else:
+                eof_insert = None
             update.__lns__.pop() # remove it
         else:
             eof_insert = None
 
         # generate offset modifier
-        ln_s_offset = self.get_line_offset(ln_s) - len(self.get_line_prefix(ln_s))
+        ln_s_prefix = self.get_line_prefix(ln_s)
+        ln_s_offset = self.get_line_offset(ln_s) - len(ln_s_prefix)
         ln_e_offset = ln_s_offset + len(update.__src) - self.get_line_offset(ln_e)
 
         # locate outdated nodes
@@ -893,6 +898,7 @@ class zSyntaxParser(object):
         next_node.offset += node_offset
 
         # update fast-lookup table
+        ln_s -= max(0, ln_s_prefix.count('\n') - 1)
         for i in range(ln_s, ln_e):
             self.__lns__.pop(ln_s)
         next_line = ln_s
