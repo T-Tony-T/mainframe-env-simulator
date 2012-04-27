@@ -1895,7 +1895,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         # move cursor to line end, if no outstanding data in between
         cursor = self.get_cursor_iter()
         eoline = cursor.copy()
-        eoline.forward_to_line_end()
+        self.forward_to_line_end(eoline)
         if self.buff['disp'].get_text(cursor, eoline).isspace():
             self.place_cursor(eoline)
 
