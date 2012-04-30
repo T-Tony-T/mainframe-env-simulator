@@ -2,7 +2,10 @@
 # 
 # Note: in this file, "page" refers to "memory page" (a 4K frame)
 
-import zPE
+from zPE.util import *
+from zPE.util.conv import *
+from zPE.util.global_config import *
+from zPE.util.excptn import *
 
 import re
 from ctypes import *            # for Union and C-Style array
@@ -40,12 +43,12 @@ class Page(Structure):
 
     def __getitem__(self, key):
         if isinstance(key, int) or isinstance(key, long):
-            return '{0:0>2}'.format(zPE.i2h(self.bytes[key]))
+            return '{0:0>2}'.format(i2h(self.bytes[key]))
         else: # slice
             (in_s, in_e, step) = key.indices(len(self.bytes))
             rv = []
             for indx in range(in_s, in_e):
-                rv.append('{0:0>2}'.format(zPE.i2h(self.bytes[indx])))
+                rv.append('{0:0>2}'.format(i2h(self.bytes[indx])))
             return ''.join(rv)
 
     def __setitem__(self, key, val):
@@ -114,16 +117,16 @@ class Page(Structure):
         rv = []
         while True:
             char_arr = ''
-            line = '{0:0>6}   '.format(zPE.i2h(pos_s))
+            line = '{0:0>6}   '.format(i2h(pos_s))
 
             for indx in range(0, 4):
                 line += self.__getitem__(slice(pos_s, pos_s + 4)) + ' '
-                char_arr += zPE.x2c(self.__getitem__(slice(pos_s, pos_s + 4)))
+                char_arr += x2c(self.__getitem__(slice(pos_s, pos_s + 4)))
                 pos_s += 4
             line += '   '
             for indx in range(0, 4):
                 line += self.__getitem__(slice(pos_s, pos_s + 4)) + ' '
-                char_arr += zPE.x2c(self.__getitem__(slice(pos_s, pos_s + 4)))
+                char_arr += x2c(self.__getitem__(slice(pos_s, pos_s + 4)))
                 pos_s += 4
 
             rv.append('{0}  *{1}*\n'.format(
@@ -140,15 +143,15 @@ class Page(Structure):
     # fmt: one of ['hw', 'fw', 'dw']
     # rv:  slice of the required range
     def __range_of(self, pos, fmt):
-        if fmt not in zPE.fmt_align_map:
+        if fmt not in fmt_align_map:
             raise SyntaxError('{0}: Invalid format.'.format(fmt))
 
-        align = zPE.fmt_align_map[fmt]
+        align = fmt_align_map[fmt]
         if pos % align != 0:
             raise IndexError('{0}: {1}'.format(
                     pos,
                     'Position not aligned on ',
-                    zPE.fmt_name_map[fmt],
+                    fmt_name_map[fmt],
                     ' boundary.'
                     ))
         return slice(pos, pos + align)
@@ -271,10 +274,10 @@ class Memory(object):
         self.l_bound = self.page_s * 4096
         self.h_bound = self.page_e * 4096
 
-        if self.l_bound < 0 or self.h_bound >= zPE.conf.Config['addr_max']:
+        if self.l_bound < 0 or self.h_bound >= Config['addr_max']:
             raise MemoryError('{0} 0x{1:0>6} ~ 0x{2:0>6}'.format(
                     'Addressing Exception: Valid address range is:',
-                    0, zPE.i2h(zPE.conf.Config['addr_max'])
+                    0, i2h(Config['addr_max'])
                     ))
 
         # allocate the memory
@@ -296,8 +299,8 @@ class Memory(object):
 
     def __str__(self):
         return "0x{0:0>6} ~ 0x{1:0>6} (0x{2:0>6} ~ 0x{3:0>6}) : {4}".format(
-            zPE.i2h(self.l_bound), zPE.i2h(self.h_bound),
-            zPE.i2h(self.min_pos), zPE.i2h(self.max_pos),
+            i2h(self.l_bound), i2h(self.h_bound),
+            i2h(self.min_pos), i2h(self.max_pos),
             self.memory
             )
 
@@ -380,7 +383,7 @@ class Memory(object):
 
         rv.insert(0, '{0}{1:0>6} TO {2:0>6}\n'.format(
                 '                             CORE ADDRESSES SPECIFIED-     ',
-                zPE.i2h(addr_s), zPE.i2h(addr_e)
+                i2h(addr_s), i2h(addr_e)
                 ))              # prepend the header
         return rv
 
@@ -484,7 +487,7 @@ class Memory(object):
         dup = 0                 # degree of duplication
         for line in dump:
             line = '{0:0>6}{1}'.format( # update address
-                zPE.i2h(int(line[:6], 16) + addr_offset),
+                i2h(int(line[:6], 16) + addr_offset),
                 line[6:]
                 )
             if line[6:] != prev[6:]: # if content differs
@@ -503,43 +506,3 @@ class Memory(object):
         return rv
 # end of Memory class definition
 
-
-
-## Region Parser
-def parse_region(region):
-    return __PARSE_REGION(region, check_alignment = True)[1]
-
-def max_sz_of(region):
-    return __PARSE_REGION(region, check_alignment = True)[0]
-
-def parse_sz_from(sz_str):
-    return __PARSE_REGION(sz_str, check_alignment = False)[0]
-
-
-### Supporting Function
-
-def __PARSE_REGION(region, check_alignment):
-    region = re.split('(\d+)', region)
-    if len(region) == 2:
-        region = int(region[1])
-    elif len(region) == 3:
-        unit = region[2].upper().split()
-        if len(unit) != 1:
-            raise SyntaxError('Invalid region size unit. Use "B", "K" or "M" as unit.')
-
-        unit = unit[0]
-        if unit in [ 'B', 'BYTE' ]:
-            region = int(region[1])
-        elif unit in [ 'K', 'KB' ]:
-            region = int(region[1]) * 1024
-        elif unit in [ 'M', 'MB' ]:
-            region = int(region[1]) * 1024 * 1024
-        else:
-            raise SyntaxError('Invalid region size unit. Use "B[yte]", "K[B]" or "M[B]" as unit.')
-    else:
-        raise SyntaxError('Invalid region size format. Should be similar to "512K" or "4096 Byte".')
-
-    if check_alignment and region % 4096 != 0:
-        raise ValueError('Region must be divisible by 4K.')
-
-    return (region, '{0}K'.format(region / 1024))

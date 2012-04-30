@@ -28,8 +28,18 @@
 #     none
 ################################################################
 
+from zPE.util import *
+from zPE.util.conv import *
+from zPE.util.excptn import *
+from zPE.util.global_config import *
 
-import zPE
+import zPE.util.spool as spool
+import zPE.base.core.SPOOL as core_SPOOL
+
+import zPE.base.core.asm
+import zPE.base.core.cpu
+
+import ASMA90, HEWLDRGO
 
 import re
 from time import time, strftime
@@ -49,7 +59,7 @@ FILE_REQ = {                    # files that are required
     'SYSPRINT' : 'AM001 ASSIST COULD NOT OPEN PRINTER FT06F001:ABORT',
     }
 FILE_GEN = {                    # files that will be generated if missing
-    'FT05F001' : lambda : zPE.core.SPOOL.new('FT05F001', '+', 'tmp', '', ''),
+    'FT05F001' : lambda : core_SPOOL.new('FT05F001', '+', 'tmp', '', ''),
     }
 FILE_MISSING = [ ]              # files that are missing
 
@@ -65,17 +75,17 @@ TIME = {
 def init(step):
     # check for file requirement
     if __MISSED_FILE(step, 0) != 0:
-        return zPE.RC['CRITICAL']
+        return RC['CRITICAL']
 
     # load in all the pseudo instructions
-    zPE.core.asm.pseudo.update(PSEUDO_INS)
-    zPE.core.cpu.ins_op.update(PSEUDO_OP)
+    zPE.base.core.asm.pseudo.update(PSEUDO_INS)
+    zPE.base.core.cpu.ins_op.update(PSEUDO_OP)
 
     limit = 0 # error tolerance limit; currently hard coded. need info
 
     # invoke parser from ASMA90 to assemble the source code
-    zPE.core.SPOOL.new('SYSLIN', '+', 'tmp', '', '') # new,pass,delete
-    zPE.core.SPOOL.new('SYSUT1', '+', 'tmp', '', '') # new,delete,delete
+    core_SPOOL.new('SYSLIN', '+', 'tmp', '', '') # new,pass,delete
+    core_SPOOL.new('SYSUT1', '+', 'tmp', '', '') # new,delete,delete
 
 
     # load the user-supplied PARM and config into the default configuration
@@ -89,16 +99,16 @@ def init(step):
             })
 
     TIME['asm_start'] = time()
-    zPE.pgm.ASMA90.pass_1()
-    zPE.pgm.ASMA90.pass_2()
+    ASMA90.pass_1()
+    ASMA90.pass_2()
     TIME['asm_end'] = time()
 
     err_cnt = __PARSE_OUT_ASM(limit)
 
     # get instream data, if not specified in DD card
-    spo = zPE.core.SPOOL.retrieve('FT05F001')
+    spo = spool.retrieve('FT05F001')
     if 'FT05F001' in FILE_MISSING:
-        spi = zPE.core.SPOOL.retrieve('SYSIN')
+        spi = spool.retrieve('SYSIN')
         while not spi.empty():
             spo.append('{0:<72}{1:8}\n'.format(
                     spi[0][:-1], '' # keep the deck_id blank
@@ -119,19 +129,19 @@ def init(step):
                 required_mem_sz = sz
 
     asm_init_res()              # release resources
-    zPE.core.SPOOL.remove('SYSUT1')
+    core_SPOOL.remove('SYSUT1')
 
     if err_cnt > limit:
         if 'FT05F001' in FILE_MISSING:
-            zPE.core.SPOOL.remove('FT05F001')
-        zPE.core.SPOOL.remove('SYSLIN')
-        return zPE.RC['NORMAL'] # skip exec, return with "CC = 0"
+            core_SPOOL.remove('FT05F001')
+        core_SPOOL.remove('SYSLIN')
+        return RC['NORMAL'] # skip exec, return with "CC = 0"
 
     # invoke HEWLDRGO to link-edit and execute the object module
-    zPE.core.SPOOL.new('SYSLOUT', 'o', 'outstream', '', '') # new,delete,delete
-    zPE.core.SPOOL.pretend('XREAD',    'FT05F001') # XREAD    -> FT05F001
-    zPE.core.SPOOL.pretend('XPRNT',    'SYSLOUT')  # XPRNT    -> SYSLOUT
-    zPE.core.SPOOL.pretend('XSNAPOUT', 'SYSLOUT')  # XSNAPOUT -> SYSLOUT
+    core_SPOOL.new('SYSLOUT', 'o', 'outstream', '', '') # new,delete,delete
+    core_SPOOL.pretend('XREAD',    'FT05F001') # XREAD    -> FT05F001
+    core_SPOOL.pretend('XPRNT',    'SYSLOUT')  # XPRNT    -> SYSLOUT
+    core_SPOOL.pretend('XSNAPOUT', 'SYSLOUT')  # XSNAPOUT -> SYSLOUT
 
     # load the user-supplied PARM and config into the default configuration
     ldr_load_parm({
@@ -143,35 +153,35 @@ def init(step):
             'MEM_POS' : 0,      # always start at 0x000000 for ASSIST
             'MEM_LEN' : required_mem_sz,
             'TIME'    : min(
-                zPE.JCL['jobstart'] + zPE.JCL['time'] - time(), # job limit
-                step.start + step.time - time()                 # step limit
+                JCL['jobstart'] + JCL['time'] - time(), # job limit
+                step.start + step.time - time()         # step limit
                 ),
             'REGION'  : step.region,
             })
 
     # initialize all register to "F4F4F4F4"
-    for reg in zPE.core.reg.GPR:
+    for reg in GPR:
         reg.long = 0xF4F4F4F4
 
     # load OBJMOD into memory, and execute it
     TIME['exec_start'] = time()
-    rc = zPE.pgm.HEWLDRGO.go(zPE.pgm.HEWLDRGO.load())
+    rc = HEWLDRGO.go(HEWLDRGO.load())
     TIME['exec_end'] = time()
 
     if 'FT05F001' in FILE_MISSING:
-        zPE.core.SPOOL.remove('FT05F001')
-    zPE.core.SPOOL.remove('XREAD')    # unlink XREAD
+        core_SPOOL.remove('FT05F001')
+    core_SPOOL.remove('XREAD')       # unlink XREAD
 
     __PARSE_OUT_LDR(rc)
 
     ldr_init_res()              # release resources
 
-    zPE.core.SPOOL.remove('SYSLIN')
-    zPE.core.SPOOL.remove('SYSLOUT')
-    zPE.core.SPOOL.remove('XPRNT')    # unlink XPRNT
-    zPE.core.SPOOL.remove('XSNAPOUT') # unlink XSNAPOUT
+    core_SPOOL.remove('SYSLIN')
+    core_SPOOL.remove('SYSLOUT')
+    core_SPOOL.remove('XPRNT')       # unlink XPRNT
+    core_SPOOL.remove('XSNAPOUT')    # unlink XSNAPOUT
 
-    return zPE.RC['NORMAL']
+    return RC['NORMAL']
 
 
 ### Supporting Functions
@@ -179,12 +189,12 @@ def __MISSED_FILE(step, i):
     if i >= len(FILE_CHK):
         return 0                # termination condition
 
-    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
-    sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
+    sp1 = spool.retrieve('JESMSGLG') # SPOOL No. 01
+    sp3 = spool.retrieve('JESYSMSG') # SPOOL No. 03
     ctrl = ' '
 
-    if FILE_CHK[i] not in zPE.core.SPOOL.list(): # not offered
-        sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
+    if FILE_CHK[i] not in spool.list(): # not offered
+        sp1.append(ctrl, strftime('%H.%M.%S '), JCL['jobid'],
                    '  IEC130I {0:<8}'.format(FILE_CHK[i]),
                    ' DD STATEMENT MISSING\n')
         sp3.append(ctrl, 'IEC130I {0:<8}'.format(FILE_CHK[i]),
@@ -193,9 +203,9 @@ def __MISSED_FILE(step, i):
 
     cnt = __MISSED_FILE(step, i+1)
 
-    if FILE_CHK[i] not in zPE.core.SPOOL.list():
+    if FILE_CHK[i] not in spool.list():
         if FILE_CHK[i] in FILE_REQ:
-            sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
+            sp1.append(ctrl, strftime('%H.%M.%S '), JCL['jobid'],
                        '  +{0}\n'.format(FILE_REQ[FILE_CHK[i]]))
             sp3.append(ctrl, '{0}\n'.format(FILE_REQ[FILE_CHK[i]]))
             cnt += 1
@@ -206,8 +216,8 @@ def __MISSED_FILE(step, i):
 
 
 def __PARSE_OUT_ASM(limit):
-    spi = zPE.core.SPOOL.retrieve('SYSUT1')   # input SPOOL
-    spo = zPE.core.SPOOL.retrieve('SYSPRINT') # output SPOOL
+    spi = spool.retrieve('SYSUT1')   # input SPOOL
+    spo = spool.retrieve('SYSPRINT') # output SPOOL
 
     CNT = {
         'pln'  : 1,         # printed line counter of the current page
@@ -217,11 +227,11 @@ def __PARSE_OUT_ASM(limit):
     ### header portion of the report
     ctrl = '1'
     spo.append(ctrl, '*** ASSIST 4.0/A2-05/15/82  470/V7A/0:OS/VS2  INS=SDFP7/X=BGHO, CHECK/TRC/=1180, OPTS=CDKMPR FROM PENN ST*NIU COMPSCI*LT\n')
-    CNT['pln'] += zPE.SPOOL_CTRL_MAP[ctrl]
+    CNT['pln'] += SPOOL_CTRL_MAP[ctrl]
 
     ctrl = '0'
     spo.append(ctrl, '\n')
-    CNT['pln'] += zPE.SPOOL_CTRL_MAP[ctrl]
+    CNT['pln'] += SPOOL_CTRL_MAP[ctrl]
 
     ### main read loop, op code portion of the report
     init_line_num = 1           # start at line No. 1
@@ -268,7 +278,7 @@ def __PARSE_OUT_ASM(limit):
                 continue
 
             # comment, EJECT, SPACE, MACRO definition, etc.
-            field = zPE.resplit_sq(r'\s+', line[:-1], 3)
+            field = resplit_sq(r'\s+', line[:-1], 3)
 
             # check for EJECT and SPACE
             if line.startswith('*')  or  len(field) < 2:
@@ -341,7 +351,7 @@ def __PARSE_OUT_ASM(limit):
         elif len(MNEMONIC[line_num]) == 1: # type 1
             if MNEMONIC[line_num][0]  and  MNEMONIC_LOC[line_num] != None:
                 # has recorded location, use it
-                loc = zPE.i2h(MNEMONIC_LOC[line_num])
+                loc = i2h(MNEMONIC_LOC[line_num])
             elif MNEMONIC[line_num][0]:
                 # has invalid location, indicate it
                 loc = '-' * 6
@@ -350,17 +360,17 @@ def __PARSE_OUT_ASM(limit):
         elif MNEMONIC[line_num][0] == None: # no scope ==> END (type 2)
             loc = ''
         elif len(MNEMONIC[line_num]) == 4: # type 4, EQU
-            loc = zPE.i2h(MNEMONIC[line_num][3])
+            loc = i2h(MNEMONIC[line_num][3])
         else:                       # type 2/3/5, inside CSECT or DSECT
-            loc = zPE.i2h(MNEMONIC_LOC[line_num])
+            loc = i2h(MNEMONIC_LOC[line_num])
 
         tmp_str = ''
 
         if ( len(MNEMONIC[line_num]) == 3  and # type 3
-             zPE.core.asm.can_get_sd(MNEMONIC[line_num][2]) # DC/=const
+             zPE.base.core.asm.can_get_sd(MNEMONIC[line_num][2]) # DC/=const
              ):
-            for val in zPE.core.asm.get_sd(MNEMONIC[line_num][2]):
-                tmp_str += zPE.core.asm.X_.tr(val.dump())
+            for val in zPE.base.core.asm.get_sd(MNEMONIC[line_num][2]):
+                tmp_str += zPE.base.core.asm.X_.tr(val.dump())
             if len(tmp_str) > 16:
                 tmp_str = tmp_str[:16]
         elif len(MNEMONIC[line_num]) == 4: # type 4
@@ -370,7 +380,7 @@ def __PARSE_OUT_ASM(limit):
         elif len(MNEMONIC[line_num]) == 5: # type 5
             # breaking up the op-mnemonic field, if any
             if MNEMONIC[line_num][2]:
-                code = zPE.core.asm.prnt_op(MNEMONIC[line_num][2])
+                code = zPE.base.core.asm.prnt_op(MNEMONIC[line_num][2])
             else:
                 code = ''
             if len(code) == 12:
@@ -390,11 +400,11 @@ def __PARSE_OUT_ASM(limit):
                 )
             # appending to it the "ADDR1" and "ADDR2" fields, if applied
             if MNEMONIC[line_num][3] != None:
-                addr_1 = zPE.i2h(MNEMONIC[line_num][3])
+                addr_1 = i2h(MNEMONIC[line_num][3])
             else:
                 addr_1 = '     '
             if MNEMONIC[line_num][4] != None:
-                addr_2 = zPE.i2h(MNEMONIC[line_num][4])
+                addr_2 = i2h(MNEMONIC[line_num][4])
             else:
                 addr_2 = '     '
             tmp_str += '{0:0>5} {1:0>5}'.format(
@@ -461,7 +471,7 @@ def __PARSE_OUT_ASM(limit):
     spo.append(ctrl, '*** ASSEMBLY TIME = {0:>8.3f} SECS, '.format(diff),
                '{0:>8} STATEMENT/SEC ***\n'.format(stmt_p_sec))
 
-    if not zPE.debug_mode():
+    if not debug_mode():
         return cnt_err          # regular process end here
     #
     # debugging information
@@ -472,7 +482,7 @@ def __PARSE_OUT_ASM(limit):
             scope = ' ' * 8
         else:
             try:
-                scope = zPE.f2x(MNEMONIC[key][0])
+                scope = f2x(MNEMONIC[key][0])
             except:
                 scope = ' ' * 8
         if len(MNEMONIC[key]) == 0: # type 0
@@ -480,22 +490,22 @@ def __PARSE_OUT_ASM(limit):
         elif len(MNEMONIC[key]) == 1: # type 1
             loc = ''
         elif len(MNEMONIC[key]) == 4: # type 4
-            loc = zPE.i2h(MNEMONIC[key][3])
+            loc = i2h(MNEMONIC[key][3])
         else:
-            loc = zPE.i2h(MNEMONIC[key][1])
+            loc = i2h(MNEMONIC[key][1])
         tmp_str = ''
         if ( len(MNEMONIC[key]) == 3  and # type 3
-             zPE.core.asm.can_get_sd(MNEMONIC[key][2]) # DC/=const
+             zPE.base.core.asm.can_get_sd(MNEMONIC[key][2]) # DC/=const
              ):
-            for val in zPE.core.asm.get_sd(MNEMONIC[key][2]):
-                tmp_str += zPE.core.asm.X_.tr(val.dump())
+            for val in zPE.base.core.asm.get_sd(MNEMONIC[key][2]):
+                tmp_str += zPE.base.core.asm.X_.tr(val.dump())
         elif len(MNEMONIC[key]) == 4: # type 4
             tmp_str += '{0:<14} {1:0>5} {0:>5}'.format(
                 '', loc
                 )
         elif len(MNEMONIC[key]) == 5: # type 5
             if MNEMONIC[key][2]:
-                code = zPE.core.asm.prnt_op(MNEMONIC[key][2])
+                code = zPE.base.core.asm.prnt_op(MNEMONIC[key][2])
             else:
                 code = ''
             if len(code) == 12:
@@ -514,11 +524,11 @@ def __PARSE_OUT_ASM(limit):
                 field_1, field_2, field_3
                 )
             if MNEMONIC[key][3] != None:
-                addr_1 = zPE.i2h(MNEMONIC[key][3])
+                addr_1 = i2h(MNEMONIC[key][3])
             else:
                 addr_1 = '     '
             if MNEMONIC[key][4] != None:
-                addr_2 = zPE.i2h(MNEMONIC[key][4])
+                addr_2 = i2h(MNEMONIC[key][4])
             else:
                 addr_2 = '     '
             tmp_str += '{0:0>5} {1:0>5}'.format(
@@ -543,19 +553,19 @@ def __PARSE_OUT_ASM(limit):
                 org_loc = MNEMONIC[line_num][1]
             print 'line {0:>4}: {1:0>6} => {2:0>6}'.format(
                 line_num, org_loc,
-                zPE.i2h(MNEMONIC_LOC[line_num])
+                i2h(MNEMONIC_LOC[line_num])
                 )
 
     from binascii import b2a_hex
     print '\n\nObject Deck:'
-    for line in zPE.core.SPOOL.retrieve('SYSLIN'):
+    for line in spool.retrieve('SYSLIN'):
         line = b2a_hex(line).upper()
-        print ' '.join(zPE.fixed_width_split(8, line[0   :  32])), '  ',
-        print ' '.join(zPE.fixed_width_split(8, line[32  :  64])), '  ',
-        print ' '.join(zPE.fixed_width_split(8, line[64  :  96]))
+        print ' '.join(fixed_width_split(8, line[0   :  32])), '  ',
+        print ' '.join(fixed_width_split(8, line[32  :  64])), '  ',
+        print ' '.join(fixed_width_split(8, line[64  :  96]))
         print '{0:38}'.format(''),
-        print ' '.join(zPE.fixed_width_split(8, line[96  : 128])), '  ',
-        print ' '.join(zPE.fixed_width_split(8, line[128 : 160]))
+        print ' '.join(fixed_width_split(8, line[96  : 128])), '  ',
+        print ' '.join(fixed_width_split(8, line[128 : 160]))
         print
     print
     # end of debugging
@@ -595,7 +605,7 @@ def __PRINT_LINE(spool_out, title, line_words, line_num, page_num,
         spool_out.append(* line_words)
         ctrl = line_words[0][0]
 
-    return ( line_num + zPE.SPOOL_CTRL_MAP[ctrl], page_num )
+    return ( line_num + SPOOL_CTRL_MAP[ctrl], page_num )
 
 
 def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):
@@ -620,14 +630,14 @@ def __PRINT_HEADER(spool_out, title, line_num, page_num, ctrl = '1'):
     spool_out.append(
         '0',  '  LOC  OBJECT CODE    ADDR1 ADDR2  STMT   SOURCE STATEMENT\n'
         )
-    return line_num + zPE.SPOOL_CTRL_MAP[ctrl] + zPE.SPOOL_CTRL_MAP['0']
+    return line_num + SPOOL_CTRL_MAP[ctrl] + SPOOL_CTRL_MAP['0']
 
 
 def __PARSE_OUT_LDR(rc):
-    spi = zPE.core.SPOOL.retrieve('SYSLOUT')  # LOADER output SPOOL
-    spo = zPE.core.SPOOL.retrieve('SYSPRINT') # ASSIST output SPOOL
+    spi = spool.retrieve('SYSLOUT')  # LOADER output SPOOL
+    spo = spool.retrieve('SYSPRINT') # ASSIST output SPOOL
 
-    ldr_except = zPE.e_pop()    # get the last exception, is exists
+    ldr_except = e_pop()        # get the last exception, is exists
 
     ctrl = '0'
     spo.append(ctrl, '*** PROGRAM EXECUTION BEGINNING - ANY OUTPUT BEFORE EXECUTION TIME MESSAGE IS PRODUCED BY USER PROGRAM ***\n')
@@ -647,11 +657,11 @@ def __PARSE_OUT_LDR(rc):
     spo.append(ctrl, '*** EXECUTION TIME = {0:>8.3f} SECS. '.format(diff),
                '{0:>9} INSTRUCTIONS EXECUTED - '.format(len(INSTRUCTION)),
                '{0:>8} INSTRUCTIONS/SEC ***\n'.format(ins_p_sec))
-    if rc >= zPE.RC['WARNING']:
+    if rc >= RC['WARNING']:
         msg = 'ABNORMAL'
         # generate err msgs here
         spo.append('1', 'ASSIST COMPLETION DUMP\n')
-        spo.append( ctrl, 'PSW AT ABEND ', str(zPE.core.reg.SPR['PSW']),
+        spo.append( ctrl, 'PSW AT ABEND ', str(SPR['PSW']),
                     '       COMPLETION CODE {0}\n'.format(str(ldr_except)[:76])
                     ) # only capable of at most 76 characters of exception msg
 
@@ -671,9 +681,9 @@ def __PARSE_OUT_LDR(rc):
                 code[1] = ' ' * 4
             code[0] = ins[1][0:4]
             spo.append(
-                ctrl, '  ', zPE.b2x(ins[0][32:39]),
+                ctrl, '  ', b2x(ins[0][32:39]),
                 '  {0:0>6}     {1} {2} {3}\n'.format(
-                    zPE.i2h(ins[0].Instruct_addr), * code
+                    i2h(ins[0].Instruct_addr), * code
                     )
                 )
         # append the following words to the end of the last instruction
@@ -690,16 +700,16 @@ def __PARSE_OUT_LDR(rc):
             else:
                 code = ins[1]
             spo.append(
-                ctrl, '  ', zPE.b2x(ins[0][32:39]),
+                ctrl, '  ', b2x(ins[0][32:39]),
                 '  {0:0>6}     {1}\n'.format(
-                    zPE.i2h(ins[0].Instruct_addr), code))
+                    i2h(ins[0].Instruct_addr), code))
 
         # register dump
         spo.append(ctrl, ' REGS 0-7      ',
-                   '    '.join([ str(r) for r in zPE.core.reg.GPR[ :8] ]),
+                   '    '.join([ str(r) for r in GPR[ :8] ]),
                    '\n')
         spo.append(' ',  ' REGS 8-15     ',
-                   '    '.join([ str(r) for r in zPE.core.reg.GPR[8: ] ]),
+                   '    '.join([ str(r) for r in GPR[8: ] ]),
                    '\n')
         spo.append(ctrl, ' FLTR 0-6      ', # floating-point registers
                    '        '.join([ 'not..implemented' ] * 4),

@@ -32,7 +32,12 @@
 ################################################################
 
 
-import zPE
+from zPE.util import *
+from zPE.util.conv import *
+from zPE.util.excptn import *
+from zPE.util.global_config import *
+
+import zPE.util.spool as spool
 
 import sys
 from time import strftime, time
@@ -40,7 +45,8 @@ from random import randint
 from binascii import b2a_hex
 from threading import Timer
 
-import zPE.core.cpu as CPU
+import zPE.base.core.cpu
+import zPE.base.core.mem
 
 from hewldrgo_config import * # read resource file for LDR config + rc
 
@@ -57,25 +63,25 @@ FILE_GEN = {                    # files that will be generated if missing
 
 def run(step):
     '''this should prepare an tmp step and pass it to init()'''
-    zPE.mark4future('user-specific pgm')
+    mark4future('user-specific pgm')
 
 
 def init(step):
     # check for file requirement
     if __MISSED_FILE(step) != 0:
-        return zPE.RC['CRITICAL']
+        return RC['CRITICAL']
 
     # load the user-supplied PARM and config into the default configuration
     # ldr_load_parm({
     #         })
     ldr_load_local_conf({
             'MEM_POS' : randint(512*128, 4096*128) * 8, # random from 512K to 4M
-            'MEM_LEN' : zPE.core.mem.max_sz_of(step.region),
+            'MEM_LEN' : region_max_sz(step.region),
                         # this is WAY to large;
                         # need a way to detect actual mem size
             'TIME'    : min(
-                zPE.JCL['jobstart'] + zPE.JCL['time'] - time(), # job limit
-                step.time                                       # step limit
+                JCL['jobstart'] + JCL['time'] - time(), # job limit
+                step.time                               # step limit
                 ),
             'REGION'  : step.region,
             })
@@ -92,20 +98,20 @@ def init(step):
 
 def load():
     '''load all OBJECT MODULEs (statically) into memory'''
-    if LDR_CONFIG['MEM_LEN'] > zPE.core.mem.max_sz_of(LDR_CONFIG['REGION']):
-        zPE.abort(9, 'Error: ', LDR_CONFIG['REGION'],
-                  ': RIGEON is not big enough.\n')
+    if LDR_CONFIG['MEM_LEN'] > region_max_sz(LDR_CONFIG['REGION']):
+        abort(9, 'Error: ', LDR_CONFIG['REGION'],
+              ': RIGEON is not big enough.\n')
 
-    spi = zPE.core.SPOOL.retrieve('SYSLIN') # input SPOOL
-    mem = zPE.core.mem.Memory(LDR_CONFIG['MEM_POS'], LDR_CONFIG['MEM_LEN'])
+    spi = spool.retrieve('SYSLIN') # input SPOOL
+    mem = zPE.base.core.mem.Memory(LDR_CONFIG['MEM_POS'], LDR_CONFIG['MEM_LEN'])
     LDR_CONFIG['EXIT_PT'] = mem.h_bound
 
     rec_tp = { # need to be all lowercase since b2a_hex() returns all lowercase
-        'ESD' : zPE.c2x('ESD').lower(),
-        'TXT' : zPE.c2x('TXT').lower(),
-        'RLD' : zPE.c2x('RLD').lower(),
-        'END' : zPE.c2x('END').lower(),
-        'SYM' : zPE.c2x('SYM').lower(),
+        'ESD' : c2x('ESD').lower(),
+        'TXT' : c2x('TXT').lower(),
+        'RLD' : c2x('RLD').lower(),
+        'END' : c2x('END').lower(),
+        'SYM' : c2x('SYM').lower(),
         }
     rec_order = {
         # current type : expected type(s)
@@ -124,23 +130,23 @@ def load():
     for r in spi.spool:
         rec = b2a_hex(r)
         if rec[:2] != '02':     # control statement
-            field = zPE.resplit_sq(r'\s+', rec, 3)
+            field = resplit_sq(r'\s+', rec, 3)
             if len(field) < 3  or  field[0] != '':
-                zPE.abort(13, "Error: ", rec,
-                          ":\n invalid OBJECT MODULE control statement.\n")
+                abort(13, "Error: ", rec,
+                      ":\n invalid OBJECT MODULE control statement.\n")
 
             if field[1] == 'ENTRY':
                 LDR_CONFIG['ENTRY_PT'] = '{0:<8}'.format(field[2])
 
             elif field[1] == 'INCLUDE':
-                zPE.mark4future('OM INCLUDE statement')
+                mark4future('OM INCLUDE statement')
 
             elif field[1] == 'NAME':
                 pass            # only the linkage-editor need this
 
             else:
-                zPE.abort(13, "Error: ", rec,
-                          ":\n invalid OBJECT MODULE control statement.\n")
+                abort(13, "Error: ", rec,
+                      ":\n invalid OBJECT MODULE control statement.\n")
             continue
 
         # check record type
@@ -148,7 +154,7 @@ def load():
             sys.stderr.write(
                 'Error: Loader: Invalid OBJECT MODULE record encountered.\n'
                 )
-            return zPE.RC['ERROR'] # OBJECT module format error
+            return RC['ERROR']  # OBJECT module format error
         else:
             expect_type = rec_order[rec[2:8]]
 
@@ -156,7 +162,7 @@ def load():
         if rec[2:8] == rec_tp['ESD']: # byte 2-4
             byte_cnt = int(rec[20:24], 16) # byte 11-12: byte count
             esd_id = rec[28:32]            # byte 15-16: ESD ID / blank
-            if esd_id == zPE.c2x('  '):    # 2 spaces
+            if esd_id == c2x('  '):        # 2 spaces
                 # blank => 'LD'
                 esd_id = None   # no advancing in ESD ID
             else:
@@ -169,7 +175,7 @@ def load():
                 vf = rec[i : i+32] # each vf is 16 bytes long
                 addr = int(vf[18:24], 16) # vf byte 10-12: address
                 length = vf[26:32]        # vf byte 14-16: length / blank
-                if length == zPE.c2x('   '): # 3 spaces
+                if length == c2x('   '):  # 3 spaces
                     length = None
                 else:
                     length = int(length, 16)
@@ -177,8 +183,8 @@ def load():
                     None, esd_id, addr, length,
                     None, LDR_PARM['AMODE'], LDR_PARM['RMODE'], None
                     )
-                esd.load_type(vf[16:18])        # vf byte 9: ESD type code
-                esd_name = zPE.x2c(vf[0:16])    # vf byte 1-8: ESD Name
+                esd.load_type(vf[16:18])  # vf byte 9: ESD type code
+                esd_name = x2c(vf[0:16])  # vf byte 1-8: ESD Name
                 if esd.type in [ 'SD', 'PC', ]:
                     CSECT[obj_id, esd.id] = ( mem_loc, esd, esd_name )
                     SCOPE[mem_loc, esd.addr, esd.length] = ( obj_id, esd.id )
@@ -201,8 +207,8 @@ def load():
             scope = int(rec[28:32], 16)    # byte 15-16: scope id
 
             if ( obj_id, scope ) not in CSECT:
-                zPE.abort(13, 'Error: ', str(scope),
-                          ': Invalid ESD ID in TXT record(s).\n')
+                abort(13, 'Error: ', str(scope),
+                      ': Invalid ESD ID in TXT record(s).\n')
 
             # calculate the actual location
             loc = ( CSECT[obj_id, scope][0] +      # start of OBJMOD
@@ -244,21 +250,19 @@ def load():
                         if ( val[2] == EXREF[obj_id, rel_id][2] and
                              val[1].type == 'SD'
                              ):
-                            reloc_value = zPE.core.reg.Register(val[1].addr)
+                            reloc_value = val[1].addr
                             found = True
                             break
                     if not found:
-                        zPE.abort(13, 'Error: ', EXREF[obj_id, rel_id][2],
-                                  ': Storage Definition not found.\n')
+                        abort(13, 'Error: ', EXREF[obj_id, rel_id][2],
+                              ': Storage Definition not found.\n')
                 else:
-                    reloc_value = zPE.core.reg.Register(
-                        int(mem[df_addr : df_addr + df_len], 16)
-                        )
+                    reloc_value = int(mem[df_addr : df_addr + df_len], 16)
 
                 # relocate the address constant
-                reloc_value + reloc_offset # AR rl_value,rl_offset
+                reloc_value += reloc_offset
                 mem[df_addr] = '{0:0>{1}}'.format(
-                    str(reloc_value)[- df_len * 2 : ], # max len
+                    i2h(reloc_value)[- df_len * 2 : ], # max len
                     df_len * 2                         # min len
                     )
 
@@ -268,7 +272,7 @@ def load():
             if LDR_CONFIG['ENTRY_PT'] == None:
                 # no ENTRY POINT offered, nor setup by a previous OBJMOD
                 entry = rec[10:16] # byte 6-8: entry point
-                if entry == zPE.c2x('   '): # 3 spaces
+                if entry == c2x('   '): # 3 spaces
                     scope = 1   # no ENTRY POINT in END, use 1st CSECT
                     loc = CSECT[obj_id, scope][1].addr
                 else:
@@ -283,7 +287,7 @@ def load():
                         LDR_CONFIG['ENTRY_PT']
                         )
                     )
-                return zPE.RC['ERROR'] # OBJECT module format error
+                return RC['ERROR'] # OBJECT module format error
 
             # prepare for next OBJECT MODULE, if any
             max_offset = 0
@@ -308,9 +312,9 @@ def load():
         sys.stderr.write(
             'Error: Loader: OBJECT MODULE not end with END card.\n'
             )
-        return zPE.RC['ERROR'] # OBJECT module format error
+        return RC['ERROR']      # OBJECT module format error
 
-    if zPE.debug_mode():
+    if debug_mode():
         print 'Memory after loading Object Deck:'
         for line in mem.dump_all():
             print line[:-1]
@@ -320,16 +324,19 @@ def load():
 # end of load()
 
 def go(mem):
-    if mem.__class__ is not zPE.core.mem.Memory:
+    if mem.__class__ is not zPE.base.core.mem.Memory:
         return mem # not a Memory instance, error occured during loading
 
-    psw = zPE.core.reg.SPR['PSW']
-    ldr_mem = zPE.core.mem.Memory((mem.max_pos + 7) / 8 * 8, 18 * 4) # 18F RSV
-    ldr_mem[ldr_mem.min_pos] = zPE.c2x('RSV ') * 18
+    psw = SPR['PSW']
+    ldr_mem = zPE.base.core.mem.Memory(
+        (mem.max_pos + 7) / 8 * 8, # align on next doubleword boundary
+        18 * 4                     # 18F RSV
+        )
+    ldr_mem[ldr_mem.min_pos] = c2x('RSV ') * 18
 
-    prsv = zPE.core.reg.GPR[13] # register 13: parent register saving area
-    rtrn = zPE.core.reg.GPR[14] # register 14: return address
-    enty = zPE.core.reg.GPR[15] # register 15: entry address
+    prsv = GPR[13] # register 13: parent register saving area
+    rtrn = GPR[14] # register 14: return address
+    enty = GPR[15] # register 15: entry address
 
     # initial program load
     prsv[0] = ldr_mem.min_pos        # load LOADER's RSV into register 13
@@ -351,32 +358,34 @@ def go(mem):
         t.start()               # start the timer
         RECORD_BR(psw.snapshot(), ['00', '00']) # branch into the module
         while not timeouted  and  psw.Instruct_addr != LDR_CONFIG['EXIT_PT']:
-            CPU.execute(RECORD_INS(psw.snapshot(), CPU.fetch()))
+            zPE.base.core.cpu.execute(
+                RECORD_INS(psw.snapshot(), zPE.base.core.cpu.fetch())
+                )
         t.cancel()              # stop the timer
-        rc = zPE.RC['NORMAL']
+        rc = RC['NORMAL']
     except Exception as e:
         # ABEND CODE; need info
         t.cancel()              # stop the timer
-        if isinstance(e, zPE.zPException):
-            zPE.e_push(e)
+        if isinstance(e, zPException):
+            e_push(e)
         else:
-            if zPE.debug_mode():
+            if debug_mode():
                 raise
             else:
-                sys.stderr.write(   # print out the actual error
+                sys.stderr.write( # print out the actual error
                     'Exception: {0}\n'.format(
                         ', '.join([ str(arg) for arg in e.args ])
                         )
                     )
-            zPE.e_push( zPE.newSystemException('0C0', 'UNKNOWN EXCEPTION') )
+            e_push( newSystemException('0C0', 'UNKNOWN EXCEPTION') )
         MEM_DUMP.extend(mem.dump_all())
-        rc = zPE.RC['ERROR']    # OBJECT module abnormally ended
+        rc = RC['ERROR']        # OBJECT module abnormally ended
     if timeouted:
-        zPE.e_push( zPE.newSystemException(
+        e_push( newSystemException(
                 '322', 'TIME EXCEEDED THE SPECIFIED LIMIT'
                 ) )
         MEM_DUMP.extend(mem.dump_all())
-        rc = zPE.RC['SEVERE']   # OBJECT module force closed
+        rc = RC['SEVERE']       # OBJECT module force closed
 
     psw.W = 1                   # content switch back to the loader
     psw.PSW_key = old_key       # restore PSW key
@@ -384,22 +393,22 @@ def go(mem):
     mem.release()
     ldr_mem.release()
 
-    if zPE.debug_mode():
-        sys.stderr.write(zPE.e_dump())
+    if debug_mode():
+        sys.stderr.write(e_dump())
     return rc
 # end of go()
 
 
 ### Supporting Functions
 def __MISSED_FILE(step):
-    sp1 = zPE.core.SPOOL.retrieve('JESMSGLG') # SPOOL No. 01
-    sp3 = zPE.core.SPOOL.retrieve('JESYSMSG') # SPOOL No. 03
+    sp1 = spool.retrieve('JESMSGLG') # SPOOL No. 01
+    sp3 = spool.retrieve('JESYSMSG') # SPOOL No. 03
     ctrl = ' '
 
     cnt = 0
     for fn in FILE_CHK:
-        if fn not in zPE.core.SPOOL.list():
-            sp1.append(ctrl, strftime('%H.%M.%S '), zPE.JCL['jobid'],
+        if fn not in spool.list():
+            sp1.append(ctrl, strftime('%H.%M.%S '), JCL['jobid'],
                        '  IEC130I {0:<8}'.format(fn),
                        ' DD STATEMENT MISSING\n')
             sp3.append(ctrl, 'IEC130I {0:<8}'.format(fn),
@@ -414,5 +423,5 @@ def __MISSED_FILE(step):
 
 
 def __PARSE_OUT(rc):
-    spo = zPE.core.SPOOL.retrieve('SYSLOUT') # output SPOOL
+    spo = spool.retrieve('SYSLOUT') # output SPOOL
 

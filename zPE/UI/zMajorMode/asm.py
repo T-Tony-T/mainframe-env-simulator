@@ -2,8 +2,8 @@
 
 from zPE.UI.basemode import BaseMode
 
-from zPE.core.asm import ASM_INSTRUCTION as ASM_INS_SET, op_code as ASM_OP_MAP, ext_mnem as EXT_MNEM_MAP, const_s, const_a
-from zPE.pgm.assist_pseudo_ins import PSEUDO_INS
+from zPE.base.core.asm import ASM_INSTRUCTION as ASM_INS_SET, op_code as ASM_OP_MAP, ext_mnem as EXT_MNEM_MAP, const_s, const_a
+from zPE.base.pgm.assist_pseudo_ins import PSEUDO_INS
 
 import sys                      # for sys.maxsize
 import re

@@ -1,7 +1,12 @@
 # this is the definition and the implementation of Registers
 # currently defines: General Purpose Registers, PSW
 
-import zPE
+from zPE.util import *
+from zPE.util.conv import *
+from zPE.util.excptn import *
+from zPE.util.global_config import *
+
+import mem
 
 import re
 from ctypes import *            # for Union and C-Style array
@@ -36,7 +41,7 @@ class Register(Union):
             self.bytes[(4-key)%4] = val
 
     def __str__(self):
-        return '{0:0>8}'.format(zPE.i2h(self.long))
+        return '{0:0>8}'.format(i2h(self.long))
 
 
     def __add__(self, other):
@@ -110,7 +115,7 @@ class Register(Union):
         '''
         MH   R1,addr    =>      R1 * value@addr
         '''
-        self.int *= Register(zPE.i2i_sign(other,4,8)).int
+        self.int *= Register(i2i_sign(other,4,8)).int
         return self
 
 
@@ -226,7 +231,7 @@ class Register(Union):
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
-        self.long = zPE.i2i_sign(other.long, 8 - hw * 4, 8)
+        self.long = i2i_sign(other.long, 8 - hw * 4, 8)
         return self
 
     def inc(self, value, pos_mask = None):
@@ -239,15 +244,15 @@ class Register(Union):
         if pos_mask == None:
             self[4] = value
         else:
-            if not pos_mask or zPE.h2i(value) == 0:
+            if not pos_mask or h2i(value) == 0:
                 SPR['PSW'].CC = 0
-            elif zPE.h2i(value[:1]) >= 0x8:
+            elif h2i(value[:1]) >= 0x8:
                 SPR['PSW'].CC = 1
             else:
                 SPR['PSW'].CC = 2
             # insert the bytes
             for pos in pos_mask:
-                self[pos + 1] = zPE.h2i(value[:2])
+                self[pos + 1] = h2i(value[:2])
                 value = value[2:]
         return self
 
@@ -261,12 +266,12 @@ class Register(Union):
                                     ][R2 - R1 + 1] - R1 )
                                 ]
         '''
-        if ( not isinstance(page, zPE.core.mem.Page)  or
+        if ( not isinstance(page, mem.Page)  or
              not isinstance(addr, int)  or
              not 0 <= addr < 4096
              ):
             raise TypeError('Operands must be of type `Page` and `int`.')
-        page.store(addr, zPE.i2i_sign(self.long, 8, 8 - hw * 4))
+        page.store(addr, i2i_sign(self.long, 8, 8 - hw * 4))
         return self
 
     def stc(self, page, addr, pos = 3):
@@ -350,7 +355,7 @@ class Register(Union):
     def __overflow(self):
         SPR['PSW'].CC = 3
         if SPR['PSW'].Program_mask & 0b1000 == 0b1000:
-            raise zPE.newFixedPointOverflowException()
+            raise newFixedPointOverflowException()
         return self
 # end of Register class
 
@@ -371,9 +376,9 @@ class RegisterPair(object):
         '''
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
-        res = zPE.i2h_sign(self.odd.int * other.int, 16)
-        self.even.long = zPE.h2i(res[ :8])
-        self.odd.long  = zPE.h2i(res[8: ])
+        res = i2h_sign(self.odd.int * other.int, 16)
+        self.even.long = h2i(res[ :8])
+        self.odd.long  = h2i(res[8: ])
         return self
 
     def __div__(self, other):
@@ -386,9 +391,9 @@ class RegisterPair(object):
         if not isinstance(other, Register):
             other = Register(other) # try converting the argument to a register
         if other.sign() == 0:       # zero-division
-            raise zPE.newFixedPointDivideException()
+            raise newFixedPointDivideException()
 
-        dividend = zPE.h2i_sign(str(self.even)+str(self.odd))
+        dividend = h2i_sign(str(self.even)+str(self.odd))
         # res[0] : quotient, res[1] : reminder
         res = list(divmod(abs(dividend), abs(other.int)))
         if self.even.sign() == 1:
@@ -399,7 +404,7 @@ class RegisterPair(object):
             res[0] = (- res[0])
 
         if not -0x80000000 <= res[0] < 0x80000000: # quotient too large
-            raise zPE.newFixedPointDivideException()
+            raise newFixedPointDivideException()
         self.even.int = res[1]
         self.odd.int  = res[0]
         return self
@@ -444,7 +449,7 @@ class RegisterPair(object):
         '''
         SRDA  R2,addr   =>      RegisterPair(R2,R2+1).rshft(addr)
         '''
-        res = zPE.h2i_sign(str(self.even)+str(self.odd)) >> (other & 0b111111)
+        res = h2i_sign(str(self.even)+str(self.odd)) >> (other & 0b111111)
         self.even.long = res >> 32
         self.odd.long  = res
         self.even.test()        # sign bit is in even register
@@ -557,9 +562,9 @@ class PSW(object):
     def dump_hex(self, word = 0):
         bin_dump = self.dump_bin()
         if word:
-            return zPE.b2x(bin_dump[word - 1])
+            return b2x(bin_dump[word - 1])
         else:
-            return [ zPE.b2x(bin_str) for bin_str in bin_dump ]
+            return [ b2x(bin_str) for bin_str in bin_dump ]
 
     def __str__(self):
         (w1, w2) = self.dump_hex()
@@ -594,21 +599,13 @@ class PSW(object):
 # end of PSW class definition
 
 
-## Register Pool
-GPR_NUM = 16                    # number of general purpose registers
+## Initialize Register Pool, if not already done
+if not GPR:
+    for i in range(GPR_NUM):
+        GPR.append(Register(i))
+    SPR['PSW'] = PSW(PSW_MODE['BC'])
 
-GPR = [                         # general purpose registers
-    Register(0x0), Register(0x1), Register(0x2), Register(0x3), # R0  ~ R3
-    Register(0x4), Register(0x5), Register(0x6), Register(0x7), # R4  ~ R7
-    Register(0x8), Register(0x9), Register(0xA), Register(0xB), # R8  ~ R11
-    Register(0xC), Register(0xD), Register(0xE), Register(0xF)  # R12 ~ R15
-    ]
-
-SPR = {                         # special purpose registers
-    'PSW' : PSW(PSW_MODE['BC']),
-    }
-
-SPR['PSW'].Channel_masks = 127  # turn on all internal channels
-SPR['PSW'].E = 1                # also turn on external channel
-SPR['PSW'].P = 1                # problem (user) state
-SPR['PSW'].PSW_key = 1          # 1st kernel-mode key
+    SPR['PSW'].Channel_masks = 127  # turn on all internal channels
+    SPR['PSW'].E = 1                # also turn on external channel
+    SPR['PSW'].P = 1                # problem (user) state
+    SPR['PSW'].PSW_key = 1          # 1st kernel-mode key

@@ -1,6 +1,10 @@
 # this contains everything about Macro parsing
 
-import zPE
+from zPE.util import *
+from zPE.util.global_config import *
+
+import zPE.base.core.asm
+
 from asma90_macro_sys1_maclib import MACRO_DEF as MACRO_DEF_SYS1
 
 from time import strftime
@@ -46,7 +50,7 @@ def __scanning(spi, line_num = 0):
         line_num += 1           # start at line No. 1
         line = spi[line_num - 1]
 
-        field = zPE.resplit_sq(r'\s+', line[:-1], 3)
+        field = resplit_sq(r'\s+', line[:-1], 3)
 
         # non-instruction stuff
         if len(field) < 2:
@@ -66,18 +70,18 @@ def __scanning(spi, line_num = 0):
         line_num += 1           # start at line No. 1
         line = spi[line_num - 1]
 
-        field = zPE.resplit_sq(r'\s+', line[:-1], 3)
+        field = resplit_sq(r'\s+', line[:-1], 3)
 
         # non-instruction stuff
         if len(field) < 2:
             continue
 
         # machine instruction
-        elif zPE.core.asm.valid_op(field[1]):
+        elif zPE.base.core.asm.valid_op(field[1]):
             continue
 
         # ASM instruction
-        elif zPE.core.asm.valid_ins(field[1]):
+        elif zPE.base.core.asm.valid_ins(field[1]):
             continue
 
         # in-line macro
@@ -94,7 +98,7 @@ def __defining(spi, line_num):
         line_num += 1           # start at line No. 1
         line = spi[line_num - 1]
 
-        field = zPE.resplit_sq(r'\s+', line[:-1], 3)
+        field = resplit_sq(r'\s+', line[:-1], 3)
 # try parsing .labels and &labels
 #        var_lbl = zPE.bad_(field[0])
 
@@ -104,7 +108,7 @@ def __defining(spi, line_num):
 
         # check instruction
         if len(field) < 2:
-            zPE.abort(90, 'Error: ', line[:-1], ': Invalid macro statement.\n')
+            abort(90, 'Error: ', line[:-1], ': Invalid macro statement.\n')
 
         # ending point of macro definition
         elif field[1] == 'MEND':

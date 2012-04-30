@@ -1,4 +1,9 @@
-import zPE
+from zPE import pkg_info
+from zPE.util.global_config import *
+
+import zPE.base.conf
+import zPE.base.core.JES2
+import zPE.base.pgm
 import zfetch
 
 import os, sys
@@ -10,19 +15,19 @@ def main(argv = sys.argv):
     args = parser.parse_args(argv[1:])
 
     if args.version:
-        info = zPE.pkg_info()
+        info = pkg_info()
         print info.project_name, info.version
         return 0
     elif args.list:
-        zPE.LIST_PGM()
+        LIST_PGM()
         return 0
 
     if not args.job_file:
         parser.print_help()
         return -1
 
-    zPE.conf.read_rc()
-    zPE.debug_mode(args.debug)
+    zPE.base.conf.read_rc()
+    debug_mode(args.debug)
 
     rc = submit(args.job_file)
 
@@ -33,50 +38,50 @@ def main(argv = sys.argv):
 
 
 def submit(job):
-    rv = zPE.core.JES2.parse(job)
+    rv = zPE.base.core.JES2.parse(job)
     flush_all = False
     overall_rc = 0
 
     if rv == 'ok':
-        zPE.core.JES2.init_job()
-        for step in zPE.JCL['step']:
+        zPE.base.core.JES2.init_job()
+        for step in JCL['step']:
             if flush_all:
                 continue        # flush all the rest step
 
-            if step.pgm in zPE.PGM_SUPPORTED:
-                rv = zPE.core.JES2.init_step(step)
+            if step.pgm in PGM_SUPPORTED:
+                rv = zPE.base.core.JES2.init_step(step)
                 if rv == 'ok':
-                    step.rc = eval(zPE.PGM_SUPPORTED[step.pgm])(step)
+                    step.rc = eval(PGM_SUPPORTED[step.pgm])(step)
                     overall_rc = max(overall_rc, step.rc)
                     if step.rc != 0:
                         rv = 'steprun'
                 else:
                     step.rc = 'FLUSH'
                     flush_all = True
-                zPE.core.JES2.finish_step(step)
+                zPE.base.core.JES2.finish_step(step)
             else:               # not in system path, search in STEPLIB
                 if 'STEPLIB' in step.dd:
-                    rv = zPE.core.JES2.init_step(step)
+                    rv = zPE.base.core.JES2.init_step(step)
                     if rv == 'ok':
-                        step.rc = zPE.pgm.HEWLDRGO.run(step)
+                        step.rc = zPE.base.pgm.HEWLDRGO.run(step)
                         overall_rc = max(overall_rc, step.rc)
                         if step.rc != 0:
                             rv = 'steprun'
                     else:
                         step.rc = 'FLUSH'
                         flush_all = True
-                    zPE.core.JES2.finish_step(step)
+                    zPE.base.core.JES2.finish_step(step)
                 else:           # not found at all
-                    zPE.abort(-1, 'Error: ', step.pgm,
-                               ': Program not supported.\n',
-                               'For more information, see \'',
-                               sys.argv[0], ' -l\' for help.\n'
-                               )
+                    abort(-1, 'Error: ', step.pgm,
+                           ': Program not supported.\n',
+                           'For more information, see \'',
+                           sys.argv[0], ' -l\' for help.\n'
+                           )
         # end of all steps
     else:
-        overall_rc = 9       # JCL error; see zPE.__init__.py for help
+        overall_rc = 9       # JCL error; see zPE.util.global_config for help
 
-    zPE.core.JES2.finish_job(rv)
+    zPE.base.core.JES2.finish_job(rv)
     return overall_rc
 
 

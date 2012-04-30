@@ -3,16 +3,14 @@
 
 # in future, may switch to "mmap"
 
+from zPE.util.global_config import *
+import zPE.util.spool
+
+import IO_JES2, IO_SMS
+
 import sys                      # for sys.maxsize
+import re
 
-import zPE
-
-
-MODE = {                        # SPOOL mode : display
-    'i' : 'SYSIN',
-    'o' : 'SYSOUT',
-    '+' : 'KEPT',
-    }
 
 ## Simultaneous Peripheral Operations On-line
 class Spool(object):
@@ -23,8 +21,8 @@ class Spool(object):
                                 # label (tp-label) for expanded input
                                 # none for output SPOOL
         # the above two need to be in sync (if modifiey manually)
-        self.mode = mode        # one of the MODE keys
-        self.f_type = f_type    # one of the zPE.JES keys
+        self.mode = mode        # one of the SP_MODE keys
+        self.f_type = f_type    # one of the JES keys
         self.virtual_path = virtual_path
                                 # path recognized within zPE;
                                 # [ dir_1, dir_2, ... , file ]
@@ -95,35 +93,13 @@ class Spool(object):
 # end of Spool Definition
 
 
-## SPOOL Pool
-DEFAULT     = [ 'JESMSGLG', 'JESJCL', 'JESYSMSG' ] # System Managed SPOOL
-DEFAULT_OUT = [ 'JESMSGLG', 'JESJCL', 'JESYSMSG' ] # SPOOLs that will be write out at the end
-DEFAULT_OUT_STEP = { # step name corresponding to the above list
-    'JESMSGLG' : 'JES',
-    'JESJCL'   : 'JES',
-    'JESYSMSG' : 'JES',
-    }
-
-SPOOL = {
-    'JESMSGLG' : Spool([], [], 'o', 'outstream', None, ['JESMSGLG']),
-    'JESJCL'   : Spool([], [], 'o', 'outstream', None, ['JESJCL']),
-    'JESYSMSG' : Spool([], [], 'o', 'outstream', None, ['JESYSMSG']),
-    }
+## Initialize the default SPOOL
+for k in SP_DEFAULT_OUT:
+    if k not in SPOOL:
+        SPOOL[k] = Spool([], [], 'o', 'outstream', None, [k])
 
 
 ## Interface Functions
-def empty():
-    return (len(SPOOL) == 0)
-
-def sz():
-    return len(SPOOL)
-
-def dict():
-    return SPOOL.items()
-
-def list():
-    return SPOOL.keys()
-
 def pop_new(key, mode, f_type, path = [], real_path = []):
     sp = new(key, mode, f_type, path, real_path)
     remove(key)
@@ -136,26 +112,26 @@ def new(key, mode, f_type, path = [], real_path = []):
              (path == path_of[key]) and (real_path == real_path_of(key))
              ):
             return SPOOL[key]   # passed from previous step
-        zPE.abort(5, 'Error: ', key, ': SPOOL name conflicts.\n')
+        abort(5, 'Error: ', key, ': SPOOL name conflicts.\n')
 
     # check SPOOL mode
     if mode not in ['i', 'o', '+']:
-        zPE.abort(5, 'Error: ', mode, ': Invalid SPOOL mode.\n')
+        abort(5, 'Error: ', mode, ': Invalid SPOOL mode.\n')
 
     # check SPOOL type
-    if f_type not in zPE.JES:
-        zPE.abort(5, 'Error: ', f_type, ': invalid SPOOL types.\n')
+    if f_type not in JES:
+        abort(5, 'Error: ', f_type, ': invalid SPOOL types.\n')
 
     # check path auto-generation
     if len(path) == 0:
         while True:
             conflict = False
-            path = [ zPE.JCL['spool_path'],
-                     'D{0:0>7}.?'.format(zPE.conf.Config['tmp_id'])
+            path = [ JCL['spool_path'],
+                     'D{0:0>7}.?'.format(Config['tmp_id'])
                      ]
-            zPE.conf.Config['tmp_id'] += 1
+            Config['tmp_id'] += 1
             # check for file conflict
-            for (k, v) in dict():
+            for (k, v) in zPE.util.spool.dict():
                 if v.virtual_path == path:
                     conflict = True
                     break
@@ -171,16 +147,44 @@ def new(key, mode, f_type, path = [], real_path = []):
         load(key, mode, f_type, real_path)
     return SPOOL[key]
 
+
+def open_file(dsn, mode, f_type):
+    '''Open the target file in regardless of the existance'''
+    return eval(''.join(['IO_', JES[f_type], '.open_file']))(dsn, mode)
+
+def rm_file(dsn, f_type):
+    '''Remove the target file in regardless of the existance'''
+    return eval(''.join(['IO_', JES[f_type], '.rm_file']))(dsn)
+
 def load(key, mode, f_type, real_path):
     if key not in SPOOL:
-        zPE.abort(5, 'Error: ', key, ': invalid DD name.\n')
+        abort(5, 'Error: ', key, ': invalid DD name.\n')
     if mode == 'o':
-        zPE.abort(5, 'Error: ', key,
-                  ': try to load data into output SPOOL.\n')
+        abort(5, 'Error: ', key,
+              ': try to load data into output SPOOL.\n')
     if f_type != 'file':
-        zPE.abort(5, 'Error: ', key,
-                  ': try to load data from non-file object.\n')
-    zPE.fill(SPOOL[key], real_path)
+        abort(5, 'Error: ', key,
+              ': try to load data from non-file object.\n')
+    __fill(SPOOL[key], real_path)
+
+def flush(sp):
+    '''Flush the indicated SPOOL to the indicated file'''
+    if sp.mode == 'i':
+        return -1
+
+    mode = 'w'
+    for line in sp.spool:
+        if '\0' in line:        # is binary file
+            mode = 'wb'
+            break
+    fp = open_file(sp.real_path, mode, sp.f_type)
+
+    cnt = 0
+    for line in sp.spool:
+        fp.write(line)
+        cnt += 1
+    fp.close()
+    return cnt
 
 
 def remove(key):
@@ -195,40 +199,35 @@ def pretend(dest, src):
     SPOOL[dest] = SPOOL[src]
     return SPOOL[dest]
 
-def retrieve(key):
-    if key in SPOOL:
-        return SPOOL[key]
-    else:
-        return None
-
 def register_write(key, step):
-    if key not in DEFAULT_OUT:
-        DEFAULT_OUT.append(key)
-        DEFAULT_OUT_STEP[key] = step
+    if key not in SP_DEFAULT_OUT:
+        SP_DEFAULT_OUT.append(key)
+        SP_DEFAULT_OUT_STEP[key] = step
         return True
     else:
         return False
 
-def mode_of(key):
-    if key in SPOOL:
-        return SPOOL[key].mode
-    else:
-        return None
 
-def type_of(key):
-    if key in SPOOL:
-        return SPOOL[key].f_type
-    else:
-        return None
+### Supporting Functions
 
-def path_of(key):
-    if key in SPOOL:
-        return SPOOL[key].virtual_path
-    else:
-        return None
+def __fill(sp, path):
+    '''Load the indicated SPOOL from the indicated file, treated as FB 80'''
+    if sp.mode != 'i':
+        return -1
 
-def real_path_of(key):
-    if key in SPOOL:
-        return SPOOL[key].real_path
+    fp = open_file(path, 'rb', 'file')
+    content = fp.read()         # read the entire file as binary
+    fp.close()
+
+    if re.search(r'[^\x0a\x0d\x20-\x7e]', content):
+        # turely binary file, treated as Fixed-Block 80
+        lines = fixed_width_split(80, content, re.S) # S for . to match all
     else:
-        return None
+        # actually ascii file, break lines on \r, \n, or both
+        lines = re.split(r'\r\n|\r|\n', content)
+        if not lines[-1]:
+            lines.pop()         # remove empty line at the end, if any
+    for line in lines:
+        sp.append(line, '\n')
+    return len(line)
+

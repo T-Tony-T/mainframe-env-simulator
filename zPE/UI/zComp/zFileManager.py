@@ -12,7 +12,7 @@ import io_encap
 #   new_dir(fn_list):           create the dir unless the fn_list corresponding to a directory
 #
 
-from zPE import spool_decode_printable
+from zPE.util import spool_decode_printable
 from z_support import XPM, PIXBUF
 
 from zBase import zTheme

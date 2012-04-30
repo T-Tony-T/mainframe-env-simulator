@@ -1,7 +1,7 @@
 # this is the System Level Configuration
 
-from core.mem import parse_region
-from core.cpu import parse_time
+from zPE.util import parse_time, parse_region
+from zPE.util.global_config import Config, CONFIG_PATH, RC
 
 import os, sys, pickle
 import re
@@ -13,17 +13,6 @@ import sqlite3
 JOB_ID_MIN = 10000              # the smallest job ID
 JOB_ID_MAX = 65535              # the largest job ID
 TMP_FILE_ID = 101               # the smallest tmp file identifier
-
-## Return Code
-RC = {
-    'NORMAL'	: 0,            # Information
-    'NOTIFY'    : 2,            # Notification
-    'WARNING'	: 4,            # Warning
-    'ERROR'	: 8,            # Error
-    'SEVERE'	: 12,           # Severe Error
-    'CRITICAL'	: 16,           # Critical Error
-    'UNABLE'	: 20,           # Unable to Preceed
-    }
 
 
 ### Configurable Definition
@@ -41,8 +30,6 @@ DEFAULT = {
         },
     }
 
-Config = { }       # 'job_id' and 'tmp_id' should not be modified manually
-
 def init_rc():
     Config['job_id']     = JOB_ID_MIN
     Config['tmp_id']     = TMP_FILE_ID  # next available tmp file identifier
@@ -56,14 +43,6 @@ def init_rc():
                                 # can be altered by "// JOB ,*,REGION=*"
                                 # can be overridden by "// EXEC *,REGION=*"
 
-
-CONFIG_PATH = {
-    'dir'       : os.path.join(os.path.expanduser('~'), '.zPE'),
-    'rc'        : os.path.join(os.path.expanduser('~'), '.zPE', 'config'),
-    'data'      : os.path.join(os.path.expanduser('~'), '.zPE', 'data'),
-    'ICH70001I' : os.path.join(os.path.expanduser('~'), '.zPE', 'data', 'ICH70001I'),
-    'SPOOL'     : os.path.join(os.path.expanduser('~'), '.zPE', 'data', 'SPOOL.sqlite')
-    }
 
 def dump_ICH70001I(conf):
     __CK_CONFIG()

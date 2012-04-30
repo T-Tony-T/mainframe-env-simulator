@@ -21,8 +21,9 @@ def min_import(module, attr_list, import_level = -1, path = None):
     return [ eval('_temp.{0}'.format(attr)) for attr in attr_list ]
 
 
+import zPE                      # for pkg_info()
 import conf, majormode, zComp
-import zPE.conf
+import zPE.base.conf as zPE_conf
 
 import copy, re, subprocess
 import pygtk
@@ -216,7 +217,7 @@ class BaseFrame(object):
         ### create main window
         self.mw = zComp.zSplitWindow(zComp.zEdit, [], (self.frame_init, self.frame_uninit), self.frame_split_dup)
         w_vbox.pack_start(self.mw, True, True, 0)
-        zComp.zDisplayPanel.set_db_all(os.path.join(zPE.conf.CONFIG_PATH['SPOOL']))
+        zComp.zDisplayPanel.set_db_all(os.path.join(zPE_conf.CONFIG_PATH['SPOOL']))
 
 
         ## connect auto-update items
@@ -517,17 +518,17 @@ class BaseFrame(object):
         sys.stderr.write(stderrdata)
 
         if ( conf.Config['MISC']['debug_mode']  or    # is in debug mode
-             zsub.returncode not in zPE.conf.RC.itervalues() # something weird happened
+             zsub.returncode not in zPE_conf.RC.itervalues() # something weird happened
              ):
             sys.stdout.write(stdoutdata)
-        if zsub.returncode not in zPE.conf.RC.itervalues():
+        if zsub.returncode not in zPE_conf.RC.itervalues():
             self.lastline.set_text(
                 '', '{0}: JOB submitted but aborted with {1}.'.format(basename, zsub.returncode)
                 )
         else:
             self.lastline.set_text(
                 '', '{0}: JOB submitted with ID={1}, return value is {2}.'.format(
-                    basename, zPE.conf.fetch_job_id(), zsub.returncode
+                    basename, zPE_conf.fetch_job_id(), zsub.returncode
                     )
                 )
 
@@ -622,7 +623,7 @@ class ConfigWindow(gtk.Window):
         self.set_title('zPE Config')
 
         # retrieve configs
-        zPE.conf.read_rc(dry_run = True) # this need to be done first to ensure config dir structure
+        zPE_conf.read_rc(dry_run = True) # this need to be done first to ensure config dir structure
         conf.read_rc_all()
 
         # lists for managing font
@@ -1062,7 +1063,7 @@ class ConfigWindow(gtk.Window):
         self.time_mm_entry = gtk.Entry()
         self.time_ss_entry = gtk.Entry()
 
-        for mode in zPE.conf.POSSIBLE_ADDR_MODE:
+        for mode in zPE_conf.POSSIBLE_ADDR_MODE:
             self.addr_mode_sw.append_text(str(mode))
         self.memory_sz_entry.set_property('width-chars', 10)
         self.time_mm_entry.set_property('width-chars', 3)
@@ -1218,7 +1219,7 @@ All rights reserved
     def _sig_clear_rc(self, *arg):
         conf.reset_key_binding() # reset all key bindings
         conf.init_rc_all()       # re-initiate GUI config
-        zPE.conf.init_rc()       # re-initiate zsub config
+        zPE_conf.init_rc()       # re-initiate zsub config
         self.load_rc()
 
     def _sig_open_console(self, *arg):
@@ -1226,7 +1227,7 @@ All rights reserved
 
     def _sig_reload_rc(self, *arg):
         conf.Config = copy.deepcopy(self.config_bkup)          # restore the GUI backup setting
-        zPE.conf.Config = copy.deepcopy(self.zsub_config_bkup) # restore the zsub backup setting
+        zPE_conf.Config = copy.deepcopy(self.zsub_config_bkup) # restore the zsub backup setting
         self.load_rc()
 
     def _sig_save_config(self, *arg):
@@ -1234,8 +1235,8 @@ All rights reserved
             return
         conf.write_rc_all()              # write changes for GUI
         conf.read_rc_all()               # validate new GUI config
-        zPE.conf.write_rc()              # write changes for zsub
-        zPE.conf.read_rc(dry_run = True) # validate new zsub config
+        zPE_conf.write_rc()              # write changes for zsub
+        zPE_conf.read_rc(dry_run = True) # validate new zsub config
         self.close()
 
     def _sig_cancel_mod(self, *arg):
@@ -1498,21 +1499,21 @@ All rights reserved
         if not addr_val:
             return          # early return
 
-        zPE.conf.Config['addr_mode'] = int(addr_val)
-        zPE.conf.Config['addr_max'] = 2 ** zPE.conf.Config['addr_mode']
+        zPE_conf.Config['addr_mode'] = int(addr_val)
+        zPE_conf.Config['addr_max'] = 2 ** zPE_conf.Config['addr_mode']
 
     def _sig_memory_sz_entered(self, entry, event = None):
         self.__on_err = event
 
         try:
-            sz = zPE.conf.parse_region(entry.get_text())
+            sz = zPE_conf.parse_region(entry.get_text())
         except:
-            entry.set_text(zPE.conf.Config['memory_sz'])
+            entry.set_text(zPE_conf.Config['memory_sz'])
             raise               # through the exception upwards
 
-        zPE.conf.Config['memory_sz'] = sz
+        zPE_conf.Config['memory_sz'] = sz
         entry.set_property('sensitive', False) # remove focus
-        entry.set_text(zPE.conf.Config['memory_sz'])
+        entry.set_text(zPE_conf.Config['memory_sz'])
         entry.set_property('sensitive', True)  # retain edibility
 
         self.__on_err = False
@@ -1530,7 +1531,7 @@ All rights reserved
             time_ss = 0
         time = time_mm * 60 + time_ss
         if time:
-            zPE.conf.Config['time_limit'] = time
+            zPE_conf.Config['time_limit'] = time
             self.update_time_limit()
         else:
             self.update_time_limit()
@@ -1550,7 +1551,7 @@ All rights reserved
             self.window.show()
         else:
             self.config_bkup = copy.deepcopy(conf.Config)          # backup GUI settings
-            self.zsub_config_bkup = copy.deepcopy(zPE.conf.Config) # backup zsub settings
+            self.zsub_config_bkup = copy.deepcopy(zPE_conf.Config) # backup zsub settings
             self.load_rc()
             self.show()
 
@@ -1598,8 +1599,8 @@ All rights reserved
         zComp.zWidget.zKillRing.set_kill_ring_size(conf.Config['MISC']['kill_ring_sz'])
 
         # System->Architecture
-        self.select_combo_item(self.addr_mode_sw, zPE.conf.Config['addr_mode'])
-        self.memory_sz_entry.set_text(zPE.conf.Config['memory_sz'])
+        self.select_combo_item(self.addr_mode_sw, zPE_conf.Config['addr_mode'])
+        self.memory_sz_entry.set_text(zPE_conf.Config['memory_sz'])
         self.update_time_limit()
 
         # System->Debugging
@@ -1636,7 +1637,7 @@ All rights reserved
         self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
 
     def update_time_limit(self):
-        time = zPE.conf.Config['time_limit']
+        time = zPE_conf.Config['time_limit']
         self.time_mm_entry.set_text(str(time / 60))
         self.time_ss_entry.set_text(str(time % 60))
     ### end of support function definition

@@ -1,6 +1,8 @@
 # this defines the basic assembler instruction set
 
-import zPE
+from zPE.util import *
+from zPE.util.excptn import *
+from zPE.util.global_config import *
 
 import re
 
@@ -77,7 +79,7 @@ class InstructionType(object):
           fw = align on fullword boundary
           dw = align on doubleword boundary
         '''
-        self.align = zPE.fmt_align_map[alignment]
+        self.align = fmt_align_map[alignment]
         return self
 
     def is_aligned(self, loc = None):
@@ -195,7 +197,7 @@ class D(InstructionType):
 
     def prnt(self):
         if self.valid:
-            rv = '{0:0>4}'.format(zPE.i2h(self.__val))
+            rv = '{0:0>4}'.format(i2h(self.__val))
         else:
             rv = '----'
         return ( '', rv, )
@@ -240,7 +242,7 @@ class I(InstructionType):
 
     def prnt(self):
         if self.valid:
-            rv = '{0:0>{1}}'.format(zPE.i2h(self.__val), self.lenfmt)
+            rv = '{0:0>{1}}'.format(i2h(self.__val), self.lenfmt)
         else:
             rv = '{0:->{1}}'.format('', self.lenfmt)
         return ( rv, '', )
@@ -285,7 +287,7 @@ class R(InstructionType):
 
     def prnt(self):
         if self.valid:
-            rv = zPE.i2h(self.__val)[-1]
+            rv = i2h(self.__val)[-1]
         else:
             rv = '-'
         return ( rv, '', )
@@ -330,8 +332,8 @@ class S(InstructionType):
     def prnt(self):
         if self.valid:
             rv = '{0}{1:0>3}'.format(
-                zPE.i2h(self.__base)[-1],
-                zPE.i2h(self.__dsplc)
+                i2h(self.__base)[-1],
+                i2h(self.__dsplc)
                 )
         else:
             rv = '----'
@@ -375,7 +377,7 @@ class X(S):
 
     def prnt(self):
         if self.valid:
-            rv = zPE.i2h(self.__indx)[-1]
+            rv = i2h(self.__indx)[-1]
         else:
             rv = '-'
         return ( rv, super(X, self).prnt()[1], )
@@ -420,7 +422,7 @@ class L(S):
                 encoded_len = self.__length - 1 # length code = length - 1
             else:               # zero
                 encoded_len = self.__length     # length code = 0
-            rv = '{0:0>{1}}'.format(zPE.i2h(encoded_len), self.lenfmt)
+            rv = '{0:0>{1}}'.format(i2h(encoded_len), self.lenfmt)
         else:
             rv = '{0:->{1}}'.format('', self.lenfmt)
         return ( rv, super(L, self).prnt()[1], )
@@ -610,7 +612,7 @@ def get_op_from(pseudo_ins, argc):
             op = pseudo[pseudo_ins](argc) # fetch the indicated format
         except:
             # number of arguments is invalid
-            if zPE.debug_mode():
+            if debug_mode():
                 raise
             op = pseudo[pseudo_ins](0)    # fetch the default format
         return op
@@ -766,7 +768,7 @@ class X_(object):
     def tr(dump):
         hex_list = []
         for val in dump[0]:
-            hex_list.append('{0:0>2}'.format(zPE.i2h(val)))
+            hex_list.append('{0:0>2}'.format(i2h(val)))
         return ''.join(hex_list)
 
 # Exception:
@@ -882,16 +884,16 @@ class P_(object):
         vals = dump[0]
         ch_list = []
         for val in vals[:-1]:
-            hex_val = '{0:0>2}'.format(zPE.i2h(val))
+            hex_val = '{0:0>2}'.format(i2h(val))
             ch_list.append(chr(int('F'+ hex_val[0], 16)).decode('EBCDIC-CP-US'))
             ch_list.append(chr(int('F'+ hex_val[1], 16)).decode('EBCDIC-CP-US'))
-        hex_val = '{0:0>2}'.format(zPE.i2h(vals[-1]))
+        hex_val = '{0:0>2}'.format(i2h(vals[-1]))
         ch_list.append(chr(int('F'+ hex_val[0], 16)).decode('EBCDIC-CP-US'))
 
         # check format
         ch_list = [ ''.join(ch_list) ]
         if not ch_list[0].isdigit():
-            raise zPE.newDataException()
+            raise newDataException()
 
         # check sign
         if hex_val[1] in 'FACE':
@@ -911,7 +913,7 @@ class P_(object):
             else:
                 raise SyntaxError("sign must be '+', '-', 'DB', or 'CR'.")
         else:
-            raise zPE.newDataException()
+            raise newDataException()
         return ''.join(ch_list)
 
     @staticmethod
@@ -961,7 +963,7 @@ class Z_(object):
                 ch_str[ch_len - indx - 1].encode('EBCDIC-CP-US')
                 )
         # set sign for the last digit
-        self.__vals[-1] = int(sign_digit + zPE.i2h(self.__vals[-1])[-1], 16)
+        self.__vals[-1] = int(sign_digit + i2h(self.__vals[-1])[-1], 16)
 
     def dump(self):
         return (self.__vals, self.natual_len)
@@ -976,7 +978,7 @@ class Z_(object):
         ch_list = []
         for val in vals[:-1]:
             ch_list.append(chr(val).decode('EBCDIC-CP-US'))
-        hex_val = zPE.i2h(vals[-1])
+        hex_val = i2h(vals[-1])
         ch_list.append(hex_val[1])
 
         int(''.join(ch_list))   # check format
@@ -1058,12 +1060,12 @@ class SDNumericalType(object):
     def dump(self):
         if self.__val >= 0:
             hex_str = '{0:0>{1}}'.format(
-                zPE.i2h(self.__val),
+                i2h(self.__val),
                 self._byte_len_ * 2
                 )
         else:
             hex_str = '{0:0>{1}}'.format( # display 2's complement
-                zPE.i2h((0x1 << self.natual_len) + self.__val),
+                i2h((0x1 << self.natual_len) + self.__val),
                 self._byte_len_ * 2
                 )
         hex_str = hex_str[ : self.room_used() * 2] # get the actually used bytes
@@ -1152,7 +1154,7 @@ class A_(SDNumericalType):
         self.apply_append(int_val, length)
 
     def dump(self):
-        hex_str = '{0:0>8}'.format(zPE.i2h(self.value()))
+        hex_str = '{0:0>8}'.format(i2h(self.value()))
         hex_str = hex_str[ : self.room_used() * 2] # get the actually used bytes
         return ( [ int(hex_str[ i : i+2 ], 16)
                    for i in [ i * 2 for i in range(len(hex_str)/2) ]
@@ -1172,7 +1174,7 @@ class A_(SDNumericalType):
             int_val += vals[indx]
         return '0x{0}'.format(
             '{0:0>8}'.format(
-                zPE.i2h(int_val % 0xFFFFFFFF)
+                i2h(int_val % 0xFFFFFFFF)
                 )[ 8 - dump[1] / 4 : ] # only show the real length
             )
 
@@ -1367,7 +1369,7 @@ def parse_sd(sd_arg):
             if len(sd_arg) - val_start < 2:
                 raise SyntaxError(( 'NON', val_start + 1, ))
 
-            sd_val = zPE.resplit(',', sd_arg[val_start + 1 : -1], ['(',"'"], [')',"'"])
+            sd_val = resplit(',', sd_arg[val_start + 1 : -1], ['(',"'"], [')',"'"])
 
             if sd_arg[-1] != ')':
                 raise SyntaxError(( 'DLM', len(sd_arg, )))

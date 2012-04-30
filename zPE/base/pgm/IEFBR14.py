@@ -19,8 +19,8 @@
 #     none
 ################################################################
 
-import zPE
+from zPE.util.global_config import GPR
 
 def init(step):
-    zPE.core.reg.GPR[15] = 0    # set return code
-    return zPE.core.reg.GPR[15]
+    GPR[15] = 0    # set return code
+    return GPR[15]

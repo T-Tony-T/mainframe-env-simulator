@@ -1,8 +1,8 @@
 # this is a simplification of the "Job Entry Subsystem - IO Component"
 # it is used to manage the SPOOL files
 
-import zPE
-from SPOOL import DEFAULT_OUT_STEP as step_lookup
+from zPE.util import spool_encode
+from zPE.util.global_config import CONFIG_PATH, JCL, SP_DEFAULT_OUT_STEP
 
 import os
 import re
@@ -24,7 +24,7 @@ class JES_DB(object):
         self.__buffer = ''      # the buffer for output
 
         # connect db
-        self.__db = sqlite3.connect(zPE.conf.CONFIG_PATH['SPOOL'])
+        self.__db = sqlite3.connect(CONFIG_PATH['SPOOL'])
         self.__db.create_function(   # register `append(src, dest)` to SQLite
             "append", 2, JES_DB.append
             )
@@ -47,7 +47,8 @@ class JES_DB(object):
         # initiate SPOOL information
         self.__c.execute(
             '''INSERT INTO SPOOL VALUES (NULL, ?, ?, ?, ?)''',
-            ( self.__job_id, self.__spool_key, step_lookup[self.__spool_key], '', )
+            ( self.__job_id, self.__spool_key,
+              SP_DEFAULT_OUT_STEP[self.__spool_key], '', )
             )
 
         self.__db.commit()
@@ -77,7 +78,7 @@ UPDATE  SPOOL
  WHERE  Job_id = ?
    AND  Spool_key = ?
 ''',
-            ( zPE.spool_encode(self.__buffer), self.__job_id, self.__spool_key )
+            ( spool_encode(self.__buffer), self.__job_id, self.__spool_key )
             )
 
         # clear buffer
@@ -94,9 +95,9 @@ UPDATE  SPOOL
 # open the target file in regardless of the existance
 def open_file(dsn, mode):
     return JES_DB(
-        zPE.JCL['jobid'],
-        zPE.JCL['jobname'],
-        zPE.JCL['owner'],
+        JCL['jobid'],
+        JCL['jobname'],
+        JCL['owner'],
         os.path.join(* dsn)
         )
 

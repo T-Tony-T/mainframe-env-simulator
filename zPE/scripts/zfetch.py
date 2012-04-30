@@ -1,5 +1,6 @@
-from zPE.conf import CONFIG_PATH
-from zPE import spool_decode, pkg_info
+from zPE import pkg_info
+from zPE.util import spool_decode
+from zPE.util.global_config import CONFIG_PATH
 
 import os, sys
 

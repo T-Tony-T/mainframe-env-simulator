@@ -1,4 +1,3 @@
-import zPE
 
 ### Linkage-Editor config definition
 
@@ -38,8 +37,8 @@ INSTRUCTION = [                 # Instruction history
 BRANCHING = [                   # Branching history
     # [ PSW, MNEMONIC ]
     ]
-from zPE.core.cpu import decode_op
-from zPE.core.asm import is_branching
+from zPE.base.core.cpu import decode_op
+from zPE.base.core.asm import is_branching
 def RECORD_INS(psw, ins):
     INSTRUCTION.append([ psw, ''.join(ins) ])
     if is_branching( decode_op(ins[0]) ):

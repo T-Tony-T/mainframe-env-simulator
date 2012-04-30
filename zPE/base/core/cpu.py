@@ -1,6 +1,9 @@
 # this defines the CPU execution details
 
-import zPE
+from zPE.util import *
+from zPE.util.conv import *
+from zPE.util.excptn import *
+from zPE.util.global_config import *
 
 from reg import GPR, SPR, Register, RegisterPair
 from mem import Memory
@@ -21,14 +24,14 @@ def fetch(EX_addr = None, EX_reg = None):
 
     # check address alignment
     if addr % 2 != 0:
-        raise zPE.newSpecificationException()
+        raise newSpecificationException()
 
     # get to the page containing the address
     pg_i = addr / 4096          # index of the page containing the address
     addr = addr % 4096          # relative address within the page
 
     if pg_i not in Memory._pool_allocated:
-        raise zPE.newProtectionException()
+        raise newProtectionException()
     page = Memory._pool_allocated[pg_i] # get the actual page
 
     # get 1st byte of the op-code
@@ -36,7 +39,7 @@ def fetch(EX_addr = None, EX_reg = None):
     addr += 1
     if EX_reg and op_code == '44':
         # try to EXecute an EX instruction
-        raise zPE.newSystemException('0C3', 'EXECUTION EXCEPTION')
+        raise newSystemException('0C3', 'EXECUTION EXCEPTION')
 
     # test if op-code is more than one byte
     op_len = len_op([ op_code ]) / 2 # op_code_byte_cnt = num_of_hex_digit / 2
@@ -53,49 +56,49 @@ def fetch(EX_addr = None, EX_reg = None):
 
     # validate op-code
     if op_code not in ins_op:
-        raise zPE.newOperationException()
+        raise newOperationException()
 
     # fetch the argument(s)
     byte_cnt = ins_op[op_code][1] # get the byte_cnt of the argument(s)
     if addr + byte_cnt > 4096:
         # retrieve next page, if available
         if pg_i + 1 not in Memory._pool_allocated:
-            raise zPE.newProtectionException()
+            raise newProtectionException()
         next_page = Memory._pool_allocated[pg_i + 1]
         arg = page[addr : ] + next_page[ : addr + byte_cnt - 4096]
     else:
         arg = page[addr : addr + byte_cnt]
 
     if EX_reg:
-        if zPE.debug_mode():
+        if debug_mode():
             print '[ EX instruction ] receives:', op_code, arg
 
         # perform OR if needed
-        indx = zPE.h2i(EX_reg)
+        indx = h2i(EX_reg)
         if indx:                # not R0
-            if zPE.debug_mode():
+            if debug_mode():
                 print '  ORing with R{0} = ******{1:0>2}'.format(
-                    indx, zPE.i2h(GPR[indx][4])
+                    indx, i2h(GPR[indx][4])
                     )
             if op_len == 1:
                 # 1-byte op-code
                 arg = '{0:0>2}{1}'.format(
-                    zPE.i2h( GPR[indx][4] | int(arg[0:2],16) ), arg[2:]
+                    i2h( GPR[indx][4] | int(arg[0:2],16) ), arg[2:]
                     ) # perform OR on 2nd byte of instruction (1st arg byte)
             else:
                 # 2-byte op-code
                 op_code = '{0}{1:0>2}{2}'.format(
                     op_code[:2],
-                    zPE.i2h( GPR[indx][4] | int(op_code[2:],16) )
+                    i2h( GPR[indx][4] | int(op_code[2:],16) )
                     ) # perform OR on 2nd byte of instruction (2nd op-code byte)
                 # validate op-code
                 if op_code not in ins_op:
-                    raise zPE.newOperationException()
+                    raise newOperationException()
                 # validate arg length
                 if byte_cnt != ins_op[op_code][1]:
-                    raise zPE.newOperationException()
+                    raise newOperationException()
         else:
-            if zPE.debug_mode():
+            if debug_mode():
                 print '  Register is R0, no instruction unchanged'
     else:
         # update ILC and Address pointer
@@ -107,36 +110,27 @@ def fetch(EX_addr = None, EX_reg = None):
 
 
 def execute(ins):
-    if zPE.debug_mode():
+    if debug_mode():
         print 'Exec: {0}: {1}'.format(
             ins_op[ins[0]][0],
-            ' '.join(zPE.fixed_width_split(4, ''.join(ins)))
+            ' '.join(fixed_width_split(4, ''.join(ins)))
             )
     ins_op[ins[0]][2](ins[1]) # execute the instruction against the arguments
 
-    if zPE.debug_mode() and ins[0] != '44': # skip EX
+    if debug_mode() and ins[0] != '44': # skip EX
         print '  '.join([ str(r) for r in GPR[:8] ]), '\t\t', SPR['PSW']
         print '  '.join([ str(r) for r in GPR[8:] ]), '\t\tCC =', SPR['PSW'].CC
         print
     return
 
 
-def parse_time(time):
-    if time.isdigit():
-        return int(time) * 60
-    if time[0] != '(' or time[-1] != ')':
-        raise SyntaxError('Invalid format. Use TIME=(m,s) or TIME=m instead.')
-    time = time[1:-1].split(',')
-    if len(time) != 2:
-        raise SyntaxError('Invalid format. Use TIME=(m,s) or TIME=m instead.')
-    return int('{0:0>1}'.format(time[0])) * 60 + int('{0:0>1}'.format(time[1]))
 ###
 
 
 ### Instruction Look-up Tabel
 ins_op = {
     '05'   : ( 'BALR', 1,
-               lambda s : [ __reg(s[0]).load(zPE.h2i(SPR['PSW'].dump_hex(2))),
+               lambda s : [ __reg(s[0]).load(h2i(SPR['PSW'].dump_hex(2))),
                             __cnt(Register(0), __addr_reg(s[1]))
                             ] ),
     '06'   : ( 'BCTR', 1, lambda s : __cnt(__reg(s[0]), __addr_reg(s[1])) ),
@@ -174,7 +168,7 @@ ins_op = {
                lambda s : execute(fetch(__addr(s[3:6],s[1],s[2]), s[0]))
                ),
     '45'   : ( 'BAL',  3,
-               lambda s : [ __reg(s[0]).load(zPE.h2i(SPR['PSW'].dump_hex(2))),
+               lambda s : [ __reg(s[0]).load(h2i(SPR['PSW'].dump_hex(2))),
                             __cnt(Register(0), __addr(s[3:6],s[1],s[2]))
                             ] ),
     '46'   : ( 'BCT',  3, lambda s : __cnt(__reg(s[0]),
@@ -197,11 +191,11 @@ ins_op = {
     '4C'   : ( 'MH',   3, lambda s : __reg(s[0]) * __deref(s[3:6],s[1],s[2],2)
                ),
     '4E'   : ( 'CVD',  3, lambda s : (
-            lambda val_str = '{0:0>16}'.format(zPE.i2p(__reg(s[0]).int)),
+            lambda val_str = '{0:0>16}'.format(i2p(__reg(s[0]).int)),
             ( page, addr ) = __page(s[3:6],s[1],s[2],8) :
                 page.store(addr,
-                           ( (Register(zPE.h2i(val_str[:8])).long << 32) +
-                             (Register(zPE.h2i(val_str[8:])).long)
+                           ( (Register(h2i(val_str[:8])).long << 32) +
+                             (Register(h2i(val_str[8:])).long)
                              ),
                            'dw'
                            )
@@ -233,14 +227,14 @@ ins_op = {
                lambda s : __reg(s[0]).sub_lgc(__deref(s[3:6],s[1],s[2]))
                ),
     '86'   : ( 'BXH',  3, lambda s : (
-            lambda R1 = __reg(s[0]), R2_num = zPE.h2i(s[1]) : [
+            lambda R1 = __reg(s[0]), R2_num = h2i(s[1]) : [
                 R1 + GPR[R2_num],                           # add increment
                 R1.cmp(GPR[R2_num + (R2_num + 1) % 2]),     # cmp limit
                 __br([ 2 ], __addr(s[3:6],'0',s[2])),       # BH  addr
                 ]
             )() ),
     '87'   : ( 'BXLE', 3, lambda s : (
-            lambda R1 = __reg(s[0]), R2_num = zPE.h2i(s[1]) : [
+            lambda R1 = __reg(s[0]), R2_num = h2i(s[1]) : [
                 R1 + GPR[R2_num],                           # add increment
                 R1.cmp(GPR[R2_num + (R2_num + 1) % 2]),     # cmp limit
                 __br([ 0, 1 ], __addr(s[3:6],'0',s[2])),    # BNH addr
@@ -265,24 +259,24 @@ ins_op = {
     '90'   : ( 'STM',  3, lambda s : [
             __reg(s[0], offset).store(* __page(s[3:6],'0',s[2],4,offset))
             for offset in (
-                lambda R1 = zPE.h2i(s[0]), R2 = zPE.h2i(s[1]) :
+                lambda R1 = h2i(s[0]), R2 = h2i(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1] - R1 + 1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
     '91'   : ( 'TM',   3, lambda s : __tst_bit(__deref(s[3:6], '0', s[2], 1),
-                                               zPE.h2i(s[0:2])
+                                               h2i(s[0:2])
                                                ) ),
     '92'   : ( 'MVI',  3, lambda s : __ref(s[3:6],'0',s[2],s[0:2]) ),
     '94'   : ( 'NI',   3, lambda s : __refmod(s[3:6],'0',s[2],'N',s[0:2]) ),
     '95'   : ( 'CLI',  3, lambda s : __cmp_lgc(__deref(s[3:6], '0', s[2], 1),
-                                               zPE.h2i(s[0:2])
+                                               h2i(s[0:2])
                                                ) ),
     '96'   : ( 'OI',   3, lambda s : __refmod(s[3:6],'0',s[2],'O',s[0:2]) ),
     '97'   : ( 'XI',   3, lambda s : __refmod(s[3:6],'0',s[2],'X',s[0:2]) ),
     '98'   : ( 'LM',   3, lambda s : [
             __reg(s[0], offset).load(  __deref(s[3:6],'0',s[2],4,offset))
             for offset in (
-                lambda R1 = zPE.h2i(s[0]), R2 = zPE.h2i(s[1]) :
+                lambda R1 = h2i(s[0]), R2 = h2i(s[1]) :
                     range([ R1 + i for i in range(16) ][R2 - R1] - R1 + 1)
                 )() # this handles the case when R1 > R2 using negative index
             ] ),
@@ -368,7 +362,7 @@ ins_op = {
     'F0'   : ( 'SRP',  5, lambda s : __shft_dec(
             s[3:6], s[2], __dclen(s[0]),
             __addr(s[7:10],'0',s[6]), # encoded shift code
-            zPE.h2i(s[1])             # rounding factor
+            h2i(s[1])                 # rounding factor
             ) ),
     'F2'   : ( 'PACK', 5, lambda s : (
             lambda pack_lst = P_.pack(__dump(s[7:10], s[6], __dclen(s[1])),
@@ -386,38 +380,38 @@ ins_op = {
             )() ),
     'F8'   : ( 'ZAP',  5, lambda s : __ref_dec(
             s[3:6], __dclen(s[0]), s[2],
-            zPE.p2i(__dump(s[7:10],s[6],__dclen(s[1]))),
+            p2i(__dump(s[7:10],s[6],__dclen(s[1]))),
             cc = True, ex = None # set CC, no exception checking
             ) ),
     'F9'   : ( 'CP',   5, lambda s : __cmp_dec(
-            zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ),
-            zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
+            p2i( __dump(s[3:6], s[2],__dclen(s[0])) ),
+            p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
             ) ),
     'FA'   : ( 'AP',   5, lambda s : __ref_dec(
             s[3:6], __dclen(s[0]), s[2],
-            ( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) +
-              zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
+            ( p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) +
+              p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
               ),
             cc = True, ex = None # set CC, no exception checking
             ) ),
     'FB'   : ( 'SP',   5, lambda s : __ref_dec(
             s[3:6], __dclen(s[0]), s[2],
-            ( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) -
-              zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
+            ( p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) -
+              p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
               ),
             cc = True, ex = None # set CC, no exception checking
             ) ),
     'FC'   : ( 'MP',   5, lambda s : __ref_dec(
             s[3:6], __dclen(s[0]), s[2],
-            ( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) *
-              zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
+            ( p2i( __dump(s[3:6], s[2],__dclen(s[0])) ) *
+              p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
               ),
             cc = False, ex = __dclen(s[1])
             ) ),
     'FD'   : ( 'DP',   5, lambda s : __ref_dec(
             s[3:6], __dclen(s[0]), s[2],
-            divmod( zPE.p2i( __dump(s[3:6], s[2],__dclen(s[0])) ),
-                    zPE.p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
+            divmod( p2i( __dump(s[3:6], s[2],__dclen(s[0])) ),
+                    p2i( __dump(s[7:10],s[6],__dclen(s[1])) )
                     ),
             cc = False, ex = __dclen(s[1])
             ) ),
@@ -430,39 +424,39 @@ def decode_op(mnem):
 ### Internal Functions
 
 def __dclen(lc):                # decode length-code to length
-    return zPE.h2i(lc) + 1
+    return h2i(lc) + 1
 
 def __reg(r, offset = 0):       # register retriever
-    return GPR[ zPE.h2i(r) + offset - 16 ]
+    return GPR[ h2i(r) + offset - 16 ]
 
 def __addr_reg(r):              # addressing register retriever
-    reg_num = zPE.h2i(r)
+    reg_num = h2i(r)
     if reg_num:
         return GPR[reg_num].addr()
     else:
         return None
 
 def __pair(r):                  # even-odd pair registers retriever
-    indx = zPE.h2i(r)
+    indx = h2i(r)
     if indx % 2 != 0:
-        raise zPE.newSpecificationException()
+        raise newSpecificationException()
     return RegisterPair(GPR[indx], GPR[indx + 1])
 
 def __addr(d, x, b):            # address retriever
     indx = __addr_reg(x) or 0
     base = __addr_reg(b) or 0
-    return Register(indx + base + zPE.h2i(d)).addr()
+    return Register(indx + base + h2i(d)).addr()
 
 def __page(d, x, b, al = 4, offset = 0): # default to fullword boundary
     addr = __addr(d, x, b) + offset * al
     if addr % al != 0:
-        raise zPE.newSpecificationException()
+        raise newSpecificationException()
 
     pg_i = addr / 4096          # index of the page containing the address
     addr = addr % 4096          # relative address within the page
 
     if pg_i not in Memory._pool_allocated:
-        raise zPE.newProtectionException()
+        raise newProtectionException()
     return ( Memory._pool_allocated[pg_i], int(addr) )
 
 def __ref(d, x, b, byte, offset = 0):
@@ -470,7 +464,7 @@ def __ref(d, x, b, byte, offset = 0):
 
 def __refmod(d, x, b, action, byte, offset = 0, skip_CC = False):
     if isinstance(byte, str):
-        byte = zPE.h2i(byte)
+        byte = h2i(byte)
     ( page, addr ) = __page(d, x, b, 1, offset) # have to be byteword boundary
 
     if action == 'N':
@@ -506,20 +500,20 @@ def __refmod(d, x, b, action, byte, offset = 0, skip_CC = False):
 
 def __deref(d, x, b, al = 4, offset = 0): # default to fullword boundary
     ( page, addr ) = __page(d, x, b, al, offset)
-    return page.retrieve(addr, zPE.align_fmt_map[al])
+    return page.retrieve(addr, align_fmt_map[al])
 
 def __dump(d, b, size):
     base = __addr_reg(b) or 0
-    addr_start = zPE.h2i(d) + base
+    addr_start = h2i(d) + base
     addr_end   = addr_start + size
     try:
         val = Memory.deref_storage(addr_start, addr_end)
     except:
-        raise zPE.newProtectionException()
+        raise newProtectionException()
     return val
 
 def __mask(m):
-    return zPE.listify_mask(m)
+    return listify_mask(m)
 
 
 def __br(mask, addr):
@@ -575,13 +569,13 @@ def __ref_dec(d, l, b, value, cc = True, ex = None):
     '''
     ex_action = 'M'             # will be ignored if ex == None
     if isinstance(value, int) or isinstance(value, long):
-        val_str = '{0:0>{1}}'.format(zPE.i2p(value), l * 2)
+        val_str = '{0:0>{1}}'.format(i2p(value), l * 2)
     elif not ex:
-        zPE.abort(-1, 'Error: zPE.core.cpu.__ref_dec(): invalid call.\n')
+        abort(-1, 'Error: zPE.base.core.cpu.__ref_dec(): invalid call.\n')
     else:
         val_str = '{0:0>{1}}{2:0>{3}}'.format(
-            zPE.i2p(value[0]), (l - ex) * 2, # store quotient in D1(L1-L2,B1)
-            zPE.i2p(value[1]), ex * 2        # store reminder in D1+L1-L2(L2,B2)
+            i2p(value[0]), (l - ex) * 2, # store quotient in D1(L1-L2,B1)
+            i2p(value[1]), ex * 2        # store reminder in D1+L1-L2(L2,B2)
             )
         ex_action = 'D'
     indx_s = len(val_str) / 2 - l
@@ -596,15 +590,15 @@ def __ref_dec(d, l, b, value, cc = True, ex = None):
             SPR['PSW'].CC = 0
     if ex:                      # exception is to be checked
         if l <= ex:
-            raise zPE.newSpecificationException()
+            raise newSpecificationException()
         if ex_action == 'M':
-            if zPE.h2i(__dump(d,b,ex)):
-                raise zPE.newDataException()
+            if h2i(__dump(d,b,ex)):
+                raise newDataException()
         if ex_action == 'D':
             if ex > 8:
-                raise zPE.newSpecificationException()
+                raise newSpecificationException()
             if indx_s:
-                raise zPE.newDecimalDivideException()
+                raise newDecimalDivideException()
             
     # store back the new value
     value = X_(val_str).dump()[0]
@@ -617,7 +611,7 @@ def __shft_dec(d, b, l, shft_code, rounding):
     val_str = __dump(d, b, l)
     val_digit = val_str[:-1]
     if not val_digit.isdigit():
-        raise zPE.newDataException()
+        raise newDataException()
     if val_str[-1] in 'FACE':
         val_sign = 1
     else:
@@ -680,7 +674,7 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
     def get_next_src_digit(look_ahead = False):
         if not src_field_swap['buff']:
             # no buffered src digits, read next byte
-            src_field_swap['buff'] = '{0:0>2}'.format(zPE.i2h(__deref(
+            src_field_swap['buff'] = '{0:0>2}'.format(i2h(__deref(
                         src_disp, '0', src_base, 1, src_field_swap['offset']
                         )))
             src_field_swap['offset'] += 1
@@ -705,7 +699,7 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
                 num_sign = 0    # reset sign field
                 src_digit = get_next_src_digit()
             if not src_digit.isdigit(): # still not digit -> invalid format
-                raise zPE.newDataException()
+                raise newDataException()
             src_digit = int(src_digit)
             if src_digit:
                 num_sign = 1    # mark as non-zero
@@ -750,9 +744,9 @@ def __ed(pttn_disp, pttn_base, ed_len, src_disp, src_base, mark_reg = None):
     return SPR['PSW'].CC
 
 def __chk_dec(val, al):
-    val = zPE.p2i(zPE.i2h(val)) # raise data exception if cannot convert to int
+    val = p2i(i2h(val)) # raise data exception if cannot convert to int
     try:
-        F_(val)                 # validate value range
+        F_(val)         # validate value range
     except:
-        raise zPE.newFixedPointDivideException()
+        raise newFixedPointDivideException()
     return val

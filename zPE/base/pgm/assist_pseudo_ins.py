@@ -1,8 +1,13 @@
 # defines Pseudo-Instructions offered by ASSIST
-import zPE
+
+from zPE.util.conv import *
+from zPE.util.excptn import *
+from zPE.util.global_config import *
+
+import zPE.util.spool as spool
 
 ### add types supporting Pseudo-Instructions
-from zPE.core.asm import InstructionType, OpConst, D, I, R, S, L, X
+from zPE.base.core.asm import InstructionType, OpConst, D, I, R, S, L, X
 
 
 ### Pseudo-Instruction Mapping
@@ -42,10 +47,11 @@ PSEUDO_OP = {
     }
 
 # internal functions supporting Pseudo-Instructions
-from zPE.core.reg import GPR, SPR, Register
-from zPE.core.mem import Memory
-from zPE.core.cpu import __addr, __ref, __dump
-# Note: zPE.core.cpu.__dump is not a memory dump report, but the content dump
+from zPE.base.core.reg import Register
+from zPE.base.core.mem import Memory
+from zPE.base.core.cpu import __addr, __ref, __dump
+# Note: zPE.base.core.cpu.__dump is not a memory dump report, but
+#       the content dump
 
 X_MACRO_VAR = {
     'snape_cnt' : 0,            # number of times XSNAP get called
@@ -61,7 +67,7 @@ def __xdump_reg():
 
 def __xdump(base, disp, size):
     addr_start = int(__addr(disp, '0', base))
-    addr_end   = int(addr_start + zPE.h2i(size))
+    addr_end   = int(addr_start + h2i(size))
     __xsnap_header('STORAGE')
     ctrl = '0'
     for line in Memory.dump_storage(addr_start, addr_end):
@@ -82,22 +88,22 @@ def __xsnap_header(xdump_type):
 def __xread(base, disp, size):
     try:
         line = __xin('XREAD')[:-1]
-        for offset in range(zPE.h2i(size)):
-            __ref(disp, '0', base, zPE.c2x(line[offset]), offset)
+        for offset in range(h2i(size)):
+            __ref(disp, '0', base, c2x(line[offset]), offset)
         SPR['PSW'].CC = 0       # read success
 
-        if zPE.debug_mode():
+        if debug_mode():
             print 'Line Read:', line
     except:
         SPR['PSW'].CC = 1       # read error or EoF
 
-        if zPE.debug_mode():
+        if debug_mode():
             print 'Xread Error or EoF'
     return
 
 def __xprnt(base, disp, size):
     ctrl = ' '
-    line = zPE.x2c(__dump(disp, base, zPE.h2i(size)))
+    line = x2c(__dump(disp, base, h2i(size)))
     if line[0] in ' 01-':
         ctrl = line[0]
     __xout('XPRNT', ctrl, line[1:], '\n')
@@ -105,17 +111,17 @@ def __xprnt(base, disp, size):
 
 
 def __xdeci(reg, base, indx, disp):
-    reg  = GPR[zPE.h2i(reg)]
+    reg  = GPR[h2i(reg)]
     addr = __addr(disp, indx, base)
 
     pg_i = addr / 4096          # index of the page containing the address
     addr = addr % 4096          # relative address within the page
     if pg_i not in Memory._pool_allocated:
-        raise zPE.newProtectionException()
+        raise newProtectionException()
 
     received = []
     while True:
-        byte = zPE.x2c(Memory._pool_allocated[pg_i][addr]) # get next byte
+        byte = x2c(Memory._pool_allocated[pg_i][addr]) # get next byte
         if not received  and  byte != ' ':
             # first non-blank byte
             if byte not in '1234567890-+':
@@ -145,19 +151,19 @@ def __xdeci(reg, base, indx, disp):
             pg_i += 1
             addr = 0
             if pg_i not in Memory._pool_allocated:
-                raise zPE.newProtectionException()
+                raise newProtectionException()
     return
 
 def __xdeco(reg, base, indx, disp):
-    num = '{0: >12}'.format(GPR[zPE.h2i(reg)].int)
+    num = '{0: >12}'.format(GPR[h2i(reg)].int)
     for i in range(len(num)):
-        __ref(disp, indx, base, zPE.c2x(num[i]), i)
+        __ref(disp, indx, base, c2x(num[i]), i)
     return
 
 
-def __xin(spool):
-    return zPE.core.SPOOL.retrieve(spool).pop(0)[0] # on EoF, raise exception
+def __xin(sp):
+    return spool.retrieve(sp).pop(0)[0] # on EoF, raise exception
 
-def __xout(spool, *words):
-    zPE.core.SPOOL.retrieve(spool).append(*words)
+def __xout(sp, *words):
+    spool.retrieve(sp).append(*words)
     return

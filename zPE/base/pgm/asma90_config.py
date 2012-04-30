@@ -1,4 +1,6 @@
-import zPE
+from zPE.util import *
+from zPE.util.conv import *
+from zPE.util.global_config import *
 
 ### High-Level Assembler config definition
 
@@ -153,7 +155,7 @@ class ExternalSymbol(object):
         if self.type in [ 'XD', 'PR' ]:
             return 'al'        # mark; should be alignment (need info)
         if self.type in [ 'LD', 'ER', 'WX' ]:
-            return zPE.c2x(' ')
+            return c2x(' ')
         # otherwise
         if self.rmode == 64:
             bit_2 = '1'
@@ -177,7 +179,7 @@ class ExternalSymbol(object):
                 bit_6_7 = '11'
         bit_4 = '0' # '1' if RSECT; need info
 
-        return zPE.b2x('00{0}{1}{2}{3}{4}'.format(
+        return b2x('00{0}{1}{2}{3}{4}'.format(
                 bit_2, bit_3, bit_4, bit_5, bit_6_7
                 ))
 
@@ -214,7 +216,7 @@ SYMBOL_EQ = {           # Cross Reference =Const Sub-Table
     # 'Symbol  ' : [ Symbol(), ... ]
     }
 def ALLOC_EQ_SYMBOL(lbl, symbol):
-    zPE.dic_append_list(SYMBOL_EQ, lbl, symbol) # mark =const as allocable
+    dic_append_list(SYMBOL_EQ, lbl, symbol) # mark =const as allocable
 INVALID_SYMBOL = []     # non-defined symbol
 NON_REF_SYMBOL = []     # non-referenced symbol
 
@@ -265,8 +267,8 @@ class ScopeCounter(object):
             if sectype == 'CSECT':
                 label = ''      # PC symbol
             elif sectype == 'DSECT':
-                zPE.abort(91, 'Error: line ', str(line_num),
-                          ': Label is required.\n')
+                abort(91, 'Error: line ', str(line_num),
+                      ': Label is required.\n')
         self.__lbl = '{0:<8}'.format(label)
         if sectype == 'DSECT':
             DSECT_CR.append([ self.__lbl, line_num, None ])
@@ -290,9 +292,9 @@ class ScopeCounter(object):
         if ESD[self.__lbl][0].id != None:
             if ESD[self.__lbl][0].id < 0:
                 # continued DSECT, not allowed
-                zPE.abort(91, 'Error: ', self.__lbl,
-                          ': DSECT redefined at line ',
-                          str(line_num), '.\n')
+                abort(91, 'Error: ', self.__lbl,
+                      ': DSECT redefined at line ',
+                      str(line_num), '.\n')
             # continued CSECT, switch to it
             self.__id = ESD[self.__lbl][0].id
             self.__cid -= 1                 # roll back the next scope id
@@ -328,7 +330,7 @@ RLD = {
     # (pos_id, rel_id) : [ RelocationEntry, ... ]
     }
 def RECORD_RL_SYMBOL(pos_id, rel_id, rl_entry):
-    zPE.dic_append_list(RLD, (pos_id, rel_id), rl_entry)
+    dic_append_list(RLD, (pos_id, rel_id), rl_entry)
 
 
 class Using(object):

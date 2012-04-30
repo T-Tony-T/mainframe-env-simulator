@@ -1,4 +1,4 @@
-from zPE.__init__ import c2x, i2h # for conversion
+from zPE.util.conv import *
 
 
 # general
