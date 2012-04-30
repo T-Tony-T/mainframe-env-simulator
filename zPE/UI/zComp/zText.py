@@ -1857,7 +1857,10 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
     def place_cursor(self, where):
         self.buff['disp'].place_cursor(where)
-        self.scroll_to_iter(where, 0)
+        try:
+            self.scroll_to_iter(where, 0)
+        except:                 # fail to scroll
+            pass                # silently ignore the error
 
     def place_cursor_at_offset(self, offset):
         self.place_cursor(self.buff['disp'].get_iter_at_offset(offset))
