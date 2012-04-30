@@ -1,5 +1,7 @@
 # Major Mode : Asm Mode
 
+from zPE.util import *
+
 from zPE.UI.basemode import BaseMode
 
 from zPE.base.core.asm import ASM_INSTRUCTION as ASM_INS_SET, op_code as ASM_OP_MAP, ext_mnem as EXT_MNEM_MAP, const_s, const_a
@@ -164,7 +166,7 @@ class AsmMode(BaseMode):
                 elif prev_ln[0].token != 'LN-CMMNT':
                     # effective previous line is regular line
                     prev_ln = ''.join([ str(node) for node in prev_ln ])[len(ast.get_line_prefix(prev_ln_ndx)) : ]
-                    field = re.split(r'(\s+)', prev_ln, 3)
+                    field = resplit_sq(r'(\s+)', prev_ln, 3)
 
                     pos_ins_start = sum([ len(f) for f in field[0:2] ])
                     if len(field) > 4: # i.e. has everything upto argument(s) field
@@ -181,10 +183,10 @@ class AsmMode(BaseMode):
                     continue    # skip it
 
             # perform the alignment
-            field = re.split(r'(\s+)', line[1], 3)
+            field = resplit_sq(r'(\s+)', line[1], 3)
             change_list = [ ]
             # check instruction alignment
-            label_end  = len(field[0]) # this always exists, since an re.split() on '' results [ '' ]
+            label_end  = len(field[0]) # this always exists, since an resplit_sq() on '' results [ '' ]
             offset_ins = sum([ len(f) for f in field[0:2] ])
             change = self.__align_part(label_end, offset_ins, pos_ins_start)
             if change:
