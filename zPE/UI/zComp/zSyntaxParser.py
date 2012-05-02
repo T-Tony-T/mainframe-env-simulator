@@ -613,7 +613,8 @@ class zSyntaxParser(object):
                         if isinstance(offset, zAstSubTree):
                             # offset is really a new sub-tree to be appended
                             ast_node.append(offset)
-                            self.__append_curr_lns(ast_node[-1])
+                            for node in ast_node[-1].flat():
+                                self.__append_curr_lns(node)
                             self.__last += len(offset)
                             offset = self.__last - self.__indx
                         self.__advance_indx(offset, ast_node)
@@ -628,7 +629,8 @@ class zSyntaxParser(object):
                             return new_subtree # report to upper level the sub-tree need to be appended
                         else:
                             ast_node.append(new_subtree)
-                            self.__append_curr_lns(ast_node[-1])
+                            for node in ast_node[-1].flat():
+                                self.__append_curr_lns(node)
                             self.__last = indx_e
                             self.__advance_indx(len(dlm_e), ast_node)
                     else:
