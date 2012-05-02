@@ -1514,6 +1514,10 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
     ### overridden signal definition
     def _sig_buffer_text_inserting(self, textbuffer, ins_iter, text, length, src):
+        invalid = re.findall(r'[^\x00-\xff]', text.decode('utf8'))
+        if invalid:
+            textbuffer.emit_stop_by_name('insert_text')
+            raise ValueError(''.join([ "Invalid characher(s) in the text: '", "', '".join(invalid), "'" ]))
         change = zBufferChange(text, ins_iter.get_offset(), 'i')
         self.__sync_buff(zTextView.target_buffer[src], change)
 
