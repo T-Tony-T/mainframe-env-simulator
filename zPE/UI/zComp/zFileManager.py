@@ -357,11 +357,22 @@ class zDisplayPanel(gtk.VBox):
     ### end of database manipulation
 
 
-    def buffer_save(self, buff):
-        return self.buffer_save_as(buff)
+    def set_buffer(self, zbuff):
+        self.center.set_buffer(zbuff.buffer)
+        # unhook the buffer from the zEditBuffer to allow
+        # new SDSF(s) in other split window(s)
+        # will be re-hooked during saving
+        zbuff.reinit()
 
-    def buffer_save_as(self, buff):
-        return self.center.buffer_save_as(buff)
+    def buffer_save(self, zbuff):
+        return self.buffer_save_as(zbuff)
+
+    def buffer_save_as(self, zbuff):
+        backup = zbuff.buffer   # backup the current zEditBuffer
+        zbuff.buffer = self.center.get_buffer() # re-hook the real buffer in-use
+        rv = self.center.buffer_save_as(zbuff)  # save the real buffer
+        zbuff.buffer = backup                   # restore the backup
+        return rv
 
 
     def get_editor(self):
@@ -383,7 +394,8 @@ class zDisplayPanel(gtk.VBox):
             text = self.fetch_content(self.__active_job)
         else:
             text = ''
-        self.center.set_text(text)
+        self.center.set_text(text, no_scrolling = True)
+        self.center.place_cursor_at_offset(0)
 
     def clear_job_list(self):
         self.job_panel.model.clear()

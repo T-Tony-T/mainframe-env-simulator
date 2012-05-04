@@ -921,7 +921,7 @@ class zEdit(z_ABC, gtk.VBox):
                 self.center.set_folder(os.path.join(* self.active_buffer.path))
 
         elif self.active_buffer.type == 'disp':
-            self.center.center.set_buffer(new_buff.buffer)
+            self.center.set_buffer(new_buff)
 
         if self.need_init:
             self.exec_init_func()
@@ -1216,7 +1216,10 @@ class zEditBuffer(z_ABC):
         else:
             raise SystemError   # this should never happen
         zEditBuffer.reg_emit('buffer_list_modified', self)
+        return self.reinit()
 
+
+    def reinit(self):
         # initiated flags
         self.modified   = None # will be set after determining the content
         self.major_mode = None # will be set after determining the content
@@ -1379,6 +1382,8 @@ class zEditBuffer(z_ABC):
         new_buff.buffer.set_text(
             self.buffer.get_text(self.buffer.get_start_iter(), self.buffer.get_end_iter(), False)
             )
+        # transfer cursor place to the new buffer
+        new_buff.buffer.place_cursor(new_buff.buffer.get_iter_at_offset(self.buffer.get_property('cursor-position')))
 
         # transfer undo-stack to the new buffer
         if self.type == 'file': # src is also a file
@@ -1455,6 +1460,7 @@ class zEditBuffer(z_ABC):
             mode = majormode.MODE_MAP[self.major_mode]
 
             self.buffer.set_text(mode.default['scratch'])
+            self.buffer.place_cursor(self.buffer.get_start_iter())
             self.ast = zSyntaxParser(mode.default['scratch'], ** mode.ast_map)
 
             self.writable = False # whether can be saved

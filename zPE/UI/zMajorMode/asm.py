@@ -63,7 +63,9 @@ LC = {                          # local config
             'LN-LABEL'  : ( 0, ''.join([ r'(',   RE['lbl'], r')' ]) ),
             'INSTRUCT'  : ( 0, ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(',   RE['ins'], r')', RE['spc'] ]) ),
             'LOC-CNT'   : ( 0, ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(?:', RE['ins'], r'[ \t]+)',
-                                    r'(?:[^\s*/+-]+[*/+-])*\(*(\*).*'
+                                    # skip upto [(,] (lazy-match)       loc
+                                    r'(?:.*?[(,])*?(?:[^\s*/+-]+[*/+-])*(\*).*'
+                                    #              skip ExpOp (greedy)      other stuff
                                     ])
                             ),
             'END-CMMNT' : ( 0, ''.join([ r'(?:', RE['lbl'], r')?[ \t]+(?:', RE['ins'], r'[ \t]+)',

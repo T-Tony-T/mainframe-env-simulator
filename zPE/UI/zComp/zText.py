@@ -1444,6 +1444,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                 self.buff['disp'].connect_after('insert_text',  self._sig_disp_text_inserted),
                 self.buff['disp'].connect_after('delete_range', self._sig_disp_range_deleted),
                 ],
+            'misc' : [
+                self.buff['disp'].connect_after('mark-set', self._sig_mark_set),
+                ],
             }
 
         # set up stroke listener
@@ -1453,6 +1456,8 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         # customize proporties
         self.set_editable(True) # default editable
+        self.set_left_margin(5) # leave 5px at left
+        self.set_right_margin(5)# leave 5px at right
 
         # register callbacks for function bindings
         self.default_func_callback = {
@@ -1513,6 +1518,51 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
 
     ### overridden signal definition
+    def _sig_mark_set(self, widget, iter, textmark, offset = None):
+        if textmark.get_name() == 'insert': # is the cursor
+            # get current line coordinates
+            if offset < 0:
+                offset  = iter.get_offset()
+            else:
+                iter = self.buff['disp'].get_iter_at_offset(offset)
+            ln_cord = self.get_line_yrange(iter)
+            if not ln_cord or not ln_cord[1]:
+                # fail to get line height, register for next checking
+                gobject.timeout_add(10, lambda: self._sig_mark_set(widget, iter, textmark, offset))
+                # since self._sig_mark_set() always return False, each timeout will be terminated right away
+                return False
+            line_c = ln_cord[0] / ln_cord[1]
+            self.buff['true'].place_cursor( # backup cursor position
+                self.buff['true'].get_iter_at_offset(offset)
+                )
+
+            # get window capacity
+            win_rect = self.get_visible_rect()
+            nlines = (win_rect.height + ln_cord[1] / 4) / ln_cord[1]
+                                # a line of more than 75% shown count as 1 line
+
+            if nlines >= 7:     # 7+  lines shown, using 3-line adjustment
+                adjust = 3
+            elif nlines >= 5:   # 5~7 lines shown, using 2-line adjustment
+                adjust = 2
+            elif nlines >= 3:   # 3~4 lines shown, using 1-line adjustment
+                adjust = 1
+            else:               # 1~2 lines shown, do not adjust anything
+                return False
+
+            # get line position
+            space_req   = adjust * ln_cord[1]
+            space_above = ln_cord[0] - win_rect.y
+            space_below = win_rect.height - space_above - ln_cord[1]
+            scroll_up   = space_above < space_below and space_above < space_req
+            scroll_down = space_above > space_below and space_below < space_req
+
+            # scroll to the calculated position, if needed
+            if scroll_up or scroll_down:
+                scroll_pos = scroll_up and max(0, ln_cord[0] - space_req) or (ln_cord[0] + space_req)
+                self.scroll_to_iter(self.get_line_at_y(scroll_pos)[0], 0)
+        return False
+
     def _sig_buffer_text_inserting(self, textbuffer, ins_iter, text, length, src):
         invalid = re.findall(r'[^\x00-\xff]', text.decode('utf8'))
         if invalid:
@@ -1742,9 +1792,10 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
     def get_text(self):
         return self.buff['disp'].get_text(self.buff['disp'].get_start_iter(), self.buff['disp'].get_end_iter(), False)
 
-    def set_text(self, text):
+    def set_text(self, text, no_scrolling = False):
         self.buff['disp'].set_text(text)
-        self.place_cursor(self.buff['disp'].get_start_iter())
+        if not no_scrolling:
+            self.place_cursor(self.get_cursor_iter(use_backup = True))
 
 
     def get_has_selection(self):
@@ -1845,7 +1896,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             self.buff['true'].get_text(self.buff['true'].get_start_iter(), self.buff['true'].get_end_iter(), False)
             )
         self.unset_mark()
-        self.place_cursor(self.buff['disp'].get_start_iter())
+        self.place_cursor(self.get_cursor_iter(use_backup = True))
 
         self.__sync_buff_end('disp')
 
@@ -1861,10 +1912,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
     def place_cursor(self, where):
         self.buff['disp'].place_cursor(where)
-        try:
-            self.scroll_to_iter(where, 0)
-        except:                 # fail to scroll
-            pass                # silently ignore the error
+        self._sig_mark_set(self.buff['disp'], where, self.buff['disp'].get_insert())
 
     def place_cursor_at_offset(self, offset):
         self.place_cursor(self.buff['disp'].get_iter_at_offset(offset))
@@ -2037,9 +2085,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             yanked_text = kr.resurrect()
 
             if yanked_text:
-                start_pos = self.get_cursor_iter().get_offset()
+                start_pos = self.get_cursor_pos()
                 self.insert_text(yanked_text)
-                end_pos   = self.get_cursor_iter().get_offset()
+                end_pos   = self.get_cursor_pos()
 
                 self.__prev_yank_bounds = ( start_pos, end_pos )
             else:
@@ -2054,9 +2102,9 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
                         self.buff['disp'].get_iter_at_offset(self.__prev_yank_bounds[1])
                         )
 
-                    start_pos = self.get_cursor_iter().get_offset()
+                    start_pos = self.get_cursor_pos()
                     self.insert_text(yanked_text)
-                    end_pos   = self.get_cursor_iter().get_offset()
+                    end_pos   = self.get_cursor_pos()
 
                     self.__prev_yank_bounds = ( start_pos, end_pos )
                 else:
@@ -2068,7 +2116,12 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         self.unset_mark()
 
 
-    def get_cursor_iter(self):
+    def get_cursor_pos(self, target = 'disp'):
+        return self.buff[target].get_property('cursor-position')
+
+    def get_cursor_iter(self, use_backup = False):
+        if use_backup:
+            return self.buff['disp'].get_iter_at_offset(self.get_cursor_pos('true'))
         return self.buff['disp'].get_iter_at_mark(self.buff['disp'].get_insert())
 
 
