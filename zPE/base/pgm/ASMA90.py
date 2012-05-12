@@ -1454,16 +1454,18 @@ def pass_2():
 
                             if reloc_arg == '*':
                                 tmp = MNEMONIC[line_num][1]
+                                reloc_id = scope_id
                             else:
-                                tmp = SYMBOL['{0:<8}'.format(reloc_arg)].value
+                                lbl_8 = '{0:<8}'.format(reloc_arg)
+                                tmp = SYMBOL[lbl_8].value
+                                reloc_id = SYMBOL[lbl_8].id
 
                             sd_info[4][lbl_i] = str(tmp + ex_disp)
 
                             # add to relocation dictionary
-                            lbl_8 = '{0:<8}'.format(reloc_arg)
                             RECORD_RL_SYMBOL(
-                                scope_id,         # position   ESDID
-                                SYMBOL[lbl_8].id, # relocation ESDID
+                                scope_id, # position   ESDID
+                                reloc_id, # relocation ESDID
                                 RelocationEntry(
                                     item_addr, 'A', sd_info[3],
                                     '+-'[reloc_neg[-1]]
