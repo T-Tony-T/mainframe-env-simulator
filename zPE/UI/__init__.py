@@ -41,12 +41,12 @@ class BaseFrame(object):
 
     def __init__(self):
         self.__global_key_binding_func = {
-            'prog_show_config'          : lambda msg: ( self.config_window.open(), self.lastline.clear(), ),
-            'prog_show_error'           : lambda msg: ( self.err_console.open(),   self.lastline.clear(), ),
-            'prog_quit'                 : lambda msg: self._sig_quit(None),
+            'prog-show-config'          : lambda msg: ( self.config_window.open(), self.lastline.clear(), ),
+            'prog-show-error'           : lambda msg: ( self.err_console.open(),   self.lastline.clear(), ),
+            'prog-quit'                 : lambda msg: self._sig_quit(None),
 
-            'zPE_submit'                : lambda msg: self._sig_submit(None, 'direct'),
-            'zPE_submit_with_JCL'       : lambda msg: self._sig_submit(None, 'wrap'),
+            'zPE-submit'                : lambda msg: self._sig_submit(None, 'direct'),
+            'zPE-submit-with-JCL'       : lambda msg: self._sig_submit(None, 'wrap'),
             }
 
         # enable the global bindings for all listeners
@@ -60,17 +60,17 @@ class BaseFrame(object):
 
         # override the default behavior of the buffer manipulation
         zComp.zEdit.func_callback_map = {
-            'buffer_open'               : lambda msg: self._sig_buff_manip(None, 'open'),
-            'buffer_save'               : lambda msg: self._sig_buff_manip(None, 'save'),
-            'buffer_save_as'            : lambda msg: self._sig_buff_manip(None, 'save-as'),
-            'buffer_close'              : lambda msg: self._sig_buff_manip(None, 'close'),
+            'buffer-open'               : lambda msg: self._sig_buff_manip(None, 'open'),
+            'buffer-save'               : lambda msg: self._sig_buff_manip(None, 'save'),
+            'buffer-save-as'            : lambda msg: self._sig_buff_manip(None, 'save-as'),
+            'buffer-close'              : lambda msg: self._sig_buff_manip(None, 'close'),
             }
         # override the default behavior of the split-window manipulation
         zComp.zSplitWindow.func_callback_map = {
-            'window_split_horz'         : lambda msg: self._sig_sw_manip(None, 'split_horz'),
-            'window_split_vert'         : lambda msg: self._sig_sw_manip(None, 'split_vert'),
-            'window_delete'             : lambda msg: self._sig_sw_manip(None, 'delete'),
-            'window_delete_other'       : lambda msg: self._sig_sw_manip(None, 'delete_other'),
+            'window-split-horz'         : lambda msg: self._sig_sw_manip(None, 'split-horz'),
+            'window-split-vert'         : lambda msg: self._sig_sw_manip(None, 'split-vert'),
+            'window-delete'             : lambda msg: self._sig_sw_manip(None, 'delete'),
+            'window-delete-other'       : lambda msg: self._sig_sw_manip(None, 'delete-other'),
             }
 
         ### redirect STDOUT and STDERR to the error console
@@ -201,17 +201,17 @@ class BaseFrame(object):
         self.tool_buff_undo.connect(   'clicked', self._sig_buff_manip, 'undo')
         self.tool_buff_redo.connect(   'clicked', self._sig_buff_manip, 'redo')
 
-        self.tool_win_split_horz.connect(  'clicked', self._sig_sw_manip, 'split_horz')
-        self.tool_win_split_vert.connect(  'clicked', self._sig_sw_manip, 'split_vert')
+        self.tool_win_split_horz.connect(  'clicked', self._sig_sw_manip, 'split-horz')
+        self.tool_win_split_vert.connect(  'clicked', self._sig_sw_manip, 'split-vert')
         self.tool_win_delete.connect(      'clicked', self._sig_sw_manip, 'delete')
-        self.tool_win_delete_other.connect('clicked', self._sig_sw_manip, 'delete_other')
+        self.tool_win_delete_other.connect('clicked', self._sig_sw_manip, 'delete-other')
 
         self.tool_submit.connect('clicked', self._sig_submit, 'direct')
         self.tool_submit_wrap.connect('clicked', self._sig_submit, 'wrap')
 
-        self.tool_config.connect('clicked', self.__global_key_binding_func['prog_show_config'])
-        self.tool_err_console.connect('clicked', self.__global_key_binding_func['prog_show_error'])
-        self.tool_quit.connect('clicked', self.__global_key_binding_func['prog_quit'])
+        self.tool_config.connect('clicked', self.__global_key_binding_func['prog-show-config'])
+        self.tool_err_console.connect('clicked', self.__global_key_binding_func['prog-show-error'])
+        self.tool_quit.connect('clicked', self.__global_key_binding_func['prog-quit'])
 
 
         ### create main window
@@ -444,14 +444,14 @@ class BaseFrame(object):
         if not frame:
             raise AssertionError('The main window is not focused!')
 
-        if task == 'split_horz':
+        if task == 'split-horz':
             self.mw.window_split_horz(frame)
-        elif task == 'split_vert':
+        elif task == 'split-vert':
             self.mw.window_split_vert(frame)
         elif task == 'delete':
             self.mw.window_delete(frame)
             self.mw.grab_focus() # focus will be lost for sure
-        elif task == 'delete_other':
+        elif task == 'delete-other':
             self.mw.window_delete_other(frame)
         else:
             raise KeyError
@@ -575,10 +575,10 @@ class BaseFrame(object):
         mi_submit.connect('activate', self._sig_submit, 'direct')
         mi_submit_wrap.connect('activate', self._sig_submit, 'wrap')
 
-        mi_split_horz.connect('activate', self._sig_sw_manip, 'split_horz')
-        mi_split_vert.connect('activate', self._sig_sw_manip, 'split_vert')
+        mi_split_horz.connect('activate', self._sig_sw_manip, 'split-horz')
+        mi_split_vert.connect('activate', self._sig_sw_manip, 'split-vert')
         mi_delete.connect('activate', self._sig_sw_manip, 'delete')
-        mi_delete_other.connect('activate', self._sig_sw_manip, 'delete_other')
+        mi_delete_other.connect('activate', self._sig_sw_manip, 'delete-other')
 
         menu.show_all()
     ### end of signals for SplitWindow

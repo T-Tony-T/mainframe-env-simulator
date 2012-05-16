@@ -284,43 +284,43 @@ from zWidget import zKillRing, zPopupMenu
 class zEntry(gtk.Entry):
     '''A gtk.Entry that has additional methods'''
     global_func_list = [
-        'align_or_complete',
+        'align-or-complete',
         'complete',
-        'complete_list',
+        'complete-list',
 
-        'backward_char',
-        'backward_delete_char',
-        'forward_char',
-        'forward_delete_char',
+        'backward-char',
+        'backward-delete-char',
+        'forward-char',
+        'forward-delete-char',
 
-        'backward_word',
-        'backward_delete_word',
-        'forward_word',
-        'forward_delete_word',
+        'backward-word',
+        'backward-delete-word',
+        'forward-word',
+        'forward-delete-word',
 
-        'backward_line',
-        'backward_delete_line',
-        'forward_line',
-        'forward_delete_line',
+        'backward-line',
+        'backward-delete-line',
+        'forward-line',
+        'forward-delete-line',
 
-        'backward_para',
-        'backward_delete_para',
-        'forward_para',
-        'forward_delete_para',
+        'backward-para',
+        'backward-delete-para',
+        'forward-para',
+        'forward-delete-para',
 
-        'kill_region',
-        'kill_ring_save',
-        'kill_ring_yank',
-        'kill_ring_yank_pop',
+        'kill-region',
+        'kill-ring-save',
+        'kill-ring-yank',
+        'kill-ring-yank-pop',
 
-        'set_mark_command',
-        'set_mark_move_left',
-        'set_mark_move_right',
-        'set_mark_move_up',
-        'set_mark_move_down',
-        'set_mark_move_start',
-        'set_mark_move_end',
-        'set_mark_select_all',
+        'set-mark-command',
+        'set-mark-move-left',
+        'set-mark-move-right',
+        'set-mark-move-up',
+        'set-mark-move-down',
+        'set-mark-move-start',
+        'set-mark-move-end',
+        'set-mark-select-all',
         ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -340,43 +340,43 @@ class zEntry(gtk.Entry):
 
         # register callbacks for function bindings
         self.default_func_callback = {
-            'align_or_complete'     : lambda msg: self.complete(), # no align available anyway
+            'align-or-complete'     : lambda msg: self.complete(), # no align available anyway
             'complete'              : lambda msg: self.complete(),
-            'complete_list'         : lambda msg: self.complete_list(),
+            'complete-list'         : lambda msg: self.complete_list(),
 
-            'backward_char'         : lambda msg: self.backward(       'char'),
-            'backward_delete_char'  : lambda msg: self.backward_delete('char', msg),
-            'forward_char'          : lambda msg: self.forward(        'char'),
-            'forward_delete_char'   : lambda msg: self.forward_delete( 'char', msg),
+            'backward-char'         : lambda msg: self.backward(       'char'),
+            'backward-delete-char'  : lambda msg: self.backward_delete('char', msg),
+            'forward-char'          : lambda msg: self.forward(        'char'),
+            'forward-delete-char'   : lambda msg: self.forward_delete( 'char', msg),
 
-            'backward_word'         : lambda msg: self.backward(       'word'),
-            'backward_delete_word'  : lambda msg: self.backward_delete('word', msg),
-            'forward_word'          : lambda msg: self.forward(        'word'),
-            'forward_delete_word'   : lambda msg: self.forward_delete( 'word', msg),
+            'backward-word'         : lambda msg: self.backward(       'word'),
+            'backward-delete-word'  : lambda msg: self.backward_delete('word', msg),
+            'forward-word'          : lambda msg: self.forward(        'word'),
+            'forward-delete-word'   : lambda msg: self.forward_delete( 'word', msg),
 
-            'backward_line'         : lambda msg: self.backward(       'line'),
-            'backward_delete_line'  : lambda msg: self.backward_delete('line', msg),
-            'forward_line'          : lambda msg: self.forward(        'line'),
-            'forward_delete_line'   : lambda msg: self.forward_delete( 'line', msg),
+            'backward-line'         : lambda msg: self.backward(       'line'),
+            'backward-delete-line'  : lambda msg: self.backward_delete('line', msg),
+            'forward-line'          : lambda msg: self.forward(        'line'),
+            'forward-delete-line'   : lambda msg: self.forward_delete( 'line', msg),
 
-            'backward_para'         : lambda msg: self.backward(       'para'),
-            'backward_delete_para'  : lambda msg: self.backward_delete('para', msg),
-            'forward_para'          : lambda msg: self.forward(        'para'),
-            'forward_delete_para'   : lambda msg: self.forward_delete( 'para', msg),
+            'backward-para'         : lambda msg: self.backward(       'para'),
+            'backward-delete-para'  : lambda msg: self.backward_delete('para', msg),
+            'forward-para'          : lambda msg: self.forward(        'para'),
+            'forward-delete-para'   : lambda msg: self.forward_delete( 'para', msg),
 
-            'kill_region'           : lambda msg: self.kill_ring_manip('kill', msg),
-            'kill_ring_save'        : lambda msg: self.kill_ring_manip('save', msg),
-            'kill_ring_yank'        : lambda msg: self.kill_ring_manip('yank', msg),
-            'kill_ring_yank_pop'    : lambda msg: self.kill_ring_manip('ypop', msg),
+            'kill-region'           : lambda msg: self.kill_ring_manip('kill', msg),
+            'kill-ring-save'        : lambda msg: self.kill_ring_manip('save', msg),
+            'kill-ring-yank'        : lambda msg: self.kill_ring_manip('yank', msg),
+            'kill-ring-yank-pop'    : lambda msg: self.kill_ring_manip('ypop', msg),
 
-            'set_mark_command'      : lambda msg: self.set_mark(),
-            'set_mark_move_left'    : lambda msg: self.set_mark(append = 'left'),
-            'set_mark_move_right'   : lambda msg: self.set_mark(append = 'right'),
-            'set_mark_move_up'      : lambda msg: self.set_mark(append = 'up'),
-            'set_mark_move_down'    : lambda msg: self.set_mark(append = 'down'),
-            'set_mark_move_start'   : lambda msg: self.set_mark(append = 'start'),
-            'set_mark_move_end'     : lambda msg: self.set_mark(append = 'end'),
-            'set_mark_select_all'   : lambda msg: ( self.set_mark(-1),
+            'set-mark-command'      : lambda msg: self.set_mark(),
+            'set-mark-move-left'    : lambda msg: self.set_mark(append = 'left'),
+            'set-mark-move-right'   : lambda msg: self.set_mark(append = 'right'),
+            'set-mark-move-up'      : lambda msg: self.set_mark(append = 'up'),
+            'set-mark-move-down'    : lambda msg: self.set_mark(append = 'down'),
+            'set-mark-move-start'   : lambda msg: self.set_mark(append = 'start'),
+            'set-mark-move-end'     : lambda msg: self.set_mark(append = 'end'),
+            'set-mark-select-all'   : lambda msg: ( self.set_mark(-1),
                                                     self.set_position(0)
                                                     ),
             }
@@ -638,7 +638,7 @@ class zEntry(gtk.Entry):
         if task != 'char':
             text_to_kill = self.get_chars(target_pos, self.get_position())
 
-            if msg['prev_cmd'] == 'backward_delete_{0}'.format(task):
+            if msg['prev_cmd'] == 'backward-delete-{0}'.format(task):
                 zKillRing.prepend_killing(text_to_kill)
             else:
                 zKillRing.kill(text_to_kill)
@@ -654,7 +654,7 @@ class zEntry(gtk.Entry):
         if task != 'char':
             text_to_kill = self.get_chars(self.get_position(), target_pos)
 
-            if msg['prev_cmd'] == 'forward_delete_{0}'.format(task):
+            if msg['prev_cmd'] == 'forward-delete-{0}'.format(task):
                 zKillRing.append_killing(text_to_kill)
             else:
                 zKillRing.kill(text_to_kill)
@@ -688,7 +688,7 @@ class zEntry(gtk.Entry):
             else:
                 self.__prev_yank_bounds = ( )
         else:
-            if msg['prev_cmd'] in [ 'kill_ring_yank', 'kill_ring_yank_pop' ]:
+            if msg['prev_cmd'] in [ 'kill-ring-yank', 'kill-ring-yank-pop' ]:
                 yanked_text = kr.circulate_resurrection()
 
                 if yanked_text:
@@ -1353,45 +1353,45 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         }
 
     global_func_list = [
-        'align_line',
-        'align_region',
-        'align_or_complete',
+        'align-line',
+        'align-region',
+        'align-or-complete',
         'complete',
-        'complete_list',
+        'complete-list',
 
-        'backward_char',
-        'backward_delete_char',
-        'forward_char',
-        'forward_delete_char',
+        'backward-char',
+        'backward-delete-char',
+        'forward-char',
+        'forward-delete-char',
 
-        'backward_word',
-        'backward_delete_word',
-        'forward_word',
-        'forward_delete_word',
+        'backward-word',
+        'backward-delete-word',
+        'forward-word',
+        'forward-delete-word',
 
-        'backward_line',
-        'backward_delete_line',
-        'forward_line',
-        'forward_delete_line',
+        'backward-line',
+        'backward-delete-line',
+        'forward-line',
+        'forward-delete-line',
 
-        'backward_para',
-        'backward_delete_para',
-        'forward_para',
-        'forward_delete_para',
+        'backward-para',
+        'backward-delete-para',
+        'forward-para',
+        'forward-delete-para',
 
-        'kill_region',
-        'kill_ring_save',
-        'kill_ring_yank',
-        'kill_ring_yank_pop',
+        'kill-region',
+        'kill-ring-save',
+        'kill-ring-yank',
+        'kill-ring-yank-pop',
 
-        'set_mark_command',
-        'set_mark_move_left',
-        'set_mark_move_right',
-        'set_mark_move_up',
-        'set_mark_move_down',
-        'set_mark_move_start',
-        'set_mark_move_end', 
-        'set_mark_select_all',
+        'set-mark-command',
+        'set-mark-move-left',
+        'set-mark-move-right',
+        'set-mark-move-up',
+        'set-mark-move-down',
+        'set-mark-move-start',
+        'set-mark-move-end', 
+        'set-mark-select-all',
        ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -1450,7 +1450,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             }
 
         # set up stroke listener
-        self.completer = zComplete(self)
+        self.completer = zComplete(self, append_space = True)
         self.__listener = zStrokeListener() # default listener
         self.listener = self.__listener     # interface listener
 
@@ -1461,45 +1461,45 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
 
         # register callbacks for function bindings
         self.default_func_callback = {
-            'align_line'            : lambda msg: self.align_line(),
-            'align_region'          : lambda msg: self.align_region(),
-            'align_or_complete'     : lambda msg: self.align_or_complete(),
+            'align-line'            : lambda msg: self.align_line(),
+            'align-region'          : lambda msg: self.align_region(),
+            'align-or-complete'     : lambda msg: self.align_or_complete(),
             'complete'              : lambda msg: self.complete(),
-            'complete_list'         : lambda msg: self.complete_list(),
+            'complete-list'         : lambda msg: self.complete_list(),
 
-            'backward_char'         : lambda msg: self.backward(       'char'),
-            'backward_delete_char'  : lambda msg: self.backward_delete('char', msg),
-            'forward_char'          : lambda msg: self.forward(        'char'),
-            'forward_delete_char'   : lambda msg: self.forward_delete( 'char', msg),
+            'backward-char'         : lambda msg: self.backward(       'char'),
+            'backward-delete-char'  : lambda msg: self.backward_delete('char', msg),
+            'forward-char'          : lambda msg: self.forward(        'char'),
+            'forward-delete-char'   : lambda msg: self.forward_delete( 'char', msg),
 
-            'backward_word'         : lambda msg: self.backward(       'word'),
-            'backward_delete_word'  : lambda msg: self.backward_delete('word', msg),
-            'forward_word'          : lambda msg: self.forward(        'word'),
-            'forward_delete_word'   : lambda msg: self.forward_delete( 'word', msg),
+            'backward-word'         : lambda msg: self.backward(       'word'),
+            'backward-delete-word'  : lambda msg: self.backward_delete('word', msg),
+            'forward-word'          : lambda msg: self.forward(        'word'),
+            'forward-delete-word'   : lambda msg: self.forward_delete( 'word', msg),
 
-            'backward_line'         : lambda msg: self.backward(       'line'),
-            'backward_delete_line'  : lambda msg: self.backward_delete('line', msg),
-            'forward_line'          : lambda msg: self.forward(        'line'),
-            'forward_delete_line'   : lambda msg: self.forward_delete( 'line', msg),
+            'backward-line'         : lambda msg: self.backward(       'line'),
+            'backward-delete-line'  : lambda msg: self.backward_delete('line', msg),
+            'forward-line'          : lambda msg: self.forward(        'line'),
+            'forward-delete-line'   : lambda msg: self.forward_delete( 'line', msg),
 
-            'backward_para'         : lambda msg: self.backward(       'para'),
-            'backward_delete_para'  : lambda msg: self.backward_delete('para', msg),
-            'forward_para'          : lambda msg: self.forward(        'para'),
-            'forward_delete_para'   : lambda msg: self.forward_delete( 'para', msg),
+            'backward-para'         : lambda msg: self.backward(       'para'),
+            'backward-delete-para'  : lambda msg: self.backward_delete('para', msg),
+            'forward-para'          : lambda msg: self.forward(        'para'),
+            'forward-delete-para'   : lambda msg: self.forward_delete( 'para', msg),
 
-            'kill_region'           : lambda msg: self.kill_ring_manip('kill', msg),
-            'kill_ring_save'        : lambda msg: self.kill_ring_manip('save', msg),
-            'kill_ring_yank'        : lambda msg: self.kill_ring_manip('yank', msg),
-            'kill_ring_yank_pop'    : lambda msg: self.kill_ring_manip('ypop', msg),
+            'kill-region'           : lambda msg: self.kill_ring_manip('kill', msg),
+            'kill-ring-save'        : lambda msg: self.kill_ring_manip('save', msg),
+            'kill-ring-yank'        : lambda msg: self.kill_ring_manip('yank', msg),
+            'kill-ring-yank-pop'    : lambda msg: self.kill_ring_manip('ypop', msg),
 
-            'set_mark_command'      : lambda msg: self.set_mark(),
-            'set_mark_move_left'    : lambda msg: self.set_mark(append = 'left'),
-            'set_mark_move_right'   : lambda msg: self.set_mark(append = 'right'),
-            'set_mark_move_up'      : lambda msg: self.set_mark(append = 'up'),
-            'set_mark_move_down'    : lambda msg: self.set_mark(append = 'down'),
-            'set_mark_move_start'   : lambda msg: self.set_mark(append = 'start'),
-            'set_mark_move_end'     : lambda msg: self.set_mark(append = 'end'),
-            'set_mark_select_all'   : lambda msg: ( self.set_mark(self.buff['disp'].get_end_iter()),
+            'set-mark-command'      : lambda msg: self.set_mark(),
+            'set-mark-move-left'    : lambda msg: self.set_mark(append = 'left'),
+            'set-mark-move-right'   : lambda msg: self.set_mark(append = 'right'),
+            'set-mark-move-up'      : lambda msg: self.set_mark(append = 'up'),
+            'set-mark-move-down'    : lambda msg: self.set_mark(append = 'down'),
+            'set-mark-move-start'   : lambda msg: self.set_mark(append = 'start'),
+            'set-mark-move-end'     : lambda msg: self.set_mark(append = 'end'),
+            'set-mark-select-all'   : lambda msg: ( self.set_mark(self.buff['disp'].get_end_iter()),
                                                     self.place_cursor(self.buff['disp'].get_start_iter()),
                                                     ),
             }
@@ -2033,7 +2033,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         if task != 'char':
             text_to_kill = self.buff['disp'].get_text(target_iter, self.get_cursor_iter())
 
-            if msg['prev_cmd'] == 'backward_delete_{0}'.format(task):
+            if msg['prev_cmd'] == 'backward-delete-{0}'.format(task):
                 zKillRing.prepend_killing(text_to_kill)
             else:
                 zKillRing.kill(text_to_kill)
@@ -2052,7 +2052,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
         if task != 'char':
             text_to_kill = self.buff['disp'].get_text(self.get_cursor_iter(), target_iter)
 
-            if msg['prev_cmd'] == 'forward_delete_{0}'.format(task):
+            if msg['prev_cmd'] == 'forward-delete-{0}'.format(task):
                 zKillRing.append_killing(text_to_kill)
             else:
                 zKillRing.kill(text_to_kill)
@@ -2093,7 +2093,7 @@ class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified
             else:
                 self.__prev_yank_bounds = ( )
         else:
-            if msg['prev_cmd'] in [ 'kill_ring_yank', 'kill_ring_yank_pop' ]:
+            if msg['prev_cmd'] in [ 'kill-ring-yank', 'kill-ring-yank-pop' ]:
                 yanked_text = kr.circulate_resurrection()
 
                 if yanked_text:

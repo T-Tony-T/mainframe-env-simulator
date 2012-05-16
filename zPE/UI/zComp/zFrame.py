@@ -20,10 +20,10 @@ import gobject
 class zSplitWindow(z_ABC, gtk.Frame):
     '''A Split-Window Frame with DnD Splitting Supported'''
     global_func_list = [
-        'window_split_horz',
-        'window_split_vert',
-        'window_delete',
-        'window_delete_other',
+        'window-split-horz',
+        'window-split-vert',
+        'window-delete',
+        'window-delete-other',
         ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -32,10 +32,10 @@ class zSplitWindow(z_ABC, gtk.Frame):
 
     def func_callback_map_generator(self, frame):
         rv_dic = {
-            'window_split_horz'   : lambda msg: self.window_split_horz(frame),
-            'window_split_vert'   : lambda msg: self.window_split_vert(frame),
-            'window_delete'       : lambda msg: self.window_delete(frame),
-            'window_delete_other' : lambda msg: self.window_delete_other(frame),
+            'window-split-horz'   : lambda msg: self.window_split_horz(frame),
+            'window-split-vert'   : lambda msg: self.window_split_vert(frame),
+            'window-delete'       : lambda msg: self.window_delete(frame),
+            'window-delete-other' : lambda msg: self.window_delete_other(frame),
             }
         if zSplitWindow.func_callback_map:
             for (k, v) in zSplitWindow.func_callback_map.iteritems():

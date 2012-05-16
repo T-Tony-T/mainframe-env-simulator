@@ -800,12 +800,12 @@ class zStrokeListener(gobject.GObject):
                     self.emit('z_activate', self.__build_msg(widget, stroke, 'Accept'))
                     self.__update_last_cmd('Activate')
 
-                elif self.__is_enabled_func('complete_list'):
+                elif self.__is_enabled_func('complete-list'):
                     # list completion is enabled, execute it if mapped
-                    if 'complete_list' in self.func_callback_map:
-                        self.func_callback_map['complete_list']()
-                    elif 'complete_list' in zStrokeListener.global_func_callback_map:
-                        zStrokeListener.global_func_callback_map['complete_list']()
+                    if 'complete-list' in self.func_callback_map:
+                        self.func_callback_map['complete-list']()
+                    elif 'complete-list' in zStrokeListener.global_func_callback_map:
+                        zStrokeListener.global_func_callback_map['complete-list']()
 
             return True
         # no Activating
@@ -1167,7 +1167,7 @@ class zComplete(gobject.GObject):
         'text', 'func', 'path', 'file', 'dir',
         ]
 
-    def __init__(self, widget, task = 'text'):
+    def __init__(self, widget, task = 'text', append_space = False):
         '''
         widget
             the widget that is to be binded to this completer
@@ -1176,6 +1176,7 @@ class zComplete(gobject.GObject):
 
         self.widget = widget
         self.set_completion_task(task)
+        self.append_space = append_space
 
         self.__reset_complete_list()
 
@@ -1248,7 +1249,7 @@ class zComplete(gobject.GObject):
 
     ### supporting function
     def __complete(self, normalized_text, task):
-        # check for unique complete
+        # check for possible completion(s)
         if not len(self.__comp_list):
             return True # no completion, early return
 
@@ -1266,6 +1267,10 @@ class zComplete(gobject.GObject):
             # if the text corresponding to a dir, append the path separator to it
             if os.path.isdir(normalized_text):
                 normalized_text += os.path.sep
+
+            # if needed, append 1 space
+            if self.append_space:
+                normalized_text += ' '
 
             self.__reset_complete_list()
         else:
@@ -1381,7 +1386,7 @@ class zComplete(gobject.GObject):
         if msg['stroke'] in key_binding  and  key_binding[msg['stroke']] in self.widget.global_func_list:
             func = key_binding[msg['stroke']]
 
-            if func in [ 'complete', 'complete_list' ]:
+            if func in [ 'complete', 'complete-list' ]:
                 if self.__try_completing:
                     # already completing, ignore
                     return

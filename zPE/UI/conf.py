@@ -113,93 +113,93 @@ DEFAULT_FUNC_KEY_BIND_KEY = [
     ]
 
 DEFAULT_FUNC_KEY_BIND = {
-    # need to be sync with "GUI_Readme.html"
+    # need to be sync with "http://code.google.com/p/mainframe-env-simulator/wiki/GuiKeyBinding"
 
     # split window manipulation; required by zSplitWindow
-    'window_split_horz'     : {
+    'window-split-horz'     : {
         'emacs' : 'C-x 3',
         'vi'    : '',
         'other' : '',
         },
-    'window_split_vert'     : {
+    'window-split-vert'     : {
         'emacs' : 'C-x 2',
         'vi'    : '',
         'other' : '',
         },
-    'window_delete'         : {
+    'window-delete'         : {
         'emacs' : 'C-x 0',
         'vi'    : '',
         'other' : '',
         },
-    'window_delete_other'   : {
+    'window-delete-other'   : {
         'emacs' : 'C-x 1',
         'vi'    : '',
         'other' : '',
         },
 
     # buffer manipulation; required by zEdit
-    'buffer_open'           : {
+    'buffer-open'           : {
         'emacs' : 'C-x C-f',
         'vi'    : '',
         'other' : 'C-o',
         },
-    'buffer_save'           : {
+    'buffer-save'           : {
         'emacs' : 'C-x C-s',
         'vi'    : '',
         'other' : 'C-s',
         },
-    'buffer_save_as'        : {
+    'buffer-save-as'        : {
         'emacs' : 'C-x C-w',
         'vi'    : '',
         'other' : 'C-S',
         },
-    'buffer_close'          : {
+    'buffer-close'          : {
         'emacs' : 'C-x k',
         'vi'    : '',
         'other' : 'F4',
         },
 
-    'buffer_undo'           : {
+    'buffer-undo'           : {
         'emacs' : 'C-x u',
         'vi'    : '',
         'other' : 'C-z',
         },
-    'buffer_redo'           : {
+    'buffer-redo'           : {
         'emacs' : '',
         'vi'    : '',
         'other' : 'C-y',
         },
 
     # tab manipulation; required by zEdit
-    'tabbar_mode'           : {
+    'tabbar-mode'           : {
         'emacs' : 'F7',
         'vi'    : '',
         'other' : 'F7',
         },
-    'tabbar_prev'           : {
+    'tabbar-prev'           : {
         'emacs' : 'C-Left',
         'vi'    : '',
         'other' : 'C-Left',
         },
-    'tabbar_next'           : {
+    'tabbar-next'           : {
         'emacs' : 'C-Right',
         'vi'    : '',
         'other' : 'C-Right',
         },
 
     # editor related functions; required by zTextView and/or zEntry
-    'align_line'            : {
+    'align-line'            : {
         'emacs' : '',
         'vi'    : '',
         'other' : '',
         },
-    'align_region'          : {
+    'align-region'          : {
         'emacs' : 'C-M-\\',
         'vi'    : '',
         'other' : '',
         },
 
-    'align_or_complete'     : {
+    'align-or-complete'     : {
         'emacs' : 'TAB',
         'vi'    : '',
         'other' : 'TAB',
@@ -210,153 +210,153 @@ DEFAULT_FUNC_KEY_BIND = {
         'vi'    : '',
         'other' : '',
         },
-    'complete_list'         : {
+    'complete-list'         : {
         'emacs' : 'M-/',
         'vi'    : '',
         'other' : '',
         },
 
-    'backward_char'         : {
+    'backward-char'         : {
         'emacs' : 'C-b',
         'vi'    : '',
         'other' : '',
         },
-    'backward_delete_char'  : {
+    'backward-delete-char'  : {
         'emacs' : 'BackSpace',
         'vi'    : '',
         'other' : 'BackSpace',
         },
-    'forward_char'          : {
+    'forward-char'          : {
         'emacs' : 'C-f',
         'vi'    : '',
         'other' : '',
         },
-    'forward_delete_char'   : {
+    'forward-delete-char'   : {
         'emacs' : 'Delete',
         'vi'    : '',
         'other' : 'Delete',
         },
 
-    'backward_word'         : {
+    'backward-word'         : {
         'emacs' : 'M-b',
         'vi'    : '',
         'other' : '',
         },
-    'backward_delete_word'  : {
+    'backward-delete-word'  : {
         'emacs' : 'M-D',
         'vi'    : '',
         'other' : '',
         },
-    'forward_word'          : {
+    'forward-word'          : {
         'emacs' : 'M-f',
         'vi'    : '',
         'other' : '',
         },
-    'forward_delete_word'   : {
+    'forward-delete-word'   : {
         'emacs' : 'M-d',
         'vi'    : '',
         'other' : '',
         },
 
-    'backward_line'         : {
+    'backward-line'         : {
         'emacs' : 'C-a',
         'vi'    : '',
         'other' : '',
         },
-    'backward_delete_line'  : {
+    'backward-delete-line'  : {
         'emacs' : 'C-K',
         'vi'    : '',
         'other' : '',
         },
-    'forward_line'          : {
+    'forward-line'          : {
         'emacs' : 'C-e',
         'vi'    : '',
         'other' : '',
         },
-    'forward_delete_line'   : {
+    'forward-delete-line'   : {
         'emacs' : 'C-k',
         'vi'    : '',
         'other' : '',
         },
 
-    'backward_para'         : {
+    'backward-para'         : {
         'emacs' : 'M-{',
         'vi'    : '',
         'other' : '',
         },
-    'backward_delete_para'  : {
+    'backward-delete-para'  : {
         'emacs' : 'M-K',
         'vi'    : '',
         'other' : '',
         },
-    'forward_para'          : {
+    'forward-para'          : {
         'emacs' : 'M-}',
         'vi'    : '',
         'other' : '',
         },
-    'forward_delete_para'   : {
+    'forward-delete-para'   : {
         'emacs' : 'M-k',
         'vi'    : '',
         'other' : '',
         },
 
-    'kill_region'           : {
+    'kill-region'           : {
         'emacs' : 'C-w',
         'vi'    : '',
         'other' : 'C-x',
         },
-    'kill_ring_save'        : {
+    'kill-ring-save'        : {
         'emacs' : 'M-w',
         'vi'    : '',
         'other' : 'C-c',
         },
-    'kill_ring_yank'        : {
+    'kill-ring-yank'        : {
         'emacs' : 'C-y',
         'vi'    : '',
         'other' : 'C-v',
         },
-    'kill_ring_yank_pop'    : {
+    'kill-ring-yank-pop'    : {
         'emacs' : 'M-y',
         'vi'    : '',
         'other' : '',
         },
 
-    'set_mark_command'      : {
+    'set-mark-command'      : {
         'emacs' : 'C-@',
         'vi'    : '',
         'other' : '',
         },
-    'set_mark_move_left'    : {
+    'set-mark-move-left'    : {
         'emacs' : 'S-Left',
         'vi'    : '',
         'other' : 'S-Left',
         },
-    'set_mark_move_right'   : {
+    'set-mark-move-right'   : {
         'emacs' : 'S-Right',
         'vi'    : '',
         'other' : 'S-Right',
         },
-    'set_mark_move_up'      : {
+    'set-mark-move-up'      : {
         'emacs' : 'S-Up',
         'vi'    : '',
         'other' : 'S-Up',
         },
-    'set_mark_move_down'    : {
+    'set-mark-move-down'    : {
         'emacs' : 'S-Down',
         'vi'    : '',
         'other' : 'S-Down',
         },
-    'set_mark_move_start'   : {
+    'set-mark-move-start'   : {
         'emacs' : 'S-Home',
         'vi'    : '',
         'other' : 'S-Home',
         },
-    'set_mark_move_end'     : {
+    'set-mark-move-end'     : {
         'emacs' : 'S-End',
         'vi'    : '',
         'other' : 'S-End',
         },
-    'set_mark_select_all'   : {
+    'set-mark-select-all'   : {
         'emacs' : 'C-x h',
         'vi'    : '',
         'other' : 'C-a',
@@ -365,34 +365,34 @@ DEFAULT_FUNC_KEY_BIND = {
 
     # functions that are not required by any z* module
     # top-level functions
-    'prog_show_config'      : {
+    'prog-show-config'      : {
         'emacs' : 'C-c c',
         'vi'    : '',
         'other' : 'C-p',
         },
-    'prog_show_error'       : {
+    'prog-show-error'       : {
         'emacs' : 'C-c e',
         'vi'    : '',
         'other' : 'C-J',
         },
-    'prog_show_about'       : {
+    'prog-show-about'       : {
         'emacs' : '',
         'vi'    : '',
         'other' : '',
         },
-    'prog_quit'             : {
+    'prog-quit'             : {
         'emacs' : 'C-x C-c',
         'vi'    : '',
         'other' : 'C-q',
         },
 
     # zPE related functions
-    'zPE_submit'            : {
+    'zPE-submit'            : {
         'emacs' : 'F9',
         'vi'    : '',
         'other' : 'F9',
         },
-    'zPE_submit_with_JCL'   : {
+    'zPE-submit-with-JCL'   : {
         'emacs' : 'F8',
         'vi'    : '',
         'other' : 'F8',
@@ -574,6 +574,7 @@ def read_key_binding():
         line = line[:-1]        # get rid of the '\n'
 
         (k, v) = re.split('[ \t]*=[ \t]*', line, maxsplit=1)
+        k = k.replace('_', '-') # normalize delimiter
 
         if __TRACE_KEY_SCAN:
             sys.stderr.write('\n== Style::{0} => {1}:\n'.format(Config['MISC']['key_binding'], line))

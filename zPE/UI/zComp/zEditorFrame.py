@@ -36,20 +36,20 @@ import gtk
 class zEdit(z_ABC, gtk.VBox):
     '''A Multi-Buffer Text Editor with an Internal File Browser'''
     global_func_list = [
-        'buffer_open',
-        'buffer_save',
-        'buffer_save_as',
-        'buffer_close',
+        'buffer-open',
+        'buffer-save',
+        'buffer-save-as',
+        'buffer-close',
 
-        'buffer_undo',
-        'buffer_redo',
+        'buffer-undo',
+        'buffer-redo',
 
-        'caps_on',
-        'caps_off',
+        'caps-on',
+        'caps-off',
 
-        'tabbar_mode',
-        'tabbar_prev',
-        'tabbar_next',
+        'tabbar-mode',
+        'tabbar-prev',
+        'tabbar-next',
         ]
     # only make the following function bindable, no actual binding applied
     zStrokeListener.global_add_func_registry(global_func_list)
@@ -116,20 +116,20 @@ class zEdit(z_ABC, gtk.VBox):
         self.default_func_callback = {
             # although works in most cases, ugly behavior.
             # rebind (overrid) them by setting zEdit.func_callback_map beforehand
-            'buffer_open'    : lambda msg: self.set_buffer(None, 'dir'),
-            'buffer_save'    : lambda msg: self.save_buffer(None),
-            'buffer_save_as' : lambda msg: self.save_buffer_as(None),
-            'buffer_close'   : lambda msg: self.rm_buffer(None),
+            'buffer-open'    : lambda msg: self.set_buffer(None, 'dir'),
+            'buffer-save'    : lambda msg: self.save_buffer(None),
+            'buffer-save-as' : lambda msg: self.save_buffer_as(None),
+            'buffer-close'   : lambda msg: self.rm_buffer(None),
 
-            'buffer_undo'    : lambda msg: self.undo(),
-            'buffer_redo'    : lambda msg: self.redo(),
+            'buffer-undo'    : lambda msg: self.undo(),
+            'buffer-redo'    : lambda msg: self.redo(),
 
-            'caps_on'        : lambda msg: self.active_buffer.set_caps_on(True),
-            'caps_off'       : lambda msg: self.active_buffer.set_caps_on(False),
+            'caps-on'        : lambda msg: self.active_buffer.set_caps_on(True),
+            'caps-off'       : lambda msg: self.active_buffer.set_caps_on(False),
 
-            'tabbar_mode'    : lambda msg: zEdit.toggle_tabbar_mode(),
-            'tabbar_prev'    : lambda msg: self.switch_tab_to('prev'),
-            'tabbar_next'    : lambda msg: self.switch_tab_to('next'),
+            'tabbar-mode'    : lambda msg: zEdit.toggle_tabbar_mode(),
+            'tabbar-prev'    : lambda msg: self.switch_tab_to('prev'),
+            'tabbar-next'    : lambda msg: self.switch_tab_to('next'),
             }
 
         if zEdit.func_callback_map:
