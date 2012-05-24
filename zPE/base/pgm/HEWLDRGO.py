@@ -48,6 +48,7 @@ from threading import Timer
 import zPE.base.core.cpu
 import zPE.base.core.mem
 
+# relative import resource file
 from hewldrgo_config import * # read resource file for LDR config + rc
 
 

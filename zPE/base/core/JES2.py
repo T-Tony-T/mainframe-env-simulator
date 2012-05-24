@@ -4,8 +4,10 @@
 from zPE.util import *
 from zPE.util.global_config import *
 
+import zPE.util.sysmsg as sysmsg
+
 import zPE.util.spool as spool
-import SPOOL as core_SPOOL
+import zPE.base.core.SPOOL as core_SPOOL
 
 import zPE.base.conf
 
@@ -410,8 +412,7 @@ def init_step(step):
 
                 return 'steplib'
 
-            sp3.append(ctrl, 'IGD103I {0}'.format(JES['file']),
-                       ' ALLOCATED TO DDNAME STEPLIB\n')
+            sp3.append(ctrl, sysmsg.IGD103('STEPLIB'), '\n')
             ddcard['STAT'] = DD_STATUS['normal']
         alloc = True
 
@@ -456,7 +457,7 @@ def init_step(step):
                 if step.dd[ddname][ddindx]['DSN'] != '':
                     # file
                     f_type = 'file'
-                    v_path = [ ddname ]
+                    v_path = step.dd[ddname][ddindx]['DSN']
                     r_path = step.dd[ddname][ddindx]['DSN']
                 else:
                     # tmp
@@ -475,10 +476,13 @@ def init_step(step):
                 }
 
         if ddindx:              # DD concatenation
-            msg = ' CONCAT    TO {0}\n'.format(ddname)
+            action = 'CONCAT   '
         else:                   # new DD
-            msg = ' ALLOCATED TO {0}\n'.format(ddname)
-        sp3.append(ctrl, 'IEF237I {0:4}'.format(JES[f_type]), msg)
+            action = 'ALLOCATED'
+        if f_type in [ 'file', 'tmp' ]:
+            sp3.append(ctrl, sysmsg.IGD103(ddname, f_type, action), '\n')
+        else:
+            sp3.append(ctrl, sysmsg.IEF237(ddname, f_type, action), '\n')
         step.dd[ddname][ddindx]['STAT'] = DD_STATUS['normal']
         alloc = True
 
@@ -517,8 +521,9 @@ def finish_step(step):
             for ddcard in step.dd['STEPLIB']:
                 path = ddcard['DSN']
                 action = DISP_ACTION[step.dd.get_act('STEPLIB', step.rc)]
-                sp3.append(ctrl, 'IGD104I {0:<44} '.format(conv_back(path)),
-                           '{0:<10} DDNAME=STEPLIB\n'.format(action + ','))
+                sp3.append(ctrl,
+                           sysmsg.IGD104('STEPLIB', conv_back(path), action),
+                           '\n')
 
         ddindx_map = {}    # { ddname : index_into_dd_concatenation, }
         for ddname in step.dd.list():
@@ -545,13 +550,20 @@ def finish_step(step):
                 if not ddindx:  # first DD concatenated
                     path = spool.path_of(ddname)
                 else:
-                    path = step.dd[ddname][ddindx]['TMP_SP']['real_path']
+                    path = step.dd[ddname][ddindx]['TMP_SP']['virtual_path']
                 action = SP_MODE['i'] # must be input data
             else:
                 path = spool.path_of(ddname)
                 action = SP_MODE[spool.mode_of(ddname)]
-            sp3.append(ctrl, 'IEF285I   {0:<44}'.format(conv_back(path)),
-                       ' {0}\n'.format(action))
+            if step.dd[ddname][ddindx]['TMP_SP']['f_type'] in [ 'file', 'tmp' ]:
+                action = DISP_ACTION[step.dd.get_act('STEPLIB', step.rc)]
+                sp3.append(ctrl,
+                           sysmsg.IGD104(ddname, conv_back(path), action),
+                           '\n')
+            else:
+                sp3.append(ctrl,
+                           sysmsg.IEF285(ddname, conv_back(path), action),
+                           '\n')
 
             if ( step.dd.is_concat(ddname)  and # concatenated DDs
                  ddname not in spool.list()     # already removed
@@ -576,7 +588,7 @@ def finish_step(step):
 
     sp3.append(' ', 'IEF373I STEP/{0:<8}/START '.format(step.name),
                strftime('%Y%j.%H%M\n', localtime(step.start)))
-    sp3.append(' ', 'IEF373I STEP/{0:<8}/STOP  '.format(step.name),
+    sp3.append(' ', 'IEF374I STEP/{0:<8}/STOP  '.format(step.name),
                strftime('%Y%j.%H%M'),
                ' CPU {0:>4}MIN {1:05.2f}SEC'.format(int(diff_min), diff_sec),   
                ' SRB {0:>4}MIN {1:05.2f}SEC'.format(int(diff_min), diff_sec),
@@ -688,7 +700,7 @@ def __JES2_STAT(msg, job_time):
 
 def __READ_UNTIL(fp, fn, dlm, nextline = None):
     # prepare spool
-    spt = core_SPOOL.pop_new(fn, 'i', 'instream', [])
+    spt = core_SPOOL.pop_new(fn, 'i', 'instream', [], [ fn ])
 
     # read until encountering dlm
     if nextline == None:        # initial read not occured already

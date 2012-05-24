@@ -4,7 +4,7 @@ from zPE.util.global_config import *
 import zPE.base.conf
 import zPE.base.core.JES2
 import zPE.base.pgm
-import zfetch
+import zPE.scripts.zfetch
 
 import os, sys
 import argparse
@@ -32,7 +32,7 @@ def main(argv = sys.argv):
     rc = submit(args.job_file)
 
     if args.output:
-        zfetch.main(['zfetch', '-o', args.output[0], 'last'])
+        zPE.scripts.zfetch.main(['zfetch', '-o', args.output[0], 'last'])
 
     return rc
 

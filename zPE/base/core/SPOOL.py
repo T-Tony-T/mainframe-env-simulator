@@ -6,7 +6,7 @@
 from zPE.util.global_config import *
 import zPE.util.spool
 
-import IO_JES2, IO_SMS
+import zPE.base.core.IO_JES2 as IO_JES2, zPE.base.core.IO_SMS as IO_SMS
 
 import sys                      # for sys.maxsize
 import re

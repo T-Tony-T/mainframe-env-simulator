@@ -5,9 +5,9 @@ from zPE.util.conv import *
 from zPE.util.excptn import *
 from zPE.util.global_config import *
 
-from reg import GPR, SPR, Register, RegisterPair
-from mem import Memory
-from asm import len_op, X_, P_, F_
+from zPE.base.core.reg import GPR, SPR, Register, RegisterPair
+from zPE.base.core.mem import Memory
+from zPE.base.core.asm import len_op, X_, P_, F_
 
 
 ### Interface Function Definition

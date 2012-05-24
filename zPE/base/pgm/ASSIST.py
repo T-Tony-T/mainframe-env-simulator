@@ -39,11 +39,12 @@ import zPE.base.core.SPOOL as core_SPOOL
 import zPE.base.core.asm
 import zPE.base.core.cpu
 
-import ASMA90, HEWLDRGO
+import zPE.base.pgm.ASMA90, zPE.base.pgm.HEWLDRGO
 
 import re
 from time import time, strftime
 
+# relative import resource files
 from asma90_config import *   # read resource file for ASM config + rc
 from hewldrgo_config import * # read resource file for LDR config + rc
 
@@ -99,8 +100,8 @@ def init(step):
             })
 
     TIME['asm_start'] = time()
-    ASMA90.pass_1()
-    ASMA90.pass_2()
+    zPE.base.pgm.ASMA90.pass_1()
+    zPE.base.pgm.ASMA90.pass_2()
     TIME['asm_end'] = time()
 
     err_cnt = __PARSE_OUT_ASM(limit)
@@ -165,7 +166,7 @@ def init(step):
 
     # load OBJMOD into memory, and execute it
     TIME['exec_start'] = time()
-    rc = HEWLDRGO.go(HEWLDRGO.load())
+    rc = zPE.base.pgm.HEWLDRGO.go(zPE.base.pgm.HEWLDRGO.load())
     TIME['exec_end'] = time()
 
     if 'FT05F001' in FILE_MISSING:
