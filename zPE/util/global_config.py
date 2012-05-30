@@ -51,12 +51,13 @@ def mark4future(feature):
 
 ### Environment Variables
 
+HOME_PATH = os.path.expanduser('~')
 CONFIG_PATH = {
-    'dir'       : os.path.join(os.path.expanduser('~'), '.zPE'),
-    'rc'        : os.path.join(os.path.expanduser('~'), '.zPE', 'config'),
-    'data'      : os.path.join(os.path.expanduser('~'), '.zPE', 'data'),
-    'ICH70001I' : os.path.join(os.path.expanduser('~'), '.zPE', 'data', 'ICH70001I'),
-    'SPOOL'     : os.path.join(os.path.expanduser('~'), '.zPE', 'data', 'SPOOL.sqlite'),
+    'dir'       : os.path.join(HOME_PATH, '.zPE'),
+    'rc'        : os.path.join(HOME_PATH, '.zPE', 'config'),
+    'data'      : os.path.join(HOME_PATH, '.zPE', 'data'),
+    'ICH70001I' : os.path.join(HOME_PATH, '.zPE', 'data', 'ICH70001I'),
+    'SPOOL'     : os.path.join(HOME_PATH, '.zPE', 'data', 'SPOOL.sqlite'),
     }
 
 

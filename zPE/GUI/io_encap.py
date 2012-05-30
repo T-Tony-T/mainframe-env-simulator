@@ -1,4 +1,4 @@
-# this is the zPE IO encapsulation for UI
+# this is the zPE IO encapsulation for GUI
 import os, sys
 
 # this module implements the following APIs:

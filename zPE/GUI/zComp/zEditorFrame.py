@@ -1,6 +1,6 @@
 # this is the editor-frame module of the zComponent package
 
-import io_encap
+import zPE.GUI.io_encap as io_encap
 # this module requires io_encap to have the following APIs:
 #
 #   is_binary(fn_list):         test if the fn_list corresponding to a binary file
@@ -14,14 +14,15 @@ import io_encap
 #   flush(buff):                write content from the zEditBuffer to the corresponding file
 #
 
-from zBase import z_ABC, zTheme
-from zFileManager import zDisplayPanel, zFileManager
-from zStrokeParser import zStrokeListener
-from zSyntaxParser import zSyntaxParser
-from zText import zLastLine, zTextView, zUndoStack, zBufferChange
-from zWidget import zToolButton, zComboBox, zTabbar
+from zPE.GUI.zComp.zBase         import z_ABC, zTheme
+from zPE.GUI.zComp.zFileManager  import zDisplayPanel, zFileManager
+from zPE.GUI.zComp.zStrokeParser import zStrokeListener
+from zPE.GUI.zComp.zSyntaxParser import zSyntaxParser
+from zPE.GUI.zComp.zText         import zLastLine, zTextView
+from zPE.GUI.zComp.zTextBuffer   import zUndoStack, zBufferChange
+from zPE.GUI.zComp.zWidget       import zToolButton, zComboBox, zTabbar
 
-import majormode
+import zPE.GUI.majormode as majormode
 
 import os, copy, re
 import pygtk
@@ -1526,3 +1527,13 @@ class zEditBuffer(z_ABC):
             zBufferChange(textbuffer.get_text(start_iter, end_iter, False), start_iter.get_offset(), 'd')
             )
     ### end of supporting function
+
+
+
+######## ######## ######## ######## ########
+########        MODULE INIT         ########
+######## ######## ######## ######## ########
+
+# open default buffers
+for buff_name, buff_type in zEditBuffer.SYSTEM_BUFFER.iteritems():
+    zEditBuffer(buff_name, buff_type)

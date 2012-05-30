@@ -5,16 +5,16 @@ RULES
 
 2)  The mode file need to be placed in either the config folder
     (usually ~/.zPE/) or the system major mode folder
-    (installation_path/zPE/UI/zMajorMode/) in order to be loaded.
+    (installation_path/zPE/GUI/zMajorMode/) in order to be loaded.
     The former take preference.
 
 3)  If the name of the major mode is "test.py", it have to define
     a class called "TestMode", which have to be derived from
-    "zPE.UI.basemode.BaseMode" class.
+    "zPE.GUI.basemode.BaseMode" class.
     Any module in the two pathes without defining such a class will
     be ignored silently.
     Any module in the the pathes derives such a class not from
-    "zPE.UI.basemode.BaseMode" class will cause a warning message.
+    "zPE.GUI.basemode.BaseMode" class will cause a warning message.
 
 4)  A major mode can override any methods defined in the BaseMode,
     but newly defined methods and members will not be seen outside

@@ -1,15 +1,5 @@
 # this is the zComponent package
 
-from z_support    import *
-
-from zBase        import *
-from zConsole     import *
-from zEditorFrame import *
-from zFileManager import *
-from zFrame       import *
-from zText        import *
-from zWidget      import *
-
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -34,7 +24,3 @@ style 'zTheme' {
 }
 widget '*' style 'zTheme'
 ''')
-
-# open default buffers
-for buff_name, buff_type in zEditBuffer.SYSTEM_BUFFER.iteritems():
-    zEditBuffer(buff_name, buff_type)

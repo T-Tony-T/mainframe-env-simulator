@@ -38,7 +38,7 @@ class BaseMode(object):
     Any major mode need to be derived from this class
     '''
 
-    from zComp.zText import zBufferChange, zAtomicChange, zCompletionDict
+    from zPE.GUI.zComp.zTextBuffer import zBufferChange, zAtomicChange, zCompletionDict
 
     # define all completion dictionary here
     _cp_dict_ = {

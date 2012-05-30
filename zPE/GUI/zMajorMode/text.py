@@ -1,6 +1,6 @@
 # Major Mode : Text Mode
 
-from zPE.UI.basemode import BaseMode
+from zPE.GUI.basemode import BaseMode
 
 LC = {                          # local config
     'ast-map' : {

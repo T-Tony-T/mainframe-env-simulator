@@ -1,6 +1,6 @@
 # this is the console module of the zComponent package
 
-from zBase import zTheme
+from zPE.GUI.zComp.zBase import zTheme
 
 import os, sys
 import pygtk

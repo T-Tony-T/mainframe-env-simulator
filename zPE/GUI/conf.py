@@ -1,10 +1,5 @@
-from zPE.UI import min_import
-
-[ KEY_BINDING_RULE_MKUP, zSP_PARSE_KEY_BINDING ] = min_import(
-    'zPE.UI.zComp.zStrokeParser', [ 'KEY_BINDING_RULE_MKUP', 'parse_key_binding' ], 0
-    )
-
-import io_encap
+import zPE.GUI.io_encap as io_encap
+from zPE.GUI.zComp.zStrokeParser import KEY_BINDING_RULE_MKUP, parse_key_binding as zSP_PARSE_KEY_BINDING
 
 import os, sys
 import pygtk
@@ -19,6 +14,14 @@ import re                       # for parsing the string
 __TRACE_KEY_SCAN = False
 
 
+# import and update path
+from zPE.util.global_config import CONFIG_PATH, HOME_PATH
+CONFIG_PATH['gui_rc']    = os.path.join(HOME_PATH, '.zPE', 'gui.conf')
+CONFIG_PATH['key_emacs'] = os.path.join(HOME_PATH, '.zPE', 'key.emacs')
+#CONFIG_PATH['key_vi']    = os.path.join(HOME_PATH, '.zPE', 'key.vi')
+CONFIG_PATH['key_other'] = os.path.join(HOME_PATH, '.zPE', 'key.other')
+
+
 # constant that will be treated as false
 STR_FALSE = [ '0', 'nil', 'false', 'False' ]
 
@@ -26,7 +29,6 @@ STR_FALSE = [ '0', 'nil', 'false', 'False' ]
 MONO_FONT = {
     # 'font family name' : pango.FontFamily object
     }
-
 for font in gtk.gdk.pango_context_get().list_families():
     if font.is_monospace():
         MONO_FONT[font.get_name()] = font
@@ -58,8 +60,19 @@ COLOR_LIST = {
     'white'             : '#FFFFFF',
     'yellow'            : '#FFFF00',
     }
-
 INVERSE_COLOR_LIST = dict( [ (v, k) for (k, v) in COLOR_LIST.iteritems() ] )
+
+# major editing mode map
+MODE_MAP = {
+    # mode_string : mode_object
+    }
+DEFAULT_BUFF_MODE_MAP = {
+    'scratch' : 'ASM Mode',     # scratch file
+    'file'    : 'ASM Mode',     # regular file
+    'dir'     : 'Text Mode',    # directory
+    'disp'    : 'Text Mode',    # display panel
+    }
+
 
 ## Configurable Definition
 DEFAULT = {
@@ -101,7 +114,7 @@ DEFAULT = {
         },
 
     'ENV'       : {
-        'STARTING_PATH' : '~',
+        'STARTING_PATH' : HOME_PATH,
         },
     }
 
@@ -441,7 +454,7 @@ def init_rc():
         }
 
     Config['ENV']       = {
-        'starting_path' : io_encap.norm_path( DEFAULT['ENV']['STARTING_PATH'] ),
+        'starting_path' : DEFAULT['ENV']['STARTING_PATH'],
         }
 
 def init_key_binding():
@@ -455,14 +468,6 @@ def init_key_binding():
     if '' in Config['KEY_BINDING']:
         del Config['KEY_BINDING'][''] # remove empty binding
 
-
-CONFIG_PATH = {
-    'dir'       : os.path.join(os.path.expanduser('~'), '.zPE'),
-    'gui_rc'    : os.path.join(os.path.expanduser('~'), '.zPE', 'gui.conf'),
-    'key_emacs' : os.path.join(os.path.expanduser('~'), '.zPE', 'key.emacs'),
-#    'key_vi'    : os.path.join(os.path.expanduser('~'), '.zPE', 'key.vi'),
-    'key_other' : os.path.join(os.path.expanduser('~'), '.zPE', 'key.other'),
-    }
 
 def read_rc_all():
     read_rc()

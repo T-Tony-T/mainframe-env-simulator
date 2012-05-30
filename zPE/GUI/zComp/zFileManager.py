@@ -1,6 +1,6 @@
 # this is the file-manager module of the zComponent package
 
-import io_encap
+import zPE.GUI.io_encap as io_encap
 # this module requires io_encap to have the following APIs:
 #
 #   is_file(fn_list):           test if the fn_list corresponding to a file
@@ -13,10 +13,10 @@ import io_encap
 #
 
 from zPE.util import spool_decode_printable
-from z_support import XPM, PIXBUF
+from zPE.GUI.zComp.z_support import XPM, PIXBUF
 
-from zBase import zTheme
-from zText import zEntry, zTextView
+from zPE.GUI.zComp.zBase import zTheme
+from zPE.GUI.zComp.zText import zEntry, zTextView
 
 import os, stat, time, re
 import sqlite3

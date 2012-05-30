@@ -1,10 +1,10 @@
 # this is the frame module of the zComponent package
 
-from z_support import XPM, PIXBUF, SUPPORT
+from zPE.GUI.zComp.z_support     import XPM, PIXBUF, SUPPORT
 
-from zBase import z_ABC, zTheme
-from zEditorFrame import zEdit
-from zStrokeParser import zStrokeListener
+from zPE.GUI.zComp.zBase         import z_ABC, zTheme
+from zPE.GUI.zComp.zEditorFrame  import zEdit
+from zPE.GUI.zComp.zStrokeParser import zStrokeListener
 
 import os, sys, time
 import pygtk

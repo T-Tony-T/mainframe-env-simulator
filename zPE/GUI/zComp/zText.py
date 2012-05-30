@@ -1,280 +1,401 @@
 # this is the text module (and their supports) of the zComponent package
 
-import io_encap
+import zPE.GUI.io_encap as io_encap
 # this module requires io_encap to have the following APIs:
 #
 #   norm_path_list(fn_list):    return the normalized absolute path
 #   norm_path(full_path):       same as above; take a string as argument
 #
 
-import os, sys, re
+import os, re
 import pygtk
 pygtk.require('2.0')
 import gtk
 import gobject, pango
 
+from zPE.GUI.zComp.zBase       import z_ABC, zTheme
+from zPE.GUI.zComp.zTextBuffer import zBufferChange, zAtomicChange, zKillRing
+
+from zPE.GUI.zComp.zStrokeParser import zStrokeListener, KEY_RE_PATTERN
+from zPE.GUI.zComp.zSyntaxParser import zSyntaxParser
+from zPE.GUI.zComp.zWidget       import zPopupMenu
+
 
 ######## ######## ######## ######## ########
-########         zUndoStack         ########
+########          zComplete         ########
 ######## ######## ######## ######## ########
 
-class zBufferChange(object):
-    '''a node keeps track of the change in a text buffer. this is used to implement undo / redo system'''
-    revert_action = {
-        'i' : 'd',
-        'd' : 'i',
+class zComplete(gobject.GObject):
+    '''
+    A completion module that can be applied to any editable widget
+    that (at least) implements the following methods:
+      - widget.is_word_end()          : test if cursor is at word end
+
+      - widget.get_current_word()     : get the word in front of the cursor
+      - widget.set_current_word(word) : set the word in front of the cursor
+
+    Notes:
+        a word is a completion unit that you wish to apply completion
+        on. for text completion, r'[a-zA-Z0-9]+' is recommended; for
+        function completion, r'[\w]+'; for path completion, r'[\S]+'
+
+    it will emit 'z_mid_of_word' signal if completion happened when
+    the cursor is not at a word-end boundary
+    '''
+
+    import zPE.GUI.majormode as __mode__
+
+    __gsignals__ = {
+        'z_mid_of_word' : (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, ()),
         }
 
-    def __init__(self, content, offset, action):
+    task_list = [               # all supported tasks
+        'text', 'func', 'path', 'file', 'dir',
+        ]
+
+    def __init__(self, widget, task = 'text', append_space = False):
         '''
-        content
-            the content that changed from the last recorded state.
-
-        offset
-            the offset into the buffer of the change above.
-
-        action
-            'i' / 'a' : the indicated content is inserted / added to the buffer
-            'd' / 'r' : the indicated content is deleted / removed from the buffer
+        widget
+            the widget that is to be binded to this completer
         '''
-        if not isinstance(content, str):
-            raise ValueError('{0}: content need to be an string!'.format(content))
-        self.content = content
+        super(zComplete, self).__init__()
 
-        if not isinstance(offset, int) or offset < 0:
-            raise ValueError('{0}: offset need to be a non-negative integer!'.format(offset))
-        self.offset  = offset
+        self.widget = widget
+        self.set_completion_task(task)
+        self.append_space = append_space
 
-        if action in [ 'i', 'a', ]:
-            self.action = 'i'
-        elif action in [ 'd', 'r', ]:
-            self.action = 'd'
+        self.__reset_complete_list()
+
+
+    def complete(self):
+        if not self.widget.get_editable():
+            return              # no need to complete, early return
+
+        # check position if it is text completion
+        if self.__task == 'text' and not self.widget.is_word_end():
+            self.__reset_complete_list()
+            self.emit('z_mid_of_word')
+            return
+
+        # increment the completion counter
+        self.__try_completing += 1
+
+        if self.__task == 'text':
+            # text completion
+            current_word = self.__generate_text_list(self.widget.get_current_line(), self.widget.get_ast())
+
+        elif self.__task == 'func':
+            # function completion
+            current_word = self.__generate_func_list(self.widget.get_current_word())
         else:
-            raise ValueError(
-                '{0}: action need to be "i" / "a" for insert / add, or "d" / "r" for delete / remove!'.format(action)
+            # path completion
+            current_word = self.__generate_path_list(self.widget.get_current_word(), self.__task)
+
+        self.__complete(current_word, self.__task)
+
+
+    def complete_list(self):
+        if not self.widget.get_editable():
+            return              # no need to complete, early return
+
+        # check position if it is text completion
+        if self.__task == 'text' and not self.widget.is_word_end():
+            self.__reset_complete_list()
+            self.emit('z_mid_of_word')
+            return
+
+        if self.__task == 'text':
+            # text completion
+            normalized_text = self.__generate_text_list(self.widget.get_current_line(), self.widget.get_ast())
+
+        elif self.__task == 'func':
+            # function completion
+            normalized_text = self.__generate_func_list(self.widget.get_current_word())
+        else:
+            # path completion
+            normalized_text = self.__generate_path_list(self.widget.get_current_word(), self.__task)
+            if '"' in normalized_text:
+                normalized_text = normalized_text.replace('"', '')
+            if re.search(r'\s', normalized_text):
+                normalized_text = ''.join(['"', normalized_text])
+
+            self.widget.set_current_word(normalized_text)
+        self.__popup_complete_list(normalized_text)
+
+
+    def set_completion_task(self, task):
+        if task not in zComplete.task_list:
+            raise ValueError('{0}: invalid task for zComplete instance.'.format(task))
+        self.__task = task
+
+
+    def clear_list(self):
+        self.__reset_complete_list()
+
+
+    ### supporting function
+    def __complete(self, normalized_text, task):
+        # check for possible completion(s)
+        if not len(self.__comp_list):
+            return True # no completion, early return
+
+        # set the joining function
+        if task == 'path':
+            text_join = lambda *arg: os.path.join(*arg)
+        else:
+            text_join = lambda *arg: ''.join(arg)
+
+        # process completion
+        if len(self.__comp_list) == 1:
+            # exact match, complete it
+            normalized_text = self.__comp_list[0]
+
+            # if the text corresponding to a dir, append the path separator to it
+            if os.path.isdir(normalized_text):
+                normalized_text += os.path.sep
+
+            # if needed, append 1 space
+            if self.append_space:
+                normalized_text += ' '
+
+            self.__reset_complete_list()
+        else:
+            # check for max complete
+            for indx in range(len(normalized_text), len(self.__comp_list[0])):
+                next_char = self.__comp_list[0][indx]
+                conflict = False
+
+                for item in self.__comp_list[1:]:
+                    if indx == len(item) or next_char != item[indx]:
+                        conflict = True
+                        break
+
+                if conflict:
+                    break
+                else:
+                    # has at least 1 char completed, reset the completion counter
+                    self.__try_completing = 0
+                    normalized_text += next_char
+
+            if self.__try_completing > 1:
+                # more than one try, switch to complete_list()
+                self.__popup_complete_list(normalized_text)
+
+        if self.__task == 'path':
+            if '"' in normalized_text:
+                normalized_text = normalized_text.replace('"', '')
+            if re.search(r'\s', normalized_text):
+                normalized_text = ''.join(['"', normalized_text])
+
+        self.widget.set_current_word(normalized_text)
+
+
+    def __generate_text_list(self, curr_line, ast):
+        self.__comp_list = self.__mode__.MODE_MAP[ast['major_mode']].complete(curr_line, ast['syntax_tree'])
+        return self.widget.get_current_word()
+
+    def __generate_func_list(self, curr_func):
+        # get the completion list
+        self.__comp_list = [ func for func in zStrokeListener.global_is_enabled_func
+                             if func.startswith(curr_func)
+                             ]
+        self.__comp_list.sort(key = str.lower) # sort alphabetically
+        return curr_func
+
+    def __generate_path_list(self, curr_path, task):
+        # normalize the path
+        if curr_path:
+            normalized_path = curr_path
+            if '"' in normalized_path:    # remove quote-marks
+                normalized_path = normalized_path.replace('"', '')
+            normalized_path = io_encap.norm_path(normalized_path)
+        else:
+            normalized_path = os.getcwd()
+
+        if re.search(r'\s', normalized_path):
+            prefix = '"'
+        else:
+            prefix = ''
+
+        # get the completion list
+        if os.path.isdir(normalized_path):
+            path = normalized_path
+            self.__comp_list = os.listdir(normalized_path)
+        else:
+            ( path, name ) = os.path.split(normalized_path)
+            self.__comp_list = [ fn for fn in os.listdir(path)
+                                 if os.path.normcase(fn).startswith(os.path.normcase(name))
+                                 ]
+
+        # sort the list alphabetically (ignore case)
+        def cmp_path(path):
+            if path[0] == '.':  # hidden file on *nix system
+                return path[1:].lower()
+            else:
+                return path.lower()
+        self.__comp_list.sort(key = cmp_path)
+
+        # expend to full path
+        self.__comp_list = [ io_encap.norm_path_list([path, fn]) for fn in self.__comp_list ]
+
+        # filter out non-dir entrys if a 'dir' task is performed
+        if task == 'dir':
+            self.__comp_list = [ fn for fn in self.__comp_list
+                                 if os.path.isdir(fn)
+                                 ]
+
+        # if the text corresponding to a dir, append the path separator to it
+        if os.path.isdir(normalized_path):
+            normalized_path += os.path.sep
+
+        # add back the prefix (leading quote), if any
+        if prefix:
+            self.__comp_list = [ ''.join(['"', fn, '"']) for fn in self.__comp_list ]
+            normalized_path = ''.join(['"', normalized_path])
+
+        return normalized_path
+
+
+    def __menu_completion_selected(self, widget, indx):
+        self.__popdown_complete_list()
+
+        # set the list to contain only the select item
+        self.__comp_list = [ self.__comp_list[indx] ]
+        # complete it
+        self.__complete(self.widget.get_text(), self.__task)
+
+    def __menu_listener_active(self, listener, msg):
+        curr_text = self.menu.curr_text
+
+        # check for function key for entry
+        key_binding = zStrokeListener.get_key_binding()
+        if msg['stroke'] in key_binding  and  key_binding[msg['stroke']] in self.widget.global_func_list:
+            func = key_binding[msg['stroke']]
+
+            if func in [ 'complete', 'complete-list' ]:
+                if self.__try_completing:
+                    # already completing, ignore
+                    return
+
+                # complete again
+                self.__popdown_complete_list()
+                self.__complete(curr_text, self.__task)
+                if self.__comp_list and self.widget.get_text() not in self.__comp_list:
+                    # there are more partial-matches
+                    self.__popup_complete_list(curr_text)
+                else:
+                    # no matches, or there exists an exact match
+                    self.__try_completing = 1 # menu just popdown, set it to stand-by mode
+
+            else:
+                self.__popdown_complete_list()
+                self.__reset_complete_list()
+                self.widget.default_func_callback[func](msg) # invoke the action
+                self.__try_completing = 1 # menu just popdown, set it to stand-by mode
+            return
+
+        # not complete
+        new_comp_list = []
+        new_char = ''
+
+        if re.match(KEY_RE_PATTERN['printable'], msg['stroke'], re.X) or msg['stroke'] == ' ':
+            # printable or space
+            new_char = msg['stroke']
+            indx = len(curr_text) # the index of the newly typed char
+
+        self.widget.set_current_word(curr_text + new_char)
+
+        if new_char:            # list changed
+            curr_text = self.widget.get_current_word() # re-fetch the current word
+            # this need to be done since the behaviour of `set_current_word()` is non-trival
+
+            # generate new list
+            for item in self.__comp_list:
+                if item.startswith(curr_text):
+                    new_comp_list.append(item)
+
+        # test if there is any match
+        if new_comp_list:
+            self.__comp_list = new_comp_list
+
+            # update completion menu
+            self.__popdown_complete_list()
+            self.__try_completing = 0
+            if self.__comp_list and self.widget.get_text() not in self.__comp_list:
+                # there are more partial-matches
+                self.__popup_complete_list(curr_text)
+            else:
+                # no matches, or there exists an exact match
+                self.__try_completing = 1
+        else:
+            # key stroke is not a printable, popdown the menu
+            self.__popdown_complete_list()
+            self.__reset_complete_list()
+
+
+    def __popup_complete_list(self, curr_text):
+        if not self.__comp_list: # list is empty
+            return               # early return
+
+        # create the menu
+        self.menu = zPopupMenu()
+
+        # record the current text
+        self.menu.curr_text = curr_text
+
+        # setup key listener
+        self.widget.block_listenning() # temporarily disable the old listener
+        self.menu.listener = zStrokeListener()
+        self.menu.listener.listen_on(self.menu)   # use default (text) task
+        self.menu.listener.listen_on(self.widget) # use default (text) task
+        self.menu.listener_sig = self.menu.listener.connect('z_activate', self.__menu_listener_active)
+
+        self.menu.register_popdown_cb(self.__on_popdown_callback)
+
+        # calculate the popup position
+        if isinstance(self.widget, gtk.Entry):
+            w_alloc = None
+        else:
+            w_alloc = self.widget.get_iter_location(self.widget.get_cursor_iter())
+            w_alloc[2] = -1     # release the width requirement
+            ( w_alloc[0], w_alloc[1] ) = self.widget.buffer_to_window_coords(
+                gtk.TEXT_WINDOW_TEXT, w_alloc[0], w_alloc[1]
                 )
 
-    def __str__(self):
-        if self.action == 'i':
-            action = 'INSERT'
-        else:
-            action = 'DELETE'
-        return '{0}: <<{1}>> AT offset {2}'.format(action, self.content, self.offset)
-
-
-    def revert(self):
-        return zBufferChange(self.content, self.offset, zBufferChange.revert_action[self.action])
-
-
-class zAtomicChange(object):
-    '''an atomic change (state) consists of a (list of) zBufferChange(s)'''
-    def __init__(self, buff_changes):
-        self.__state__ = []
-        for change in buff_changes:
-            self.__state__.append(change)
-
-    def __str__(self):
-        return ' => '.join([ str(change) for change in self.__state__ ])
-
-    def __len__(self):
-        return len(self.__state__)
-
-    def __getitem__(self, key):
-        return self.__state__[key]
-
-    def append(self, new_change):
-        self.__state__.append(new_change)
-
-    def pop(self, index = -1):
-        return self.__state__.pop(index)
-
-    def revert(self):
-        return zAtomicChange([ change.revert() for change in self.__state__ ][::-1])
-
-
-
-class zUndoStack(object):
-    '''an modified Emacs-Style Undo / Redo System implemeted using Stack (List)'''
-    def __init__(self, init_content):
-        self.clear(init_content)
-
-    def __str__(self):
-        rv_list = [ '[\n' ]
-        for state in self.__stack:
-            if self.is_saved(state):
-                saved_indicator = '*'
+        # fill the menu
+        list_sz = len(self.__comp_list)
+        nrows   = int(list_sz ** 0.5) + 1
+        for indx in range(list_sz):
+            mi = gtk.MenuItem(self.__comp_list[indx], False)
+            if w_alloc:
+                ( col, row ) = divmod(indx, nrows)
+                self.menu.attach(mi, col, col + 1, row, row + 1)
             else:
-                saved_indicator = ' '
+                self.menu.append(mi)
+            mi.connect('activate', self.__menu_completion_selected, indx)
 
-            rv_list.append('{0}  {1:0>3}:  {2}\n'.format(saved_indicator, self.get_group_id(state), state))
-        rv_list.append(']\n')
+        self.menu.show_all()
+        self.menu.popup_given(self.widget, w_alloc)
 
-        return ''.join(rv_list)
+    def __popdown_complete_list(self):
+        if self.menu:
+            self.menu.popdown()
 
+    def __on_popdown_callback(self):
+        self.menu.listener.clear_all()
+        if self.menu.listener.handler_is_connected(self.menu.listener_sig):
+            self.menu.listener.disconnect(self.menu.listener_sig)
+        self.menu = None
 
-    def clear(self, init_content = ''):
-        '''reset the entire undo-stack'''
-        init_state = zAtomicChange([ zBufferChange(init_content, 0, 'i') ])
-
-        self.__stack = [ init_state ]
-        self.__top   = 0        # top index (of the undo-stack)
-        self.__undo  = 0        # current undo index
-
-        self.__group = [        # any states within the same group are "equvilent"
-            [ init_state ],
-            ]
-        self.__group_saved = 0  # the index of the group that state(s) is equvilent to the saved one
+        # restore old listener
+        self.widget.unblock_listenning()
 
 
-    def is_init(self):
-        '''test whether the current state is an initial-state (no former edit)'''
-        return self.__undo == 0
-
-    def is_last(self):
-        '''test whether the current state is an end-state (no former undo)'''
-        return self.__undo == self.__top
-
-
-    def is_saved(self, state = None):
-        '''test whether the given state (current state, if not specified) is saved'''
-        if not state:
-            state = self.get_current_state()
-        return state in self.__group[self.__group_saved]
-
-    def get_group_id(self, state):
-        '''retrieve the group ID for a specific state'''
-        for indx in range(len(self.__group)):
-            if state in self.__group[indx]:
-                break
-        return indx
-
-
-    def get_current_state(self):
-        '''retrieve the current state'''
-        return self.__stack[-1]
-
-    def save_current_state(self):
-        '''mark the group of the current state as "saved"'''
-        self.__group_saved = self.get_group_id(self.get_current_state())
-
-
-    def new_state(self, new_state):
-        '''push a new edit onto the stack'''
-        self.__stack.append(new_state)
-        self.__top  = len(self.__stack) - 1     # update the top index
-        self.__undo = self.__top                # point the undo index to the top of the stack
-        self.__group.append([ new_state ])      # add the new state into a new group
-
-    def undo(self):
-        '''push an "undo" onto the stack; this will *NOT* modified any buffer'''
-        if self.is_init():
-            return None # stack is at initial state, cannot undo
-
-        undo_state = self.__stack[self.__undo].revert() # revert the state of undo index
-        self.__stack.append(undo_state)                 # push the reverted state onto the stack
-
-        self.__undo -= 1        # decrement the undo index to the previous state
-        self.__group[self.get_group_id(self.__stack[self.__undo])].append(undo_state) # update group list
-
-        return undo_state
-
-    def redo(self):
-        '''pop an "undo" out of the stack; this will *NOT* modified any buffer'''
-        if self.is_last():
-            return None # no former undo(s), cannot redo
-
-        redo_state = self.__stack.pop() # pop the last state out of the stack
-
-        self.__group[self.get_group_id(self.__stack[self.__undo])].remove(redo_state) # update group list
-        self.__undo += 1        # increment the undo index to the next state
-
-        return redo_state.revert()      # pop the reverted last state out of the stack
-
-
-
-######## ######## ######## ######## ########
-########       zCompletionDict      ########
-######## ######## ######## ######## ########
-
-class zCompletionDict(object):
-    '''completion dictionary used for generating completion list'''
-    def __init__(self, word_set):
-        self.__root__ = { '' : False } # root cannot be end-of-word
-        self.__cnt__  = 0
-        self.update(word_set)
-
-
-    def __contains__(self, word):
-        sub = self.subdict(word)
-        return sub and sub['']
-
-    def __len__(self):
-        return self.__cnt__
-
-
-    def add(self, word):
-        '''add a word into the dict'''
-        if word in self:
-            return              # no need to add, early return
-        ptr = self.__root__
-        for ch in word:
-            ptr[ch] = ptr.has_key(ch) and ptr[ch] or { '' : False }
-            ptr = ptr[ch]
-        ptr[''] = True          # turn on end-of-word mark
-        self.__cnt__ += 1
-
-
-    def complete(self, word):
-        '''return the list of all possible completions of the word'''
-        sub = self.subdict(word)
-        return sub and self.listify(word, sub) or [ ]
-
-
-    def dump(self):
-        return self.__root__
-
-
-    def listify(self, prefix = '', subdict = None):
-        if not subdict:
-            subdict = self.dump()
-        return [ ''.join(chlist) for chlist in self.__listify__([ prefix ], subdict) ]
-
-    def __listify__(self, prefix, subdict):
-        rv = [ ]
-        if subdict['']:
-            rv.append(prefix)
-        for key in subdict.iterkeys():
-            if not key:         # '' is end-of-word mark, ignore it
-                continue
-            rv.extend(self.__listify__(prefix + [ key ], subdict[key]))
-        return rv
-
-
-    def subdict(self, word):
-        '''return the subdict with prefix equal to the given word, or None if not found'''
-        ptr = self.__root__
-        for ch in word:
-            if not ch in ptr:
-                return None
-            ptr = ptr[ch]
-        return ptr
-
-
-    def update(self, word_set):
-        '''update the dict with a set of words'''
-        for word in word_set:
-            self.add(word)
-
-
-
-######## ######## ######## ######## ########
-######## Text Field / Area Classes  ########
-######## ######## ######## ######## ########
-
-from zBase import z_ABC, zTheme
-from zStrokeParser import zStrokeListener, zComplete
-from zSyntaxParser import zSyntaxParser
-from zWidget import zKillRing, zPopupMenu
+    def __reset_complete_list(self):
+        self.__comp_list = []     # completion list
+        self.__try_completing = 0 # how many times tring completion; reset to 0 if completion success
+    ### end of supporting function
+gobject.type_register(zComplete)
 
 
 ######## ######## ######## ######## ########
@@ -1345,7 +1466,7 @@ class zLastLine(gtk.HBox):
 class zTextView(z_ABC, gtk.TextView): # do *NOT* use obj.get_buffer.set_modified(), which is used internally
     '''The Customized TextView that Support zEdit'''
 
-    import majormode as __mode__
+    import zPE.GUI.majormode as __mode__
 
     target_buffer = {           # source-target matching for duoble-buffering system
         'disp' : 'true',

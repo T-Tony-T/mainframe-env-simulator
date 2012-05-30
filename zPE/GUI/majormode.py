@@ -1,24 +1,22 @@
 # this is the "Major Editing Mode" selector
-# each Major Mode is defined as an resource module in "zMajorMode" resource folder
+# each Major Mode is defined as an resource module in "zMajorMode"
+# resource folder, or in user's config folder (~/.zPE/)
 
-from zPE.UI import min_import
-from io_encap import norm_path, list_dir
-from conf import CONFIG_PATH
+from zPE.GUI import min_import, GUI_PGK_PATH
+from zPE.GUI.io_encap import norm_path, list_dir
 
-import os, sys, inspect
-SELF_PATH = os.path.split(inspect.getfile(inspect.currentframe()))
+from zPE.GUI.conf import CONFIG_PATH, MODE_MAP, DEFAULT_BUFF_MODE_MAP as DEFAULT
+
+import os, sys
 
 SEARCH_PATH = {
-    'global' : norm_path(os.path.join(SELF_PATH[0], "zMajorMode")),
+    'global' : norm_path(os.path.join(GUI_PGK_PATH[0], "zMajorMode")),
     'user'   : norm_path(CONFIG_PATH['dir']),
     }
 
 
-MODE_MAP = {
-    # mode_string : mode_object
-    }
-
-_base_ = min_import('zPE.UI.basemode', [ 'BaseMode' ], 0)
+# BaseMode need to be imported the EXACT SAME WAY as other modes are
+_base_ = min_import('zPE.GUI.basemode', [ 'BaseMode' ], 0)
 
 def load_mode(path):
     for fn in list_dir(path):
@@ -38,13 +36,6 @@ def load_mode(path):
 
 load_mode(SEARCH_PATH['user'])
 load_mode(SEARCH_PATH['global'])
-
-DEFAULT = {
-    'scratch' : 'ASM Mode',     # scratch file
-    'file'    : 'ASM Mode',     # regular file
-    'dir'     : 'Text Mode',    # directory
-    'disp'    : 'Text Mode',    # display panel
-    }
 
 def guess(text):
     '''guess the major mode from the text in the buffer'''

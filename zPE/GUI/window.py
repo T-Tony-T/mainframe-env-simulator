@@ -1,31 +1,14 @@
-# modules that will be auto imported
-import io_encap
-
-import os, sys, inspect
-SELF_PATH = os.path.split(io_encap.norm_path(inspect.getfile(inspect.currentframe())))
-if SELF_PATH[0] not in sys.path:
-    sys.path.append(SELF_PATH[0])
-
-def min_import(module, attr_list, import_level = -1, path = None):
-    '''minimal-import of the given attr from the module'''
-    if path and path not in sys.path:
-        sys.path.insert(0, path)
-        path = True
-    else:
-        path = False
-    _temp = __import__(module, globals(), locals(), attr_list, import_level)
-    if path:
-        sys.path.pop(0)
-    if len(attr_list) == 1:
-        return eval('_temp.{0}'.format(attr_list[0]))
-    return [ eval('_temp.{0}'.format(attr)) for attr in attr_list ]
-
-
 import zPE                      # for pkg_info()
-import conf, majormode, zComp
 import zPE.base.conf as zPE_conf
 
-import copy, re, subprocess
+from zPE.GUI import GUI_PGK_PATH
+
+import zPE.GUI.conf as GUI_conf
+import zPE.GUI.io_encap as io_encap
+
+import zPE.GUI.zComp.all as zComp
+
+import os, sys, copy, re, subprocess
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -90,7 +73,7 @@ class BaseFrame(object):
 
         self.root.set_title('zPE - Mainframe Programming Environment Simulator')
         self.root.set_icon( gtk.gdk.pixbuf_new_from_file(
-                os.path.join(SELF_PATH[0], 'image', 'icon_zPE.svg')
+                os.path.join(GUI_PGK_PATH[0], 'image', 'icon_zPE.svg')
                 ))
         self.root.set_size_request(800, 560)
 
@@ -125,33 +108,33 @@ class BaseFrame(object):
         self.tool_buff_redo.set_tooltip_text('Redo Last "Undo" in Current Buffer')
         # ------------------------
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(SELF_PATH[0], 'image', 'window_split_horz.png')
+            os.path.join(GUI_PGK_PATH[0], 'image', 'window_split_horz.png')
             )
         self.tool_win_split_horz = gtk.ToolButton(bttn_icon)
         self.tool_win_split_horz.set_tooltip_text('Split Current Focused Window Horizontally')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(SELF_PATH[0], 'image', 'window_split_vert.png')
+            os.path.join(GUI_PGK_PATH[0], 'image', 'window_split_vert.png')
             )
         self.tool_win_split_vert = gtk.ToolButton(bttn_icon)
         self.tool_win_split_vert.set_tooltip_text('Split Current Focused Window Vertically')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(SELF_PATH[0], 'image', 'window_delete.png')
+            os.path.join(GUI_PGK_PATH[0], 'image', 'window_delete.png')
             )
         self.tool_win_delete = gtk.ToolButton(bttn_icon)
         self.tool_win_delete.set_tooltip_text('Close Current Focused Frame')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(SELF_PATH[0], 'image', 'window_delete_other.png')
+            os.path.join(GUI_PGK_PATH[0], 'image', 'window_delete_other.png')
             )
         self.tool_win_delete_other = gtk.ToolButton(bttn_icon)
         self.tool_win_delete_other.set_tooltip_text('Close All Frames but the Current One')
         # ------------------------
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(SELF_PATH[0], 'image', 'submit.png')
+            os.path.join(GUI_PGK_PATH[0], 'image', 'submit.png')
             )
         self.tool_submit = gtk.ToolButton(bttn_icon)
         self.tool_submit.set_tooltip_text('Submit the Job File')
         bttn_icon = gtk.image_new_from_file(
-            os.path.join(SELF_PATH[0], 'image', 'submit_test.png')
+            os.path.join(GUI_PGK_PATH[0], 'image', 'submit_test.png')
             )
         self.tool_submit_wrap = gtk.ToolButton(bttn_icon)
         self.tool_submit_wrap.set_tooltip_text('Test Run the Source File With Default JCL')
@@ -495,18 +478,18 @@ class BaseFrame(object):
                     buff.buffer.get_end_iter(),
                     False
                     )
-                pathname = conf.Config['ENV']['starting_path']
+                pathname = GUI_conf.Config['ENV']['starting_path']
             else:
                 content = io_encap.open_file( (pathname, basename), 'r' ).read()
             if content[-1] != '\n':
                 content_end = '\n'
             else:
                 content_end = ''
-            mode = majormode.MODE_MAP[buff.major_mode]
+            mode = GUI_conf.MODE_MAP[buff.major_mode]
             stdindata = ''.join([ mode.default['JCL-header'], content, content_end, mode.default['JCL-tailer'] ])
 
         cmd = [ 'zsub', ]
-        if conf.Config['MISC']['debug_mode']:
+        if GUI_conf.Config['MISC']['debug_mode']:
             cmd.append('--debug')
         cmd.append(filename)
 
@@ -517,7 +500,7 @@ class BaseFrame(object):
         ( stdoutdata, stderrdata ) = zsub.communicate(stdindata)
         sys.stderr.write(stderrdata)
 
-        if ( conf.Config['MISC']['debug_mode']  or    # is in debug mode
+        if ( GUI_conf.Config['MISC']['debug_mode']  or       # is in debug mode
              zsub.returncode not in zPE_conf.RC.itervalues() # something weird happened
              ):
             sys.stdout.write(stdoutdata)
@@ -624,7 +607,7 @@ class ConfigWindow(gtk.Window):
 
         # retrieve configs
         zPE_conf.read_rc(dry_run = True) # this need to be done first to ensure config dir structure
-        conf.read_rc_all()
+        GUI_conf.read_rc_all()
 
         # lists for managing font
         self.__label = {
@@ -701,7 +684,7 @@ class ConfigWindow(gtk.Window):
         ct_gui_font.add(gtk.HBox())
 
         self.font_sw = {}
-        for key in conf.Config['FONT']:
+        for key in GUI_conf.Config['FONT']:
             self.font_sw[key] = gtk.combo_box_new_text()
 
             self.__label['LABEL'].append(gtk.Label('{0}:'.format(key.title())))
@@ -710,7 +693,7 @@ class ConfigWindow(gtk.Window):
 
             self.font_sw[key].connect('changed', self._sig_font_changed)
 
-        for font in conf.MONO_FONT:
+        for font in GUI_conf.MONO_FONT:
             self.font_sw['name'].append_text(font)
         for size in range(6, 73):
             self.font_sw['size'].append_text(str(size))
@@ -774,15 +757,15 @@ class ConfigWindow(gtk.Window):
         ct_gui_env.set_label_widget(self.__label['FRAME'][-1])
         ct_gui.pack_start(ct_gui_env, False, False, 10)
 
-        ct_gui_env.add(gtk.Table(len(conf.Config['ENV']), 2, False))
+        ct_gui_env.add(gtk.Table(len(GUI_conf.Config['ENV']), 2, False))
         ct_gui_env.child.set_col_spacings(5)
 
         self.env_bttn  = {}
         self.env_entry = {}
         row = 0
-        for key in conf.Config['ENV']:
+        for key in GUI_conf.Config['ENV']:
             self.env_bttn[key] = zComp.zToggleButton(key.title(), False)
-            self.env_entry[key] = zComp.zText.zEntry()
+            self.env_entry[key] = zComp.zEntry()
 
             bttn = self.env_bttn[key]
             style = bttn.get_style().copy()
@@ -863,7 +846,7 @@ class ConfigWindow(gtk.Window):
         ct_key_binding.child.pack_start(ct_key_binding_scroll, True, True, 0)
         ct_key_binding.child.pack_start(ct_key_binding_entry, True, True, 0)
 
-        n_func = len(conf.DEFAULT_FUNC_KEY_BIND)
+        n_func = len(GUI_conf.DEFAULT_FUNC_KEY_BIND)
         ct_key_binding_table = gtk.Table(n_func, 2, True)
         ct_key_binding_table.set_col_spacings(15)
         ct_key_binding_scroll.add_with_viewport(ct_key_binding_table)
@@ -871,7 +854,7 @@ class ConfigWindow(gtk.Window):
         self.kb_function = {}
         self.kb_stroke = {}
         row = 0
-        for func in sorted(conf.DEFAULT_FUNC_KEY_BIND.iterkeys()):
+        for func in sorted(GUI_conf.DEFAULT_FUNC_KEY_BIND.iterkeys()):
             self.kb_function[func] = zComp.zToggleButton('  ' + func, False)
             self.kb_stroke[func] = gtk.Label('')
 
@@ -1123,7 +1106,7 @@ class ConfigWindow(gtk.Window):
         ct_about_icon = gtk.Image()
         ct_about_icon.set_from_pixbuf(
             gtk.gdk.pixbuf_new_from_file_at_size(
-                os.path.join(SELF_PATH[0], 'image', 'icon_zPE.svg'),
+                os.path.join(GUI_PGK_PATH[0], 'image', 'icon_zPE.svg'),
                 192, 192
                 ))
         ct_about.pack_start(ct_about_icon, False, False, 25)
@@ -1217,24 +1200,24 @@ All rights reserved
 
     ### top-level signal definition
     def _sig_clear_rc(self, *arg):
-        conf.reset_key_binding() # reset all key bindings
-        conf.init_rc_all()       # re-initiate GUI config
-        zPE_conf.init_rc()       # re-initiate zsub config
+        GUI_conf.reset_key_binding() # reset all key bindings
+        GUI_conf.init_rc_all()       # re-initiate GUI config
+        zPE_conf.init_rc()           # re-initiate zsub config
         self.load_rc()
 
     def _sig_open_console(self, *arg):
         self.open()
 
     def _sig_reload_rc(self, *arg):
-        conf.Config = copy.deepcopy(self.config_bkup)          # restore the GUI backup setting
+        GUI_conf.Config = copy.deepcopy(self.config_bkup)      # restore the GUI backup setting
         zPE_conf.Config = copy.deepcopy(self.zsub_config_bkup) # restore the zsub backup setting
         self.load_rc()
 
     def _sig_save_config(self, *arg):
         if self.__on_err:
             return
-        conf.write_rc_all()              # write changes for GUI
-        conf.read_rc_all()               # validate new GUI config
+        GUI_conf.write_rc_all()          # write changes for GUI
+        GUI_conf.read_rc_all()           # validate new GUI config
         zPE_conf.write_rc()              # write changes for zsub
         zPE_conf.read_rc(dry_run = True) # validate new zsub config
         self.close()
@@ -1249,32 +1232,32 @@ All rights reserved
 
     ### signal for GUI
     def _sig_tabbar_on(self, bttn):
-        conf.Config['MISC']['tab_on'] = bttn.get_active()
-        zComp.zEdit.set_tab_on(conf.Config['MISC']['tab_on'])
-        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
+        GUI_conf.Config['MISC']['tab_on'] = bttn.get_active()
+        zComp.zEdit.set_tab_on(GUI_conf.Config['MISC']['tab_on'])
+        self.tabbar_grouped.set_property('sensitive', GUI_conf.Config['MISC']['tab_on'])
 
     def _sig_tabbar_grouped(self, bttn):
-        conf.Config['MISC']['tab_grouped'] = bttn.get_active()
-        zComp.zEdit.set_tab_grouped(conf.Config['MISC']['tab_grouped'])
+        GUI_conf.Config['MISC']['tab_grouped'] = bttn.get_active()
+        zComp.zEdit.set_tab_grouped(GUI_conf.Config['MISC']['tab_grouped'])
 
     def _sig_tabbar_mode_toggled_sync(self, widget):
-        conf.Config['MISC']['tab_on']      = zComp.zEdit.get_tab_on()
-        conf.Config['MISC']['tab_grouped'] = zComp.zEdit.get_tab_grouped()
+        GUI_conf.Config['MISC']['tab_on']      = zComp.zEdit.get_tab_on()
+        GUI_conf.Config['MISC']['tab_grouped'] = zComp.zEdit.get_tab_grouped()
 
         self.update_tabbar_settings()
 
 
     def _sig_font_changed(self, combo):
         new_font = {}
-        for key in conf.Config['FONT']:
+        for key in GUI_conf.Config['FONT']:
             font_val = self.font_sw[key].get_active_text()
             if not font_val:
                 return          # early return
             new_font[key] = font_val
         new_font['size'] = int(new_font['size'])
 
-        conf.Config['FONT'] = new_font
-        zComp.zTheme.set_font(conf.Config['FONT'])
+        GUI_conf.Config['FONT'] = new_font
+        zComp.zTheme.set_font(GUI_conf.Config['FONT'])
 
 
     def _sig_color_entry_activate(self, entry, event, key):
@@ -1283,9 +1266,9 @@ All rights reserved
         color_code = entry.get_text()
         if re.match('^#[0-9a-fA-F]{6}$', color_code):
             self.set_color_modify(key, color_code)
-            zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+            zComp.zTheme.set_color_map(GUI_conf.Config['COLOR_MAP'])
         else:
-            entry.set_text(conf.Config['COLOR_MAP'][key])
+            entry.set_text(GUI_conf.Config['COLOR_MAP'][key])
             entry.grab_focus()
             return
 
@@ -1299,7 +1282,7 @@ All rights reserved
             if widget == self.color_picker[key]:
                 break
         self.set_color_modify(key, color_code)
-        zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+        zComp.zTheme.set_color_map(GUI_conf.Config['COLOR_MAP'])
 
 
     def _sig_env_entry_edit_request(self, tggl_bttn, key):
@@ -1312,7 +1295,7 @@ All rights reserved
             self.env_entry[key].set_position(-1)
         else:
             # self pop up
-            self.set_path_quoted(self.env_entry[key], conf.Config['ENV'][key])
+            self.set_path_quoted(self.env_entry[key], GUI_conf.Config['ENV'][key])
             self.env_bttn[key].grab_focus()
 
     def _sig_env_entry_activate(self, entry, msg, key, task):
@@ -1326,9 +1309,9 @@ All rights reserved
                 self.env_entry[key].set_text('<Invalid Path>')
                 self.env_entry[key].select_region(0, -1)
                 return
-            conf.Config['ENV'][key] = env_path
+            GUI_conf.Config['ENV'][key] = env_path
 
-            zComp.zTheme.set_env({ key : conf.Config['ENV'][key], })
+            zComp.zTheme.set_env({ key : GUI_conf.Config['ENV'][key], })
             self.env_bttn[key].set_active(False)
 
         elif task == 'cancel' and msg['return_msg'] == 'Quit':
@@ -1339,13 +1322,13 @@ All rights reserved
 
     ### signal for KeyBinding
     def _sig_key_style_toggled(self, radio, key):
-        if radio.get_active() and key in conf.DEFAULT_FUNC_KEY_BIND_KEY:
-            conf.Config['MISC']['key_binding'] = key
+        if radio.get_active() and key in GUI_conf.DEFAULT_FUNC_KEY_BIND_KEY:
+            GUI_conf.Config['MISC']['key_binding'] = key
 
-            conf.read_key_binding()
+            GUI_conf.read_key_binding()
 
-            zComp.zStrokeListener.set_style(conf.Config['MISC']['key_binding'])
-            zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
+            zComp.zStrokeListener.set_style(GUI_conf.Config['MISC']['key_binding'])
+            zComp.zStrokeListener.set_key_binding(GUI_conf.Config['KEY_BINDING'])
 
             self.load_binding()
 
@@ -1388,24 +1371,24 @@ All rights reserved
         stroke = entry.get_text()
         if not stroke:
             # clear binding
-            conf.func_binding_rm(entry.func_editing)
+            GUI_conf.func_binding_rm(entry.func_editing)
             self.kb_stroke[entry.func_editing].set_text('')
             entry.set_text('< removed >')
         else:
             # validate stroke
-            seq = conf.parse_key_binding(stroke)
+            seq = GUI_conf.parse_key_binding(stroke)
             if not seq:
                 binding_is_valid = False
             else:
                 try:
-                    if conf.key_sequence_add(
+                    if GUI_conf.key_sequence_add(
                         entry.func_editing, seq,
                         force_override = False,
                         force_rebind = True,
                         warning = False
                         ):
                         # key sequence added
-                        zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
+                        zComp.zStrokeListener.set_key_binding(GUI_conf.Config['KEY_BINDING'])
                         binding_is_valid = True
                     else:
                         binding_is_valid = None
@@ -1422,14 +1405,14 @@ All rights reserved
                         md.add_buttons('_Override', gtk.RESPONSE_ACCEPT, '_Cancel', gtk.RESPONSE_CANCEL)
                         md_id = md.run()
                         if md_id == gtk.RESPONSE_ACCEPT:
-                            if conf.key_sequence_add(
+                            if GUI_conf.key_sequence_add(
                                 entry.func_editing, seq,
                                 force_override = True,
                                 force_rebind = True,
                                 warning = False
                                 ):
                                 # key sequence added
-                                zComp.zStrokeListener.set_key_binding(conf.Config['KEY_BINDING'])
+                                zComp.zStrokeListener.set_key_binding(GUI_conf.Config['KEY_BINDING'])
                                 self.kb_stroke[err_func].set_text('') # clear conflict binding text
                                 binding_is_valid = True
                             else:
@@ -1465,7 +1448,7 @@ All rights reserved
         self.kb_rules_dialog.show()
 
     def _sig_key_stroke_clear(self, bttn):
-        conf.init_key_binding()
+        GUI_conf.init_key_binding()
         self.load_binding()
     ### end of signal for KeyBinding
 
@@ -1479,14 +1462,14 @@ All rights reserved
             if sz < 1:          # require size to be at least 1
                 raise ValueError('Kill-ring size must be at least 1.')
         except:
-            entry.set_text(str(conf.Config['MISC']['kill_ring_sz']))
+            entry.set_text(str(GUI_conf.Config['MISC']['kill_ring_sz']))
             raise               # through the exception upwards
 
-        conf.Config['MISC']['kill_ring_sz'] = sz
-        zComp.zWidget.zKillRing.set_kill_ring_size(conf.Config['MISC']['kill_ring_sz'])
+        GUI_conf.Config['MISC']['kill_ring_sz'] = sz
+        zComp.zKillRing.set_kill_ring_size(GUI_conf.Config['MISC']['kill_ring_sz'])
 
         entry.set_property('sensitive', False) # remove focus
-        entry.set_text(str(conf.Config['MISC']['kill_ring_sz']))
+        entry.set_text(str(GUI_conf.Config['MISC']['kill_ring_sz']))
         entry.set_property('sensitive', True)  # retain edibility
 
         self.__on_err = False
@@ -1541,7 +1524,7 @@ All rights reserved
         self.__on_err = False
 
     def _sig_debug_zsub(self, bttn):
-        conf.Config['MISC']['debug_mode'] = bttn.get_active()
+        GUI_conf.Config['MISC']['debug_mode'] = bttn.get_active()
     ### end of signal for System
 
 
@@ -1550,7 +1533,7 @@ All rights reserved
         if self.get_property('visible'):
             self.window.show()
         else:
-            self.config_bkup = copy.deepcopy(conf.Config)          # backup GUI settings
+            self.config_bkup = copy.deepcopy(GUI_conf.Config)      # backup GUI settings
             self.zsub_config_bkup = copy.deepcopy(zPE_conf.Config) # backup zsub settings
             self.load_rc()
             self.show()
@@ -1568,35 +1551,35 @@ All rights reserved
         self.update_tabbar_settings()
 
         # GUI->Font
-        for key in conf.Config['FONT']:
-            self.select_combo_item(self.font_sw[key], conf.Config['FONT'][key])
+        for key in GUI_conf.Config['FONT']:
+            self.select_combo_item(self.font_sw[key], GUI_conf.Config['FONT'][key])
 
         # GUI->Theme
         for key in self.color_entry:
-            self.set_color_modify(key, conf.Config['COLOR_MAP'][key])
-        zComp.zTheme.set_color_map(conf.Config['COLOR_MAP'])
+            self.set_color_modify(key, GUI_conf.Config['COLOR_MAP'][key])
+        zComp.zTheme.set_color_map(GUI_conf.Config['COLOR_MAP'])
 
         # GUI->Environment
         for key in self.env_entry:
-            self.set_path_quoted(self.env_entry[key], conf.Config['ENV'][key])
-        zComp.zTheme.set_env(conf.Config['ENV'])
+            self.set_path_quoted(self.env_entry[key], GUI_conf.Config['ENV'][key])
+        zComp.zTheme.set_env(GUI_conf.Config['ENV'])
 
 
         # KeyBinding->Style
         for key in self.key_style_key:
-            if key not in conf.DEFAULT_FUNC_KEY_BIND_KEY:
+            if key not in GUI_conf.DEFAULT_FUNC_KEY_BIND_KEY:
                 self.key_style[key].set_property('sensitive', False)
                 self.key_style[key].set_active(True)
             else:
                 self.key_style[key].set_property('sensitive', True)
-        self.key_style[conf.Config['MISC']['key_binding']].set_active(True)
+        self.key_style[GUI_conf.Config['MISC']['key_binding']].set_active(True)
 
         # KeyBinding->Binding
         self.load_binding()
 
         # Editor->KillRing
-        self.kill_ring_sz_entry.set_text(str(conf.Config['MISC']['kill_ring_sz']))
-        zComp.zWidget.zKillRing.set_kill_ring_size(conf.Config['MISC']['kill_ring_sz'])
+        self.kill_ring_sz_entry.set_text(str(GUI_conf.Config['MISC']['kill_ring_sz']))
+        zComp.zKillRing.set_kill_ring_size(GUI_conf.Config['MISC']['kill_ring_sz'])
 
         # System->Architecture
         self.select_combo_item(self.addr_mode_sw, zPE_conf.Config['addr_mode'])
@@ -1604,15 +1587,15 @@ All rights reserved
         self.update_time_limit()
 
         # System->Debugging
-        self.debug_zsub.set_active(conf.Config['MISC']['debug_mode'])
+        self.debug_zsub.set_active(GUI_conf.Config['MISC']['debug_mode'])
 
 
     def load_binding(self):
-        style = conf.Config['MISC']['key_binding']
+        style = GUI_conf.Config['MISC']['key_binding']
         self.kb_rules_dialog.set_title('Style::{0}'.format(style.title()))
-        self.kb_rules_dialog_content.set_markup(conf.KEY_BINDING_RULE_MKUP[style])
+        self.kb_rules_dialog_content.set_markup(GUI_conf.KEY_BINDING_RULE_MKUP[style])
         for (k, v) in self.kb_stroke.iteritems():
-            v.set_text(conf.Config['FUNC_BINDING'][k])
+            v.set_text(GUI_conf.Config['FUNC_BINDING'][k])
     ### end of public API definition
 
 
@@ -1622,7 +1605,7 @@ All rights reserved
         self.color_picker[key].modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(color_code))
         self.color_picker[key].modify_bg(gtk.STATE_PRELIGHT, gtk.gdk.color_parse(color_code))
 
-        conf.Config['COLOR_MAP'][key] = color_code
+        GUI_conf.Config['COLOR_MAP'][key] = color_code
 
     def set_path_quoted(self, entry, path_str):
         path_str += os.path.sep
@@ -1632,9 +1615,9 @@ All rights reserved
         entry.set_text(path_str)
 
     def update_tabbar_settings(self):
-        self.tabbar_on.set_active(conf.Config['MISC']['tab_on'])
-        self.tabbar_grouped.set_active(conf.Config['MISC']['tab_grouped'])
-        self.tabbar_grouped.set_property('sensitive', conf.Config['MISC']['tab_on'])
+        self.tabbar_on.set_active(GUI_conf.Config['MISC']['tab_on'])
+        self.tabbar_grouped.set_active(GUI_conf.Config['MISC']['tab_grouped'])
+        self.tabbar_grouped.set_property('sensitive', GUI_conf.Config['MISC']['tab_on'])
 
     def update_time_limit(self):
         time = zPE_conf.Config['time_limit']
