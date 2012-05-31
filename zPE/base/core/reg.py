@@ -6,7 +6,7 @@ from zPE.util.conv import *
 from zPE.util.excptn import *
 from zPE.util.global_config import *
 
-import mem
+import zPE.base.core.mem
 
 import re
 from ctypes import *            # for Union and C-Style array
@@ -266,7 +266,7 @@ class Register(Union):
                                     ][R2 - R1 + 1] - R1 )
                                 ]
         '''
-        if ( not isinstance(page, mem.Page)  or
+        if ( not isinstance(page, zPE.base.core.mem.Page)  or
              not isinstance(addr, int)  or
              not 0 <= addr < 4096
              ):

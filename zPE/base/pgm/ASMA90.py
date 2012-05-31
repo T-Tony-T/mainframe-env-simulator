@@ -48,6 +48,7 @@ from time import localtime, strftime
 from random import randint
 from binascii import a2b_hex
 
+# relative import resource files
 from asma90_config import *   # read resource file for ASM config + rc
 
 from asma90_err_code_rc import *        # read recourse file for err msg

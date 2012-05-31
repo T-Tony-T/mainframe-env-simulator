@@ -23,12 +23,12 @@ setup(
     #   R - SVN Revision Number (int) [ developing version ]
     #   P - Pre-Release Number (int)  [ release candidate  ]
     #   B - Bug-Fix Number (int)      [ normal release     ]
-    version = "1.000",
+    version = "1.001",
     # note:
     #   Major version is considered as:
-    #     0 - None   Fully Functional - current
-    #     1 - ASSIST Fully Functional - coming
-    #     2 - HLASM  Fully Functional - planning
+    #     0 - None   Fully Functional - finished
+    #     1 - ASSIST Fully Functional - current
+    #     2 - HLASM  Fully Functional - coming
     #     3 - COBOL  Fully Functional - planning
     #     4 - ...
     #   {.dev-rR} is appended by ./setup.cfg; remove it before packaging

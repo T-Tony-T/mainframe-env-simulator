@@ -5,6 +5,7 @@ from zPE.util.global_config import *
 
 import zPE.base.core.asm
 
+# relative import resource file
 from asma90_macro_sys1_maclib import MACRO_DEF as MACRO_DEF_SYS1
 
 from time import strftime

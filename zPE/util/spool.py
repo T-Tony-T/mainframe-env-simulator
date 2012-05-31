@@ -1,6 +1,6 @@
 # this defines the SPOOL access methods
 
-from global_config import SP_DEFAULT, SP_DEFAULT_OUT, SP_DEFAULT_OUT_STEP, SPOOL, SPOOL_CTRL_MAP
+from zPE.util.global_config import SP_DEFAULT, SP_DEFAULT_OUT, SP_DEFAULT_OUT_STEP, SPOOL, SPOOL_CTRL_MAP
 
 def empty():
     return (len(SPOOL) == 0)

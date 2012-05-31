@@ -1,8 +1,8 @@
-import zPE.UI
+import zPE.GUI.window
 
 
 def main():
-    base = zPE.UI.BaseFrame()
+    base = zPE.GUI.window.BaseFrame()
     base.main()
 
 
