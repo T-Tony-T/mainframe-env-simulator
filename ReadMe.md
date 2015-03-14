@@ -1,0 +1,79 @@
+# GENERAL INFORMATION #
+
+This software is a Mainframe Programming Environment Simulator running on PC (Linux, Max OS, Windows, etc.) that will compile / assemble source code written to be compiled / assembled on a Mainframe machine.
+
+The final goal is to let the developer work on their own PC when developing / testing their programs without worrying about Internet connection or connection to a Mainframe machine. It is also aimed at reduce the teaching cost of IBM Assembler, COBOL, etc.
+
+This software is released under the New BSD (3-Clause) License.
+
+[Copyright (c) 2011, 2012](License.md), Northern Illinois University
+All rights reserved.
+
+
+---
+
+
+# PRE-INSTALL #
+
+Make sure you have [python](http://python.org/) 2.x (not python 3) and [setuptools](http://pypi.python.org/pypi/setuptools) installed correctly.
+
+You can find the python 2.x here:
+http://python.org/download/
+
+And you can find the setuptools here:
+http://pypi.python.org/pypi/setuptools#files
+
+Under Windows, please make sure the installation directory of python
+is in your "PATH" Environment Variable.
+
+
+To make the GUI work, you also need to install GTK+ and PyGTK.
+This requirement will be removed later.
+
+
+---
+
+
+# INSTALLATION #
+
+## Under Linux: ##
+```
+$ python setup.py build
+$ sudo python setup.py install --record install.record.txt
+```
+("install.record.txt" is used for uninstall)
+
+## Under Windows: (cmd) ##
+```
+> python setup.py build
+> python setup.py bdist_wininst
+> dist\mainframe-env-simulator-*.exe
+```
+
+
+---
+
+
+# USAGE #
+
+## CLI: ##
+  * Use ```zsub JCL_FILE``` to submit an JCL job
+  * The job output can be obtained by ```zfetch [-o FILE] last```
+
+## GUI: ##
+  * Run ```zPE``` to open the GUI.
+
+
+
+---
+
+
+# UNINSTALLATION #
+
+## Under Linux: ##
+```
+$ cat install.record.txt | sudo xargs rm -rf
+```
+
+## Under Windows: ##
+Control Panel -> Uninstall a Program
